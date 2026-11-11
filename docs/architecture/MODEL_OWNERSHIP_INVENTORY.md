@@ -102,3 +102,18 @@
 | `StoreReaderState` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`product:belongsTo(StoreProduct; 'product_id')` | `app/Models/StoreReaderState.php` |
 | `StoreTag` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `products:belongsToMany(StoreProduct; 'store_product_tag', 'tag_id', 'product_id')` | `app/Models/StoreTag.php` |
 | `StoreWishlist` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`product:belongsTo(StoreProduct; 'product_id')` | `app/Models/StoreWishlist.php` |
+
+| `Team` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `organization:belongsTo(Organization)`<br>`supervisor:belongsTo(User; 'supervisor_id')`<br>`members:belongsToMany(User)` | `app/Models/Team.php` |
+| `Ticket` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`assignee:belongsTo(User; 'assigned_to')`<br>`relatedProduct:belongsTo(StoreProduct; 'related_product_id')`<br>`messages:hasMany(TicketMessage)`<br>`publicMessages:hasMany(TicketMessage; false)->orWhereNull('is_internal')` | `app/Models/Ticket.php` |
+| `TicketMessage` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `ticket:belongsTo(Ticket)`<br>`user:belongsTo(User)` | `app/Models/TicketMessage.php` |
+| `TypingDocument` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`project:belongsTo(FarastProject)`<br>`farastDocument:hasOne(FarastDocument; 'id', 'farast_document_id')` | `app/Models/TypingDocument.php` |
+| `User` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `documents:hasMany(TypingDocument)`<br>`projects:hasMany(FarastProject)`<br>`knowledge:hasMany(UserKnowledge)`<br>`tickets:hasMany(Ticket)`<br>`wallet:hasOne(Wallet)`<br>`orders:hasMany(Order)`<br>`freeCredits:hasMany(FreeCredit)`<br>`organization:belongsTo(Organization)`<br>`teams:belongsToMany(Team)`<br>`canvaConnection:hasOne(CanvaConnection)` | `app/Models/User.php` |
+| `UserCapability` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)` | `app/Models/UserCapability.php` |
+| `UserFile` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)` | `app/Models/UserFile.php` |
+| `UserKnowledge` | `farast_user_knowledge` | explicit | `id` | `default` | `user:belongsTo(User)` | `app/Models/UserKnowledge.php` |
+| `VoiceCorrection` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)` | `app/Models/VoiceCorrection.php` |
+| `VoiceProviderAccount` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `usage:hasMany(VoiceProviderUsage)` | `app/Models/VoiceProviderAccount.php` |
+| `VoiceProviderUsage` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `providerAccount:belongsTo(VoiceProviderAccount; 'voice_provider_account_id')` | `app/Models/VoiceProviderUsage.php` |
+| `Wallet` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`transactions:hasMany(WalletTransaction)` | `app/Models/Wallet.php` |
+| `WalletTransaction` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `wallet:belongsTo(Wallet)` | `app/Models/WalletTransaction.php` |
+| `WeeklyFreePage` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/WeeklyFreePage.php` |
