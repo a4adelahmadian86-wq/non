@@ -31,6 +31,31 @@
 
     <div class="course-curriculum-head"><div><span class="eyebrow">CURRICULUM BUILDER</span><h2>برنامه آموزشی</h2><p>هر فصل می‌تواند چندین جلسه و هر جلسه منابع مستقل داشته باشد.</p></div><div class="course-counts"><b>{{ $course->sections->count() }}</b><span>فصل</span><b>{{ $course->sections->sum(fn($s)=>$s->lessons->count()) }}</b><span>جلسه</span></div></div>
 
+    @php($unassignedIntakeAssets = $product->files->where('purpose', 'course_asset')->whereNull('course_lesson_id'))
+    @if($unassignedIntakeAssets->isNotEmpty())
+      <section class="store-panel course-section-card">
+        <div class="course-panel-title"><div><span>فایل‌های مرحله ورود محصول</span><h2>منابع آماده اتصال به جلسه</h2></div><span class="course-pill">{{ $unassignedIntakeAssets->count() }} فایل</span></div>
+        <p>فایل‌های اولیه دوره بازرسی و ذخیره شده‌اند. هر فایل را پس از ساخت فصل و جلسه به محل آموزشی مناسب متصل کنید.</p>
+        @foreach($unassignedIntakeAssets as $asset)
+          <div class="course-resource-row">
+            <span><i class="fa-solid fa-paperclip"></i> {{ $asset->original_name }} <small>{{ number_format($asset->size_bytes / 1024, 1) }} KB · {{ $asset->scan_status === 'clean' ? 'بررسی ساختاری موفق' : 'نیازمند بررسی بیشتر' }}</small></span>
+            <form method="post" action="{{ route('admin.store.course.assets.attach', [$product, $asset]) }}" class="course-inline-fields">
+              @csrf
+              <select name="lesson_id" required aria-label="جلسه مقصد">
+                <option value="">انتخاب جلسه مقصد</option>
+                @foreach($course->sections as $assetSection)
+                  @foreach($assetSection->lessons as $assetLesson)
+                    <option value="{{ $assetLesson->id }}">{{ $assetSection->title }} / {{ $assetLesson->title }}</option>
+                  @endforeach
+                @endforeach
+              </select>
+              <button type="submit" class="store-outline-btn">اتصال به جلسه</button>
+            </form>
+          </div>
+        @endforeach
+      </section>
+    @endif
+
     <form method="post" action="{{ route('admin.store.course.sections.store',$product) }}" class="store-panel course-add-section">
       @csrf
       <strong>افزودن فصل جدید</strong>
