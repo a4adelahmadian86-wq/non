@@ -305,6 +305,18 @@ class UnifiedAuthorizationTest extends TestCase
             'subject_id' => $subject->id,
             'event' => 'permission.direct_revoked',
         ]);
+
+        $limitedAdmin = User::factory()->create(['role' => 'admin']);
+        $adminGrant = $authorization->grantDirectPermission(
+            $admin,
+            $limitedAdmin,
+            'reports.view',
+            'allow',
+            'own',
+        );
+        self::assertTrue($authorization->allows($limitedAdmin, 'reports.view'));
+        $authorization->revokeDirectPermission($admin, (int) $adminGrant->id);
+        self::assertFalse($authorization->allows($limitedAdmin, 'reports.view'));
     }
 
     public function test_admin_can_create_and_assign_a_custom_role_with_an_audit_record(): void
