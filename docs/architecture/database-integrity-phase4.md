@@ -11,7 +11,7 @@ The local report of 12 pending migrations cannot be reconciled from GitHub sourc
 
 ## Migration inventory
 
-- The inspected \`main\` snapshot contains 114 migration files.
+- The inspected \`main\` snapshot contains 117 migration files after the Phase 4 additions.
 - There are 10 pairs of files sharing a timestamp:
   - \`2026_09_12_000012\`
   - \`2026_10_03_000001\`
@@ -36,7 +36,7 @@ The original core schema used cascading deletes for:
 - \`orders.user_id\`
 - \`payments.order_id\`
 
-The Phase 4 financial migration adds stable unique idempotency keys to orders and payments, backfills existing rows deterministically, and refuses to create unique indexes if duplicate keys are found. It also changes financial-history deletion behavior to restrictive behavior. SQLite uses equivalent insert/update/delete triggers because its schema grammar cannot drop an existing foreign key by name.
+The Phase 4 financial migration adds stable unique idempotency keys to orders and payments, backfills existing rows deterministically, enforces uniqueness for non-empty gateway authorities, and refuses to create unique indexes if duplicate keys or gateway authorities are found. It also changes financial-history deletion behavior to restrictive behavior. SQLite uses equivalent insert/update/delete triggers because its schema grammar cannot drop an existing foreign key by name. A separate migration enforces wallet-ledger immutability with database triggers on SQLite, MySQL, and PostgreSQL.
 
 Wallet transaction records are immutable at two layers: Eloquent rejects model updates/deletes, and a database trigger rejects direct SQL and query-builder updates/deletes. SQLite, MySQL, and PostgreSQL have driver-specific trigger implementations. The protection is retained during rollback so a rollback cannot silently make the ledger mutable again.
 
@@ -62,6 +62,7 @@ A proposed historical table-rebuild migration was excluded from this PR. The act
 - Repeated order/payment idempotency keys resolve to one record.
 - Existing financial records block cascading account, wallet, and order deletion.
 - Wallet ledger records reject Eloquent updates and deletes, and database triggers also reject query-builder/raw SQL mutation.
+- Duplicate non-empty gateway authorities stop the financial migration before schema mutation.
 - The financial migration backfills legacy rows, is repeatable, and rejects duplicate legacy keys without merging them.
 - The commercial ledger migration rejects orphan references and preserves the orphaned row for manual reconciliation.
 - Representative subscription, invoice-item, and wallet-reservation references are rejected when their parent row does not exist.
@@ -74,6 +75,7 @@ A proposed historical table-rebuild migration was excluded from this PR. The act
 3. Run the read-only orphan/duplicate preflight against a copy of the local database before applying the new reference migration.
 4. Test the upgrade path on a sanitized copy of the upgraded database, not only on a clean SQLite database.
 5. Verify the new foreign-key migration on the actual production database engine.
-6. Resolve the existing Reader test failures on \`main\` separately. The Phase 3 Commerce workflow currently reports failures in \`StoreReaderAccessTest\` on both the main baseline and this branch; these are not being hidden or changed in this database-focused PR.
+6. Run the Phase 4 database-driver matrix on MySQL 8.4 and PostgreSQL 16; the repository's existing full CI currently runs SQLite only.
+7. Resolve the existing Reader test failures on \`main\` separately. The Phase 3 Commerce workflow currently reports failures in \`StoreReaderAccessTest\` on both the main baseline and this branch; these are not being hidden or changed in this database-focused PR.
 
 The Phase 4 PR remains a draft until these gates are satisfied.
