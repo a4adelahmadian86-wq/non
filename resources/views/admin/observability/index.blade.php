@@ -92,6 +92,7 @@
                         <thead>
                             <tr>
                                 <th class="py-2">زمان</th>
+                                <th class="py-2">شناسه رخداد</th>
                                 <th class="py-2">نوع رخداد</th>
                                 <th class="py-2">شدت</th>
                                 <th class="py-2">وضعیت</th>
@@ -103,6 +104,7 @@
                             @foreach($health['incidents'] as $incident)
                                 <tr class="border-t">
                                     <td class="py-2 whitespace-nowrap">{{ $incident['created_at'] }}</td>
+                                    <td class="py-2 font-mono text-xs">{{ $incident['incident_id'] ?? '—' }}</td>
                                     <td class="py-2">{{ $incident['event_type'] }}</td>
                                     <td class="py-2">{{ $incident['severity'] }}</td>
                                     <td class="py-2">{{ $incident['status'] }}</td>
