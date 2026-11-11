@@ -377,10 +377,18 @@ class PlatformCompletionController extends Controller {
     'team_role'=>$beforeMembership?->team_role,
     'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
    ];
-   DB::table('team_user')->updateOrInsert(
-    ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
-    ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
-   );
+   if($beforeMembership){
+    DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$member->id)
+     ->update(['team_role'=>$x['team_role'],'updated_at'=>now()]);
+   } else {
+    DB::table('team_user')->insert([
+     'team_id'=>$teamRecord->id,
+     'user_id'=>$member->id,
+     'team_role'=>$x['team_role'],
+     'created_at'=>now(),
+     'updated_at'=>now(),
+    ]);
+   }
    if($x['team_role']==='supervisor' && ! $teamRecord->supervisor_id){
     $teamRecord->update(['supervisor_id'=>$member->id]);
    } elseif($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
