@@ -98,6 +98,8 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 
 - `GET /up`: Liveness لاراول.
 - `GET /ready`: Readiness دیتابیس اصلی با `SELECT 1`؛ پاسخ 503 یعنی سرویس نباید ترافیک بگیرد.
+- `php artisan farast:health-check` را اجرا کنید؛ این فرمان اتصال DB، Private Storage، جدول‌های Queue/Cache/Session، تنظیمات Production و وجود کلید/صف/مقصد بکاپ را بررسی می‌کند.
+- `php artisan storage:check-volumes --limit=100` را اجرا کنید تا اتصال واقعی Volumeها نیز آزموده شود؛ `farast:health-check` به‌تنهایی دسترسی شبکه‌ای به مقصد خارجی را اثبات نمی‌کند.
 - پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
 - `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.
 - `php artisan queue:failed` و `php artisan migrate:status` را بررسی کنید.
@@ -109,9 +111,11 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 - `storage:backup-weekly` یک درخواست را در صف اختصاصی `backups` قرار می‌دهد؛ تولید آرشیو توسط `RunStorageBackupJob` و Worker صف `backups` انجام می‌شود، نه در فرایند Cron. درخواست‌های `queued/running` در `storage_backup_runs` قابل پایش‌اند.
 - درخواست زمان‌بندی‌شده فقط وقتی قابل اجراست که `FARAST_BACKUP_ENCRYPTION_KEY` و حداقل یک Volume سالم با `drive_key=foreign_backup` پیکربندی شده باشد.
 - بکاپ با AES-256 رمزنگاری می‌شود؛ SHA-256 پس از انتقال مقایسه می‌شود و خوانایی Manifest و جریان دیتابیس رمزگشایی‌شده نیز قبل از موفق علامت‌گذاری شدن بررسی می‌شود.
+- پوشش فایل فعلی شامل `storage/app/private`، `storage/app/public`، `storage/app/remote-archive` و فایل‌های مدیریت‌شده روی Volumeهای ثبت‌شده است؛ این بکاپ جایگزین نسخه کد، `vendor/`، فایل `.env`، `APP_KEY` یا تنظیمات میزبان نیست.
 - قفل اجرای بکاپ در Cache مشترک، اجرای هم‌زمان Snapshotها را متوقف می‌کند. فرمان `storage:recover-stale-backup-runs` هر ۱۵ دقیقه اجرا می‌شود: اجرای running قدیمی‌تر از ۵ ساعت (شامل snapshot lock و رکورد مقصد) و درخواست queued قدیمی‌تر از ۲۴ ساعت را failed می‌کند. `storage:backup-weekly` نیز پیش از dispatch همین پاک‌سازی را اجرا می‌کند؛ این پاک‌سازی جایگزین پایش پیوسته Worker و صف نیست.
 - بررسی دستی: `php artisan storage:verify-backup {runId}`.
 - Restore مخرب است و دیتابیس و فایل‌ها را جایگزین می‌کند: `php artisan storage:restore-backup {runId} --confirm`. فقط در محیط بازیابی جداگانه یا پنجره رخداد کنترل‌شده اجرا شود. پس از Restore برنامه عمداً در Maintenance Mode باقی می‌ماند؛ پس از اعتبارسنجی داده‌ها، Storage و Workerها، اپراتور باید `php artisan up` را اجرا کند.
+- Restore با `runId` روی دیتابیس فعلی انجام می‌شود؛ Dump برای اشیایی که در Snapshot وجود داشته‌اند DROP دارد، اما اشیای Schema که بعد از Snapshot ایجاد شده و در Dump نیستند الزاماً حذف نمی‌شوند. برای بازیابی دقیق به وضعیت Snapshot، از دیتابیس خالی و مسیر Bootstrap با `--archive` استفاده کنید.
 - آزمون Restore باید از دیتابیس و Storage جداگانه استفاده کند؛ هرگز برای تمرین روی Production اجرا نشود.
 - **بازیابی از نابودی کامل دیتابیس:** پس از ساخت یک دیتابیس خالی با همان درایور، بازیابی `APP_KEY` اصلی و `FARAST_BACKUP_ENCRYPTION_KEY` از Secret Manager و دریافت فایل ZIP از مقصد خارجی، بدون نیاز به رکوردهای `storage_backup_runs` اجرا کنید: `php artisan storage:restore-backup --archive=/secure/path/backup.zip --confirm`. این مسیر Manifest رمزنگاری‌شده و HMAC موجودی فایل‌ها را بررسی می‌کند، دیتابیس و فایل‌ها را بازمی‌گرداند و رکورد `bootstrap_restore` می‌سازد. پس از Restore، `php artisan storage:check-volumes --limit=100` را اجرا کنید، سلامت سرویس را با `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh` بسنجید و مقصدها را بررسی کنید؛ برنامه تا اجرای صریح `php artisan up` در Maintenance می‌ماند.
 - کلید رمزنگاری بکاپ، `APP_KEY`، اطلاعات دسترسی مقصدهای خارجی و شناسه/مسیر آرشیوها باید خارج از همان محیط/حساب نگهداری بکاپ قابل بازیابی باشند.
@@ -119,6 +123,8 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 
 ## وضعیت میزبان و سرویس‌های جانبی
 
+- زمینه استقرار شناخته‌شده برنامه اصلی Laravel، هاست اشتراکی خارج از Render است و به‌روزرسانی‌ها از GitHub شاخه `main` توسط Update Bot دریافت می‌شوند. این مسیر با دو سرویس کمکی Python در Render متفاوت است.
+- کد، Workflow، Secret و تنظیمات مقصد Update Bot در این مخزن موجود نیست؛ بنابراین این تغییرات Bot یا هاست را دست‌کاری نمی‌کنند. برای هر استقرار باید SHA دقیق Commit دریافت‌شده توسط Bot ثبت شود و اجرای Migration کنترل‌شده، `config:cache`، `queue:restart`، `farast:health-check`، `storage:check-volumes --limit=100` و Smoke Check بیرونی قابل اثبات باشد. اگر Bot فقط فایل‌ها را همگام کند و فرمان‌های پس از انتشار را اجرا نکند، انتشار عملیاتی کامل محسوب نمی‌شود.
 - این مخزن هیچ Blueprint یا Dockerfile برای برنامه اصلی Laravel ندارد؛ `render.yaml` فقط دو سرویس کمکی Python را تعریف می‌کند. Workspace متصل‌شده Render نیز در ممیزی، سرویس Laravel یا دیتابیس Production نشان نداد.
 - `DEPLOY.md` و فایل‌های مخزن به‌تنهایی نام میزبان واقعی Laravel، دامنه Production یا دیتابیس زنده را تعیین نمی‌کنند. تا زمان شناسایی آن‌ها، هیچ Migration یا Deploy تولیدی نباید اجرا شود.
 - سرویس Voice-typing مخزن مستقل `a4adelahmadian86-wq/Voice-typing` است. Blueprint آن Docker، پلن پولی 2 CPU / 8 GB و دیسک پایدار 10 GB در Frankfurt تعریف می‌کند؛ راهنمای همان مخزن می‌گوید پلن Free برای اجرای مدل‌های صوتی مناسب نیست. در مستندات این مخزن، وضعیت پنل زنده با Blueprint اختلاف دارد. قبل از Sync یا تغییر پلن/منطقه باید قیمت و تغییرات دقیق در Render بررسی و تأیید شوند.
