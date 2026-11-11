@@ -45,6 +45,14 @@ class StoreProductIntakeService
             'supervisor_status', 'antivirus_status', 'is_primary',
         ]);
 
+        $archiveFileCount = $ingestions->filter(function ($item) {
+            $name = strtolower((string) $item->original_name);
+            return str_ends_with($name, '.zip')
+                || str_ends_with($name, '.tar')
+                || str_ends_with($name, '.tar.gz')
+                || str_ends_with($name, '.tar.bz2');
+        })->count();
+
         return [
             'file_count' => $ingestions->count(),
             'uploaded_count' => $ingestions->where('status', 'uploaded')->count(),
@@ -52,7 +60,8 @@ class StoreProductIntakeService
             'review_pending_count' => $ingestions->whereIn('supervisor_status', ['pending', 'queued', 'reviewing', 'awaiting_supervisor'])->count(),
             'review_completed_count' => $ingestions->where('supervisor_status', 'completed')->count(),
             'review_blocked_count' => $ingestions->whereIn('supervisor_status', ['blocked', 'failed', 'manual_review_required'])->count(),
-            'archive_file_count' => $ingestions->sum(fn ($item) => (int) data_get($item->inspection_json, 'archive_entry_count', 0)),
+            'archive_file_count' => $archiveFileCount,
+            'archive_entry_count' => (int) $ingestions->sum(fn ($item) => (int) data_get($item->inspection_json, 'archive_entry_count', 0)),
             'total_size_bytes' => (int) $ingestions->sum('size_bytes'),
             'files' => $ingestions->map(fn ($item) => [
                 'id' => $item->id,
