@@ -384,7 +384,12 @@ class PlatformCompletionController extends Controller {
    if($x['team_role']==='supervisor' && ! $teamRecord->supervisor_id){
     $teamRecord->update(['supervisor_id'=>$member->id]);
    } elseif($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
-    $teamRecord->update(['supervisor_id'=>null]);
+    $nextSupervisorId=DB::table('team_user')
+     ->where('team_id',$teamRecord->id)
+     ->where('team_role','supervisor')
+     ->orderBy('user_id')
+     ->value('user_id');
+    $teamRecord->update(['supervisor_id'=>$nextSupervisorId]);
    }
    $teamRecord->refresh();
    $this->auditAccessChange($r,$beforeState['team_role']!==null?'team.member.updated':'team.member.added',(int)$member->id,$beforeState,[
