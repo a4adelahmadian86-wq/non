@@ -34,6 +34,23 @@
 | Controller | 51 | 52 | کنترلر جدید `ReadinessController` |
 | Test PHP | 112 | 123 | آزمون‌های CRM course progress، email/SMS idempotency، هویت اعلان پشتیبانی، مالکیت Route اعلان، recovery/backup/readiness، چرخه کامل خرید تا ثبت‌نام دوره و observability history |
 
+
+### ترتیب Migrationها
+
+در 116 Migration جاری، ده گروه timestamp تکراری وجود دارد؛ نام فایل کامل همچنان یکتا است و Laravel آن‌ها را بر اساس نام کامل مرتب می‌کند، پس تکرار timestamp به‌تنهایی خطا نیست. اما ترتیب dependency باید در fresh install ثابت بماند. گروه‌ها:
+- `2026_09_12_000012`: افزودن email به users / ایجاد AI interactions
+- `2026_10_03_000001`: phase5 platform layer / professional commercial engine
+- `2026_10_19_000002`: support SLA / announcements
+- `2026_11_07_000001`: workflow retry ledger / workspace permissions
+- `2026_11_08_000001`: preview access level / product ingestion & knowledge
+- `2026_11_09_000012`: reader discussions / email delivery tracking
+- `2026_11_10_000001`: marketing consent / storage management
+- `2026_11_10_000005`: account security / coupon-order link
+- `2026_11_10_000006`: trusted devices / internal messaging
+- `2026_11_10_000011`: storage file key hash / CRM incentives
+
+هیچ‌کدام از این گروه‌ها به‌تنهایی اثبات شکست migration نیستند؛ معیار پذیرش این است که ترتیب lexical و dependency واقعی با `migrate:fresh` و upgrade از snapshot production تست شود. دو migration تکراری antivirus و دو create-table متعارض محصول که در بخش 11 ثبت شده‌اند فعلاً فقط در PRهای باز هستند و در شمار Migrationهای main نیستند.
+
 ## 2. Route ownership: اصلاح ادغام‌شده
 
 PR #371 در main ادغام شده است.
