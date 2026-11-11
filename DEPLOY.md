@@ -28,12 +28,13 @@
 برای هر Release از SHA مشخص و تأییدشده استفاده کنید:
 
 ```bash
+# Stop immediately on any failure; a failed build must not reach the live release.
+set -euo pipefail
+
 # Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
 # After the release is staged and its shared storage/.env are wired.
-# Stop immediately on any failure; do not bring the site up after a failed migration.
-set -euo pipefail
 php artisan down --render="errors::503" --retry=60
 php artisan migrate:status
 php artisan migrate --force
