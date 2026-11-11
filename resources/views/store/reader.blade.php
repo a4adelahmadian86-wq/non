@@ -166,8 +166,8 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 
 .farast-reader{min-height:100vh;font-family:Tahoma,Arial,sans-serif}
 .farast-reader i.fa-solid,.farast-reader i.fa-regular{display:none!important}
-.farast-reader .reader-tool:not(:has(span))[aria-label]::after{content:attr(aria-label);font-size:.62rem;line-height:1.25;white-space:nowrap}
-.farast-reader .reader-tool:not(:has(span))[aria-label]{width:auto;min-width:34px;padding-inline:8px}
+.farast-reader .reader-tool[aria-label]:not(.reader-tool-wide)::after{content:attr(aria-label);font-size:.62rem;line-height:1.25;white-space:nowrap}
+.farast-reader .reader-tool[aria-label]:not(.reader-tool-wide){width:auto;min-width:34px;padding-inline:8px}
 .farast-reader .farast-studio-action[aria-label]::after,.farast-reader .farast-audio-play[aria-label]::after,.farast-reader .farast-audio-collapse[aria-label]::after{content:attr(aria-label);font-size:.62rem;white-space:nowrap}
 .farast-reader .farast-audio-play,.farast-reader .farast-audio-collapse{width:auto;min-width:38px;padding-inline:8px;border-radius:9px}
 .farast-reader .farast-reader-heading span{font-family:Tahoma,Arial,sans-serif}
