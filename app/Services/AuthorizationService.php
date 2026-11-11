@@ -352,6 +352,16 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
+            // When a resource declares its organization, it must agree with the
+            // actor's organization. A shared/corrupt team pivot cannot expose a
+            // foreign-organization user or record.
+            if ($hasResourceContext && array_key_exists('organization_id', $context)
+                && ($context['organization_id'] === null
+                    || $user->organization_id === null
+                    || (int) $context['organization_id'] !== (int) $user->organization_id)) {
+                return false;
+            }
+
             // A record must belong to an explicitly shared team. Cache the
             // actor's memberships once per request to keep list filtering bounded.
             if ($hasResourceContext) {
