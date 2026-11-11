@@ -35,4 +35,24 @@ class AuditLogObservabilityTest extends TestCase
             'callback' => 'https://example.test/callback?token=secret-value&state=ok',
         ]);
     }
+
+    public function test_audit_uses_active_job_trace_instead_of_stale_request_attributes(): void
+    {
+        $request = Request::create('/admin/settings', 'POST');
+        $request->attributes->set('farast.request_id', 'stale-request');
+        $request->attributes->set('farast.correlation_id', 'stale-correlation');
+        app()->instance('request', $request);
+        app(FarastTraceContext::class)->set('job-request-123', 'job-correlation-456');
+
+        $query = Mockery::mock();
+        DB::shouldReceive('table')->once()->with('audit_logs')->andReturn($query);
+        $query->shouldReceive('insert')->once()->with(Mockery::on(function (array $row): bool {
+            $meta = json_decode($row['meta'], true);
+
+            return ($meta['request_id'] ?? null) === 'job-request-123'
+                && ($meta['correlation_id'] ?? null) === 'job-correlation-456';
+        }));
+
+        app(AuditLogService::class)->record(7, 'job.action', null);
+    }
 }
