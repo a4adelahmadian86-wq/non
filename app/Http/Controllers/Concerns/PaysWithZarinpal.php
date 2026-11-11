@@ -228,6 +228,7 @@ trait PaysWithZarinpal
                         'order_id' => (int) $locked->id,
                         'amount_rials' => (int) $locked->total_rials,
                         'order_kind' => (string) ($locked->pricing_snapshot['kind'] ?? 'store'),
+                        'status' => (string) $locked->status,
                     ],
                     'order:'.$locked->id.':paid',
                 );
@@ -265,6 +266,7 @@ trait PaysWithZarinpal
                         'order_id' => (int) $order->id,
                         'amount_rials' => (int) $order->total_rials,
                         'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'store'),
+                        'status' => (string) $order->status,
                     ],
                     'order:'.$order->id.':paid',
                 );
