@@ -453,6 +453,13 @@ class StorageManager
 
     public function cleanupExpiredVolumeReservations(int $limit = 100): int
     {
+        // A process may die after claiming a reservation but before finishing provider cleanup.
+        // Recover claims only after a lease longer than the provider request timeout.
+        StorageVolumeReservation::query()
+            ->where('status', 'cleaning')
+            ->where('updated_at', '<', now()->subMinutes(15))
+            ->update(['status' => 'active', 'expires_at' => now()]);
+
         $reservations = StorageVolumeReservation::query()
             ->where('status', 'active')
             ->where('expires_at', '<=', now())
