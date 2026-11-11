@@ -31,6 +31,18 @@ class BusinessCommerceLifecycleTest extends TestCase
             'balance_rials' => 500000,
         ]);
 
+        DB::table('farast_workflows')->insert([
+            'user_id' => $customer->id,
+            'name' => 'پیگیری سفارش پرداخت‌شده',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([
+                ['action' => 'create_follow_up', 'title' => 'پیگیری سفارش پرداخت‌شده', 'priority' => 'normal'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $category = StoreCategory::create([
             'name' => 'دوره‌های آزمون',
             'slug' => 'phase7-course-category',
@@ -140,6 +152,12 @@ class BusinessCommerceLifecycleTest extends TestCase
             'user_id' => $customer->id,
             'type' => 'order_paid',
         ]);
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $customer->id,
+            'created_by' => $customer->id,
+            'title' => 'پیگیری سفارش پرداخت‌شده',
+            'priority' => 'normal',
+        ]);
 
         // Replaying the same wallet checkout must not create a second financial
         // entry, payment, entitlement, enrollment, or order-paid notification.
@@ -156,6 +174,10 @@ class BusinessCommerceLifecycleTest extends TestCase
         $this->assertSame(1, DB::table('farast_notifications')
             ->where('user_id', $customer->id)
             ->where('type', 'order_paid')
+            ->count());
+        $this->assertSame(1, DB::table('crm_follow_up_tasks')
+            ->where('customer_id', $customer->id)
+            ->where('title', 'پیگیری سفارش پرداخت‌شده')
             ->count());
 
         $this->get(route('store.course.learn', $product))
