@@ -214,89 +214,57 @@ class StorageBackupService
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('ساخت فایل فشرده بکاپ ناموفق بود.');
         }
-        $zip->setPassword($password);
+        if (! $zip->setPassword($password)) {
+            $zip->close();
+            throw new RuntimeException('تنظیم کلید رمزنگاری آرشیو بکاپ ناموفق بود.');
+        }
+
         $manifest = [
+            'format_version' => 2,
             'created_at' => now()->toIso8601String(),
             'application' => config('app.name'),
             'database_driver' => config('database.connections.'.config('database.default').'.driver', config('database.default')),
             'storage_policy' => 'farast-storage-core-v1',
         ];
-        $this->addDirectory($zip, storage_path('app/private'), 'private');
-        $this->addDirectory($zip, storage_path('app/public'), 'public');
-        $this->addDirectory($zip, storage_path('app/remote-archive'), 'legacy-remote-archive');
-        $this->addDatabaseDump($zip, $work);
+        $entries = [];
+
+        $this->addDirectory($zip, storage_path('app/private'), 'private', $entries);
+        $this->addDirectory($zip, storage_path('app/public'), 'public', $entries);
+        $this->addDirectory($zip, storage_path('app/remote-archive'), 'legacy-remote-archive', $entries);
+        $this->addDatabaseDump($zip, $work, $entries);
+
         $managedCount = 0;
-        StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])->whereNull('storage_volume_id')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
+        StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])->whereNull('storage_volume_id')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
             foreach ($files as $file) {
                 $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
                 $temporary = $work.'/staged-'.$file->id;
                 $this->storage->downloadTo($disk, $file->file_key, $temporary);
                 $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
-                $this->addEncryptedFile($zip, $temporary, $entry);
+                $this->addEncryptedFile($zip, $temporary, $entry, $entries);
                 $managedCount++;
             }
         });
-        StorageManagedFile::query()->whereIn('status', ['active', 'delete_pending'])->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
+        StorageManagedFile::query()->whereIn('status', ['active', 'delete_pending'])->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
             foreach ($files as $file) {
                 if (! $file->volume) continue;
                 $temporary = $work.'/managed-'.$file->id;
                 $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
                 $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
                 $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
-                $this->addEncryptedFile($zip, $temporary, $entry);
+                $this->addEncryptedFile($zip, $temporary, $entry, $entries);
                 $managedCount++;
             }
         });
+
         $manifest['managed_files_included'] = $managedCount;
+        $manifest['entries'] = $entries;
+        $manifest['entry_count'] = count($entries);
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        $zip->setEncryptionName('manifest.json', ZipArchive::EM_AES_256);
-        if (! $zip->close()) throw new RuntimeException('بستن آرشیو بکاپ ناموفق بود.');
-    }
-
-    private function addDatabaseDump(ZipArchive $zip, string $work): void
-    {
-        $connection = config('database.default');
-        $config = config('database.connections.'.$connection, []);
-        $driver = $config['driver'] ?? $connection;
-        $dump = $work.'/database.sql';
-
-        if ($driver === 'sqlite') {
-            $database = $config['database'] ?? '';
-            if (! is_file($database) || ! copy($database, $dump)) throw new RuntimeException('فایل پایگاه داده SQLite قابل کپی نیست.');
-        } elseif ($driver === 'mysql' || $driver === 'mariadb') {
-            $command = [
-                'mysqldump',
-                '--host='.(string) ($config['host'] ?? '127.0.0.1'),
-                '--port='.(string) ($config['port'] ?? '3306'),
-                '--user='.(string) ($config['username'] ?? ''),
-                '--single-transaction', '--routines', '--triggers',
-                '--result-file='.$dump,
-                (string) ($config['database'] ?? ''),
-            ];
-            $process = new Process($command, base_path(), ['MYSQL_PWD' => (string) ($config['password'] ?? '')]);
-            $process->setTimeout(3600);
-            $process->run();
-            if (! $process->isSuccessful()) throw new RuntimeException('تهیه خروجی MySQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
-            if (! is_file($dump) || filesize($dump) === 0) throw new RuntimeException('فایل خروجی MySQL خالی یا ایجادنشده است.');
-        } elseif ($driver === 'pgsql') {
-            $command = [
-                'pg_dump', '--host='.(string) ($config['host'] ?? '127.0.0.1'),
-                '--port='.(string) ($config['port'] ?? '5432'),
-                '--username='.(string) ($config['username'] ?? ''),
-                '--format=plain', '--no-owner', '--no-privileges', '--clean', '--if-exists',
-                '--file='.$dump,
-                (string) ($config['database'] ?? ''),
-            ];
-            $process = new Process($command, base_path(), ['PGPASSWORD' => (string) ($config['password'] ?? '')]);
-            $process->setTimeout(3600);
-            $process->run();
-            if (! $process->isSuccessful()) throw new RuntimeException('تهیه خروجی PostgreSQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
-            if (! is_file($dump) || filesize($dump) === 0) throw new RuntimeException('فایل خروجی PostgreSQL خالی یا ایجادنشده است.');
-        } else {
-            throw new RuntimeException('درایور پایگاه داده برای بکاپ پشتیبانی نشده است.');
+        if (! $zip->setEncryptionName('manifest.json', ZipArchive::EM_AES_256)) {
+            $zip->close();
+            throw new RuntimeException('رمزنگاری Manifest بکاپ ناموفق بود.');
         }
-
-        $this->addEncryptedFile($zip, $dump, 'database/database.sql');
+        if (! $zip->close()) throw new RuntimeException('بستن آرشیو بکاپ ناموفق بود.');
     }
 
     private function addDirectory(ZipArchive $zip, string $directory, string $prefix): void
