@@ -39,6 +39,7 @@ class StorageManager
         foreach ($volumes as $volume) {
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
+                $this->verifyWrittenObject($volume, $key, $checksum);
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
                 } catch (\Throwable $exception) {
@@ -275,6 +276,24 @@ class StorageManager
         }
         if ($volume->driver !== 's3') throw new RuntimeException('آداپتور این نوع سرویس هنوز نصب نشده است.');
         $this->s3->putFile($volume, $key, $localPath);
+    }
+
+    private function verifyWrittenObject(StorageVolume $volume, string $key, string $expectedChecksum): void
+    {
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-storage-verify');
+        if (! is_string($temporary)) {
+            throw new RuntimeException('ساخت فایل موقت برای تأیید صحت آپلود ناموفق بود.');
+        }
+
+        try {
+            $this->downloadTo($this->volumeDisk($volume), $key, $temporary);
+            $actualChecksum = hash_file('sha256', $temporary);
+            if (! is_string($actualChecksum) || ! hash_equals($expectedChecksum, $actualChecksum)) {
+                throw new RuntimeException('Checksum فایل ذخیره‌شده با فایل اصلی مطابقت ندارد.');
+            }
+        } finally {
+            @unlink($temporary);
+        }
     }
 
     private function register(
