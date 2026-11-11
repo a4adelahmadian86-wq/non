@@ -21,6 +21,7 @@ class AuthorizationService
     public const SCOPES = ['global', 'organization', 'team', 'own'];
 
     private array $permissionIds = [];
+    private array $decisionCache = [];
 
     public const PERMISSIONS = [
         'dashboard.view','users.view','users.create','users.edit','users.delete','users.suspend',
@@ -78,6 +79,25 @@ class AuthorizationService
             return false;
         }
 
+        $cacheKey = implode(':', [
+            (string) $user->id,
+            (string) $user->role,
+            (string) $user->is_blocked,
+            (string) ($user->organization_id ?? ''),
+            $permission,
+        ]);
+        if (array_key_exists($cacheKey, $this->decisionCache)) {
+            return $this->decisionCache[$cacheKey];
+        }
+
+        $decision = $this->resolvePermissionDecision($user, $permission);
+        $this->decisionCache[$cacheKey] = $decision;
+
+        return $decision;
+    }
+
+    private function resolvePermissionDecision(User $user, string $permission): bool
+    {
         $direct = $this->activeDirectGrants($user, $permission);
         if ($direct->contains(fn (object $grant): bool => $grant->effect === 'deny')) {
             return false;
