@@ -433,6 +433,9 @@ class StorageManager
                 ->where('reservation_key', $reservationKey)
                 ->lockForUpdate()
                 ->firstOrFail();
+            if ($reservation->status !== 'active') {
+                throw new RuntimeException('رزرو ظرفیت در حال پاک‌سازی است و قابل نهایی‌سازی نیست.');
+            }
             $volume = StorageVolume::query()->lockForUpdate()->findOrFail($reservation->storage_volume_id);
             $volume->increment('used_bytes', (int) $reservation->reserved_bytes);
             $volume->increment('object_count', (int) $reservation->reserved_objects);
@@ -442,12 +445,16 @@ class StorageManager
 
     public function releaseVolumeCapacityReservation(string $reservationKey): void
     {
-        StorageVolumeReservation::query()->where('reservation_key', $reservationKey)->delete();
+        StorageVolumeReservation::query()
+            ->where('reservation_key', $reservationKey)
+            ->where('status', 'active')
+            ->delete();
     }
 
     public function cleanupExpiredVolumeReservations(int $limit = 100): int
     {
         $reservations = StorageVolumeReservation::query()
+            ->where('status', 'active')
             ->where('expires_at', '<=', now())
             ->orderBy('id')
             ->limit(max(1, $limit))
@@ -455,9 +462,27 @@ class StorageManager
 
         $cleaned = 0;
         foreach ($reservations as $reservation) {
+            $claimed = DB::transaction(function () use ($reservation): ?StorageVolumeReservation {
+                $locked = StorageVolumeReservation::query()
+                    ->whereKey($reservation->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $locked || $locked->status !== 'active' || $locked->expires_at->isFuture()) {
+                    return null;
+                }
+
+                $locked->update(['status' => 'cleaning']);
+
+                return $locked->fresh();
+            });
+
+            if (! $claimed) {
+                continue;
+            }
+
             try {
-                $volume = StorageVolume::find($reservation->storage_volume_id);
-                $key = (string) data_get($reservation->metadata, 'object_key', '');
+                $volume = StorageVolume::find($claimed->storage_volume_id);
+                $key = (string) data_get($claimed->metadata, 'object_key', '');
                 if ($volume && $key !== '') {
                     $key = StoragePath::normalizeObjectKey($key);
                     if ($volume->driver === 'local') {
@@ -470,23 +495,24 @@ class StorageManager
                     }
                 }
 
-                DB::transaction(function () use ($reservation): void {
+                DB::transaction(function () use ($claimed): void {
                     $lockedReservation = StorageVolumeReservation::query()
-                        ->whereKey($reservation->id)
+                        ->whereKey($claimed->id)
                         ->lockForUpdate()
                         ->first();
-                    if (! $lockedReservation) {
+                    if (! $lockedReservation || $lockedReservation->status !== 'cleaning') {
                         return;
                     }
 
                     $managedFileId = (int) data_get($lockedReservation->metadata, 'managed_file_id', 0);
+                    $reservationKey = (string) $lockedReservation->reservation_key;
                     $lockedReservation->delete();
 
                     if ($managedFileId > 0) {
                         $managed = StorageManagedFile::query()->lockForUpdate()->find($managedFileId);
                         if ($managed) {
                             $metadata = (array) $managed->metadata;
-                            if (hash_equals((string) data_get($metadata, 'capacity_reservation_key', ''), (string) $lockedReservation->reservation_key)) {
+                            if (hash_equals((string) data_get($metadata, 'capacity_reservation_key', ''), $reservationKey)) {
                                 unset($metadata['capacity_reservation_key']);
                                 $changes = ['metadata' => $metadata];
                                 if ($managed->status === 'transferring') {
@@ -498,7 +524,19 @@ class StorageManager
                     }
                 });
                 $cleaned++;
-            } catch (\Throwable $exception) {
+            } catch (\\Throwable $exception) {
+                DB::transaction(function () use ($claimed): void {
+                    $locked = StorageVolumeReservation::query()
+                        ->whereKey($claimed->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($locked && $locked->status === 'cleaning') {
+                        $locked->update([
+                            'status' => 'active',
+                            'expires_at' => now()->addMinutes(15),
+                        ]);
+                    }
+                });
                 report($exception);
             }
         }
