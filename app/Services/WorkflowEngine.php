@@ -341,10 +341,15 @@ class WorkflowEngine
                                         ->where('started_at', '<=', now()->subMinutes(30));
                                 });
                         });
-                })->orWhereNotExists(function ($allCompleted) {
-                    $allCompleted->select(DB::raw(1))->from('farast_workflow_event_workflows')
-                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
-                        ->where('status', '!=', 'completed');
+                })->orWhere(function ($allCompleted) {
+                    $allCompleted->whereExists(function ($anyMapping) {
+                        $anyMapping->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                            ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id');
+                    })->whereNotExists(function ($unfinished) {
+                        $unfinished->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                            ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
+                            ->where('status', '!=', 'completed');
+                    });
                 });
             })
             ->where(function ($states) {
@@ -606,6 +611,10 @@ class WorkflowEngine
                             'updated_at' => now(),
                         ]);
                 }
+
+                DB::table('farast_workflow_events')->where('id', $event->id)->update([
+                    'updated_at' => now(),
+                ]);
 
                 DB::table('farast_workflow_event_workflows')->where('id', $locked->id)->update([
                     'status' => 'running',
