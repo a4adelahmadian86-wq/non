@@ -193,6 +193,50 @@ class AuthorizationService
         });
     }
 
+    public function updateRole(
+        User $actor,
+        string $key,
+        string $name,
+        array $permissionKeys,
+        bool $isActive = true,
+        ?Request $request = null,
+    ): object {
+        abort_unless($this->canManageScope($actor, $actor, 'global', null, null), 403);
+        $role = DB::table('roles')->where('key', $key)->first();
+        abort_unless($role, 404);
+        abort_if((bool) $role->is_system, 403, 'نقش سیستمی قابل ویرایش نیست.');
+        $name = trim($name);
+        abort_unless($name !== '' && mb_strlen($name) <= 160, 422, 'نام نقش معتبر نیست.');
+
+        $permissionIds = [];
+        foreach (array_values(array_unique($permissionKeys)) as $permissionKey) {
+            $permissionId = $this->permissionId((string) $permissionKey);
+            abort_unless($permissionId !== null, 422, 'مجوز تعریف‌نشده: '.(string) $permissionKey);
+            $permissionIds[] = $permissionId;
+        }
+
+        return DB::transaction(function () use ($actor, $role, $key, $name, $permissionIds, $isActive, $request): object {
+            DB::table('roles')->where('id', $role->id)->update([
+                'name' => $name,
+                'is_active' => $isActive,
+                'updated_at' => now(),
+            ]);
+            RolePermission::query()->where('role', $key)->delete();
+
+            foreach ($permissionIds as $permissionId) {
+                RolePermission::firstOrCreate(['role' => $key, 'permission_id' => $permissionId]);
+            }
+
+            $this->audit('role.updated', $actor, null, null, [
+                'role_key' => $key,
+                'is_active' => $isActive,
+                'permission_count' => count($permissionIds),
+            ], $request);
+
+            return DB::table('roles')->where('id', $role->id)->first();
+        });
+    }
+
     public function assignRole(
         User $actor,
         User $subject,
