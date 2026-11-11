@@ -880,4 +880,32 @@ class AdvancedAccessControlTest extends TestCase
             'effect' => 'allow',
         ]);
     }
+
+    public function test_user_suspension_and_wallet_adjustment_roll_back_when_audit_write_fails(): void
+    {
+        $admin = $this->user('09140000160', User::ROLE_ADMIN);
+        $employee = $this->user('09140000161');
+        $wallet = \\App\\Models\\Wallet::query()->firstOrCreate(
+            ['user_id' => $employee->id],
+            ['balance_rials' => 5000],
+        );
+
+        DB::unprepared("CREATE TRIGGER fail_admin_audit BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+
+        $this->actingAs($admin)
+            ->post('/admin/users/'.$employee->id.'/block')
+            ->assertServerError();
+
+        $this->assertFalse((bool) $employee->fresh()->is_blocked);
+
+        $this->post('/admin/finance/users/'.$employee->id.'/wallet', [
+            'type' => 'credit',
+            'amount_rials' => 1000,
+            'description' => 'Atomic audit regression',
+        ])->assertServerError();
+
+        $this->assertSame(5000, (int) DB::table('wallets')->where('user_id', $employee->id)->value('balance_rials'));
+        $this->assertSame(0, DB::table('wallet_transactions')->where('wallet_id', $wallet->id)->count());
+    }
+
 }
