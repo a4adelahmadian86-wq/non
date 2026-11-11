@@ -210,3 +210,10 @@ PR #407 فقط آزمون Integration regression را اضافه می‌کند. 
 ### 8.14 اتصال سند canonical به پروژه
 
 در `EditorDocumentService::save()` هنگام ساخت `FarastDocument` از روی `TypingDocument`، `project_id` legacy منتقل نمی‌شد؛ بنابراین سند canonical و نسخه‌های آن از رابطه اصلی پروژه جدا می‌ماندند. همچنین اختلاف project_id دو رکورد بدون خطای صریح پذیرفته می‌شد. PR #413 شناسه پروژه را در ایجاد/ذخیره canonical حفظ می‌کند، relink بین دو پروژه را رد می‌کند و رابطه معکوس `TypingDocument::farastDocument` را به BelongsTo اصلاح می‌کند. آزمون، ایجاد نسخه‌ها، sync سازگاری legacy و جلوگیری از انتقال سند بین پروژه‌ها را پوشش می‌دهد.
+
+
+### 8.15 رزرو کوپن پیش از پرداخت درگاه: مانع مالی حل‌نشده
+
+در `PaysWithZarinpal` ابتدا درگاه با موفقیت verify می‌شود و سپس `StoreCouponRedemptionService::redeemForPaidOrder()` داخل transaction دیتابیس اجرا می‌شود. این سرویس هنوز وضعیت فعلی coupon، زمان انقضا، سقف استفاده، رضایت بازاریابی، بودجه کمپین و حاشیه سود جاری را دوباره بررسی می‌کند و در چند حالت `RuntimeException` می‌دهد. در این حالت transaction محلی rollback می‌شود، اما پرداخت خارجی قبلاً verify/capture شده است؛ در نتیجه احتمال دارد مشتری پول پرداخت کرده باشد ولی Order و Payment در دیتابیس pending باقی بمانند و entitlement صادر نشود.
+
+این مسئله با جابه‌جایی ترتیب paid در PR #411 حل نمی‌شود؛ چون exception همچنان کل transaction را rollback می‌کند. راه‌حل قابل قبول نیازمند قرارداد رزرو تخفیف در زمان checkout، snapshot معتبر و تغییرناپذیر پیشنهاد، تبدیل reservation به redemption پس از پرداخت، و مسیر آزادسازی/انقضای رزرو یا reconciliation/refund برای پرداخت‌های دیررس است. تا طراحی و آزمون این چرخه، پرداخت درگاه همراه کوپن را نباید کامل و قابل اتکا اعلام کرد.
