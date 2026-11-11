@@ -82,7 +82,6 @@ return new class extends Migration
         $duplicate = DB::table('payments')
             ->select('gateway', 'transaction_id')
             ->whereNotNull('transaction_id')
-            ->where('transaction_id', '<>', '')
             ->groupBy('gateway', 'transaction_id')
             ->havingRaw('COUNT(*) > 1')
             ->first();
