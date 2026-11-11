@@ -51,6 +51,30 @@
         <p class="product-pipeline-empty">در حال حاضر سندی در وضعیت نیازمند رسیدگی یا پردازش طولانی ثبت نشده است.</p>
       @endif
     </section>
+    @if($publicationQueue->isNotEmpty())
+      <section class="product-pipeline-panel" aria-label="صف بررسی و انتشار محصولات">
+        <div class="product-pipeline-heading">
+          <div><strong>صف بررسی و انتشار محصولات</strong><small>هیچ محصولی پیش از پایان بررسی نهایی به‌صورت عمومی منتشر نمی‌شود.</small></div>
+          <span class="product-pipeline-status">{{ $publicationQueue->count() }} مورد</span>
+        </div>
+        <div class="product-pipeline-attention">
+          @foreach($publicationQueue as $review)
+            <div class="product-pipeline-attention-row">
+              <span>
+                <b>{{ $review->product?->title ?? 'محصول حذف‌شده' }}</b>
+                <small>{{ $review->product?->type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }} · ثبت‌کننده: {{ $review->submitter?->name ?? 'کاربر حذف‌شده' }} · {{ $review->created_at?->format('Y/m/d H:i') }}</small>
+                @if($review->ai_verdict)<small>نتیجه AI: {{ match($review->ai_verdict) { 'approved' => 'تأیید', 'needs_changes' => 'نیازمند اصلاح', 'blocked' => 'رد شده', 'unavailable' => 'سرویس در دسترس نیست', default => $review->ai_verdict } }} · امتیاز {{ $review->ai_score ?? '—' }}</small>@endif
+              </span>
+              <span class="product-pipeline-status">{{ $review->status === 'pending_manager' ? 'در انتظار تأیید مدیر' : 'در انتظار بررسی ناظر هوشمند' }}</span>
+              @if($review->product)
+                <a href="{{ route('admin.store.edit', $review->product) }}">بررسی و تکمیل</a>
+                @if($review->product->type === 'course')<a href="{{ route('admin.store.course.edit', $review->product) }}">مدیریت دوره</a>@endif
+              @endif
+            </div>
+          @endforeach
+        </div>
+      </section>
+    @endif
     <form method="get" class="product-center-filters" aria-label="فیلتر و مرتب‌سازی محصولات">
       <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، شناسه یا برچسب محصول" aria-label="جستجوی محصول">
       <select name="type" aria-label="نوع محصول"><option value="">همه نوع‌ها</option><option value="digital_file" @selected($type==='digital_file')>فایل دانلودی</option><option value="course" @selected($type==='course')>دوره آموزشی</option></select>
