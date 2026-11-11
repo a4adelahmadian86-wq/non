@@ -85,7 +85,7 @@ class StorageManager
         ?int $productId = null,
         string $visibility = 'private'
     ): array {
-        $originalName = basename(str_replace('\\\\', '/', trim($originalName)));
+        $originalName = basename(str_replace('\\', '/', trim($originalName)));
         if ($originalName === '' || $originalName === '.' || $originalName === '..') {
             throw new RuntimeException('نام فایل برای ذخیره‌سازی معتبر نیست.');
         }
