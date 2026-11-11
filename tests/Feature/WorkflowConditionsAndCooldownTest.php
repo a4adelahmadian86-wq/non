@@ -963,4 +963,47 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertStringContainsString('unhealthy', $output);
     }
 
+    public function test_event_level_infrastructure_retry_limit_requires_manual_recovery_for_unstarted_steps(): void
+    {
+        $owner = $this->owner('09140000242');
+        $workflow = $this->workflow($owner);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'event-retry-limit:document:242',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 242, 'revision' => 1]),
+            'status' => 'failed',
+            'attempts' => 5,
+            'matched_workflows' => 1,
+            'failed_workflows' => 0,
+            'matched_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'pending',
+            'attempts' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $this->assertFalse($engine->shouldRetryEvent($eventId, 5));
+        $this->assertSame(0, $engine->dispatchPendingEvents());
+
+        $this->assertTrue($engine->retryFailedEvent($eventId));
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'pending',
+            'attempts' => 0,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'pending',
+            'attempts' => 0,
+        ]);
+    }
+
 }
