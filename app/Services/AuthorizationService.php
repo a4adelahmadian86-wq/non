@@ -281,6 +281,26 @@ class AuthorizationService
         });
     }
 
+    public function revokeDirectPermission(User $actor, int $grantId, ?Request $request = null): void
+    {
+        $grant = DB::table('user_permission_grants')->where('id', $grantId)->first();
+        abort_unless($grant, 404);
+        $subject = User::query()->findOrFail($grant->user_id);
+        abort_unless($this->canManageScope($actor, $subject, $grant->scope, $grant->organization_id, $grant->team_id), 403);
+
+        DB::transaction(function () use ($actor, $subject, $grant, $request): void {
+            DB::table('user_permission_grants')->where('id', $grant->id)->update([
+                'expires_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->audit('permission.direct_revoked', $actor, $subject, null, [
+                'grant_id' => $grant->id,
+                'permission_id' => $grant->permission_id,
+                'effect' => $grant->effect,
+            ], $request);
+        });
+    }
+
     private function validScopeContext(string $scope, ?int $organizationId, ?int $teamId): bool
     {
         return match ($scope) {
@@ -308,7 +328,7 @@ class AuthorizationService
                     ->exists()
             );
         $actorScope = $manageableAssignments->isNotEmpty()
-            ? $manageableAssignments->pluck('scope')->sortBy(fn ($value) => $rank[$value] ?? 4)->first()
+            ? $manageableAssignments->pluck('scope')->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
             : ($this->activeAssignments($actor)->isEmpty() ? $this->legacyScope($actor) : 'own');
 
         if (! isset($rank[$actorScope]) || $rank[$scope] < $rank[$actorScope]) {
