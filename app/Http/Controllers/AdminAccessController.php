@@ -77,7 +77,7 @@ class AdminAccessController extends Controller
             $roleKey,
             $data['name'],
             $data['permissions'] ?? [],
-            array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true,
+            isset($data['is_active']) ? (bool) $data['is_active'] : null,
             $request,
         );
 
