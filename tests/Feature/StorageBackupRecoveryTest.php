@@ -230,7 +230,7 @@ class StorageBackupRecoveryTest extends TestCase
         ]);
         File::put(storage_path('app/private/backup-recovery-bootstrap-only.txt'), 'must-be-removed');
 
-        app()->forgetInstance(\\App\\Services\\Storage\\StorageManager::class);
+        app()->forgetInstance(\App\Services\Storage\StorageManager::class);
         $bootstrapExitCode = Artisan::call('storage:restore-backup', [
             '--archive' => $archivePath,
             '--confirm' => true,
