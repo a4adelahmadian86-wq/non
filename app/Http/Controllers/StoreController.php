@@ -551,7 +551,7 @@ class StoreController extends Controller
                         || ($audioState === 'upgrading' && ! $audioArtifactReady);
                     $audioUpgrading = $audioState === 'upgrading' && $audioArtifactReady;
                     $audioFailed = ! $audioArtifactReady && in_array($audioState, ['failed', 'partial', 'completed', 'ready'], true);
-                    $audioUnavailable = in_array($audioState, ['awaiting_provider', 'unavailable'], true);
+                    $audioUnavailable = in_array($audioState, ['awaiting_provider', 'unavailable', 'not_applicable'], true);
                     $readerAudioStatus = $audioArtifactReady
                         ? ($audioUpgrading ? 'upgrading' : 'ready')
                         : ($audioPending ? 'pending' : ($audioFailed ? 'failed' : ($audioUnavailable ? 'unavailable' : '')));
