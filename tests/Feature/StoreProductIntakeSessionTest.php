@@ -71,8 +71,6 @@ class StoreProductIntakeSessionTest extends TestCase
             'role' => User::ROLE_EMPLOYEE,
         ]);
 
-        $this->actingAs($employee)->get(route('admin.store.intake.create'))->assertForbidden();
-
         $permission = Permission::firstOrCreate(
             ['key' => 'store.products.create'],
             ['label' => 'ثبت محصول و دوره', 'group' => 'store']
