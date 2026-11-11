@@ -159,11 +159,25 @@ class StorageManager
             ->where('started_at', '>=', now()->subHours(8))
             ->exists();
 
-        if ($managed && $snapshotInProgress) {
-            $metadata = (array) $managed->metadata;
-            $metadata['delete_after_snapshot'] = true;
-            $managed->update(['status' => 'delete_pending', 'metadata' => $metadata]);
-            return;
+        if ($managed) {
+            // Persist the deletion intent before touching the external volume.
+            // If the provider or the following DB commit fails, scheduled cleanup
+            // can retry this idempotent operation without losing the managed record.
+            $managed = DB::transaction(function () use ($managed, $snapshotInProgress): ?StorageManagedFile {
+                $locked = StorageManagedFile::query()->lockForUpdate()->find($managed->id);
+                if (! $locked || $locked->status === 'deleted') return null;
+
+                $metadata = (array) $locked->metadata;
+                $metadata['delete_requested_at'] ??= now()->toIso8601String();
+                if ($snapshotInProgress) {
+                    $metadata['delete_after_snapshot'] = true;
+                }
+                $locked->update(['status' => 'delete_pending', 'metadata' => $metadata]);
+
+                return $locked->fresh();
+            });
+
+            if (! $managed || $snapshotInProgress) return;
         }
 
         if ($volumeId) {
@@ -188,14 +202,18 @@ class StorageManager
         if ($managed) {
             DB::transaction(function () use ($managed, $volumeId): void {
                 $locked = StorageManagedFile::query()->lockForUpdate()->find($managed->id);
-                if (! $locked || $locked->status === 'deleted') return;
+                if (! $locked || $locked->status === 'deleted' || $locked->status !== 'delete_pending') return;
+
                 if ($volumeId) {
                     DB::table('storage_volumes')->where('id', $volumeId)->update([
                         'used_bytes' => DB::raw('CASE WHEN used_bytes >= '.(int) $locked->size_bytes.' THEN used_bytes - '.(int) $locked->size_bytes.' ELSE 0 END'),
                         'object_count' => DB::raw('CASE WHEN object_count > 0 THEN object_count - 1 ELSE 0 END'),
                     ]);
                 }
-                $locked->update(['status' => 'deleted']);
+
+                $metadata = (array) $locked->metadata;
+                unset($metadata['delete_after_snapshot'], $metadata['delete_requested_at']);
+                $locked->update(['status' => 'deleted', 'metadata' => $metadata]);
             });
         }
     }
