@@ -337,6 +337,7 @@ class CrmController extends Controller
     public function storeNote(Request $request, int $customer, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate([
             'note' => 'required|string|min:2|max:5000',
             'visibility' => 'sometimes|in:internal',
@@ -362,6 +363,7 @@ class CrmController extends Controller
     public function storeFollowUp(Request $request, int $customer, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate([
             'title' => 'required|string|max:180',
             'description' => 'nullable|string|max:4000',
@@ -371,7 +373,7 @@ class CrmController extends Controller
         ]);
 
         if (! empty($data['assigned_to'])) {
-            $console->authorizeAction($request->user(), 'users', (int) $data['assigned_to']);
+            $console->authorizeAction($request->user(), 'users', (int) $data['assigned_to'], 'users.edit');
         }
 
         $id = DB::table('crm_follow_up_tasks')->insertGetId([
@@ -455,6 +457,7 @@ class CrmController extends Controller
     public function updateFollowUp(Request $request, int $customer, int $task, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate(['status' => 'required|in:open,completed,cancelled']);
 
         $followUp = DB::table('crm_follow_up_tasks')

@@ -98,22 +98,20 @@ class SupportTicketService
             $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
             $this->sla->applyTargets($ticket);
 
+            if ($ticket->user_id) {
+                app(WorkflowEngine::class)->enqueue('ticket.created', [
+                    'user_id' => (int) $ticket->user_id,
+                    'customer_id' => (int) $ticket->user_id,
+                    'ticket_id' => (int) $ticket->id,
+                    'ticket_code' => (string) $ticket->ticket_code,
+                    'status' => (string) $ticket->status,
+                ], 'ticket:'.$ticket->id.':created');
+            }
+
             return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
         });
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
-
-        if ($ticket->user_id) {
-            try {
-                app(WorkflowEngine::class)->dispatch(
-                    'ticket.created',
-                    ['user_id' => (int) $ticket->user_id, 'customer_id' => (int) $ticket->user_id, 'ticket_id' => (int) $ticket->id, 'ticket_code' => $ticket->ticket_code],
-                    'ticket:'.$ticket->id.':created',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
 
         if ($ticket->assignee) {
             $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee));
