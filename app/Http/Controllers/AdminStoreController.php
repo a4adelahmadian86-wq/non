@@ -529,7 +529,7 @@ class AdminStoreController extends Controller
                 ->allows($request->user(), 'store.security_scan'), 403);
             try {
                 $avResult = $antivirus->scan($disk->path($stagingPath));
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 throw new \Symfony\Component\HttpKernel\Exception\HttpException(503, 'موتور آنتی‌ویروس در دسترس نیست؛ فایل تأیید نشد.', $exception);
             }
             if (($avResult['status'] ?? null) === 'infected') {
