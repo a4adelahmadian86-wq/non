@@ -44,16 +44,21 @@ class AuditEventService
                 'payload_meta' => $payloadMeta,
             ];
 
+            $payload = $this->normalizePayload($payload);
+
             return FarastAuditEvent::create([
                 'event_id' => (string) Str::uuid(),
-                'user_id' => $userId,
-                'project_id' => $projectId,
-                'event_type' => $eventType,
-                'aggregate_type' => $aggregateType,
-                'aggregate_id' => $aggregateId,
-                'source' => $source,
-                'payload_meta' => $payloadMeta,
-                'payload_checksum' => hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                'user_id' => $payload['user_id'],
+                'project_id' => $payload['project_id'],
+                'event_type' => $payload['event_type'],
+                'aggregate_type' => $payload['aggregate_type'],
+                'aggregate_id' => $payload['aggregate_id'],
+                'source' => $payload['source'],
+                'payload_meta' => $payload['payload_meta'],
+                'payload_checksum' => hash('sha256', json_encode(
+                    $payload,
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+                )),
                 'previous_checksum' => $previous,
             ]);
         });
@@ -93,6 +98,25 @@ class AuditEventService
         if (! $lock) {
             throw new \RuntimeException('Canonical audit ledger migration lock is unavailable.');
         }
+    }
+
+    /**
+     * Normalize invalid UTF-8 before persistence so the stored JSON and the
+     * checksummed representation are byte-for-byte equivalent.
+     */
+    private function normalizePayload(array $payload): array
+    {
+        $encoded = json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        );
+        $normalized = json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
+
+        if (! is_array($normalized)) {
+            throw new \\UnexpectedValueException('Audit payload must serialize to an object.');
+        }
+
+        return $normalized;
     }
 
     private function sanitize(array $data, int $depth = 0): array
