@@ -473,37 +473,51 @@ class AdminController extends Controller
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
         abort_unless($console->sectionAllowed($request->user(), 'access'), 403, 'تغییر نقش فقط در دامنهٔ سراسری مجاز است.');
         $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
-        abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
 
-        $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
+        $data = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
+        $oldRole = null;
 
-        if ((int) $user->id === (int) $request->user()->id && $d['role'] !== User::ROLE_ADMIN) {
-            $anotherActiveAdminExists = User::query()
+        DB::transaction(function () use ($request, $user, $data, $audit, &$oldRole): void {
+            // Serialize all administrator-role changes so two concurrent
+            // self-demotions cannot remove the final active break-glass account.
+            $adminRows = User::query()
                 ->where('role', User::ROLE_ADMIN)
-                ->where('is_blocked', false)
-                ->where('id', '!=', $user->id)
-                ->exists();
-            abort_unless($anotherActiveAdminExists, 409, 'حداقل یک مدیر اصلی فعال باید در سامانه باقی بماند.');
-        }
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['id', 'is_blocked']);
 
-        $old = $user->role;
-        DB::transaction(function () use ($request, $user, $d, $old, $audit): void {
-            $user->update(['role' => $d['role']]);
-            $this->recordAccessAudit($request, 'user.base_role.updated', (int) $user->id, [
-                'role' => $old,
+            $actor = User::query()->whereKey($request->user()->id)->firstOrFail();
+            abort_unless($actor->isAdmin() && ! $actor->is_blocked, 403, 'حساب مدیر اصلی فعال نیست.');
+
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin() && (int) $lockedUser->id !== (int) $actor->id, 403, 'نقش مدیر اصلی کاربر دیگری قابل تغییر نیست.');
+
+            if ((int) $lockedUser->id === (int) $actor->id && $data['role'] !== User::ROLE_ADMIN) {
+                $activeAdminCount = $adminRows->filter(fn ($row) => ! (bool) $row->is_blocked)->count();
+                abort_unless($activeAdminCount > 1, 409, 'حداقل یک مدیر اصلی فعال باید در سامانه باقی بماند.');
+            }
+
+            $oldRole = (string) $lockedUser->role;
+            $lockedUser->update(['role' => $data['role']]);
+
+            $this->recordAccessAudit($request, 'user.base_role.updated', (int) $lockedUser->id, [
+                'role' => $oldRole,
             ], [
-                'role' => $d['role'],
+                'role' => $data['role'],
             ]);
 
             if (Schema::hasTable('audit_logs')) {
-                $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
-                    'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
+                $audit->record((int) $actor->id, 'admin.user.role_changed', $request->ip(), [
+                    'target_user_id' => (int) $lockedUser->id,
+                    'from' => $oldRole,
+                    'to' => $data['role'],
                 ]);
             }
         });
+
         app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
-        return back()->with('status', "نقش کاربر «{$user->name}» از {$old} به {$d['role']} تغییر کرد.");
+        return back()->with('status', "نقش کاربر «{$user->name}» از {$oldRole} به {$data['role']} تغییر کرد.");
     }
 
     private function databaseReachable(): bool
