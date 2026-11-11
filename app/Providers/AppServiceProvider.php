@@ -8,7 +8,9 @@ use App\Services\FarastTraceContext;
 use App\Services\SupportTicketService;
 use Illuminate\Auth\Events\Failed as AuthenticationFailed;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -135,6 +137,27 @@ class AppServiceProvider extends ServiceProvider
                 ]);
             } catch (Throwable $exception) {
                 error_log('FARAST logout logging failed: '.get_class($exception));
+            }
+        });
+
+        Event::listen(Lockout::class, function (Lockout $event): void {
+            try {
+                Log::warning('farast.security.authentication_lockout', [
+                    'route' => $event->request->route()?->getName(),
+                    'path' => $event->request->path(),
+                ]);
+            } catch (Throwable $exception) {
+                error_log('FARAST authentication lockout logging failed: '.get_class($exception));
+            }
+        });
+
+        Event::listen(PasswordReset::class, function (PasswordReset $event): void {
+            try {
+                Log::notice('farast.security.password_reset', [
+                    'actor_id' => $event->user->getAuthIdentifier(),
+                ]);
+            } catch (Throwable $exception) {
+                error_log('FARAST password reset logging failed: '.get_class($exception));
             }
         });
     }
