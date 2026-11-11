@@ -41,12 +41,12 @@
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   group.append(status);
-  toolbar.append(group);
+  const personalPanel=document.createElement('details');personalPanel.className='farast-reader-advanced-panel farast-reader-preferences-panel';const personalSummary=document.createElement('summary');personalSummary.textContent='تنظیمات مطالعه و یادداشت‌های شخصی';personalPanel.append(personalSummary,group);toolbar.append(personalPanel);
   const notesPanel = document.createElement('section');
   notesPanel.className = 'farast-reader-local-notes';
   notesPanel.hidden = true;
   notesPanel.setAttribute('aria-label', 'حاشیه‌نویسی‌های ذخیره‌شده در این مرورگر');
-  toolbar.append(notesPanel);
+  personalPanel.append(notesPanel);
   const css = document.createElement('style');
   css.textContent = `
     .farast-reader-personal-tools{flex-wrap:wrap}
