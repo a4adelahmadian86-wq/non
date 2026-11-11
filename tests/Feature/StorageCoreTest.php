@@ -175,6 +175,8 @@ class StorageCoreTest extends TestCase
             ]);
             $this->assertSame(0, $volume->fresh()->used_bytes);
             $this->assertSame(0, $volume->fresh()->object_count);
+            $reserved = StorageVolumeReservation::query()->where('reservation_key', $reservation)->firstOrFail();
+            $this->assertTrue($reserved->expires_at->greaterThan(now()->addHours(5)));
 
             $storage->commitVolumeCapacityReservation($reservation);
             $run->update(['status' => 'completed', 'object_key' => $key, 'completed_at' => now()]);
