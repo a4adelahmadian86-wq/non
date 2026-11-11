@@ -58,8 +58,8 @@ class WorkflowEngine
         }
 
         foreach ($contract['non_empty_strings'] ?? [] as $field) {
-            $value = trim((string) ($context[$field] ?? ''));
-            if ($value === '' || mb_strlen($value) > 190) {
+            $value = $context[$field] ?? null;
+            if (! is_string($value) || trim($value) === '' || mb_strlen($value) > 190) {
                 throw new \InvalidArgumentException('Workflow event requires a valid '.$field.'.');
             }
         }
@@ -167,8 +167,11 @@ class WorkflowEngine
         }
 
         $userId = filter_var($context['user_id'] ?? null, FILTER_VALIDATE_INT);
-        if (! $userId || $userId < 1 || ! Schema::hasTable('farast_workflow_events')) {
-            return 0;
+        if ($userId === false || $userId < 1) {
+            throw new \\InvalidArgumentException('Workflow event requires a valid user_id.');
+        }
+        if (! Schema::hasTable('farast_workflow_events')) {
+            throw new \\RuntimeException('Workflow event ledger is not installed; refusing to lose a domain event.');
         }
 
         $allowedContextFields = WorkflowConditionEvaluator::FIELDS;
@@ -176,8 +179,6 @@ class WorkflowEngine
         if ($unknownContextFields !== []) {
             throw new \InvalidArgumentException('Workflow event context contains unsupported fields.');
         }
-
-        $this->validateEventContract($eventType, $context);
 
         foreach ($context as $field => $value) {
             if ($field === 'user_id') {
@@ -193,6 +194,8 @@ class WorkflowEngine
                 throw new \InvalidArgumentException('Workflow event context values cannot exceed 5000 characters.');
             }
         }
+
+        $this->validateEventContract($eventType, $context);
 
         $context['user_id'] = (int) $userId;
         // The event type is authoritative server data, never caller-controlled.
