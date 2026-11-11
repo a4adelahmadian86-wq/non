@@ -86,10 +86,15 @@ class ReviewProductPublicationRequest implements ShouldQueue
         $review = $supervisor->review($snapshot);
         $review['snapshot_hash'] = $snapshotHash;
 
-        $manualSecurityReview = data_get($product->metadata, 'intake_security_review.status') === 'manual_review_required';
+        $documentAnalysisIncomplete = DB::table('store_product_documents')
+            ->where('product_id', $product->id)
+            ->whereIn('processing_status', ['failed', 'awaiting_provider', 'stale'])
+            ->exists();
+        $manualSecurityReview = data_get($product->metadata, 'intake_security_review.status') === 'manual_review_required'
+            || $documentAnalysisIncomplete;
         $submitterCanPublish = $queueItem->submitter
             && $authorization->allows($queueItem->submitter, 'store.products.publish');
-        $productReady = $product->category?->is_active === true;
+        $productReady = (bool) $product->category?->is_active;
 
         if ($productReady && $product->type === 'course') {
             $productReady = $product->course()
