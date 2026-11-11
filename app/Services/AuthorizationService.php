@@ -350,6 +350,13 @@ class AuthorizationService
         $actorScope = $manageableAssignments->isNotEmpty()
             ? $manageableAssignments->pluck('scope')->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
             : ($this->activeAssignments($actor)->isEmpty() ? $this->legacyScope($actor) : 'own');
+        $manageableTeamIds = $manageableAssignments
+            ->where('scope', 'team')
+            ->pluck('team_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
 
         if (! isset($rank[$actorScope]) || $rank[$scope] < $rank[$actorScope]) {
             return false;
@@ -367,6 +374,9 @@ class AuthorizationService
 
         if ($scope === 'team') {
             if ($teamId === null || ! $subject->teams()->whereKey($teamId)->exists()) {
+                return false;
+            }
+            if ($actorScope === 'team' && $manageableTeamIds->isNotEmpty() && ! $manageableTeamIds->contains($teamId)) {
                 return false;
             }
             $teamOrganizationId = \App\Models\Team::query()->whereKey($teamId)->value('organization_id');
@@ -403,6 +413,10 @@ class AuthorizationService
         }
 
         if ($actorScope === 'team') {
+            if ($manageableTeamIds->isNotEmpty()) {
+                return $subject->teams()->whereIn('teams.id', $manageableTeamIds)->exists();
+            }
+
             return $actor->teams()
                 ->wherePivot('team_role', 'manager')
                 ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
