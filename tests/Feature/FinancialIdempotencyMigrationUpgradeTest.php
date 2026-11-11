@@ -268,7 +268,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
 
     public function test_upgrade_rejects_transaction_id_without_gateway_before_schema_mutation(): void
     {
-        DB::table('payments')->where('id', 30)->update(['gateway' => null, 'authority' => null]);
+        DB::table('payments')->where('id', 30)->update(['gateway' => '', 'authority' => null]);
 
         try {
             $this->runFinancialMigration();
@@ -278,7 +278,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         }
 
         $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
-        $this->assertDatabaseHas('payments', ['id' => 30, 'gateway' => null, 'transaction_id' => 'legacy-transaction-30']);
+        $this->assertDatabaseHas('payments', ['id' => 30, 'gateway' => '', 'transaction_id' => 'legacy-transaction-30']);
     }
 
 }
