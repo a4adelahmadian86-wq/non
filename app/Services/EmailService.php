@@ -417,7 +417,8 @@ class EmailService
             ),
             htmlView: 'emails.support-ticket',
             viewData: $data,
-            meta: ['ticket_id' => $ticket->id],
+            meta: ['ticket_id' => $ticket->id, 'idempotency_key' => $idempotencyKey],
+            idempotencyKey: $idempotencyKey,
         );
     }
 
@@ -446,7 +447,7 @@ class EmailService
         $this->mailConfig->apply();
 
         $provider = $this->mailConfig->currentProvider();
-        $log = EmailLog::create([
+        $attributes = [
             'type' => $type,
             'to_email' => mb_strtolower(trim($to)),
             'user_id' => $user?->id,
@@ -454,7 +455,22 @@ class EmailService
             'status' => 'queued',
             'queued_at' => now(),
             'meta' => array_merge($meta, ['provider' => $provider]),
-        ]);
+        ];
+
+        if ($idempotencyKey !== null && trim($idempotencyKey) !== '') {
+            $key = mb_substr(trim($idempotencyKey), 0, 191);
+            $log = EmailLog::firstOrCreate(
+                ['idempotency_key' => $key],
+                $attributes + ['idempotency_key' => $key],
+            );
+
+            // A previously recorded event must not enqueue a second delivery.
+            if (! $log->wasRecentlyCreated) {
+                return;
+            }
+        } else {
+            $log = EmailLog::create($attributes);
+        }
 
         try {
             $forceSync = in_array($type, ['otp', 'test'], true)
