@@ -783,7 +783,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('name="type" value="course"', false)
             ->assertSee('name="title"', false)
             ->assertDontSee('data-product-ingestion', false)
-            ->assertDontSee('data-product-upload-step', false);
+            ->assertDontSee('id="product-upload-step"', false);
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
             'title' => 'دوره آزمایشی از انتخاب نوع',
