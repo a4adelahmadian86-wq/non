@@ -25,7 +25,7 @@ The canonical `AuditEventService` enriches append-only ledger events with the ac
 
 ## Dashboard probes
 
-The admin page is available at `/admin/observability` and uses the existing global `audit` section permission. It is read-only and reports:
+The admin page is available at `/admin/observability` and uses the existing global `audit` section permission. It is read-only, shows the latest 20 incident/recovery transitions and a bounded 24-hour trend (up to 500 events) from the canonical audit ledger, and reports:
 
 - Database connectivity.
 - Queue driver, pending jobs, oldest pending age and failed jobs; `sync` is explicitly marked as non-measurable for backlog.
