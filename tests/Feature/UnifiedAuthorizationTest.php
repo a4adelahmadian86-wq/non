@@ -239,12 +239,20 @@ class UnifiedAuthorizationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $authorization = app(AuthorizationService::class);
-        $assignment = $authorization->assignRole($manager, $memberA, 'employee', 'own');
-        self::assertSame($memberA->id, (int) $assignment->user_id);
+        $this->actingAs($manager)
+            ->postJson('/admin/access-control/users/'.$memberA->id.'/roles', [
+                'role_key' => 'employee',
+                'scope' => 'own',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('assignment.user_id', $memberA->id);
 
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-        $authorization->assignRole($manager, $memberB, 'employee', 'own');
+        $this->actingAs($manager)
+            ->postJson('/admin/access-control/users/'.$memberB->id.'/roles', [
+                'role_key' => 'employee',
+                'scope' => 'own',
+            ])
+            ->assertForbidden();
     }
 
     public function test_direct_permission_grant_and_revocation_are_audited(): void
