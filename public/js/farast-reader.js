@@ -459,7 +459,7 @@
     const annotationLayer=wrapper.querySelector('.farast-pdf-annotation-layer');
     if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
     wrapper.dataset.rendered='1';
-    root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}});
+    root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }finally{
       const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
       delete wrapper.dataset.rerenderAfterRender;
