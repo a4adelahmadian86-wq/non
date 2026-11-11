@@ -12,6 +12,39 @@ class RunStorageBackupCommandTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_manual_backup_request_uses_the_same_dispatch_lock_as_the_scheduler(): void
+    {
+        config(['storage_management.backup.encryption_key' => 'test-backup-key']);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Backup fixture',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.test',
+            'bucket' => 'farast-backups',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        $lock = Cache::lock('farast:backup:dispatch', 30);
+        $this->assertTrue($lock->get());
+
+        try {
+            try {
+                app(AdminStorageController::class)->requestBackup();
+                $this->fail('The manual request must not bypass the scheduler dispatch lock.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                $this->assertSame(409, $exception->getStatusCode());
+            }
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertDatabaseCount('storage_backup_runs', 0);
+    }
+
     public function test_weekly_backup_command_dispatches_to_the_dedicated_backups_queue(): void
     {
         Queue::fake();
