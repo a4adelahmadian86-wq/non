@@ -58,11 +58,16 @@ class AdminConsoleService
         $rank = config('farast_admin.scope_rank', ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3]);
         $userRank = $rank[$scope] ?? 3;
         $requiredRank = $rank[$def['min_scope']] ?? 3;
+        $allowed = $userRank <= $requiredRank;
 
-        // نقش مدیر نیز از scope محدودترِ تنظیم‌شده در middleware تبعیت می‌کند.
-        return $userRank <= $requiredRank;
+        if ($allowed) {
+            // Downstream list/query helpers use this exact section permission
+            // to apply custom role scopes and direct deny overrides per record.
+            request()->attributes->set('farast.section_permission', (string) $def['permission']);
+        }
+
+        return $allowed;
     }
-
     /**
      * فهرست بخش‌های مجاز — برای رندر ناوبری و کنترل‌های رابط.
      *
@@ -84,17 +89,55 @@ class AdminConsoleService
      * شناسه کاربران قابل‌مشاهده در دامنهٔ کاربر جاری.
      * null یعنی بدون محدودیت.
      */
-    public function visibleUserIds(?User $user): ?array
+    public function visibleUserIds(?User $user, ?string $permission = null): ?array
     {
+        if (! $user) {
+            return [];
+        }
+
         $scope = request()->attributes->get('farast.scope');
+        $ids = ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+        if ($ids === null) {
+            return null;
+        }
 
-        return ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+        $permission ??= request()->attributes->get('farast.section_permission');
+        if (! is_string($permission) || $permission === '' || $ids === []) {
+            return $ids;
+        }
+
+        // Base role scope is only the outer boundary. Custom role assignments
+        // and direct deny overrides must also be enforced on every listed user.
+        $candidates = User::query()
+            ->with('teams:id')
+            ->whereIn('id', $ids)
+            ->get(['id', 'organization_id']);
+        $supervisedTeams = Team::query()
+            ->whereIn('supervisor_id', $candidates->pluck('id'))
+            ->get(['id', 'supervisor_id'])
+            ->groupBy('supervisor_id');
+
+        $visible = [];
+        foreach ($candidates as $candidate) {
+            $memberTeamIds = $candidate->teams->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $supervisedTeamIds = ($supervisedTeams->get($candidate->id) ?? collect())->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $context = [
+                'owner_id' => (int) $candidate->id,
+                'organization_id' => $candidate->organization_id,
+                'team_ids' => array_values(array_unique(array_merge($memberTeamIds, $supervisedTeamIds))),
+            ];
+
+            if ($this->authorization->allowsFor($user, $permission, $context)) {
+                $visible[] = (int) $candidate->id;
+            }
+        }
+
+        return $visible;
     }
-
     /**
      * شناسه تیم‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
      */
-    public function visibleTeamIds(?User $user): ?array
+    public function visibleTeamIds(?User $user, ?string $permission = null): ?array
     {
         if (! $user) {
             return [];
@@ -105,30 +148,54 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            return $user->organization_id
-                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->all()
+            $ids = $user->organization_id
+                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->map(fn ($id) => (int) $id)->all()
                 : [];
-        }
-        if ($scope !== self::SCOPE_TEAM) {
+        } elseif ($scope === self::SCOPE_TEAM) {
+            $ids = $user->organization_id
+                ? Team::query()
+                    ->where('organization_id', $user->organization_id)
+                    ->where(function ($query) use ($user) {
+                        $query->where('supervisor_id', $user->id)
+                            ->orWhereIn('id', function ($subquery) use ($user) {
+                                $subquery->select('team_id')
+                                    ->from('team_user')
+                                    ->where('user_id', $user->id)
+                                    ->whereIn('team_role', ['manager', 'owner', 'supervisor']);
+                            });
+                    })
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
+        } else {
             return [];
         }
 
-        return Team::query()
-            ->where('supervisor_id', $user->id)
-            ->orWhereIn('id', function ($query) use ($user) {
-                $query->select('team_id')
-                    ->from('team_user')
-                    ->where('user_id', $user->id)
-                    ->where('team_role', 'manager');
-            })
-            ->pluck('id')
-            ->all();
-    }
+        $permission ??= request()->attributes->get('farast.section_permission');
+        if (! is_string($permission) || $permission === '' || $ids === []) {
+            return $ids;
+        }
 
+        $teams = Team::query()->whereIn('id', $ids)->get(['id', 'organization_id', 'supervisor_id']);
+        $visible = [];
+        foreach ($teams as $team) {
+            $context = [
+                'owner_id' => $team->supervisor_id,
+                'organization_id' => $team->organization_id,
+                'team_id' => (int) $team->id,
+            ];
+            if ($this->authorization->allowsFor($user, $permission, $context)) {
+                $visible[] = (int) $team->id;
+            }
+        }
+
+        return $visible;
+    }
     /**
      * شناسه سازمان‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
      */
-    public function visibleOrganizationIds(?User $user): ?array
+    public function visibleOrganizationIds(?User $user, ?string $permission = null): ?array
     {
         if (! $user) {
             return [];
@@ -139,17 +206,45 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            return $user->organization_id ? [(int) $user->organization_id] : [];
+            $ids = $user->organization_id ? [(int) $user->organization_id] : [];
+        } elseif ($scope === self::SCOPE_TEAM) {
+            $teamIds = $this->visibleTeamIds($user, $permission) ?? [];
+            $ids = Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->map(fn ($id) => (int) $id)->all();
+        } else {
+            return [];
         }
-        if ($scope === self::SCOPE_TEAM) {
-            $teamIds = $this->visibleTeamIds($user) ?? [];
 
-            return Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->all();
+        $permission ??= request()->attributes->get('farast.section_permission');
+        if (! is_string($permission) || $permission === '' || $ids === []) {
+            return $ids;
         }
 
-        return [];
+        // Preserve the permitted team subset when checking an organization
+        // container; a team-scoped grant must not be promoted to whole-org access.
+        $permittedTeamIds = $this->visibleTeamIds($user, $permission) ?? [];
+        $teamsByOrganization = Team::query()
+            ->whereIn('id', $permittedTeamIds)
+            ->get(['id', 'organization_id'])
+            ->groupBy('organization_id');
+
+        $organizations = \App\Models\Organization::query()->whereIn('id', $ids)->get(['id']);
+        $visible = [];
+        foreach ($organizations as $organization) {
+            $teamIds = ($teamsByOrganization->get($organization->id) ?? collect())
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($this->authorization->allowsFor($user, $permission, [
+                'organization_id' => (int) $organization->id,
+                'team_ids' => $teamIds,
+            ])) {
+                $visible[] = (int) $organization->id;
+            }
+        }
+
+        return $visible;
     }
-
     /**
      * اعمال خودکار دامنه روی هر کوئری دارای user_id.
      */
@@ -167,13 +262,39 @@ class AdminConsoleService
      * گارد عملیاتی برای متدهای نوشتاری کنسول:
      * هم بخش و هم مالکیت رکورد هدف بررسی می‌شود.
      */
-    public function authorizeAction(?User $user, string $section, ?int $targetUserId = null): void
-    {
+    public function authorizeAction(
+        ?User $user,
+        string $section,
+        ?int $targetUserId = null,
+        ?string $requiredPermission = null
+    ): void {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
+        if ($requiredPermission !== null) {
+            abort_unless(
+                $this->authorization->allows($user, $requiredPermission),
+                403,
+                'مجوز عملیاتی لازم برای این تغییر در اختیار شما نیست.'
+            );
+        }
+
         if ($targetUserId !== null && $user) {
-            $ids = $this->visibleUserIds($user);
-            abort_if($ids !== null && ! in_array($targetUserId, $ids, true), 403, 'این کاربر خارج از دامنهٔ دسترسی شماست.');
+            $sectionPermission = config("farast_admin.sections.$section.permission");
+            $sectionIds = $this->visibleUserIds($user, is_string($sectionPermission) ? $sectionPermission : null);
+            abort_if(
+                $sectionIds !== null && ! in_array($targetUserId, $sectionIds, true),
+                403,
+                'این کاربر خارج از دامنهٔ مشاهدهٔ شماست.'
+            );
+
+            if ($requiredPermission !== null) {
+                $actionIds = $this->visibleUserIds($user, $requiredPermission);
+                abort_if(
+                    $actionIds !== null && ! in_array($targetUserId, $actionIds, true),
+                    403,
+                    'این کاربر خارج از دامنهٔ عملیاتی شماست.'
+                );
+            }
         }
     }
 

@@ -35,7 +35,7 @@ class AdminController extends Controller
         // دامنهٔ کاربر از middleware یا محاسبهٔ مستقیم نقش.
         $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($actor);
         $globalScope = $scope === AdminConsoleService::SCOPE_GLOBAL;
-        $visibleIds = $console->visibleUserIds($actor);
+        $visibleIds = $console->visibleUserIds($actor, 'dashboard.view');
 
         // دسترسی‌های کنسول بر پایهٔ RBAC + Scope — همین‌جا منبع واحد ناوبری است.
         $allowedSections = $console->allowedSections($actor);
@@ -70,6 +70,10 @@ class AdminController extends Controller
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
         $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor, 'users.view') : [];
+        if ($canViewUsers && $userVisibleIds !== null) {
+            $usersQuery->whereIn('id', $userVisibleIds);
+        }
         $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
         // Do not hydrate personal user data unless users.view is granted in this scope.
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
@@ -236,8 +240,8 @@ class AdminController extends Controller
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
-        $visibleTeamIds = $console->visibleTeamIds($actor);
-        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $visibleTeamIds = $canViewAnalytics ? $console->visibleTeamIds($actor, 'reports.team') : [];
+        $visibleOrganizationIds = $canViewAnalytics ? $console->visibleOrganizationIds($actor, 'reports.team') : [];
         $paidPaymentsQuery = function () use ($visibleIds) {
             $query = DB::table('payments')->where('payments.status', 'paid');
             if ($visibleIds !== null) {
@@ -468,13 +472,14 @@ class AdminController extends Controller
     {
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
         abort_unless($console->sectionAllowed($request->user(), 'access'), 403, 'تغییر نقش فقط در دامنهٔ سراسری مجاز است.');
-        $console->authorizeAction($request->user(), 'users', $user->id);
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
 
         $old = $user->role;
         $user->update(['role' => $d['role']]);
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         if (Schema::hasTable('audit_logs')) {
             $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
@@ -763,8 +768,9 @@ class AdminController extends Controller
     public function toggleUser(User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_if($user->isAdmin(), 403);
+        abort_if((int) $user->id === (int) auth()->id(), 422, 'نمی‌توانید حساب خودتان را مسدود کنید.');
         // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
-        $console->authorizeAction(auth()->user(), 'users', $user->id);
+        $console->authorizeAction(auth()->user(), 'users', $user->id, 'users.suspend');
 
         $user->update(['is_blocked' => ! $user->is_blocked]);
 
@@ -984,10 +990,12 @@ class AdminController extends Controller
         return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
     }
 
-    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
+    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_if($user->isAdmin(), 403);
-        $console->authorizeAction($r->user(), 'users', $user->id);
+        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
+        $console->authorizeAction($r->user(), 'users', $user->id, 'users.capabilities.manage');
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'زیرساخت ثبت ممیزی در دسترس نیست.');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1011,7 +1019,24 @@ class AdminController extends Controller
             $values[$key] = array_key_exists($key, $data) && $data[$key] !== '' ? $data[$key] : null;
         }
 
-        UserCapability::updateOrCreate(['user_id' => $user->id], $values);
+        DB::transaction(function () use ($r, $user, $values, $audit): void {
+            $capability = UserCapability::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            $before = $capability?->getAttributes() ?? [];
+
+            if ($capability) {
+                $capability->fill($values)->save();
+            } else {
+                $capability = UserCapability::create(['user_id' => $user->id, ...$values]);
+            }
+
+            $audit->record((int) $r->user()->id, 'admin.user.capabilities_updated', $r->ip(), [
+                'target_user_id' => (int) $user->id,
+                'before' => $before,
+                'after' => $capability->getAttributes(),
+            ]);
+        });
+
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', 'دسترسی‌های کاربر ذخیره شد.');
     }
@@ -1019,7 +1044,8 @@ class AdminController extends Controller
     public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
-        $console->authorizeAction($r->user(), 'finance', $user->id);
+        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر موجودی کیف پول خودتان مجاز نیست.');
+        $console->authorizeAction($r->user(), 'finance', $user->id, 'finance.manage');
 
         $d = $r->validate([
             'type' => ['required', 'in:credit,debit'],
