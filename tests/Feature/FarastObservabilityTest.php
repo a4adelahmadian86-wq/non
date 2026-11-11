@@ -197,7 +197,7 @@ class FarastObservabilityTest extends TestCase
     public function test_exception_responses_keep_request_and_correlation_headers(): void
     {
         Route::get('/_test/observability-failure', function () {
-            throw new \\RuntimeException('expected test exception');
+            throw new \RuntimeException('expected test exception');
         });
 
         $this->getJson('/_test/observability-failure', [
