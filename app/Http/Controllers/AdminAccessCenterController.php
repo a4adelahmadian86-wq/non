@@ -24,11 +24,11 @@ class AdminAccessCenterController extends Controller
         'integrations.manage', 'voice.use', 'voice.manage', 'ai.use', 'ai.view', 'ai.manage', 'ocr.use',
         'system.audit', 'audit.view', 'reports.view', 'reports.users', 'reports.team',
         'reports.documents', 'reports.workflows', 'reports.ai', 'reports.resources',
-        'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend',
+        'dashboard.view', 'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend', 'users.capabilities.manage',
         'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
         'documents.export', 'documents.share', 'projects.create',
         'support.manage', 'store.manage', 'organization.manage', 'team.view', 'team.manage',
-        'workflows.manage', 'workflows.create', 'workflows.edit', 'workflows.delete', 'workflows.run', 'workflows.audit',
+        'workflows.view', 'workflows.manage', 'workflows.create', 'workflows.edit', 'workflows.delete', 'workflows.run', 'workflows.audit',
         'automation.manage', 'automation.run', 'automation.audit',
     ];
 
