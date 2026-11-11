@@ -18,19 +18,19 @@
 | `2026_09_12_000010_create_cache_tables.php` | `cache`, `cache_locks` | — | — | — | — | — | — |
 | `2026_09_12_000011_create_jobs_tables.php` | `jobs`, `job_batches`, `failed_jobs` | — | — | — | `failed_jobs.uuid` | `jobs.queue` | — |
 | `2026_09_12_000012_add_email_to_users_table.php` | — | `users`, `users` | — | — | `users.email` | — | — |
-| `2026_09_12_000012_create_ai_interactions_and_feedback_tables.php` | `ai_interactions`, `ai_feedback` | — | — | `user_id → Laravel convention`<br>`document_id → typing_documents`<br>`user_id → Laravel convention`<br>`document_id → typing_documents`<br>`ai_interaction_id → ai_interactions` | — | `current column`<br>`current column`<br>`current column`<br>`current column`<br>`current column`<br>`current column` | — |
-| `2026_09_12_000013_create_email_otp_challenges_table.php` | `email_otp_challenges` | — | — | — | — | `current column`<br>`current column` | — |
-| `2026_09_13_000001_create_site_settings_table.php` | `site_settings` | — | — | — | `current column` | — | — |
+| `2026_09_12_000012_create_ai_interactions_and_feedback_tables.php` | `ai_interactions`, `ai_feedback` | — | — | `user_id → Laravel convention`<br>`document_id → typing_documents`<br>`user_id → Laravel convention`<br>`document_id → typing_documents`<br>`ai_interaction_id → ai_interactions` | — | `ai_interactions.request_id`<br>`ai_interactions.provider_interaction_id`<br>`ai_interactions.source_hash`<br>`ai_interactions.status`<br>`ai_feedback.type`<br>`ai_feedback.category` | — |
+| `2026_09_12_000013_create_email_otp_challenges_table.php` | `email_otp_challenges` | — | — | — | — | `email_otp_challenges.email`<br>`email_otp_challenges.expires_at` | — |
+| `2026_09_13_000001_create_site_settings_table.php` | `site_settings` | — | — | — | `site_settings.key` | — | — |
 
-| `2026_09_13_000002_create_user_capabilities_table.php` | `user_capabilities` | — | — | `user_id → Laravel convention` | `current column` | — | — |
+| `2026_09_13_000002_create_user_capabilities_table.php` | `user_capabilities` | — | — | `user_id → Laravel convention` | `user_capabilities.user_id` | — | — |
 | `2026_09_13_000003_bootstrap_master_admin.php` | — | — | — | — | — | — | — |
-| `2026_09_13_000004_create_announcements_table.php` | `announcements` | — | — | `created_by → users` | — | `current column` | — |
-| `2026_09_13_000005_create_wallets_table.php` | `wallets` | — | — | `user_id → Laravel convention` | `current column` | — | — |
-| `2026_09_13_000006_create_wallet_transactions_table.php` | `wallet_transactions` | — | — | `wallet_id → Laravel convention` | `current column` | `['reference_type','reference_id']` | — |
+| `2026_09_13_000004_create_announcements_table.php` | `announcements` | — | — | `created_by → users` | — | `announcements.is_active` | — |
+| `2026_09_13_000005_create_wallets_table.php` | `wallets` | — | — | `user_id → Laravel convention` | `wallets.user_id` | — | — |
+| `2026_09_13_000006_create_wallet_transactions_table.php` | `wallet_transactions` | — | — | `wallet_id → Laravel convention` | `wallet_transactions.idempotency_key` | `wallet_transactions(reference_type, reference_id)` | — |
 | `2026_09_13_000007_create_orders_table.php` | `orders` | — | — | `user_id → Laravel convention`<br>`document_id → typing_documents` | — | `['user_id','status']` | — |
 | `2026_09_13_000008_create_payments_table.php` | `payments` | — | — | `order_id → Laravel convention` | — | `['gateway','authority']`<br>`'transaction_id'` | — |
 | `2026_09_13_000009_create_free_credits_table.php` | `free_credits` | — | — | `user_id → Laravel convention` | `['mobile_hash','week_start']` | `['user_id','week_start']` | — |
-| `2026_09_13_000010_add_content_hash_to_orders.php` | — | `orders`, `orders` | — | — | — | `current column` | — |
+| `2026_09_13_000010_add_content_hash_to_orders.php` | — | `orders`, `orders` | — | — | — | `orders.content_hash` | — |
 | `2026_09_13_000011_create_email_logs_table.php` | `email_logs` | — | — | `user_id → Laravel convention` | — | `current column`<br>`current column`<br>`current column` | — |
 | `2026_09_13_000012_ensure_master_admin.php` | — | — | — | — | — | — | — |
 | `2026_09_13_000013_create_store_catalog_tables.php` | `store_categories`, `store_products`, `store_product_files`, `store_product_previews`, `store_product_images`, `store_tags`, `store_product_tag`, `store_product_related`, `store_product_reviews`, `store_licenses` | — | — | `parent_id → store_categories`<br>`category_id → store_categories`<br>`seller_id → users`<br>`product_id → store_products`<br>`product_id → store_products`<br>`product_id → store_products`<br>`product_id → store_products`<br>`tag_id → store_tags`<br>`product_id → store_products`<br>`related_product_id → store_products`<br>`product_id → store_products`<br>`user_id → users`<br>`product_id → store_products` | `current column`<br>`current column`<br>`current column`<br>`current column`<br>`['product_id', 'user_id']`<br>`current column` | `['parent_id', 'is_active', 'sort_order']`<br>`['category_id', 'status', 'published_at']`<br>`['featured', 'status', 'sort_order']`<br>`['seller_id', 'status']`<br>`['product_id', 'is_active']`<br>`'sha256'`<br>`['product_id', 'is_active', 'sort_order']`<br>`['product_id', 'is_active', 'sort_order']`<br>`['product_id', 'status']` | — |
