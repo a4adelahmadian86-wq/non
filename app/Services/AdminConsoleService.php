@@ -113,6 +113,11 @@ class AdminConsoleService
             return [];
         }
 
+        $assignedTeamIds = $this->authorization->effectiveTeamIds($user);
+        if ($assignedTeamIds !== null) {
+            return $assignedTeamIds;
+        }
+
         return Team::query()
             ->where('supervisor_id', $user->id)
             ->orWhereIn('id', function ($query) use ($user) {
