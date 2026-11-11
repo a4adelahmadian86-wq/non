@@ -10,6 +10,8 @@ use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Models\StoreProductIntakeSession;
 use App\Models\StoreProductIntakeFile;
+use App\Models\StoreProductPublicationReview;
+use App\Jobs\ReviewProductPublicationRequest;
 use App\Models\User;
 use App\Jobs\ReviewProductIntakeFile;
 use App\Services\LocalClamAvScanner;
@@ -265,7 +267,8 @@ class AdminStoreController extends Controller
         $tagIds = $data['tag_ids'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
 
-        $created = DB::transaction(function () use ($data, $tagIds, $session) {
+        $submittedBy = (int) $request->user()->id;
+        $created = DB::transaction(function () use ($data, $tagIds, $session, $submittedBy) {
             $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSession->isUsable() && $lockedSession->status === 'details', 409, 'نشست ورود قبلاً مصرف شده یا مرحله مشخصات آن باز نیست.');
             abort_unless($lockedSession->product_id === null, 409, 'این نشست قبلاً به محصول متصل شده است.');
@@ -334,22 +337,38 @@ class AdminStoreController extends Controller
                 $intakeFile->update(['status' => 'attached', 'product_file_id' => $record->id]);
             }
 
+            $publicationReview = StoreProductPublicationReview::create([
+                'product_id' => $product->id,
+                'intake_session_id' => $lockedSession->id,
+                'submitted_by' => $submittedBy,
+                'status' => StoreProductPublicationReview::STATUS_PENDING_AI,
+            ]);
             $lockedSession->update([
                 'product_id' => $product->id,
                 'status' => StoreProductIntakeSession::STATUS_SUBMITTED,
                 'submitted_at' => now(),
             ]);
-            $this->audit('store.product.created_from_intake', $product, [
+            $this->audit('store.product.submitted_for_publication_review', $product, [
                 'intake_session_id' => $session->id,
                 'file_count' => count($bindings),
                 'product_type' => $product->type,
                 'manual_security_review_required' => $lockedFiles->contains(fn ($file) => data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required' || data_get($file->inspection_json, 'risk_level') === 'warning'),
             ]);
 
-            return [$product, $bindings];
+            return [$product, $bindings, (int) $publicationReview->id];
         }, 3);
 
-        [$product, $bindings] = $created;
+        [$product, $bindings, $publicationReviewId] = $created;
+        try {
+            ReviewProductPublicationRequest::dispatch($publicationReviewId);
+        } catch (Throwable $exception) {
+            StoreProductPublicationReview::query()->whereKey($publicationReviewId)->update([
+                'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
+                'ai_verdict' => 'unavailable',
+                'ai_review_json' => ['error' => class_basename($exception), 'automated_publication' => false],
+            ]);
+            report($exception);
+        }
 
         foreach ($product->files()->where('purpose', $product->type === 'course' ? 'course_asset' : 'product_download')->get() as $productFile) {
             $documentId = (int) DB::table('store_product_documents')->where('product_file_id', $productFile->id)->value('id');
@@ -367,9 +386,16 @@ class AdminStoreController extends Controller
             }
         }
 
+        $publicationReview = StoreProductPublicationReview::query()->find($publicationReviewId);
+        $statusMessage = $publicationReview?->status === StoreProductPublicationReview::STATUS_PUBLISHED
+            ? 'ناظر هوشمند محصول را تأیید کرد و با توجه به مجوز انتشار ثبت‌کننده، محصول منتشر شد.'
+            : ($publicationReview?->status === StoreProductPublicationReview::STATUS_PENDING_MANAGER
+                ? 'محصول ثبت شد و برای بررسی و تصمیم نهایی مدیر در صف انتشار قرار گرفت.'
+                : 'محصول ثبت شد و بررسی نهایی ناظر هوشمند در صف اجرا قرار گرفت.');
+
         return $product->type === 'course'
-            ? redirect()->route('admin.store.course.edit', $product)->with('status', 'دوره پس از بررسی فایل‌ها ایجاد شد؛ منابع اولیه در انتظار اتصال به جلسه‌های دوره هستند.')
-            : redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'محصول به‌صورت پیش‌نویس ایجاد شد؛ فایل‌ها پس از بازرسی و بررسی ناظر به آن متصل شدند.');
+            ? redirect()->route('admin.store.course.edit', $product)->with('status', $statusMessage.' منابع اولیه دوره را به جلسه‌های مربوط متصل کنید.')
+            : redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', $statusMessage);
     }
 
     public function preflightIntakeFile(
