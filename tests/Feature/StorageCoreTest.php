@@ -391,4 +391,71 @@ class StorageCoreTest extends TestCase
         $this->assertFileDoesNotExist($abandoned);
     }
 
+    public function test_failed_provider_delete_keeps_a_retryable_record_and_releases_inventory_only_after_success(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Recoverable delete volume',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.invalid',
+            'bucket' => 'farast',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 12,
+            'object_count' => 1,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        $file = StorageManagedFile::create([
+            'storage_volume_id' => $volume->id,
+            'drive_key' => 'iran_primary',
+            'file_key' => 'recoverable/delete-me.txt',
+            'file_key_hash' => hash('sha256', 'recoverable/delete-me.txt'),
+            'original_name' => 'delete-me.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => 12,
+            'checksum' => hash('sha256', 'delete-me'),
+            'classification' => 'critical',
+            'source_module' => 'storage-test',
+            'visibility' => 'private',
+            'status' => 'active',
+            'metadata' => ['disk' => 'storage_volume:'.$volume->id],
+        ]);
+
+        $failedAdapter = \Mockery::mock(\App\Services\Storage\S3CompatibleAdapter::class);
+        $failedAdapter->shouldReceive('delete')->once()->andThrow(new \RuntimeException('provider temporarily unavailable'));
+        app()->instance(\App\Services\Storage\S3CompatibleAdapter::class, $failedAdapter);
+        app()->forgetInstance(StorageManager::class);
+
+        try {
+            app(StorageManager::class)->delete('storage_volume:'.$volume->id, $file->file_key);
+            $this->fail('The provider failure should be surfaced to the caller.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('provider temporarily unavailable', $exception->getMessage());
+        }
+
+        $file->refresh();
+        $volume->refresh();
+        $this->assertSame('delete_pending', $file->status);
+        $this->assertNotNull(data_get($file->metadata, 'delete_requested_at'));
+        $this->assertSame(12, $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+
+        $retryAdapter = \Mockery::mock(\App\Services\Storage\S3CompatibleAdapter::class);
+        $retryAdapter->shouldReceive('delete')->once();
+        app()->instance(\App\Services\Storage\S3CompatibleAdapter::class, $retryAdapter);
+        app()->forgetInstance(StorageManager::class);
+
+        $this->assertSame(1, app(StorageManager::class)->cleanupDeferredDeletes());
+        $file->refresh();
+        $volume->refresh();
+
+        $this->assertSame('deleted', $file->status);
+        $this->assertNull(data_get($file->metadata, 'delete_requested_at'));
+        $this->assertSame(0, $volume->used_bytes);
+        $this->assertSame(0, $volume->object_count);
+    }
+
 }
