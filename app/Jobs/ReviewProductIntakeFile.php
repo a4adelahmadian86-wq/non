@@ -37,7 +37,10 @@ class ReviewProductIntakeFile implements ShouldQueue
         }
 
         if ($file->size_bytes > 25 * 1024 * 1024) {
-            $file->update(['supervisor_status' => 'awaiting_provider']);
+            $file->update([
+                'supervisor_status' => 'manual_review_required',
+                'supervisor_review_json' => ['security_gate' => 'manual_scan_required', 'reason' => 'file_exceeds_supervisor_limit', 'automated_publication' => false],
+            ]);
             return;
         }
 
@@ -79,7 +82,10 @@ class ReviewProductIntakeFile implements ShouldQueue
     {
         StoreProductIntakeFile::query()->whereKey($this->intakeFileId)
             ->where('supervisor_status', 'pending')
-            ->update(['supervisor_status' => 'failed']);
+            ->update([
+                'supervisor_status' => 'manual_review_required',
+                'supervisor_review_json' => ['security_gate' => 'manual_scan_required', 'reason' => 'supervisor_unavailable', 'error' => class_basename($exception), 'automated_publication' => false],
+            ]);
         report($exception);
     }
 }
