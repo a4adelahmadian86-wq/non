@@ -41,7 +41,7 @@
         @if(!empty($publicationWorkflow['publication_blockers']))
           <div class="store-alert error"><strong>موانع فنی:</strong> {{ implode(' · ', $publicationWorkflow['publication_blockers']) }}</div>
         @endif
-        @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.publish_products'))
+        @if($canPublishProducts ?? false)
           <form method="post" action="{{ route('admin.store.publication.manual-approve', $product) }}" class="product-file-upload" onsubmit="return confirm('تأیید انسانی شما ثبت و محصول منتشر می‌شود. آیا بررسی کامل انجام شده است؟')">
             @csrf
             <label class="product-field product-field-wide">دلیل و مستند تأیید انسانی *<textarea name="reason" required minlength="10" maxlength="1000" rows="3" placeholder="یادداشت کنید چه مواردی را بررسی کردید و چرا تصمیم به انتشار گرفته‌اید."></textarea></label>
