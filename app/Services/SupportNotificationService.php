@@ -62,7 +62,7 @@ class SupportNotificationService
         }
     }
 
-    public function customerReplied(Ticket $ticket, string $body): void
+    public function customerReplied(Ticket $ticket, string $body, ?int $messageId = null): void
     {
         $ticket->loadMissing(['user', 'assignee']);
 
@@ -80,7 +80,8 @@ class SupportNotificationService
                 'پاسخ کاربر روی '.$ticket->displayCode(),
                 Str::limit($body, 120),
                 $ticket,
-                staff: true
+                staff: true,
+                eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
             $this->email->sendTicketCustomerReply($staff, $ticket, $body);
         }
@@ -98,7 +99,7 @@ class SupportNotificationService
         }
     }
 
-    public function staffReplied(Ticket $ticket, string $body, bool $isInternal = false): void
+    public function staffReplied(Ticket $ticket, string $body, bool $isInternal = false, ?int $messageId = null): void
     {
         if ($isInternal) {
             return;
@@ -112,7 +113,8 @@ class SupportNotificationService
                 'ticket_reply',
                 'پاسخ جدید به تیکت '.$ticket->displayCode(),
                 Str::limit($body, 160),
-                $ticket
+                $ticket,
+                eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
             $this->email->sendTicketReply($ticket->user, $ticket, $body);
 
@@ -259,7 +261,7 @@ class SupportNotificationService
         return $this->staffUsers();
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null): void
     {
         try {
             $url = $staff
@@ -277,7 +279,7 @@ class SupportNotificationService
                     'url' => $url,
                 ],
                 false,
-                'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).':user:'.$userId,
+                'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).($eventIdentity ? ':identity:'.$eventIdentity : '').':user:'.$userId,
             );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
