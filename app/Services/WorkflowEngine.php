@@ -128,7 +128,8 @@ class WorkflowEngine
         }
 
         $context['user_id'] = (int) $userId;
-        unset($context['event_type']);
+        // The event type is authoritative server data, never caller-controlled.
+        $context['event_type'] = $eventType;
         try {
             $encodedContext = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         } catch (\JsonException $exception) {
