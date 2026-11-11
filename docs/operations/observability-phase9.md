@@ -14,7 +14,7 @@ This phase extends existing first-party assets; it does not introduce a parallel
 
 ## Dashboard probes
 
-The admin observability page reports bounded, read-only probes for database connectivity, queue backlog/failures, private storage directory writability, storage volume inventory, pending transfers and log directory writability/retention configuration.
+The admin observability page reports bounded, read-only probes for database connectivity, queue backlog/failures, private storage directory writability, storage volume inventory, pending transfers, log directory writability/retention configuration, and the existing cached Product Supervisor/document-audio readiness probes. It reuses `ProductInfrastructureHealthService`; it does not introduce another provider-health client.
 
 A missing optional table is reported as an incomplete capability, not silently treated as a healthy external service. Probe exceptions are reported to Laravel's existing exception handler and are not exposed to the dashboard.
 
