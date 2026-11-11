@@ -545,18 +545,9 @@ class StoreController extends Controller
                             && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
-                    $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
-                    $documentAudioConfigured = filled(config('services.document_audio.url'))
-                        && filled(config('services.document_audio.token'));
-                    if ($audioNeedsUpgrade && $documentAudioConfigured) {
-                        GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
-                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
-                        $readerAudioStatus = $audioArtifactReady ? 'upgrading' : 'pending';
-                    } elseif (! $audioArtifactReady) {
-                        $readerAudioStatus = 'unavailable';
-                    } else {
-                        $readerAudioStatus = 'ready';
-                    }
+                    // Reading a PDF must never trigger a remote speech-provider call.
+                    // Existing audio artifacts remain playable from this application's own storage.
+                    $readerAudioStatus = $audioArtifactReady ? 'ready' : 'unavailable';
 
                     if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
