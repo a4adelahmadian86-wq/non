@@ -2,26 +2,67 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Storage\StorageBackupService;
+use App\Jobs\RunStorageBackupJob;
+use App\Models\StorageBackupRun;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 class RunStorageBackup extends Command
 {
     protected $signature = 'storage:backup-weekly';
-    protected $description = 'Create and deliver an encrypted weekly application backup';
+    protected $description = 'Queue an encrypted weekly application backup on the dedicated backups connection';
 
-    public function handle(StorageBackupService $backup): int
+    public function handle(): int
     {
+        $lock = Cache::lock('farast:backup:dispatch', 30);
+        if (! $lock->get()) {
+            $this->info('A backup dispatch is already being prepared.');
+            return self::SUCCESS;
+        }
+
         try {
-            $results = $backup->runWeekly();
-            $completed = collect($results)->where('status', 'completed')->count();
-            $failed = collect($results)->where('status', 'failed')->count();
-            $this->info("Backup destinations completed: {$completed}; failed: {$failed}");
-            return $completed > 0 && $failed === 0 ? self::SUCCESS : self::FAILURE;
-        } catch (\Throwable $exception) {
+            if ($this->call('storage:recover-stale-backup-runs') !== self::SUCCESS) {
+                return self::FAILURE;
+            }
+
+            $existing = StorageBackupRun::query()
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
+                ->whereIn('status', ['queued', 'running'])
+                ->latest('id')
+                ->first();
+
+            if ($existing) {
+                $this->info('An active backup request already exists: #'.$existing->id);
+                return self::SUCCESS;
+            }
+
+            $request = StorageBackupRun::create([
+                'backup_type' => 'weekly',
+                'source_name' => 'scheduler_request',
+                'status' => 'queued',
+                'metadata' => ['request_only' => true],
+            ]);
+
+            try {
+                RunStorageBackupJob::dispatch($request->id);
+            } catch (Throwable $exception) {
+                $request->update([
+                    'status' => 'failed',
+                    'completed_at' => now(),
+                    'error_message' => mb_substr($exception->getMessage(), 0, 1000),
+                ]);
+                throw $exception;
+            }
+
+            $this->info('Encrypted backup queued on the backups worker: #'.$request->id);
+            return self::SUCCESS;
+        } catch (Throwable $exception) {
             report($exception);
             $this->error($exception->getMessage());
             return self::FAILURE;
+        } finally {
+            $lock->release();
         }
     }
 }

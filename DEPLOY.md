@@ -1,86 +1,128 @@
-# استقرار
+# استقرار Production فراست
 
-1. PHP 8.2+، Composer، MySQL و در صورت نیاز Redis نصب شود.
-2. `composer install --no-dev --optimize-autoloader`
-3. `.env.example` به `.env` کپی و APP_KEY ساخته شود.
-4. کلید Gemini، Kavenegar و مشخصات دیتابیس فقط در environment تنظیم شوند.
-5. `ADMIN_INITIAL_PASSWORD` را قبل از `php artisan migrate --seed` تنظیم کنید؛ رمز اولیه داخل repository نگهداری نمی‌شود.
-6. `php artisan migrate --seed`
-7. document root وب‌سرور روی `public/` قرار گیرد و اجرای PHP از خارج آن مسدود باشد.
-8. scheduler لاراول برای `farast:purge-files` هر دقیقه اجرا شود تا برنامه زمان‌بندی روزانه را اجرا کند.
-9. queue worker برای پردازش‌های سنگین اجرا شود.
-10. HTTPS، HSTS، backup رمزنگاری‌شده دیتابیس و محدودیت دسترسی به storage/app/private فعال باشد.
+این راهنما برای استقرار برنامه اصلی Laravel است؛ سرویس گفتار آنلاین در مخزن مستقل Voice-typing مدیریت می‌شود و نباید با سرویس‌های کمکی همین مخزن یکی فرض شود.
 
-## Files host
-در این نسخه فایل ورودی در دیسک خصوصی نگهداری می‌شود. برای انتقال به هاست دانلود فایلز، adapter اختصاصی FilesHost را به Storage اضافه کنید و لینک خروجی را فقط با URL امضاشده و TTL کوتاه ارائه دهید. کلید هاست دانلود هرگز در client قرار نگیرد.
+## پیش‌نیازها
+
+- PHP 8.2+ با افزونه‌های موردنیاز Composer و ZipArchive
+- Composer
+- MySQL یا PostgreSQL؛ SQLite فقط برای تست و محیط‌های سبک
+- وب‌سرور با document root دقیقاً روی پوشه `public/`
+- دسترسی نوشتن محدود برای `storage/` و `bootstrap/cache/`
+- یک Secret Manager برای `APP_KEY`، رمز دیتابیس، کلید بکاپ و کلیدهای ارائه‌دهندگان
+- Cron برای اجرای Scheduler لاراول
+- Worker مدیریت‌شده یا اجرای Worker زمان‌بندی‌شده (یکی از این دو روش، نه هر دو)
+
+## آماده‌سازی محیط
+
+1. فایل `.env.example` را به `.env` کپی کنید.
+2. همه placeholderها را در Secret Manager/Environment میزبان تکمیل کنید؛ فایل واقعی `.env` را در Git قرار ندهید.
+3. `APP_ENV=production`، `APP_DEBUG=false` و `APP_URL=https://...` را بررسی کنید.
+4. `APP_KEY` را فقط یک بار برای این محیط تولید کنید (مثلاً با `php artisan key:generate --show` در محیط امن)، در Secret Manager نگه دارید و هنگام Deployهای بعدی regenerate نکنید.
+5. `FARAST_BACKUP_ENCRYPTION_KEY` را جداگانه و تصادفی تولید کنید؛ آن را در همان محل یا همان حسابی که بکاپ‌ها ذخیره می‌شوند نگه ندارید.
+6. `FARAST_VOICE_TOKEN` باید با مقدار متناظر در سرویس Voice-typing یکسان باشد. کلیدهای Gemini، Groq، Kavenegar و سرویس‌های کمکی نیز فقط در محیط سرور تنظیم شوند.
+7. SMTP را با `MAIL_HOST`، `MAIL_PORT`، `MAIL_USERNAME`، `MAIL_PASSWORD` و `MAIL_ENCRYPTION` پیکربندی کنید؛ بدون این مقادیر ارسال ایمیل Production را تأییدشده تلقی نکنید.
+
+## ساخت و انتشار برنامه
+
+برای هر Release از SHA مشخص و تأییدشده استفاده کنید:
+
+```bash
+# Stop immediately on any failure; a failed build must not reach the live release.
+set -euo pipefail
+
+# Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
+composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
+# After the release is staged and its shared storage/.env are wired.
+php artisan down --render="errors::503" --retry=60
+
+# PAUSE the host-managed scheduler/cron and all dedicated queue workers now.
+# Wait for in-flight jobs (especially backup/restore jobs) to finish gracefully.
+# If QUEUE_SCHEDULED_WORKER=true, pausing the scheduler prevents new scheduled workers.
+
+php artisan migrate:status
+php artisan migrate --force
+php artisan config:cache
+# Route caching is intentionally disabled: current route files still contain
+# Closure-based routes. Clear any stale cache; enable route:cache only after
+# those routes are converted to controller actions and the cache command is tested.
+php artisan route:clear
+php artisan view:cache
+php artisan event:cache
+php artisan queue:restart
+
+# RESUME the host-managed queue workers and scheduler only after the new release,
+# migrations and caches are ready. Keep the scheduler single-instance per environment.
+php artisan up
+```
+
+- قبل از فعال‌سازی Release و اجرای Migration از دیتابیس و Storage بکاپ verifyشده بگیرید.
+- وابستگی‌ها را در Release جدید بسازید؛ `composer install` را روی `vendor/` نسخه‌ای که ترافیک زنده می‌گیرد اجرا نکنید.
+- فایل `.env` و مسیر `storage/` باید بین Releaseها به‌صورت کنترل‌شده و پایدار مشترک باشند.
+- Migrationهای destructive باید جداگانه بررسی شوند؛ `migrate:rollback` کورکورانه روش Rollback تولید نیست.
+- در استقرار Zero-Downtime، فعال‌سازی symlink/Release باید اتمیک باشد و فقط پس از بررسی سازگاری Schema انجام شود.
+- در اولین راه‌اندازی فقط، بعد از تعیین `ADMIN_INITIAL_PASSWORD` و بررسی Seederها، seed اولیه را اجرا کنید. `db:seed` را در هر Release به‌صورت خودکار اجرا نکنید.
+- وب‌سرور فقط باید به `public/` دسترسی مستقیم داشته باشد؛ `.env`، `storage/app/private`، فایل‌های بکاپ و کدهای داخلی نباید public باشند.
+
+## Scheduler
+
+Cron باید هر دقیقه Scheduler لاراول را اجرا کند؛ خود Scheduler زمان اجرای هر کار را از `routes/console.php` تعیین می‌کند:
+
+```cron
+* * * * * cd /path/to/farast && php artisan schedule:run >> /dev/null 2>&1
+```
+
+اجرای مستقیم `farast:purge-files` هر دقیقه جایگزین Scheduler نیست. بکاپ هفتگی فعلی یکشنبه ساعت 02:00 زمان‌بندی شده است؛ تا زمان تصویب RPO، این تناوب را برای سامانه پرتغییر کافی فرض نکنید.
+
+## Worker
+
+یکی از دو مدل زیر را انتخاب کنید:
+
+### مدل A — Cron-only / هاست اشتراکی
+
+`QUEUE_SCHEDULED_WORKER=true` باقی بماند. Scheduler، Workerهای کوتاه‌عمر `--stop-when-empty` را برای صف‌های اسناد، پیش‌فرض و بکاپ هر دقیقه اجرا می‌کند. این مدل نیازمند Cron سالم و قفل مشترک Cache/Database است.
+
+### مدل B — Worker دائمی تحت Supervisor یا systemd
+
+دو Worker مستقل را تحت Process Manager اجرا و restart کنید:
+
+```bash
+php artisan queue:work database --queue=documents,documents-audio,default --sleep=3 --tries=3 --timeout=900
+php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=14400
+```
+
+در این مدل `QUEUE_SCHEDULED_WORKER=false` قرار دهید تا Scheduler Workerهای زمان‌بندی‌شده را هم‌زمان اجرا نکند. برای هر Worker، `autorestart`، توقف graceful، کاربر غیر root و لاگ مستقل تنظیم کنید. زمان `retry_after` صف بکاپ باید از `--timeout` آن بیشتر باشد؛ در تنظیم فعلی 15000 در برابر 14400 ثانیه است.
+
+## سلامت و بررسی پس از انتشار
+
+- `GET /up`: Liveness لاراول.
+- `GET /ready`: Readiness دیتابیس اصلی با `SELECT 1`؛ پاسخ 503 یعنی سرویس نباید ترافیک بگیرد.
+- پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
+- `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.
+- `php artisan queue:failed` و `php artisan migrate:status` را بررسی کنید.
+- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up` و پاسخ JSON `/ready` را کنترل می‌کند.
+- موفقیت `/ready` به‌تنهایی سلامت Redis، Storage خارجی، سرویس صوت یا ارائه‌دهندگان AI را تضمین نمی‌کند.
+
+## Backup و Restore
+
+- `storage:backup-weekly` یک درخواست را در صف اختصاصی `backups` قرار می‌دهد؛ تولید آرشیو توسط `RunStorageBackupJob` و Worker صف `backups` انجام می‌شود، نه در فرایند Cron. درخواست‌های `queued/running` در `storage_backup_runs` قابل پایش‌اند.
+- درخواست زمان‌بندی‌شده فقط وقتی قابل اجراست که `FARAST_BACKUP_ENCRYPTION_KEY` و حداقل یک Volume سالم با `drive_key=foreign_backup` پیکربندی شده باشد.
+- بکاپ با AES-256 رمزنگاری می‌شود؛ SHA-256 پس از انتقال مقایسه می‌شود و خوانایی Manifest و جریان دیتابیس رمزگشایی‌شده نیز قبل از موفق علامت‌گذاری شدن بررسی می‌شود.
+- قفل اجرای بکاپ در Cache مشترک، اجرای هم‌زمان Snapshotها را متوقف می‌کند. فرمان `storage:recover-stale-backup-runs` هر ۱۵ دقیقه اجرا می‌شود: اجرای running قدیمی‌تر از ۵ ساعت (شامل snapshot lock و رکورد مقصد) و درخواست queued قدیمی‌تر از ۲۴ ساعت را failed می‌کند. `storage:backup-weekly` نیز پیش از dispatch همین پاک‌سازی را اجرا می‌کند؛ این پاک‌سازی جایگزین پایش پیوسته Worker و صف نیست.
+- بررسی دستی: `php artisan storage:verify-backup {runId}`.
+- Restore مخرب است و دیتابیس و فایل‌ها را جایگزین می‌کند: `php artisan storage:restore-backup {runId} --confirm`. فقط در محیط بازیابی جداگانه یا پنجره رخداد کنترل‌شده اجرا شود. پس از Restore برنامه عمداً در Maintenance Mode باقی می‌ماند؛ پس از اعتبارسنجی داده‌ها، Storage و Workerها، اپراتور باید `php artisan up` را اجرا کند.
+- آزمون Restore باید از دیتابیس و Storage جداگانه استفاده کند؛ هرگز برای تمرین روی Production اجرا نشود.
+- **بازیابی از نابودی کامل دیتابیس:** پس از ساخت یک دیتابیس خالی با همان درایور، بازیابی `APP_KEY` اصلی و `FARAST_BACKUP_ENCRYPTION_KEY` از Secret Manager و دریافت فایل ZIP از مقصد خارجی، بدون نیاز به رکوردهای `storage_backup_runs` اجرا کنید: `php artisan storage:restore-backup --archive=/secure/path/backup.zip --confirm`. این مسیر Manifest رمزنگاری‌شده و HMAC موجودی فایل‌ها را بررسی می‌کند، دیتابیس و فایل‌ها را بازمی‌گرداند و رکورد `bootstrap_restore` می‌سازد. پس از Restore، `php artisan storage:check-volumes --limit=100` را اجرا کنید، سلامت سرویس را با `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh` بسنجید و مقصدها را بررسی کنید؛ برنامه تا اجرای صریح `php artisan up` در Maintenance می‌ماند.
+- کلید رمزنگاری بکاپ، `APP_KEY`، اطلاعات دسترسی مقصدهای خارجی و شناسه/مسیر آرشیوها باید خارج از همان محیط/حساب نگهداری بکاپ قابل بازیابی باشند.
+- Retention فعلی عملاً `keep_all` است و حذف خودکار بکاپ‌های قدیمی پیاده‌سازی نشده؛ ظرفیت مقصد را پایش کنید و تا تصویب RPO/RTO حذف خودکار را فعال نکنید.
+
+## وضعیت میزبان و سرویس‌های جانبی
+
+- این مخزن هیچ Blueprint یا Dockerfile برای برنامه اصلی Laravel ندارد؛ `render.yaml` فقط دو سرویس کمکی Python را تعریف می‌کند. Workspace متصل‌شده Render نیز در ممیزی، سرویس Laravel یا دیتابیس Production نشان نداد.
+- `DEPLOY.md` و فایل‌های مخزن به‌تنهایی نام میزبان واقعی Laravel، دامنه Production یا دیتابیس زنده را تعیین نمی‌کنند. تا زمان شناسایی آن‌ها، هیچ Migration یا Deploy تولیدی نباید اجرا شود.
+- سرویس Voice-typing مخزن مستقل `a4adelahmadian86-wq/Voice-typing` است. Blueprint آن Docker، پلن پولی 2 CPU / 8 GB و دیسک پایدار 10 GB در Frankfurt تعریف می‌کند؛ راهنمای همان مخزن می‌گوید پلن Free برای اجرای مدل‌های صوتی مناسب نیست. در مستندات این مخزن، وضعیت پنل زنده با Blueprint اختلاف دارد. قبل از Sync یا تغییر پلن/منطقه باید قیمت و تغییرات دقیق در Render بررسی و تأیید شوند.
 
 ## نکته امنیتی مهم
+
 جلوگیری مطلق از کپی متن در مرورگر ممکن نیست؛ کاربر دارای کنترل کامل روی دستگاه خود می‌تواند DevTools یا ابزارهای ضبط صفحه استفاده کند. این پروژه کپی عادی، cut، context menu و میانبرهای رایج را در ویرایشگر می‌بندد و متن خام را از API عمومی ارائه نمی‌کند. امنیت واقعی باید با کنترل دسترسی سمت سرور و محدود کردن export پیاده شود.
-
-## استقرار تایپ صوتی زنده
-
-### درگاه آنلاین فعلی Render
-
-درگاه آنلاین فعلی، سرویس مستقل مخزن [Voice-typing](https://github.com/a4adelahmadian86-wq/Voice-typing/tree/free-groq-edge-tts) است؛ این سرویس با Laravel و پوشهٔ `voice-stream/` یکسان نیست.
-
-- نشانی پایه: `https://voice-typing-r5r7.onrender.com`
-- WebSocket زنده: `wss://voice-typing-r5r7.onrender.com/v1/stream`
-- سلامت پایه: `GET /health`
-- وضعیت احراز‌شده: `GET /v1/status`
-- تشخیص دسته‌ای: `POST /v1/transcribe`
-- تولید صدا: `POST /v1/synthesize`
-- چت سازگار با OpenAI: `POST /v1/chat/completions`
-
-تنظیمات لازم:
-
-**در Laravel**
-- `FARAST_VOICE_TOKEN`: یک راز تصادفی قوی؛ این مقدار باید دقیقاً با مقدار همین متغیر در سرویس Voice-typing یکسان باشد.
-- `VOICE_STREAM_URL`: در صورت استفاده از دامنهٔ پیش‌فرض، مقدار پیش‌فرض کد کافی است؛ در غیر این صورت نشانی پایهٔ WebSocket را با طرح `wss://` تنظیم کنید.
-- در صورت override کردن آدرس‌ها، `FARAST_VOICE_ASR_URL`، `FARAST_VOICE_TTS_URL` و `FARAST_AI_GATEWAY_URL` را با endpointهای همین سرویس هماهنگ کنید.
-
-**در سرویس Voice-typing روی Render**
-- `FARAST_VOICE_TOKEN`: دقیقاً همان مقدار Laravel.
-- `GROQ_API_KEY`: کلید فعال Groq.
-- `GROQ_ASR_MODEL`: به‌طور پیش‌فرض `whisper-large-v3`.
-- `GROQ_CHAT_MODEL`: مدل چت سمت سرور؛ مقدار پیش‌فرض در کد `openai/gpt-oss-120b` است.
-- `FARAST_EDGE_TTS_VOICE`: صدای ثابت Edge TTS؛ مقدار پیش‌فرض `fa-IR-FaridNeural` است.
-
-در این معماری، توکن مشترک `FARAST_VOICE_TOKEN` برای احراز درخواست‌های ASR، TTS و چت و امضای توکن کوتاه‌عمر WebSocket استفاده می‌شود. توکن نشست شامل شناسهٔ کاربر، زبان، زمان انقضا و nonce است و پس از ۱۲۰ ثانیه منقضی می‌شود.
-
-**نکتهٔ امنیتی:** `APP_KEY` لاراول را در سرویس Voice-typing کپی نکنید. سرویس آنلاین فعلی توکن نشست را با `FARAST_VOICE_TOKEN` مشترک اعتبارسنجی می‌کند؛ `VOICE_GATEWAY_SECRET` مربوط به مسیر gateway قدیمی/خودمیزبان است و جایگزین این توکن نیست. هیچ‌یک از کلیدها را در مخزن یا کد مرورگر قرار ندهید.
-
-### اختلاف پیکربندی پنل Render و فایل Blueprint
-
-در زمان آخرین بررسی، سرویس فعال پنل Render با runtime از نوع Docker، فایل `./Dockerfile`، منطقهٔ Ohio و پلن Free اجرا می‌شود؛ اما `render.yaml` شاخهٔ سرویس، runtime پایتون و منطقهٔ Frankfurt را توصیف می‌کند. مسیر health-check نیز در تنظیمات فعلی پنل خالی است، هرچند Blueprint مقدار `/health` را تعریف می‌کند.
-
-این دو پیکربندی را بدون برنامهٔ مهاجرت با هم sync نکنید. فایل Blueprint فعلی مرجع دقیق وضعیت سرویس زنده نیست و sync کردن آن می‌تواند runtime یا منطقه را تغییر دهد. هرگونه یکسان‌سازی باید ابتدا روی سرویس آزمایشی جداگانه build و بررسی شود؛ سرویس فعال را برای رفع صرفاً ظاهری این اختلاف تغییر ندهید.
-
-### محدودیت دسترس‌پذیری Render Free
-
-سرویس آنلاین فعلی روی پلن Free قرار دارد و ممکن است پس از دورهٔ بی‌ترافیکی متوقف و هنگام درخواست بعدی بیدار شود. Workflow با نام `Keep Render voice gateway warm` تلاش می‌کند هر ۱۰ دقیقه endpoint سلامت را فراخوانی کند؛ زمان‌بندی GitHub Actions تضمین‌شده نیست و سوابق اجرا نشان داده‌اند که همهٔ نوبت‌های زمان‌بندی‌شده الزاماً اجرا نمی‌شوند. بنابراین این روش تضمین همیشه‌فعال بودن نیست. برای SLA بهتر باید پلن همیشه‌فعال Render انتخاب شود؛ این کار هزینهٔ دوره‌ای دارد و نباید بدون تأیید بودجه انجام شود.
-
-پاسخ موفق `/health` فقط سلامت پایهٔ برنامه و وضعیت پیکربندی را نشان می‌دهد؛ به‌تنهایی تضمین‌کنندهٔ دسترسی لحظه‌ای به ارائه‌دهنده‌های بیرونی نیست. برای ارزیابی واقعی، لاگ‌های موفق ASR، چت و TTS و آزمایش نشست WebSocket را نیز بررسی کنید.
-
-**حریم خصوصی:** در معماری آنلاین فعلی، صوت برای تشخیص گفتار به Groq ارسال می‌شود، پیام‌های چت به Groq می‌روند و متن پاسخ برای Edge TTS ارسال می‌شود. پیش از استفاده از داده‌های محرمانه، شرایط نگهداری و پردازش هر ارائه‌دهنده و رضایت کاربر را بررسی کنید. این معماری، اجرای کاملاً محلی یا بدون ارائه‌دهندهٔ بیرونی نیست.
-
-### مسیر خودمیزبان/محلی جداگانه
-
-پوشهٔ `voice-stream/` شامل gateway مبتنی بر Node، Sherpa-ONNX، Piper و درگاه مدل زبانی محلی است. این معماری مستقل از سرویس آنلاین Voice-typing است و برای اجرای محلی یا استقرار اختصاصی استفاده می‌شود. تنظیمات، رازهای gateway، APP_KEY و نحوهٔ راه‌اندازی آن را فقط از [راهنمای voice-stream](voice-stream/README.md) دنبال کنید؛ تنظیمات این مسیر را با متغیرهای سرویس آنلاین Render مخلوط نکنید.
-
-## درگاه چندموتوره هوش مصنوعی Runflare (اختیاری)
-
-کد اولیهٔ درگاه سبک در مخزن [Voice-typing، شاخهٔ runflare-ai-gateway](https://github.com/a4adelahmadian86-wq/Voice-typing/tree/runflare-ai-gateway/runflare-gateway) آماده شده است. این سرویس مدل بزرگ را داخل پلن رایگان Runflare بارگذاری نمی‌کند؛ درخواست‌ها را به ارائه‌دهندگان قابل‌تعویض می‌فرستد و در صورت خرابی، مسیر پشتیبان را امتحان می‌کند.
-
-پس از ایجاد سرویس و بررسی واقعی endpointها، این متغیرها را فقط در environment سمت سرور Laravel تنظیم کنید:
-
-- `FARAST_VOICE_ASR_URL=https://<دامنه-Runflare>/v1/transcribe`
-- `FARAST_VOICE_TTS_URL=https://<دامنه-Runflare>/v1/synthesize`
-- `FARAST_VOICE_ASR_TOKEN` و `FARAST_VOICE_TTS_TOKEN`: هر دو برابر `FARAST_GATEWAY_TOKEN` همان سرویس Runflare باشند.
-- `FARAST_AI_GATEWAY_URL=https://<دامنه-Runflare>`
-- `FARAST_AI_GATEWAY_TOKEN`: برابر `FARAST_GATEWAY_TOKEN` باشد.
-
-درگاه AI برای عملیات متنی ویرایشگر ابتدا Gemini و سپس Groq را امتحان می‌کند؛ در صورت تنظیم، مسیر قدیمی مستقیم Gemini در Laravel نیز fallback باقی می‌ماند. تا وقتی متغیرهای `FARAST_AI_GATEWAY_URL` و `FARAST_AI_GATEWAY_TOKEN` خالی‌اند، رفتار فعلی تغییر نمی‌کند. پس از تغییر environment، کش تنظیمات Laravel را پاک کنید.
-
-**حریم خصوصی:** سهمیه رایگان Gemini طبق شرایط فعلی ممکن است از محتوای ارسالی برای بهبود محصولات Google استفاده کند. پیش از ارسال متن محرمانه یا اسناد کاربران، شرایط جاری ارائه‌دهنده و سیاست پردازش/رضایت کاربر را بررسی کنید؛ صرفاً داشتن یک API key به معنای مناسب بودن آن برای داده محرمانه نیست.
-
-سرویس رایگان Runflare پس از سه ماه حذف می‌شود؛ این درگاه stateless است و مدل یا داده کاربر روی دیسک نگه نمی‌دارد. بااین‌حال، ساخت سرویس جایگزین و ثبت مجدد secretها پس از انقضا همچنان باید در پنل Runflare انجام شود؛ اسکریپت مخزن مرحلهٔ deploy کد را ساده می‌کند، نه ایجاد خودکار پروژه حذف‌شده را.
