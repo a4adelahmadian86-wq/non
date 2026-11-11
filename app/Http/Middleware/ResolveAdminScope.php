@@ -153,9 +153,19 @@ class ResolveAdminScope
             ->where('user_id', $user->id)
             ->first();
 
-        if (! $restriction
-            || ($restriction->starts_at && now()->lt($restriction->starts_at))
-            || ($restriction->expires_at && now()->gte($restriction->expires_at))) {
+        if (! $restriction || ($restriction->starts_at && now()->lt($restriction->starts_at))) {
+            // A global administrator may intentionally narrow the dashboard with
+            // the configured scope override. Resolve the matching real boundary
+            // instead of silently degrading that view to own-only.
+            $effectiveScope = self::scopeFor($user);
+            if ($effectiveScope === self::SCOPE_ORGANIZATION && $user->organization_id) {
+                return (int) $user->organization_id;
+            }
+
+            return null;
+        }
+
+        if ($restriction->expires_at && now()->gte($restriction->expires_at)) {
             return null;
         }
 
