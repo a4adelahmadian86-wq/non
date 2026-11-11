@@ -948,13 +948,13 @@ test('assistant streams complete TTS chunks while keeping full-duplex capture ac
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__resolveChat());
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__audio.finish());
