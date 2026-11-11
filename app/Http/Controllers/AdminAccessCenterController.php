@@ -34,7 +34,12 @@ class AdminAccessCenterController extends Controller
 
     private function ensurePlatformAdmin(Request $request): void
     {
-        abort_unless($request->user()?->isAdmin(), 403, 'مدیریت ساختار نقش‌ها فقط در اختیار مدیر اصلی سامانه است.');
+        abort_unless(
+            $request->user()?->isAdmin()
+            && $request->attributes->get('farast.scope') === 'global',
+            403,
+            'مدیریت ساختار نقش‌ها فقط برای مدیر اصلی با دامنهٔ سراسری مجاز است.'
+        );
         foreach (['farast_roles', 'farast_role_permissions', 'farast_user_roles', 'farast_user_permission_overrides', 'farast_access_audit_logs'] as $table) {
             abort_unless(Schema::hasTable($table), 503, 'زیرساخت مدیریت دسترسی هنوز نصب نشده است.');
         }
