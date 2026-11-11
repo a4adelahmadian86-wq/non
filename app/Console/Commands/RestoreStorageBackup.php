@@ -140,7 +140,7 @@ class RestoreStorageBackup extends Command
                 $zip->close();
                 throw new RuntimeException('درایور پایگاه داده بکاپ با درایور پشتیبانی‌شده و محیط مقصد یکسان نیست.');
             }
-            if (! $zip->locateName('database/database.sql')) {
+            if ($zip->locateName('database/database.sql') === false) {
                 $zip->close();
                 throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
             }
