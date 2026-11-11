@@ -106,7 +106,7 @@ class AuthorizationService
 
     public function createRole(User $actor, string $key, string $name, array $permissionKeys): object
     {
-        abort_unless($this->allows($actor, 'access.manage'), 403);
+        abort_unless($this->canManageScope($actor, $actor, 'global', null, null), 403);
         $key = trim($key);
         $name = trim($name);
         abort_unless((bool) preg_match('/^[a-z][a-z0-9_.-]{2,99}$/', $key), 422, 'کلید نقش معتبر نیست.');
@@ -388,6 +388,17 @@ class AuthorizationService
                 if (isset($all[$key])) {
                     RolePermission::firstOrCreate(['role' => $role, 'permission_id' => $all[$key]]);
                 }
+            }
+
+            if (DB::getSchemaBuilder()->hasTable('roles')) {
+                DB::table('roles')->insertOrIgnore([
+                    'key' => $role,
+                    'name' => str($role)->replace('_', ' ')->title()->toString(),
+                    'is_system' => true,
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
         }
         $this->permissionIds = [];
