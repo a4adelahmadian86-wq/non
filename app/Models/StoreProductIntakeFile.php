@@ -11,7 +11,7 @@ class StoreProductIntakeFile extends Model
         'intake_session_id', 'user_id', 'status', 'staging_disk', 'staging_path',
         'managed_disk', 'managed_path', 'managed_file_id', 'product_file_id',
         'original_name', 'mime', 'size_bytes', 'sha256', 'inspection_json',
-        'is_primary', 'expires_at', 'uploaded_at',
+        'is_primary', 'expires_at', 'uploaded_at', 'supervisor_status', 'supervisor_review_json', 'supervisor_reviewed_at',
     ];
 
     protected $casts = [
@@ -20,6 +20,8 @@ class StoreProductIntakeFile extends Model
         'is_primary' => 'boolean',
         'expires_at' => 'datetime',
         'uploaded_at' => 'datetime',
+        'supervisor_review_json' => 'array',
+        'supervisor_reviewed_at' => 'datetime',
     ];
 
     public function session(): BelongsTo
