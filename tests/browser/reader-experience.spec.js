@@ -43,6 +43,25 @@ test('reopens durable reader storage after another tab closes the database', asy
   expect(restored).toBe('after-reopen');
 });
 
+test('keeps reader data in IndexedDB after local storage and Cache API are cleared', async ({ page }) => {
+  await page.goto('/');
+  await page.addScriptTag({ url: '/js/farast-reader-storage.js' });
+  await page.evaluate(async () => {
+    await window.FarastReaderDurableStore.set('farast-reader:v1:durability-probe', JSON.stringify({ progress: { section: 2, page: 4 }, bookmarks: [] }));
+    localStorage.clear();
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(name => caches.delete(name)));
+    }
+  });
+
+  await page.reload();
+  await page.addScriptTag({ url: '/js/farast-reader-storage.js' });
+  const restored = await page.evaluate(() => window.FarastReaderDurableStore.restore('farast-reader:v1:durability-probe'));
+
+  expect(JSON.parse(restored)).toEqual({ progress: { section: 2, page: 4 }, bookmarks: [] });
+});
+
 async function mountReader(page, includeExcel = false, readerStateUrl = '') {
   await page.goto('/');
   const total = includeExcel ? 3 : 2;
