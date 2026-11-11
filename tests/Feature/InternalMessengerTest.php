@@ -271,4 +271,24 @@ class InternalMessengerTest extends TestCase
         $this->assertSame(2, $conversation->participants()->count());
     }
 
+    public function test_employee_can_keep_a_conversation_with_a_platform_admin(): void
+    {
+        $organization = $this->makeOrganization();
+        $employee = $this->makeEmployee($organization);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => null,
+            'is_blocked' => false,
+        ]);
+
+        $this->actingAs($employee)->post(route('messenger.store'), [
+            'type' => 'direct',
+            'participant_ids' => [$admin->id],
+        ])->assertRedirect();
+
+        $conversation = Conversation::query()->firstOrFail();
+        $this->actingAs($employee)->get(route('messenger.show', $conversation))->assertOk();
+    }
+
+
 }
