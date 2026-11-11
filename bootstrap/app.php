@@ -28,7 +28,7 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
         $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
-        $exceptions->respond(function (\\Symfony\\Component\\HttpFoundation\\Response $response) {
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response) {
             $request = request();
             $requestId = $request?->attributes->get('farast.request_id');
             $correlationId = $request?->attributes->get('farast.correlation_id');
