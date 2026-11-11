@@ -129,7 +129,7 @@ jobs:
           DB_DATABASE: farast_test
           DB_USERNAME: root
           DB_PASSWORD: root
-      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|FeedbackPipelineSchemaTest'
+      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
