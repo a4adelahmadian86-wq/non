@@ -36,6 +36,11 @@ composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
 # After the release is staged and its shared storage/.env are wired.
 php artisan down --render="errors::503" --retry=60
+
+# PAUSE the host-managed scheduler/cron and all dedicated queue workers now.
+# Wait for in-flight jobs (especially backup/restore jobs) to finish gracefully.
+# If QUEUE_SCHEDULED_WORKER=true, pausing the scheduler prevents new scheduled workers.
+
 php artisan migrate:status
 php artisan migrate --force
 php artisan config:cache
@@ -46,6 +51,9 @@ php artisan route:clear
 php artisan view:cache
 php artisan event:cache
 php artisan queue:restart
+
+# RESUME the host-managed queue workers and scheduler only after the new release,
+# migrations and caches are ready. Keep the scheduler single-instance per environment.
 php artisan up
 ```
 
