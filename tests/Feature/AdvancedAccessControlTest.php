@@ -437,15 +437,18 @@ class AdvancedAccessControlTest extends TestCase
 
         $this->actingAs($manager);
         request()->attributes->set('farast.scope', 'organization');
-        request()->attributes->set('farast.section_permission', 'users.view');
+        // A stale section permission must not override the explicit permission
+        // requested by a downstream query.
+        request()->attributes->set('farast.section_permission', 'reports.team');
 
-        $visibleIds = app(AdminConsoleService::class)->visibleUserIds($manager);
+        $console = app(AdminConsoleService::class);
+        $visibleIds = $console->visibleUserIds($manager, 'users.view');
 
         $this->assertContains($manager->id, $visibleIds);
         $this->assertContains($memberA->id, $visibleIds);
         $this->assertNotContains($memberB->id, $visibleIds);
         $this->assertNotContains($unassigned->id, $visibleIds);
-        $this->assertSame([$organization->id], app(AdminConsoleService::class)->visibleOrganizationIds($manager));
+        $this->assertSame([$organization->id], $console->visibleOrganizationIds($manager, 'users.view'));
     }
 
     public function test_organization_role_cannot_be_assigned_outside_its_parent_organization(): void
