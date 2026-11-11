@@ -161,11 +161,11 @@ class ReviewProductPublicationRequest implements ShouldQueue
             ->update([
                 'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
                 'ai_verdict' => 'unavailable',
-                'ai_review_json' => json_encode([
+                'ai_review_json' => [
                     'error' => class_basename($exception),
                     'reviewed_at' => now()->toISOString(),
                     'automated_publication' => false,
-                ], JSON_UNESCAPED_UNICODE),
+                ],
             ]);
         report($exception);
     }
