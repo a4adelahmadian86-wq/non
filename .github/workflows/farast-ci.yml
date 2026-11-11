@@ -1,7 +1,7 @@
 name: FARAST CI
 
 concurrency:
-  group: farast-ci-${{ github.ref }}
+  group: farast-ci-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 on:
   push:
