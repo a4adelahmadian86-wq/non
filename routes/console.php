@@ -8,6 +8,11 @@ use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
+// Operational health alerts are transition-aware and rate-limited through the shared cache.
+Schedule::command('farast:observability:check')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
 // Probe active storage providers and refresh provider-reported usage/counts.
 Schedule::command('storage:check-volumes --limit=100')
     ->everyFiveMinutes()
