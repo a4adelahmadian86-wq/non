@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use App\Models\User;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
@@ -142,7 +143,7 @@ class StorageCoreTest extends TestCase
         $absolute = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
         File::ensureDirectoryExists(dirname($absolute));
         file_put_contents($absolute, 'partial-upload');
-        \\App\\Models\\StorageVolumeReservation::query()
+        StorageVolumeReservation::query()
             ->where('reservation_key', $reservation)
             ->update(['expires_at' => now()->subMinute()]);
 
