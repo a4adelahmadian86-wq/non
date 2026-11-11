@@ -5,9 +5,19 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ReadinessController;
 
 return Application::configure(basePath:dirname(__DIR__))
-    ->withRouting(web:__DIR__.'/../routes/web.php',commands:__DIR__.'/../routes/console.php',health:'/up')
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+        then: function (): void {
+            // Register readiness outside the browser web middleware stack.
+            Route::get('/ready', ReadinessController::class)->name('health.ready');
+        },
+    )
     ->withMiddleware(function(Middleware $middleware):void{
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
         $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'admin.section'=>App\Http\Middleware\EnsureAdminSection::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
@@ -22,6 +32,7 @@ return Application::configure(basePath:dirname(__DIR__))
         // دامنه‌ی کنسول مدیریت برای همه مسیرهای /admin حل می‌شود (معماری داشبورد واحد + Scope).
         $middleware->web(append: [App\Http\Middleware\EnsureActiveAccount::class, App\Http\Middleware\ResolveAdminScope::class, App\Http\Middleware\TrackAuthenticatedSession::class, App\Http\Middleware\RequireTwoFactorChallenge::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
+        // The middleware checks its cached configuration after the application is bootstrapped.
         // Run first so even failures in later global middleware receive a trace ID.
         $middleware->prepend(App\Http\Middleware\FarastObservability::class);
     })
