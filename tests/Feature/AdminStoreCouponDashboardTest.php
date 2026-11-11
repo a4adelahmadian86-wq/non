@@ -307,6 +307,67 @@ class AdminStoreCouponDashboardTest extends TestCase
         $this->actingAs($employee)->get(route('admin.store-coupons.index'))->assertForbidden();
     }
 
+    public function test_dashboard_shows_coupon_and_campaign_management_audit_history(): void
+    {
+        $admin = $this->admin();
+        $customer = User::create([
+            'name' => 'مشتری تاریخچه',
+            'email' => 'coupon-audit-customer@example.test',
+            'mobile' => '09151119996',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $product = $this->product();
+        $coupon = StoreCoupon::create([
+            'code' => 'AUDITSMART10',
+            'type' => 'fixed',
+            'value' => 5000,
+            'max_uses' => 1,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        $assignment = StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+            'status' => 'offered',
+            'score' => 5,
+            'reason_codes' => ['cart_abandoned'],
+            'offered_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->actingAs($admin)->put(route('admin.store-coupons.settings'), [
+            'score_threshold' => 5,
+            'signal_window_days' => 14,
+            'cooldown_days' => 7,
+            'offer_valid_hours' => 48,
+            'max_discount_percent' => 10,
+            'abandonment_hours' => 2,
+            'retention_days' => 90,
+            'monthly_budget_rials' => 0,
+        ])->assertRedirect(route('admin.store-coupons.index'));
+
+        $this->post(route('admin.store-coupons.store'), [
+            'code' => 'AUDITPUBLIC10',
+            'type' => 'percent',
+            'value' => 10,
+            'description' => 'آزمون تاریخچه',
+        ])->assertRedirect(route('admin.store-coupons.index'));
+
+        $this->post(route('admin.store-coupons.assignments.revoke', $assignment->id))
+            ->assertRedirect(route('admin.store-coupons.index'));
+
+        $this->get(route('admin.store-coupons.index'))
+            ->assertOk()
+            ->assertSee('تاریخچه تغییرات مدیریتی')
+            ->assertSee('تغییر قواعد موتور پیشنهاد هوشمند')
+            ->assertSee('ایجاد کد تخفیف عمومی')
+            ->assertSee('ابطال پیشنهاد اختصاصی')
+            ->assertSee('Coupon Dashboard Admin')
+            ->assertSee('AUDITPUBLIC10');
+    }
+
     public function test_admin_can_revoke_an_unused_smart_offer_and_disable_its_coupon(): void
     {
         $admin = $this->admin();
