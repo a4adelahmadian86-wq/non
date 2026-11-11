@@ -478,14 +478,21 @@ class AdminController extends Controller
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
 
         $old = $user->role;
-        $user->update(['role' => $d['role']]);
-        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
-
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
-                'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
+        DB::transaction(function () use ($request, $user, $d, $old, $audit): void {
+            $user->update(['role' => $d['role']]);
+            $this->recordAccessAudit($request, 'user.base_role.updated', (int) $user->id, [
+                'role' => $old,
+            ], [
+                'role' => $d['role'],
             ]);
-        }
+
+            if (Schema::hasTable('audit_logs')) {
+                $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
+                    'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
+                ]);
+            }
+        });
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', "نقش کاربر «{$user->name}» از {$old} به {$d['role']} تغییر کرد.");
     }
@@ -772,11 +779,20 @@ class AdminController extends Controller
         // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
         $console->authorizeAction(auth()->user(), 'users', $user->id, 'users.suspend');
 
-        $user->update(['is_blocked' => ! $user->is_blocked]);
+        $beforeBlocked = (bool) $user->is_blocked;
+        $afterBlocked = ! $beforeBlocked;
+        DB::transaction(function () use ($user, $audit, $beforeBlocked, $afterBlocked): void {
+            $user->update(['is_blocked' => $afterBlocked]);
+            $this->recordAccessAudit(request(), $afterBlocked ? 'user.blocked' : 'user.unblocked', (int) $user->id, [
+                'is_blocked' => $beforeBlocked,
+            ], [
+                'is_blocked' => $afterBlocked,
+            ]);
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record(auth()->id(), $user->is_blocked ? 'admin.user.blocked' : 'admin.user.unblocked', request()->ip(), ['target_user_id' => $user->id]);
-        }
+            if (Schema::hasTable('audit_logs')) {
+                $audit->record(auth()->id(), $afterBlocked ? 'admin.user.blocked' : 'admin.user.unblocked', request()->ip(), ['target_user_id' => $user->id]);
+            }
+        });
 
         return back();
     }
@@ -1029,11 +1045,13 @@ class AdminController extends Controller
                 $capability = UserCapability::create(['user_id' => $user->id, ...$values]);
             }
 
+            $after = $capability->getAttributes();
             $audit->record((int) $r->user()->id, 'admin.user.capabilities_updated', $r->ip(), [
                 'target_user_id' => (int) $user->id,
                 'before' => $before,
-                'after' => $capability->getAttributes(),
+                'after' => $after,
             ]);
+            $this->recordAccessAudit($r, 'user.capabilities.updated', (int) $user->id, $before, $after);
         });
 
         app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
@@ -1086,4 +1104,23 @@ class AdminController extends Controller
 
         return back()->with('status', 'موجودی کیف پول کاربر به‌روزرسانی شد.');
     }
+    private function recordAccessAudit(Request $request, string $action, int $subjectUserId, array $before, array $after): void
+    {
+        abort_unless(Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ممیزی دسترسی در دسترس نیست.');
+
+        DB::table('farast_access_audit_logs')->insert([
+            'actor_id' => $request->user()?->id,
+            'subject_user_id' => $subjectUserId,
+            'role_id' => null,
+            'permission_id' => null,
+            'action' => $action,
+            'before_state' => json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'after_state' => json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 4000),
+            'created_at' => now(),
+        ]);
+    }
+
+
 }
