@@ -741,7 +741,13 @@
       });
       layersHost.append(fragment);
       layersSection.hidden=false;
-    }catch(_){
+    }catch(error){
+      root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
+        supported:typeof pdfDoc?.getOptionalContentConfig==='function',
+        count:0,
+        groups:[],
+        error:String(error?.message||error)
+      }}));
       layersHost.replaceChildren();
       layersSection.hidden=true;
     }
