@@ -9,6 +9,7 @@ use App\Jobs\RunStorageBackupJob;
 use App\Services\StorageConnectionService;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -63,7 +64,7 @@ class AdminStorageController extends Controller
             \Illuminate\Support\Facades\Artisan::call('storage:recover-stale-backup-runs');
             abort_if(
                 StorageBackupRun::query()
-                    ->whereIn('source_name', ['queued', 'running'])
+                    ->whereIn('source_name', ['scheduler_request', 'manual_request'])
                     ->whereIn('status', ['queued', 'running'])
                     ->exists(),
                 409,
