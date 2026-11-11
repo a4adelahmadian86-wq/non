@@ -42,7 +42,7 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletController::class,'topUpCallback'])->middleware('throttle:30,10')->name('wallet.topup.callback');
 
-Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth','permission:store.manage'])->prefix('admin')->name('admin.')->group(function () {
     Route::post('/store/{product}/ai-supervisor/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'review'])->middleware('throttle:5,10')->name('store.ai-supervisor.review');
     Route::post('/store/{product}/ai-supervisor/files/{file}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewFile'])->middleware('throttle:5,10')->name('store.ai-supervisor.files.review');
     Route::post('/store/{product}/ai-supervisor/images/{image}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewImage'])->middleware('throttle:5,10')->name('store.ai-supervisor.images.review');
@@ -51,9 +51,14 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
+    Route::post('/store/intake/preflight', [AdminStoreController::class, 'preflightNewProductFile'])->name('store.intake.preflight');
+    Route::post('/store/intake/{product}/{ingestionId}/confirm', [AdminStoreController::class, 'confirmNewProductFile'])->name('store.intake.confirm');
+    Route::delete('/store/intake/{product}/{ingestionId}', [AdminStoreController::class, 'cancelNewProductIntake'])->name('store.intake.cancel');
+
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
+    Route::post('/store/{product}/publication/approve', [AdminStoreController::class, 'approvePublication'])->middleware('permission:store.publish_products')->name('store.publication.approve');
     Route::delete('/store/{product}',[AdminStoreController::class,'destroy'])->name('store.destroy');
     Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
     Route::post('/store/{product}/images',[AdminStoreController::class,'uploadImage'])->middleware('throttle:20,10')->name('store.images.upload');
