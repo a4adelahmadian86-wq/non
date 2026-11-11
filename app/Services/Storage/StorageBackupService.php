@@ -77,10 +77,11 @@ class StorageBackupService
                     $verificationPath = $work.'/verify-'.$run->id;
                     $this->storage->downloadTo($targetDisk, $objectKey, $verificationPath);
                     $remoteChecksum = hash_file('sha256', $verificationPath);
-                    @unlink($verificationPath);
                     if (! is_string($remoteChecksum) || ! hash_equals($checksum, $remoteChecksum)) {
                         throw new RuntimeException('Checksum نسخه پشتیبان پس از انتقال با فایل اصلی مطابقت ندارد.');
                     }
+                    $this->assertArchiveReadable($verificationPath, $backupKey);
+                    @unlink($verificationPath);
                     $run->update([
                         'status' => 'completed', 'object_key' => $objectKey,
                         'completed_at' => now(),
@@ -106,6 +107,41 @@ class StorageBackupService
             throw $exception;
         } finally {
             $this->removeDirectory($work);
+        }
+    }
+
+    private function assertArchiveReadable(string $archivePath, string $password): void
+    {
+        $zip = new ZipArchive();
+        if ($zip->open($archivePath) !== true) {
+            throw new RuntimeException('آرشیو پشتیبان پس از انتقال قابل باز شدن نیست.');
+        }
+
+        try {
+            if (! $zip->setPassword($password)) {
+                throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو پشتیبان ناموفق بود.');
+            }
+
+            $manifestJson = $zip->getFromName('manifest.json');
+            $manifest = is_string($manifestJson) ? json_decode($manifestJson, true) : null;
+            if (! is_array($manifest) || empty($manifest['database_driver'])) {
+                throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ پس از انتقال قابل رمزگشایی نیست.');
+            }
+
+            $database = $zip->getStream('database/database.sql');
+            if (! is_resource($database)) {
+                throw new RuntimeException('فایل دیتابیس بکاپ پس از انتقال قابل رمزگشایی نیست.');
+            }
+            try {
+                $sample = fread($database, 64);
+            } finally {
+                fclose($database);
+            }
+            if (! is_string($sample) || $sample === '') {
+                throw new RuntimeException('جریان دیتابیس بکاپ پس از انتقال خالی است.');
+            }
+        } finally {
+            $zip->close();
         }
     }
 
