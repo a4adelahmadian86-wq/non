@@ -232,20 +232,6 @@ class PlatformCompletionController extends Controller {
   return back()->with('status','گردش‌کار بدون سابقه حذف شد و رویداد ممیزی آن حفظ شد.');
  }
 
- public function deleteWorkflow(Request $r,$id){
-  $authorization=app(AuthorizationService::class);
-  abort_unless($authorization->allows($r->user(),'workflows.delete')||$authorization->allows($r->user(),'workflows.manage')||$authorization->allows($r->user(),'automation.manage'),403);
-  DB::transaction(function()use($r,$id){
-   $workflow=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->lockForUpdate()->first();
-   abort_unless($workflow,404);
-   $hasRuns=DB::table('farast_workflow_runs')->where('workflow_id',$id)->exists();
-   $hasEventMappings=DB::table('farast_workflow_event_workflows')->where('workflow_id',$id)->exists();
-   abort_if($hasRuns||$hasEventMappings,409,'این گردش‌کار سابقه اجرا یا رویداد دارد؛ برای حفظ تاریخچه آن را غیرفعال کنید، نه حذف.');
-   $this->auditWorkflow($r,(int)$r->user()->id,(int)$id,'workflow.deleted',(array)$workflow,null);
-   DB::table('farast_workflows')->where('id',$id)->delete();
-  });
-  return back()->with('status','گردش‌کار بدون سابقه حذف شد و رویداد ممیزی آن حفظ شد.');
- }
  public function security(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'audit.view'),403);
   return view('platform.security',['events'=>DB::table('farast_security_events')->where('user_id',$r->user()->id)->latest()->limit(50)->get()]);
