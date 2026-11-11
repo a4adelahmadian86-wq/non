@@ -7,6 +7,7 @@ use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use Symfony\Component\Process\Process;
 use RuntimeException;
+use Illuminate\Support\Facades\DB;
 use ZipArchive;
 
 class StorageBackupService
@@ -68,8 +69,9 @@ class StorageBackupService
                     'checksum' => $checksum,
                 ]);
                 $objectKey = 'weekly/'.now()->format('Y/m/d').'/farast-'.now()->format('Ymd-His').'-'.$run->id.'.zip';
+                $reservationKey = null;
                 try {
-                    $this->storage->uploadBackup($target, $objectKey, $archivePath);
+                    $reservationKey = $this->storage->uploadBackup($target, $objectKey, $archivePath, (int) $run->id);
                     $targetDisk = $this->storage->volumeDisk($target);
                     if (! $this->storage->exists($targetDisk, $objectKey)) {
                         throw new RuntimeException('تأیید وجود فایل بکاپ در مقصد ناموفق بود.');
@@ -81,22 +83,35 @@ class StorageBackupService
                     if (! is_string($remoteChecksum) || ! hash_equals($checksum, $remoteChecksum)) {
                         throw new RuntimeException('Checksum نسخه پشتیبان پس از انتقال با فایل اصلی مطابقت ندارد.');
                     }
-                    $run->update([
-                        'status' => 'completed', 'object_key' => $objectKey,
-                        'completed_at' => now(),
-                        'metadata' => ['sha256' => $checksum, 'encrypted' => true, 'encryption' => 'Zip AES-256'],
-                    ]);
-                    $target->increment('used_bytes', (int) filesize($archivePath));
-                    $target->increment('object_count');
+                    DB::transaction(function () use ($run, $objectKey, $checksum, $reservationKey): void {
+                        $run->update([
+                            'status' => 'completed',
+                            'object_key' => $objectKey,
+                            'completed_at' => now(),
+                            'metadata' => ['sha256' => $checksum, 'encrypted' => true, 'encryption' => 'Zip AES-256'],
+                        ]);
+                        $this->storage->commitVolumeCapacityReservation((string) $reservationKey);
+                    });
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
-                    try {
-                        $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
-                    } catch (\Throwable $cleanupException) {
-                        report($cleanupException);
+                    $cleaned = $exception instanceof StorageCapacityException;
+                    if (! $cleaned) {
+                        try {
+                            $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
+                            $cleaned = true;
+                        } catch (\Throwable $cleanupException) {
+                            report($cleanupException);
+                        }
                     }
+
+                    if ($cleaned) {
+                        $this->storage->releaseBackupCapacityReservation((int) $run->id);
+                    }
+
                     $run->update(['status' => 'failed', 'object_key' => $objectKey, 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
-                    $target->update(['status' => 'error', 'last_checked_at' => now()]);
+                    if (! $exception instanceof StorageCapacityException) {
+                        $target->update(['status' => 'error', 'last_checked_at' => now()]);
+                    }
                     $results[] = ['volume_id' => $target->id, 'status' => 'failed'];
                 }
             }
