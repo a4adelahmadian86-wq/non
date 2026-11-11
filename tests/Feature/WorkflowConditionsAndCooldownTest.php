@@ -600,7 +600,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
                 'stale-worker-token',
             );
             $this->fail('A stale worker must not complete a mapping owned by a newer lease.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('lease was lost', $exception->getMessage());
         }
 
