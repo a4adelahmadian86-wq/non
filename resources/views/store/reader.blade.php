@@ -182,9 +182,16 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 </style>
 @endpush
 
+<style>
+.farast-pdf-document,.farast-pdf-cont-page{position:relative}
+.farast-pdf-annotation-layer{position:absolute;top:0;left:0;z-index:2;pointer-events:none;transform-origin:0 0}
+.farast-pdf-annotation-layer .linkAnnotation,.farast-pdf-annotation-layer .widgetAnnotation,.farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select,.farast-pdf-annotation-layer button{pointer-events:auto}
+.farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select{max-width:100%;font:inherit}
+.farast-pdf-annotation-layer :focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+</style>
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
-<script src="/js/farast-reader.js?v=20261111pdfcompat6"></script>
+<script src="/js/farast-reader.js?v=20261111annotations1"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
