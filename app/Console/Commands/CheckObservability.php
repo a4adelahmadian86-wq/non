@@ -74,6 +74,22 @@ class CheckObservability extends Command
         }
 
         if ($status === 'healthy') {
+            try {
+                // A recovered incident starts a new alert lifecycle. Clear every
+                // fingerprint gated during the active incident so a recurrence
+                // inside the old cooldown is not silently suppressed.
+                $activeGateKeys = (array) Cache::pull('farast:observability:active-alert-keys', []);
+                foreach ($activeGateKeys as $activeGateKey) {
+                    if (is_string($activeGateKey) && str_starts_with($activeGateKey, 'farast:observability:alert:')) {
+                        Cache::forget($activeGateKey);
+                    }
+                }
+            } catch (Throwable $exception) {
+                $this->safeLog('warning', 'farast.observability.alert_state_cleanup_failed', [
+                    'exception_class' => get_class($exception),
+                ]);
+            }
+
             if (in_array($previous, ['critical', 'warning', 'unknown'], true)) {
                 $this->emitAlert(
                     'recovered',
@@ -118,6 +134,20 @@ class CheckObservability extends Command
         }
 
         if ($shouldNotify) {
+            try {
+                $activeGateKeys = (array) Cache::get('farast:observability:active-alert-keys', []);
+                $activeGateKeys[] = $gateKey;
+                Cache::put(
+                    'farast:observability:active-alert-keys',
+                    array_values(array_unique(array_filter($activeGateKeys, 'is_string'))),
+                    now()->addDays(30)
+                );
+            } catch (Throwable $exception) {
+                $this->safeLog('warning', 'farast.observability.alert_state_tracking_failed', [
+                    'exception_class' => get_class($exception),
+                ]);
+            }
+
             $title = $severity === 'critical'
                 ? 'هشدار بحرانی سلامت فراست'
                 : 'هشدار وضعیت سلامت فراست';
@@ -233,8 +263,9 @@ class CheckObservability extends Command
         }
 
         $cooldown = max(5, min(1440, (int) config('observability.alerts.cooldown_minutes', 30)));
-        $bucket = (int) floor(now()->timestamp / ($cooldown * 60));
-        $alertKey = hash('sha256', json_encode([$severity, $affected, $bucket], JSON_UNESCAPED_SLASHES) ?: $severity);
+        // Each emitted transition is a distinct notification identity. The
+        // command-level fingerprint gate provides retry deduplication.
+        $alertKey = (string) Str::uuid();
 
         $incidentEvent = null;
         try {
