@@ -122,6 +122,25 @@ class StoreCourseEnrollmentIntegrityTest extends TestCase
         $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $fixture['libraryItem']->id)->count());
     }
 
+    public function test_paid_order_with_mismatched_payment_total_cannot_grant_course_enrollment(): void
+    {
+        $fixture = $this->fixture(paid: true);
+        Payment::query()
+            ->where('order_id', $fixture['order']->id)
+            ->update(['amount_rials' => 99999]);
+
+        try {
+            app(StoreCourseEnrollmentService::class)->grant($fixture['libraryItem'], $fixture['product']);
+            $this->fail('A payment total that differs from the order must not grant course access.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('تطبیق ندارد', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('store_course_enrollments', [
+            'library_item_id' => $fixture['libraryItem']->id,
+        ]);
+    }
+
     public function test_revoked_library_entitlement_cannot_create_or_recreate_course_enrollment(): void
     {
         $fixture = $this->fixture(paid: true, revoked: true);
