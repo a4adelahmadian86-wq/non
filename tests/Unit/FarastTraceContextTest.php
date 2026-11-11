@@ -35,4 +35,13 @@ class FarastTraceContextTest extends TestCase
         self::assertNull($context->current()['request_id']);
         self::assertMatchesRegularExpression('/\A[0-9a-f-]{36}\z/i', $context->current()['correlation_id']);
     }
+
+    public function test_it_rejects_untrusted_trace_identifiers_at_the_context_boundary(): void
+    {
+        $context = new FarastTraceContext();
+        $context->set("invalid request\\nforged", str_repeat('x', 65));
+
+        self::assertNull($context->current()['request_id']);
+        self::assertMatchesRegularExpression('/\\A[0-9a-f-]{36}\\z/i', $context->current()['correlation_id']);
+    }
 }
