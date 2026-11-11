@@ -131,6 +131,60 @@ class StorageCoreTest extends TestCase
         $this->assertDatabaseCount('storage_volume_reservations', 0);
     }
 
+    public function test_backup_upload_reserves_capacity_until_checksum_verified_run_is_committed(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Backup reservation volume',
+            'driver' => 'local',
+            'capacity_bytes' => 1048576,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+        $run = StorageBackupRun::create([
+            'storage_volume_id' => $volume->id,
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now(),
+            'size_bytes' => 0,
+            'checksum' => hash('sha256', 'backup-payload'),
+        ]);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-backup-reservation-test-');
+        $this->assertIsString($temporary);
+        $payload = 'backup-payload';
+        file_put_contents($temporary, $payload);
+
+        try {
+            $storage = app(StorageManager::class);
+            $key = 'weekly/test/farast-reservation.zip';
+            $reservation = $storage->uploadBackup($volume, $key, $temporary, (int) $run->id);
+
+            $this->assertTrue($storage->exists($storage->volumeDisk($volume), $key));
+            $this->assertDatabaseHas('storage_volume_reservations', [
+                'reservation_key' => $reservation,
+                'storage_volume_id' => $volume->id,
+                'reserved_bytes' => strlen($payload),
+                'purpose' => 'backup',
+                'status' => 'active',
+            ]);
+            $this->assertSame(0, $volume->fresh()->used_bytes);
+            $this->assertSame(0, $volume->fresh()->object_count);
+
+            $storage->commitVolumeCapacityReservation($reservation);
+            $run->update(['status' => 'completed', 'object_key' => $key, 'completed_at' => now()]);
+            $volume->refresh();
+            $this->assertSame(strlen($payload), $volume->used_bytes);
+            $this->assertSame(1, $volume->object_count);
+            $this->assertDatabaseCount('storage_volume_reservations', 0);
+        } finally {
+            @unlink($temporary);
+        }
+    }
+
     public function test_expired_capacity_reservation_removes_partial_object_before_releasing_capacity(): void
     {
         $volume = StorageVolume::create([
