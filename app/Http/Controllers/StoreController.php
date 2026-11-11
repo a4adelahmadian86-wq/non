@@ -436,7 +436,7 @@ class StoreController extends Controller
         }, $status, $headers);
     }
 
-    public function reader(string $slug)
+    public function reader(string $slug, StorageManager $storage)
     {
         $product = StoreProduct::with([
             'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
@@ -480,8 +480,8 @@ class StoreController extends Controller
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
-                            && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                        ->first(fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                            && $storage->exists($artifact->disk ?: 'private', $artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
