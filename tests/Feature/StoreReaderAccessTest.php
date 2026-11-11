@@ -372,7 +372,7 @@ class StoreReaderAccessTest extends TestCase
         $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
             ->assertStatus(202);
 
-        (new \\App\\Jobs\\ProcessProductDocument($document->id))->failed(new \\RuntimeException('audio-upgrade-failure'));
+        (new \App\Jobs\ProcessProductDocument($document->id))->failed(new \RuntimeException('audio-upgrade-failure'));
         $failedUpgrade = $document->fresh();
         $this->assertSame('failed', data_get($failedUpgrade->structure_json, 'audio.status'));
         $this->actingAs($user)->get(route('store.reader', $product->slug))
