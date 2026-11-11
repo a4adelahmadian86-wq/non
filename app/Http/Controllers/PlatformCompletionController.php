@@ -383,7 +383,7 @@ class PlatformCompletionController extends Controller {
  }
  public function removeTeamMember(Request $r,$team,$user){
   abort_unless($r->user()?->isAdmin(),403);
-  $teamRecord=\\App\\Models\\Team::query()->findOrFail((int)$team);
+  $teamRecord=\App\Models\Team::query()->findOrFail((int)$team);
   $memberId=(int)$user;
   DB::transaction(function()use($teamRecord,$memberId):void{
    DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->delete();
