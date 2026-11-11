@@ -214,6 +214,17 @@ class StoreCourseEnrollmentIntegrityTest extends TestCase
         ]);
     }
 
+    public function test_legacy_library_item_backfills_only_one_unambiguous_matching_order_line(): void
+    {
+        $fixture = $this->fixture(paid: true);
+        $fixture['libraryItem']->update(['order_item_id' => null]);
+
+        $enrollment = app(StoreCourseEnrollmentService::class)->grant($fixture['libraryItem']->fresh(), $fixture['product']);
+
+        $this->assertSame($fixture['orderItem']->id, (int) $fixture['libraryItem']->fresh()->order_item_id);
+        $this->assertSame($fixture['course']->id, (int) $enrollment->course_id);
+    }
+
     public function test_revoked_library_entitlement_cannot_create_or_recreate_course_enrollment(): void
     {
         $fixture = $this->fixture(paid: true, revoked: true);
