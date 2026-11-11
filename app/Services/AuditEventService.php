@@ -79,7 +79,7 @@ class AuditEventService
                 ->update(['batch' => DB::raw('batch')]);
 
             if (! $connection->table('migrations')->where('migration', $migration)->exists()) {
-                throw new \\RuntimeException('Canonical audit ledger migration lock is unavailable.');
+                throw new \RuntimeException('Canonical audit ledger migration lock is unavailable.');
             }
 
             return;
@@ -91,7 +91,7 @@ class AuditEventService
             ->first(['id']);
 
         if (! $lock) {
-            throw new \\RuntimeException('Canonical audit ledger migration lock is unavailable.');
+            throw new \RuntimeException('Canonical audit ledger migration lock is unavailable.');
         }
     }
 
