@@ -58,7 +58,9 @@ class ResolveAdminScope
         if ($scope === self::SCOPE_TEAM && ! $user->isAdmin() && ! $this->hasManagedTeams($user)) {
             $scope = self::SCOPE_OWN;
         }
-        if ($scope === self::SCOPE_TEAM && $user->isAdmin() && ! self::scopeIdFor($user)) {
+        if (in_array($scope, [self::SCOPE_ORGANIZATION, self::SCOPE_TEAM], true)
+            && $user->isAdmin()
+            && ! self::scopeIdFor($user)) {
             $scope = self::SCOPE_OWN;
         }
 
@@ -139,6 +141,15 @@ class ResolveAdminScope
         if (! $restriction
             || ($restriction->starts_at && now()->lt($restriction->starts_at))
             || ($restriction->expires_at && now()->gte($restriction->expires_at))) {
+            return null;
+        }
+
+        $requestUser = request()->user();
+        $effectiveScope = $requestUser && (int) $requestUser->id === (int) $user->id
+            ? request()->attributes->get('farast.scope')
+            : self::scopeFor($user);
+
+        if ($effectiveScope !== $restriction->scope_type) {
             return null;
         }
 
