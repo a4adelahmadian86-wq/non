@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\FarastProject;
+use App\Models\FarastDocument;
+use App\Models\FarastDocumentVersion;
 use App\Models\Payment;
 use App\Models\StoreDownload;
 use App\Models\StoreCourseEnrollment;
@@ -102,7 +105,7 @@ class CrmController extends Controller
                 'created_at' => $ticket->created_at,
             ]);
 
-        $documents = TypingDocument::query()->where('user_id', $user->id)->latest()->limit(30)->get()
+        $documents = TypingDocument::query()->where('user_id', $user->id)->whereNull('farast_document_id')->latest()->limit(30)->get()
             ->map(fn (TypingDocument $document) => [
                 'type' => 'typing_document',
                 'id' => $document->id,
@@ -133,6 +136,50 @@ class CrmController extends Controller
                 'order_id' => $item->order_id,
                 'granted_at' => $item->granted_at,
                 'created_at' => $item->created_at,
+            ]);
+
+        $projects = FarastProject::query()
+            ->withCount([
+                'documents',
+                'typingDocuments' => fn ($query) => $query->whereNull('farast_document_id'),
+            ])
+            ->where('user_id', $user->id)
+            ->latest('updated_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastProject $project) => [
+                'type' => 'farast_project',
+                'id' => $project->id,
+                'title' => $project->name,
+                'status' => $project->status,
+                'project_type' => $project->project_type,
+                'documents_count' => (int) $project->documents_count,
+                'standalone_typing_documents_count' => (int) $project->typing_documents_count,
+                'estimated_price_rials' => (int) $project->estimated_price_rials,
+                'paid_rials' => (int) $project->paid_rials,
+                'created_at' => $project->created_at,
+                'updated_at' => $project->updated_at,
+            ]);
+
+        $farastDocuments = FarastDocument::query()
+            ->with('project:id,name')
+            ->withCount('versions')
+            ->where('user_id', $user->id)
+            ->latest('updated_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastDocument $document) => [
+                'type' => 'farast_document',
+                'id' => $document->id,
+                'title' => $document->title,
+                'status' => $document->status,
+                'project_id' => $document->project_id,
+                'project_name' => $document->project?->name,
+                'revision' => (int) $document->revision,
+                'versions_count' => (int) $document->versions_count,
+                'last_saved_at' => $document->last_saved_at,
+                'created_at' => $document->created_at,
+                'updated_at' => $document->updated_at,
             ]);
 
         $downloads = StoreDownload::query()->with(['file', 'libraryItem.product'])
@@ -214,7 +261,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)->concat($ticketMessages)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($courseEnrollments)->concat($ticketMessages)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -247,6 +294,13 @@ class CrmController extends Controller
                 'typing_documents_count' => $user->documents_count,
                 'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
                 'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
+                'projects_count' => FarastProject::query()->where('user_id', $user->id)->count(),
+                'farast_documents_count' => FarastDocument::query()->where('user_id', $user->id)->count(),
+                'farast_document_versions_count' => FarastDocumentVersion::query()
+                    ->whereHas('document', fn ($query) => $query->where('user_id', $user->id))
+                    ->count(),
+                'standalone_typing_documents_count' => TypingDocument::query()
+                    ->where('user_id', $user->id)->whereNull('farast_document_id')->count(),
                 'course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->count(),
                 'completed_course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->whereNotNull('completed_at')->count(),
                 'completed_course_lessons_count' => StoreCourseLessonProgress::query()
