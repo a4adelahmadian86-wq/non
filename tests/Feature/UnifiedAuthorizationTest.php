@@ -298,6 +298,8 @@ class UnifiedAuthorizationTest extends TestCase
 
         self::assertSame($subject->id, (int) $assignment->user_id);
         self::assertTrue($authorization->allows($subject, 'workflows.manage'));
+        $authorization->updateRole($admin, 'workflow_operator', 'Workflow operator', [], false);
+        self::assertFalse($authorization->allows($subject, 'workflows.manage'));
         $this->assertDatabaseHas('access_audit_logs', [
             'actor_id' => $admin->id,
             'subject_id' => $subject->id,
