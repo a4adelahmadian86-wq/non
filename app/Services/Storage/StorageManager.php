@@ -396,7 +396,7 @@ class StorageManager
             $this->verifyWrittenObject($volume, $key, $checksum);
 
             return $reservationKey;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $cleaned = false;
             try {
                 if ($volume->driver === 's3') {
@@ -408,7 +408,7 @@ class StorageManager
                     }
                 }
                 $cleaned = true;
-            } catch (\\Throwable $cleanupException) {
+            } catch (\Throwable $cleanupException) {
                 report($cleanupException);
             }
 
