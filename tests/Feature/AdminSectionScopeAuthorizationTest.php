@@ -63,6 +63,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->get('/admin/access')->assertForbidden();
         // Store management remains global-admin only until granular product permissions are introduced.
         $this->get('/admin/store')->assertForbidden();
+        $this->get('/admin/store/operations')->assertForbidden();
+        $this->get('/admin/support-report')->assertForbidden();
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
