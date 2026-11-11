@@ -2,7 +2,7 @@
 
 > آخرین تطبیق فایل‌های منبع: `main` در commit `1b9108fcedfb3f330a2ba19caba91a33cb00a966`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
 
-> مبنا: ۱۱۲ فایل PHP در `app/Services/` در `main` (۱۱۸ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
+> مبنا: ۱۱۳ فایل PHP در `app/Services/` در `main` (۱۱۸ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
 
 | Service | Source | Service dependencies | Model imports | Direct table references | Storage disk names | Public methods | DB call count | Storage call count |
 |---|---|---|---|---|---|---|---:|---:|
@@ -86,7 +86,7 @@
 | `ProviderRegistry` | `app/Services/ProviderRegistry.php` | `AiProviderRegistry`, `VoiceProviderRouter`, `ProviderConnectionHealth` | `SiteSetting`, `VoiceProviderAccount` | — | — | `__construct()`, `catalog()`, `forCapability()` | 0 | 0 |
 
 | `SmartDiscountMarketingService` | `app/Services/SmartDiscountMarketingService.php` | `StoreCouponMarginPolicy`, `StoreCouponBudgetPolicy`, `NotificationService` | `Order`, `StoreCoupon`, `SiteSetting`, `StoreCouponAssignment`, `StoreProduct`, `User` | `farast_workflow_events` | — | `evaluate()`, `effectiveCampaignDiscountPercent()` | 2 | 0 |
-| `SmsService` | `app/Services/SmsService.php` | — | — | — | — | `sendOtp()`, `sendText()`, `sendLookup()`, `sendEvent()` | 0 | 0 |
+| `SmsService` | `app/Services/SmsService.php` | — | `SmsLog` | — | — | `sendOtp()`, `sendText()`, `sendLookup()`, `sendEvent()` | 0 | 0 |
 | `SpeechToolHandler` | `app/Services/SpeechToolHandler.php` | `VoiceTranscriptionService` | `User` | — | — | `__construct()`, `handle()` | 0 | 0 |
 | `S3CompatibleAdapter` | `app/Services/Storage/S3CompatibleAdapter.php` | — | `StorageVolume` | — | — | `putFile()`, `putContents()`, `getContents()`, `downloadTo()`, `size()`, `streamRange()`, `exists()`, `delete()`, `inventory()`, `probe()` | 0 | 0 |
 | `StorageBackupService` | `app/Services/Storage/StorageBackupService.php` | `StorageManager` | `StorageBackupRun`, `StorageManagedFile`, `StorageVolume` | — | — | `__construct()`, `runWeekly()` | 0 | 0 |
@@ -102,11 +102,12 @@
 | `StoreCouponRedemptionService` | `app/Services/StoreCouponRedemptionService.php` | `StoreCouponMarginPolicy`, `StoreCouponBudgetPolicy` | `Order`, `StoreCoupon`, `StoreCouponAssignment`, `StoreProduct`, `User` | `crm_marketing_campaigns`, `store_coupon_assignments as assignments` | — | `redeemForPaidOrder()` | 2 | 0 |
 
 | `StoreCourseEnrollmentService` | `app/Services/StoreCourseEnrollmentService.php` | — | `StoreCourseEnrollment`, `StoreLibraryItem`, `StoreProduct` | — | — | `grant()` | 0 | 0 |
+| `StoreCourseProgressService` | `app/Services/StoreCourseProgressService.php` | — | `StoreCourseEnrollment`, `StoreCourseLesson` | — | — | `lessonAvailable()`, `availableLessons()`, `summarize()`, `syncCompletion()` | 0 | 0 |
 | `StorePdfPreviewPreparer` | `app/Services/StorePdfPreviewPreparer.php` | — | — | — | — | `prepareSample()` | 0 | 0 |
 | `StoreProductDocumentPageBuilder` | `app/Services/StoreProductDocumentPageBuilder.php` | — | — | — | — | `build()` | 0 | 0 |
 | `StoreXlsxPreviewRenderer` | `app/Services/StoreXlsxPreviewRenderer.php` | — | — | — | — | `render()` | 0 | 0 |
 | `SubscriptionEntitlementService` | `app/Services/SubscriptionEntitlementService.php` | — | `FarastCommercialPlan`, `FarastEntitlement`, `User` | — | — | `sync()` | 0 | 0 |
-| `SupportNotificationService` | `app/Services/SupportNotificationService.php` | `EmailService`, `SmsService`, `NotificationService` | `SiteSetting`, `Ticket`, `User` | — | — | `__construct()`, `ticketCreated()`, `customerReplied()`, `staffReplied()`, `statusChanged()`, `assigned()`, `slaWarning()`, `slaBreached()` | 0 | 0 |
+| `SupportNotificationService` | `app/Services/SupportNotificationService.php` | `EmailService`, `SmsService`, `NotificationService` | `SiteSetting`, `Ticket`, `User` | — | — | `__construct()`, `ticketCreated()`, `customerReplied(messageId)`, `staffReplied(messageId)`, `statusChanged(eventIdentity)`, `assigned(eventIdentity)`, `slaWarning()`, `slaBreached()` | 0 | 0 |
 | `SupportSlaService` | `app/Services/SupportSlaService.php` | — | `Ticket` | `tickets` | — | `applyTargets()`, `addSlaMinutes()`, `addBusinessMinutes()`, `firstResponseStatus()`, `resolutionStatus()`, `markResolved()`, `agentReport()` | 0 | 0 |
 | `SupportTicketService` | `app/Services/SupportTicketService.php` | `WorkflowEngine`, `UploadSecurityService`, `StorageManager`, `SupportNotificationService`, `SupportSlaService` | `Ticket`, `TicketMessage`, `User` | `tickets`, `ticket_messages` | private | `__construct()`, `generateCode()`, `createTicket()`, `pickLeastLoadedAgent()`, `addMessage()`, `changeStatus()`, `assign()`, `updateMeta()`, `submitCsat()`, `markCustomerSeen()`, `claimGuestTickets()`, `findOpenGuestTicket()`, `waitingMinutes()`, `needsAgentReply()` | 1 | 2 |
 | `TemplateRegistry` | `app/Services/TemplateRegistry.php` | — | — | `farast_templates` | — | `all()`, `get()` | 1 | 0 |
