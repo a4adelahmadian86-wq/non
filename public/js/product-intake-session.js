@@ -20,10 +20,10 @@
   try {
     const existing = JSON.parse(root.dataset.existingFiles || '[]');
     existing.forEach(file => {
-      rows.set(file.id, { uploaded: file.status === 'uploaded' || file.status === 'attached', supervisorStatus: file.supervisor_status, securityGate: file.security_gate });
+      rows.set(file.id, { uploaded: file.status === 'uploaded' || file.status === 'attached', isPrimary: !!file.is_primary, supervisorStatus: file.supervisor_status, securityGate: file.security_gate });
       totalBytes += Number(file.size_bytes || 0);
       const directory = (file.relative_path || '').split('/').slice(0, -1).join('/');
-      if (directory) folderNames.add(directory);
+      if (directory) { const parts = directory.split('/'); for (let depth = 1; depth <= parts.length; depth++) folderNames.add(parts.slice(0, depth).join('/')); }
       if (file.status === 'uploaded' && ['pending', 'processing'].includes(file.supervisor_status)) {
         const card = Array.from(list.children).find(node => node.textContent.includes(file.relative_path || file.name));
         if (card) {
@@ -172,7 +172,8 @@
     const form = new FormData();
     form.append('file', item.file);
     form.append('relative_path', item.relativePath || item.file.name);
-    form.append('is_primary', index === 0 ? '1' : '0');
+    const hasPrimary = Array.from(rows.values()).some(row => row.isPrimary);
+    form.append('is_primary', hasPrimary ? '0' : '1');
     const response = await fetch(root.dataset.preflightUrl, {
       method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: form
     });
@@ -182,7 +183,7 @@
     totalBytes += item.file.size;
     const directory = (item.relativePath || '').split('/').slice(0, -1).join('/');
     if (directory) folderNames.add(directory);
-    const row = { uploaded: false, supervisorStatus: 'pending', securityGate: null };
+    const row = { uploaded: false, isPrimary: !!payload.file.is_primary, supervisorStatus: 'pending', securityGate: null };
     rows.set(id, row);
     makeCard(item.file, item.relativePath, { ...payload.inspection, file_id: id });
     refreshSummary();
@@ -222,6 +223,8 @@
 
   fileInput?.addEventListener('change', () => addFiles(Array.from(fileInput.files || []).map(file => ({ file, relativePath: file.name }))));
   folderInput?.addEventListener('change', () => addFiles(Array.from(folderInput.files || []).map(file => ({ file, relativePath: file.webkitRelativePath || file.name }))));
+  dropzone?.addEventListener('click', event => { if (event.target === dropzone) fileInput?.click(); });
+  dropzone?.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput?.click(); } });
   dropzone?.addEventListener('dragover', event => { event.preventDefault(); dropzone.classList.add('is-dragging'); });
   dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('is-dragging'));
   dropzone?.addEventListener('drop', async event => {
