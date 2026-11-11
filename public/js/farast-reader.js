@@ -691,6 +691,14 @@
         loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
         pdfDoc=await loadingTask.promise;
       }
+      if(pdfDoc.isPureXfa){
+        if(pdfLoading){
+          pdfLoading.hidden=false;
+          pdfLoading.style.display='grid';
+          pdfLoading.textContent='این سند از فرم‌های XFA استفاده می‌کند؛ XFA در این خوانشگر پشتیبانی نمی‌شود. لطفاً نسخه استاندارد PDF یا فرم AcroForm را دریافت کنید.';
+        }
+        return;
+      }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
