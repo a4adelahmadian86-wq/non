@@ -355,8 +355,41 @@ class PlatformCompletionController extends Controller {
  public function usage(Request $r){abort_unless(app(AuthorizationService::class)->allows($r->user(),'reports.view'),403);return response()->json(DB::table('farast_usage_counters')->where('user_id',$r->user()->id)->orderByDesc('period_start')->get());}
  public function createFolder(Request $r){$this->authorizeDocumentAction($r,'documents.create');$x=$r->validate(['name'=>'required|string|max:120','parent_id'=>'nullable|integer']);$this->assertFolderOwnership(isset($x['parent_id'])?(int)$x['parent_id']:null);DB::table('document_folders')->insert(['user_id'=>auth()->id(),'name'=>$x['name'],'parent_id'=>$x['parent_id']??null,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پوشه ایجاد شد.');}
  public function teamMembers(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$t=DB::table('teams')->find($team);abort_unless($t,404);return response()->json(DB::table('team_user')->join('users','users.id','=','team_user.user_id')->where('team_id',$team)->select('users.id','users.name','users.email','team_user.team_role')->get());}
- public function addTeamMember(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['user_id'=>'required|integer','team_role'=>'required|in:owner,supervisor,employee']);DB::table('team_user')->updateOrInsert(['team_id'=>$team,'user_id'=>$x['user_id']],['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]);app(AuthorizationService::class)->forgetUser((int)$x['user_id']);return back()->with('status','عضو تیم به‌روزرسانی شد.');}
- public function removeTeamMember(Request $r,$team,$user){abort_unless(auth()->user()->isAdmin(),403);DB::table('team_user')->where('team_id',$team)->where('user_id',$user)->delete();app(AuthorizationService::class)->forgetUser((int)$user);return back();}
+ public function addTeamMember(Request $r,$team){
+  abort_unless($r->user()?->isAdmin(),403);
+  $x=$r->validate(['user_id'=>'required|integer|exists:users,id','team_role'=>'required|in:owner,supervisor,manager,employee']);
+  $teamRecord=\App\Models\Team::query()->findOrFail((int)$team);
+  $member=\App\Models\User::query()->findOrFail((int)$x['user_id']);
+  abort_unless(
+   $teamRecord->organization_id !== null
+   && $member->organization_id !== null
+   && (int)$teamRecord->organization_id === (int)$member->organization_id,
+   422,
+   'عضویت تیم فقط برای کاربر همان سازمان مجاز است.'
+  );
+  DB::table('team_user')->updateOrInsert(
+   ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
+   ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
+  );
+  if($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
+   $teamRecord->update(['supervisor_id'=>null]);
+  }
+  app(AuthorizationService::class)->forgetUser((int)$member->id);
+  return back()->with('status','عضو تیم به‌روزرسانی شد.');
+ }
+ public function removeTeamMember(Request $r,$team,$user){
+  abort_unless($r->user()?->isAdmin(),403);
+  $teamRecord=\\App\\Models\\Team::query()->findOrFail((int)$team);
+  $memberId=(int)$user;
+  DB::transaction(function()use($teamRecord,$memberId):void{
+   DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->delete();
+   if((int)$teamRecord->supervisor_id===$memberId){
+    $teamRecord->update(['supervisor_id'=>null]);
+   }
+  });
+  app(AuthorizationService::class)->forgetUser($memberId);
+  return back();
+ }
  private function auditWorkflow(Request $request,int $ownerId,?int $workflowId,string $action,?array $before,?array $after):void
  {
   DB::table('farast_workflow_audit_logs')->insert([
