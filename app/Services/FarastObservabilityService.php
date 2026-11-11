@@ -77,6 +77,7 @@ class FarastObservabilityService
 
                     return [
                         'event_id' => (string) $event->event_id,
+                        'incident_id' => is_string($meta['incident_id'] ?? null) ? $meta['incident_id'] : null,
                         'event_type' => (string) $event->event_type,
                         'severity' => (string) ($meta['severity'] ?? (substr((string) $event->event_type, strrpos((string) $event->event_type, '.') + 1) ?: 'unknown')),
                         'status' => (string) ($meta['status'] ?? 'unknown'),
