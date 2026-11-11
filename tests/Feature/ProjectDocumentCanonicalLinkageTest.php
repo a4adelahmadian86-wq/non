@@ -80,6 +80,69 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
         $this->assertSame(1, $project->documents()->count());
     }
 
+    public function test_project_document_versions_share_revoke_and_trash_restore_use_the_same_canonical_record(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $project = $this->project($user, 'پروژه بازیابی و اشتراک');
+        $legacy = $this->typingDocument($user, $project);
+        $service = app(EditorDocumentService::class);
+
+        $first = $service->save($legacy, '<p>نسخه نخست برای بازیابی</p>', 'سند اشتراکی', 0, 'manual');
+        $second = $service->save($legacy->fresh(), '<p>نسخه دوم جاری</p>', 'سند اشتراکی', 1, 'manual');
+        $document = FarastDocument::query()->findOrFail($second['document_id']);
+
+        $this->actingAs($user)
+            ->get(route('editor.document.versions', $legacy->id))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonCount(2, 'versions');
+
+        $firstVersion = DB::table('farast_document_versions')
+            ->where('document_id', $document->id)
+            ->orderBy('id')
+            ->first();
+
+        $this->post(route('editor.document.version.restore', [$legacy->id, $firstVersion->id]))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $document->refresh();
+        $this->assertStringContainsString('نسخه نخست برای بازیابی', $document->content);
+        $this->assertSame($document->content, $legacy->fresh()->content);
+        $this->assertSame($project->id, (int) $document->project_id);
+        $this->assertSame(1, $project->documents()->count());
+
+        $shareResponse = $this->postJson(route('platform.documents.share', $document->id), [
+            'permission' => 'view',
+        ])->assertOk();
+
+        $token = basename($shareResponse->json('url'));
+        $share = DB::table('farast_document_shares')->where('token', $token)->first();
+        $this->assertNotNull($share);
+
+        $this->get('/shared/documents/'.$token)
+            ->assertOk()
+            ->assertSee('نسخه نخست برای بازیابی');
+
+        $this->delete(route('platform.documents.shares.destroy', $share->id))
+            ->assertRedirect();
+        $this->get('/shared/documents/'.$token)->assertNotFound();
+
+        $this->post(route('platform.documents.trash', $document->id))->assertRedirect();
+        $this->assertDatabaseHas('farast_documents', [
+            'id' => $document->id,
+            'status' => 'trashed',
+        ]);
+
+        $this->post(route('platform.documents.restore', $document->id))->assertRedirect();
+        $this->assertDatabaseHas('farast_documents', [
+            'id' => $document->id,
+            'status' => 'active',
+            'trashed_at' => null,
+            'project_id' => $project->id,
+        ]);
+    }
+
     public function test_editor_refuses_to_relink_a_canonical_document_to_a_different_project(): void
     {
         $user = User::factory()->create();
