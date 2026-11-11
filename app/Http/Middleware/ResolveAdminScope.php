@@ -64,20 +64,6 @@ class ResolveAdminScope
             $scope = self::SCOPE_OWN;
         }
 
-        // دامنهٔ قابل‌ویرایش: ادمین می‌تواند برای هر کاربر، دامنهٔ محدودتری نسبت به نقشش تنظیم کند.
-        $override = config('farast_admin.scope_override_key');
-        if (is_string($override) && $override !== '') {
-            try {
-                $configured = trim((string) \App\Models\SiteSetting::read($override, ''));
-            } catch (\Throwable) {
-                $configured = '';
-            }
-            $allowedRank = [self::SCOPE_GLOBAL => 0, self::SCOPE_ORGANIZATION => 1, self::SCOPE_TEAM => 2, self::SCOPE_OWN => 3];
-            if (isset($allowedRank[$configured]) && $allowedRank[$configured] >= $allowedRank[$scope]) {
-                $scope = $configured;
-            }
-        }
-
         $request->attributes->set('farast.scope', $scope);
         view()->share('farastScope', $scope);
         view()->share('farastScopeUser', $user);
@@ -96,7 +82,7 @@ class ResolveAdminScope
 
         if ($user->isAdmin()) {
             if (! Schema::hasTable('farast_user_admin_scopes')) {
-                return self::SCOPE_GLOBAL;
+                return self::applyConfiguredOverride(self::SCOPE_GLOBAL);
             }
 
             $restriction = DB::table('farast_user_admin_scopes')
@@ -104,27 +90,56 @@ class ResolveAdminScope
                 ->first();
 
             if (! $restriction) {
-                return self::SCOPE_GLOBAL;
+                return self::applyConfiguredOverride(self::SCOPE_GLOBAL);
             }
 
             if ($restriction->starts_at && now()->lt($restriction->starts_at)) {
-                return self::SCOPE_GLOBAL;
+                return self::applyConfiguredOverride(self::SCOPE_GLOBAL);
             }
 
             if ($restriction->expires_at && now()->gte($restriction->expires_at)) {
-                return self::SCOPE_OWN;
+                return self::applyConfiguredOverride(self::SCOPE_OWN);
             }
 
-            return in_array($restriction->scope_type, [self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
+            $scope = in_array($restriction->scope_type, [self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
                 ? $restriction->scope_type
                 : self::SCOPE_OWN;
+
+            return self::applyConfiguredOverride($scope);
         }
 
-        return match ($user->role) {
+        $scope = match ($user->role) {
             User::ROLE_ORGANIZATION_MANAGER => $user->organization_id ? self::SCOPE_ORGANIZATION : self::SCOPE_OWN,
             User::ROLE_TEAM_SUPERVISOR => self::SCOPE_TEAM,
             default => self::SCOPE_OWN,
         };
+
+        return self::applyConfiguredOverride($scope);
+    }
+
+    private static function applyConfiguredOverride(string $scope): string
+    {
+        $overrideKey = config('farast_admin.scope_override_key');
+        if (! is_string($overrideKey) || $overrideKey === '') {
+            return $scope;
+        }
+
+        try {
+            $configured = trim((string) \App\Models\SiteSetting::read($overrideKey, ''));
+        } catch (\Throwable) {
+            $configured = '';
+        }
+
+        $rank = [
+            self::SCOPE_GLOBAL => 0,
+            self::SCOPE_ORGANIZATION => 1,
+            self::SCOPE_TEAM => 2,
+            self::SCOPE_OWN => 3,
+        ];
+
+        return isset($rank[$configured]) && $rank[$configured] >= ($rank[$scope] ?? 3)
+            ? $configured
+            : $scope;
     }
 
     /** Explicit organization/team boundary assigned to a restricted administrator. */
