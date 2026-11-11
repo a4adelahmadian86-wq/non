@@ -151,6 +151,228 @@ class AdminStoreController extends Controller
             ->with('status', $archivedCount.' محصول با موفقیت به بایگانی منتقل شد.');
     }
 
+    public function createIntake()
+    {
+        $canRequestAntivirus = app(\\App\\Services\\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
+
+        return view('admin.store.intake-start', compact('canRequestAntivirus'));
+    }
+
+    public function storeIntake(Request $request)
+    {
+        $data = $request->validate([
+            'product_type' => 'required|in:digital_file,course',
+            'antivirus_requested' => 'nullable|boolean',
+        ]);
+
+        $antivirusRequested = $request->boolean('antivirus_requested');
+        if ($antivirusRequested) {
+            abort_unless(app(\\App\\Services\\AuthorizationService::class)
+                ->allows($request->user(), 'store.security_scan'), 403, 'اجازه درخواست اسکن آنتی‌ویروس برای حساب شما ثبت نشده است.');
+        }
+
+        $session = StoreProductIntakeSession::create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $request->user()->id,
+            'product_type' => $data['product_type'],
+            'status' => StoreProductIntakeSession::STATUS_SELECTING_FILES,
+            'antivirus_requested' => $antivirusRequested,
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        return redirect()->route('admin.store.intake.show', $session);
+    }
+
+    public function showIntake(StoreProductIntakeSession $session)
+    {
+        abort_unless((int) $session->user_id === (int) auth()->id(), 404);
+        abort_unless($session->isUsable(), 410, 'مهلت این نشست ورود محصول پایان یافته است؛ یک نشست تازه بسازید.');
+
+        $session->load(['files' => fn ($query) => $query->orderBy('id')]);
+
+        return view('admin.store.intake-files', compact('session'));
+    }
+
+    public function preflightIntakeFile(
+        Request $request,
+        StoreProductIntakeSession $session,
+        UploadSecurityService $security,
+        LocalClamAvScanner $antivirus
+    ) {
+        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
+        abort_unless($session->isUsable(), 410, 'مهلت نشست ورود محصول پایان یافته است.');
+        $maxBytes = $session->product_type === 'course' ? 256 * 1024 * 1024 : 50 * 1024 * 1024;
+        $request->validate([
+            'file' => ['required', 'file', 'max:'.(int) ceil($maxBytes / 1024)],
+            'is_primary' => 'nullable|boolean',
+        ]);
+
+        $upload = $request->file('file');
+        $safeName = mb_substr(basename(str_replace('\\\\', '/', $upload->getClientOriginalName())), 0, 255);
+        $originalNameLower = strtolower($safeName);
+        $extension = str_ends_with($originalNameLower, '.tar.gz')
+            ? 'tar.gz'
+            : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
+        $allowedExtensions = ['pdf','zip','tar','tar.gz','tar.bz2','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
+        abort_unless(in_array($extension, $allowedExtensions, true), 422, 'این پسوند در فهرست فرمت‌های مجاز نیست.');
+
+        $path = $upload->storeAs(
+            'store/quarantine/intake/'.$session->id,
+            (string) Str::uuid().'.'.$extension,
+            'private'
+        );
+        if (! $path) {
+            return response()->json(['message' => 'ذخیره موقت فایل در قرنطینه ممکن نشد.'], 503);
+        }
+
+        try {
+            $inspection = $security->inspect($path, $upload->getMimeType(), $maxBytes);
+            abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ساختاری و امنیتی عبور نکرده است.');
+
+            if ($session->antivirus_requested) {
+                abort_unless(app(\\App\\Services\\AuthorizationService::class)
+                    ->allows($request->user(), 'store.security_scan'), 403);
+                $avResult = $antivirus->scan(Storage::disk('private')->path($path));
+                if (($avResult['status'] ?? null) === 'infected') {
+                    throw new \\RuntimeException('antivirus_infected');
+                }
+                $inspection['antivirus'] = $avResult;
+            } else {
+                $inspection['antivirus'] = ['status' => 'not_requested', 'engine' => null];
+            }
+
+            $file = StoreProductIntakeFile::create([
+                'intake_session_id' => $session->id,
+                'user_id' => $request->user()->id,
+                'status' => 'inspected',
+                'staging_disk' => 'private',
+                'staging_path' => $path,
+                'original_name' => $safeName,
+                'mime' => $inspection['mime'],
+                'size_bytes' => $inspection['size'],
+                'sha256' => $inspection['checksum'],
+                'inspection_json' => $inspection,
+                'is_primary' => $request->boolean('is_primary', $session->files()->doesntExist()),
+                'expires_at' => now()->addMinutes(30),
+            ]);
+        } catch (Throwable $exception) {
+            Storage::disk('private')->delete($path);
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
+            return response()->json([
+                'message' => 'بررسی فایل کامل نشد؛ فایل وارد مخزن اصلی نشده است.',
+                'code' => class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed',
+            ], $exception->getMessage() === 'antivirus_engine_unavailable' ? 503 : 422);
+        }
+
+        $session->update(['status' => StoreProductIntakeSession::STATUS_SELECTING_FILES]);
+
+        return response()->json([
+            'success' => true,
+            'file_id' => $file->id,
+            'file' => ['name' => $file->original_name, 'mime' => $file->mime, 'size_bytes' => $file->size_bytes, 'sha256' => $file->sha256],
+            'inspection' => $inspection,
+            'summary' => [
+                'file_count' => $session->files()->whereIn('status', ['inspected', 'uploaded'])->count(),
+                'total_size_bytes' => (int) $session->files()->whereIn('status', ['inspected', 'uploaded'])->sum('size_bytes'),
+                'archive_entry_count' => (int) ($inspection['archive_entry_count'] ?? 0),
+            ],
+        ], 201);
+    }
+
+    public function confirmIntakeFile(
+        Request $request,
+        StoreProductIntakeSession $session,
+        StoreProductIntakeFile $file,
+        UploadSecurityService $security,
+        LocalClamAvScanner $antivirus,
+        StorageManager $storage
+    ) {
+        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
+        abort_unless($file->intake_session_id === $session->id && (int) $file->user_id === (int) $request->user()->id, 404);
+        abort_unless($session->isUsable(), 410);
+        abort_unless($file->status === 'inspected' && $file->expires_at?->isFuture(), 409, 'مهلت تأیید فایل پایان یافته است.');
+
+        $disk = Storage::disk($file->staging_disk ?: 'private');
+        abort_unless($disk->exists((string) $file->staging_path), 410, 'فایل موقت دیگر در دسترس نیست.');
+        $maxBytes = $session->product_type === 'course' ? 256 * 1024 * 1024 : 50 * 1024 * 1024;
+        $inspection = $security->inspect((string) $file->staging_path, $file->mime, $maxBytes);
+        abort_unless(hash_equals((string) $file->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بازرسی تغییر کرده است.');
+
+        if ($session->antivirus_requested) {
+            abort_unless(app(\\App\\Services\\AuthorizationService::class)
+                ->allows($request->user(), 'store.security_scan'), 403);
+            $avResult = $antivirus->scan($disk->path((string) $file->staging_path));
+            if (($avResult['status'] ?? null) === 'infected') {
+                $disk->delete((string) $file->staging_path);
+                $file->update(['status' => 'rejected', 'staging_path' => null]);
+                abort(422, 'آنتی‌ویروس فایل آلوده را شناسایی کرد.');
+            }
+            $inspection['antivirus'] = $avResult;
+        } else {
+            $inspection['antivirus'] = ['status' => 'not_requested', 'engine' => null];
+        }
+
+        $managed = $storage->adoptExistingPrivate(
+            (string) $file->staging_path,
+            $file->original_name,
+            (string) $inspection['mime'],
+            (int) $inspection['size'],
+            'product-intake',
+            StoreProductIntakeFile::class,
+            (int) $file->id,
+            null,
+            StorageManager::CRITICAL
+        );
+
+        try {
+            $storage->bindReference((int) $managed['managed_file_id'], StoreProductIntakeFile::class, (int) $file->id);
+            $file->update([
+                'status' => 'uploaded',
+                'staging_path' => null,
+                'managed_disk' => $managed['disk'],
+                'managed_path' => $managed['path'],
+                'managed_file_id' => $managed['managed_file_id'],
+                'inspection_json' => $inspection,
+                'uploaded_at' => now(),
+                'supervisor_status' => 'pending',
+            ]);
+            $disk->delete((string) $file->getOriginal('staging_path'));
+        } catch (Throwable $exception) {
+            $storage->delete($managed['disk'], $managed['path']);
+            throw $exception;
+        }
+
+        $session->update(['status' => StoreProductIntakeSession::STATUS_FILES_UPLOADED]);
+        try {
+            ReviewProductIntakeFile::dispatch((int) $file->id);
+        } catch (Throwable $exception) {
+            $file->update(['supervisor_status' => 'failed']);
+            report($exception);
+        }
+
+        return response()->json([
+            'success' => true,
+            'file_id' => $file->id,
+            'storage_status' => $managed['status'] ?? 'stored',
+            'supervisor_status' => $file->fresh()->supervisor_status,
+        ]);
+    }
+
+    public function cancelIntakeFile(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
+    {
+        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
+        abort_unless($file->intake_session_id === $session->id && (int) $file->user_id === (int) $request->user()->id, 404);
+        abort_unless($file->status === 'inspected', 409);
+
+        Storage::disk($file->staging_disk ?: 'private')->delete((string) $file->staging_path);
+        $file->update(['status' => 'rejected', 'staging_path' => null]);
+
+        return response()->json(['success' => true]);
+    }
+
     public function create()
     {
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
