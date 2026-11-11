@@ -495,8 +495,9 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $this->assertGreaterThan(0, $eventId);
         $this->assertSame(1, Artisan::call('farast:workflows:health'));
-        $this->assertStringContainsString('queue_connection=sync', Artisan::output());
-        $this->assertStringContainsString('pending=1', Artisan::output());
+        $output = Artisan::output();
+        $this->assertStringContainsString('queue_connection=sync', $output);
+        $this->assertStringContainsString('pending=1', $output);
         $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'pending']);
     }
 
