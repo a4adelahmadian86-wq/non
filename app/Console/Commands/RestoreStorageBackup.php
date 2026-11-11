@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
+use App\Services\Storage\StorageBackupService;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
 use Illuminate\Console\Command;
@@ -17,19 +19,42 @@ use ZipArchive;
 
 class RestoreStorageBackup extends Command
 {
-    protected $signature = 'storage:restore-backup {runId} {--confirm}';
+    protected $signature = 'storage:restore-backup {runId?} {--archive=} {--confirm}';
     protected $description = 'Restore an encrypted application backup into local staging and keep the site in maintenance mode';
 
-    public function handle(StorageManager $storage, StorageTransferService $transfers): int
+    public function handle(StorageManager $storage, StorageTransferService $transfers, StorageBackupService $backup): int
     {
         if (! $this->option('confirm')) {
             $this->error('این عملیات مخرب است؛ برای تأیید صریح، گزینه --confirm را وارد کنید.');
             return self::FAILURE;
         }
-        $run = StorageBackupRun::with('volume')->find($this->argument('runId'));
-        if (! $run || $run->status !== 'completed' || ! $run->volume || ! $run->object_key) {
-            $this->error('نسخه پشتیبان تکمیل‌شده و قابل دسترسی پیدا نشد.');
+        $runId = $this->argument('runId');
+        $archiveOption = $this->option('archive');
+        if (($runId && $archiveOption) || (! $runId && ! $archiveOption)) {
+            $this->error('یک شناسه بکاپ یا مسیر آرشیو محلی را انتخاب کنید؛ هر دو هم‌زمان مجاز نیستند.');
             return self::FAILURE;
+        }
+
+        $run = null;
+        $sourceArchive = null;
+        if ($runId) {
+            $run = StorageBackupRun::with('volume')->find($runId);
+            if (! $run || $run->status !== 'completed' || ! $run->volume || ! $run->object_key) {
+                $this->error('نسخه پشتیبان تکمیل‌شده و قابل دسترسی پیدا نشد.');
+                return self::FAILURE;
+            }
+        } else {
+            $archivePath = (string) $archiveOption;
+            $sourceArchive = realpath($archivePath);
+            if (
+                $sourceArchive === false
+                || ! is_file($sourceArchive)
+                || ! is_readable($sourceArchive)
+                || is_link($archivePath)
+            ) {
+                $this->error('آرشیو محلی برای بازیابی وجود ندارد یا قابل خواندن نیست.');
+                return self::FAILURE;
+            }
         }
         $password = (string) config('storage_management.backup.encryption_key', '');
         if ($password === '') {
@@ -51,20 +76,53 @@ class RestoreStorageBackup extends Command
         $maintenanceEnabled = false;
 
         try {
-            $storage->downloadTo($storage->volumeDisk($run->volume), $run->object_key, $archive);
+            if ($run) {
+                $storage->downloadTo($storage->volumeDisk($run->volume), $run->object_key, $archive);
+            } elseif (! is_string($sourceArchive) || ! copy($sourceArchive, $archive)) {
+                throw new RuntimeException('کپی آرشیو محلی به فضای موقت بازیابی ناموفق بود.');
+            }
+
             $checksum = hash_file('sha256', $archive);
-            if (! is_string($checksum) || ! hash_equals((string) $run->checksum, $checksum)) {
+            if (! is_string($checksum) || ($run && ! hash_equals((string) $run->checksum, $checksum))) {
                 throw new RuntimeException('Checksum نسخه پشتیبان صحیح نیست.');
             }
+            // For a local bootstrap restore, the encrypted manifest and per-entry
+            // AES authentication are the trust anchor; no database run row is needed.
+            $backup->verifyArchive($archive);
 
             $zip = new ZipArchive();
             if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
-            $zip->setPassword($password);
+            if (! $zip->setPassword($password)) {
+                $zip->close();
+                throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
+            }
+            $seenEntries = [];
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $name = $zip->getNameIndex($index);
-                if (! is_string($name) || str_starts_with($name, '/') || str_contains($name, '\\') || preg_match('#(^|/)\.\.?(/|$)#', $name) || str_contains($name, "\0")) {
+                if (
+                    ! is_string($name)
+                    || $name === ''
+                    || strlen($name) > 4096
+                    || str_starts_with($name, '/')
+                    || preg_match('/^[A-Za-z]:/', $name)
+                    || str_contains($name, '\\')
+                    || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
+                    || str_contains($name, "\0")
+                    || isset($seenEntries[$name])
+                ) {
                     $zip->close();
-                    throw new RuntimeException('مسیر ناامن در آرشیو بازیابی شناسایی شد.');
+                    throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بازیابی شناسایی شد.');
+                }
+                $seenEntries[$name] = true;
+
+                $operatingSystem = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
+                    $unixFileType = ($externalAttributes >> 16) & 0170000;
+                    if ($operatingSystem === ZipArchive::OPSYS_UNIX && $unixFileType === 0120000) {
+                        $zip->close();
+                        throw new RuntimeException('پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                    }
                 }
             }
             $manifestJson = $zip->getFromName('manifest.json');
@@ -74,7 +132,15 @@ class RestoreStorageBackup extends Command
             }
             $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
             $databaseDriver = (string) ($manifest['database_driver'] ?? '');
-            if (! $zip->locateName('database/database.sql')) {
+            $currentDriver = (string) config(
+                'database.connections.'.config('database.default').'.driver',
+                config('database.default')
+            );
+            if (! in_array($databaseDriver, ['sqlite', 'mysql', 'mariadb', 'pgsql'], true) || $databaseDriver !== $currentDriver) {
+                $zip->close();
+                throw new RuntimeException('درایور پایگاه داده بکاپ با درایور پشتیبانی‌شده و محیط مقصد یکسان نیست.');
+            }
+            if ($zip->locateName('database/database.sql') === false) {
                 $zip->close();
                 throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
             }
@@ -95,6 +161,88 @@ class RestoreStorageBackup extends Command
             $this->restoreDatabase($databaseDriver, $extracted.'/database/database.sql');
             DB::purge();
             DB::reconnect();
+
+            if ($run) {
+                // The backup run itself was recorded after its database snapshot.
+                // Recreate its audit row and account for the already-present object.
+                $restoredRun = StorageBackupRun::query()->find($run->id);
+                if (! $restoredRun) {
+                    $restoredRun = new StorageBackupRun();
+                    $restoredRun->id = $run->id;
+                    $volume = StorageVolume::query()->find($run->storage_volume_id);
+                    if (! $volume) {
+                        throw new RuntimeException('مقصد نسخه پشتیبان در پایگاه داده بازیابی‌شده موجود نیست.');
+                    }
+                    $volume->increment('used_bytes', max(0, (int) $run->size_bytes));
+                    $volume->increment('object_count');
+                }
+                $runMetadata = (array) ($run->metadata ?? []);
+                $runMetadata['restored_at'] = now()->toIso8601String();
+                $restoredRun->forceFill([
+                    'storage_volume_id' => $run->storage_volume_id,
+                    'backup_type' => $run->backup_type,
+                    'source_name' => $run->source_name,
+                    'status' => 'completed',
+                    'object_key' => $run->object_key,
+                    'size_bytes' => $run->size_bytes,
+                    'checksum' => $run->checksum,
+                    'started_at' => $run->started_at,
+                    'completed_at' => $run->completed_at,
+                    'metadata' => $runMetadata,
+                ])->save();
+            } else {
+                // Bootstrap recovery has no surviving storage_backup_runs row.
+                // Record the restore itself without pretending the archive remains
+                // addressable through a database-backed storage volume.
+                StorageBackupRun::create([
+                    'backup_type' => 'recovery',
+                    'source_name' => 'bootstrap_restore',
+                    'status' => 'completed',
+                    'size_bytes' => (int) filesize($archive),
+                    'checksum' => $checksum,
+                    'started_at' => now(),
+                    'completed_at' => now(),
+                    'metadata' => [
+                        'bootstrap' => true,
+                        'restored_at' => now()->toIso8601String(),
+                        'archive_name' => basename((string) $sourceArchive),
+                        'archive_sha256' => $checksum,
+                        'archive_created_at' => $manifest['created_at'] ?? null,
+                        'database_driver' => $databaseDriver,
+                        'manifest_format_version' => (int) ($manifest['format_version'] ?? 1),
+                    ],
+                ]);
+            }
+
+            // The snapshot necessarily captured its own lock row as "running".
+            // It is no longer active after a restore and must not defer deletes for hours.
+            StorageBackupRun::query()
+                ->where('source_name', 'snapshot_lock')
+                ->where('status', 'running')
+                ->update(['status' => 'completed', 'completed_at' => now(), 'error_message' => null]);
+
+            // Scheduled and manual requests are marked running before their backup job
+            // takes the snapshot. Complete both after restore so neither remains stuck.
+            $restoreRunId = $run?->id;
+            StorageBackupRun::query()
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
+                ->whereIn('status', ['queued', 'running'])
+                ->get()
+                ->each(function (StorageBackupRun $request) use ($restoreRunId, $checksum): void {
+                    $metadata = (array) ($request->metadata ?? []);
+                    $metadata['restored_at'] = now()->toIso8601String();
+                    if ($restoreRunId !== null) {
+                        $metadata['restored_from_backup_run_id'] = (int) $restoreRunId;
+                    } else {
+                        $metadata['restored_from_archive_sha256'] = $checksum;
+                    }
+                    $request->forceFill([
+                        'status' => 'completed',
+                        'completed_at' => now(),
+                        'error_message' => null,
+                        'metadata' => $metadata,
+                    ])->save();
+                });
 
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
@@ -197,7 +345,17 @@ class RestoreStorageBackup extends Command
 
     private function restoreDirectory(string $source, string $destination): void
     {
+        // A restore is replacement, not a merge: remove files created after the snapshot.
+        // Refuse symlink roots so a malformed host layout cannot redirect destructive cleanup.
+        if (is_link($destination)) {
+            throw new RuntimeException('مسیر مقصد بازیابی نباید پیوند نمادین باشد.');
+        }
+        if (is_dir($destination)) {
+            File::deleteDirectory($destination);
+        }
         if (! is_dir($source)) return;
+
+        File::ensureDirectoryExists($destination);
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $item) {
             if (! $item->isFile()) continue;

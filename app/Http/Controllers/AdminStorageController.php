@@ -9,6 +9,7 @@ use App\Jobs\RunStorageBackupJob;
 use App\Services\StorageConnectionService;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -56,16 +57,42 @@ class AdminStorageController extends Controller
         abort_unless(config('storage_management.backup.encryption_key'), 422, 'کلید رمزنگاری بکاپ تنظیم نشده است.');
         abort_unless(StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')->exists(), 422, 'ابتدا حداقل یک هاست سالم در درایو بکاپ خارجی متصل کنید.');
 
-        $run = StorageBackupRun::create([
-            'backup_type' => 'manual',
-            'source_name' => 'manual_request',
-            'status' => 'queued',
-            'started_at' => now(),
-            'metadata' => ['request_only' => true],
-        ]);
-        RunStorageBackupJob::dispatch($run->id);
+        $lock = Cache::lock('farast:backup:dispatch', 30);
+        abort_unless($lock->get(), 409, 'درخواست دیگری برای شروع بکاپ در حال ثبت است؛ دوباره تلاش کنید.');
 
-        return back()->with('status', 'درخواست بکاپ در صف اجرا قرار گرفت.');
+        try {
+            \Illuminate\Support\Facades\Artisan::call('storage:recover-stale-backup-runs');
+            abort_if(
+                StorageBackupRun::query()
+                    ->whereIn('source_name', ['scheduler_request', 'manual_request'])
+                    ->whereIn('status', ['queued', 'running'])
+                    ->exists(),
+                409,
+                'یک درخواست بکاپ در صف یا در حال اجراست؛ پس از پایان آن دوباره تلاش کنید.'
+            );
+
+            $run = StorageBackupRun::create([
+                'backup_type' => 'manual',
+                'source_name' => 'manual_request',
+                'status' => 'queued',
+                'metadata' => ['request_only' => true],
+            ]);
+
+            try {
+                RunStorageBackupJob::dispatch($run->id);
+            } catch (Throwable $exception) {
+                $run->update([
+                    'status' => 'failed',
+                    'completed_at' => now(),
+                    'error_message' => mb_substr($exception->getMessage(), 0, 1000),
+                ]);
+                throw $exception;
+            }
+
+            return back()->with('status', 'درخواست بکاپ در صف اجرا قرار گرفت.');
+        } finally {
+            $lock->release();
+        }
     }
 
     public function store(Request $request, StorageConnectionService $connections)
