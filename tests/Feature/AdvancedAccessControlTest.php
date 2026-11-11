@@ -885,7 +885,7 @@ class AdvancedAccessControlTest extends TestCase
     {
         $admin = $this->user('09140000160', User::ROLE_ADMIN);
         $employee = $this->user('09140000161');
-        $wallet = \\App\\Models\\Wallet::query()->firstOrCreate(
+        $wallet = \App\Models\Wallet::query()->firstOrCreate(
             ['user_id' => $employee->id],
             ['balance_rials' => 5000],
         );
