@@ -85,7 +85,7 @@ return new class extends Migration
 
         Schema::table($tableName, function (Blueprint $table) use ($column, $parentTable, $foreignKey): void {
             if ($foreignKey) {
-                $table->dropForeign($foreignKey['name']);
+                $table->dropForeign([$column]);
             }
 
             $table->foreign($column)
