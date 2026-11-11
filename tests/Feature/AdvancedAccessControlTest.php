@@ -880,4 +880,47 @@ class AdvancedAccessControlTest extends TestCase
             'effect' => 'allow',
         ]);
     }
+    public function test_workflow_create_edit_run_and_delete_routes_fail_closed_without_permissions(): void
+    {
+        $employee = $this->user('09140000991');
+        $workflowId = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $employee->id,
+            'name' => 'Restricted workflow',
+            'enabled' => true,
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'Restricted']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payload = [
+            'name' => 'Attempted workflow',
+            'trigger_type' => 'document.saved',
+            'steps' => [['action' => 'notify', 'title' => 'No permission']],
+            'enabled' => '1',
+        ];
+
+        $this->actingAs($employee)
+            ->post('/workspace/workflows', $payload)
+            ->assertForbidden();
+
+        $this->post('/workspace/workflows', array_merge($payload, [
+            'id' => $workflowId,
+            'name' => 'Attempted edit',
+        ]))->assertForbidden();
+
+        $this->postJson('/workspace/workflows/'.$workflowId.'/run')
+            ->assertForbidden();
+
+        $this->delete('/workspace/workflows/'.$workflowId)
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('farast_workflows', 1);
+        $this->assertDatabaseCount('farast_workflow_runs', 0);
+        $this->assertDatabaseMissing('farast_workflow_audit_logs', [
+            'workflow_id' => $workflowId,
+            'action' => 'workflow.deleted',
+        ]);
+    }
+
 }
