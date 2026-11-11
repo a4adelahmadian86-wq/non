@@ -108,11 +108,31 @@ Artisan::command('farast:workflows:health', function () {
         ->groupBy('status')->pluck('total', 'status');
     $oldest = DB::table('farast_workflow_events')->where('status', 'pending')->orderBy('created_at')->first();
     $delay = $oldest ? max(0, (int) Illuminate\Support\Carbon::parse($oldest->created_at)->diffInSeconds(now())) : 0;
+    $staleProcessing = DB::table('farast_workflow_events')->where('status', 'processing')
+        ->where('updated_at', '<=', now()->subMinutes(30))->count();
+    $queueJobs = Schema::hasTable('jobs') ? DB::table('jobs')->where('queue', 'automation')->count() : 0;
+    $oldestQueuedJob = Schema::hasTable('jobs')
+        ? DB::table('jobs')->where('queue', 'automation')->orderBy('created_at')->first()
+        : null;
+    $queueDelay = $oldestQueuedJob
+        ? max(0, now()->getTimestamp() - (int) $oldestQueuedJob->created_at)
+        : 0;
+    $failedQueueJobs = Schema::hasTable('failed_jobs')
+        ? DB::table('failed_jobs')->where('queue', 'automation')->count()
+        : 0;
     $failed = (int) ($counts['failed'] ?? 0);
     $pending = (int) ($counts['pending'] ?? 0);
-    $this->line('pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' oldest_pending_seconds='.$delay);
-    if ($failed > 0 || $delay >= 300) {
-        Log::warning('FARAST workflow queue health threshold exceeded', ['pending' => $pending, 'failed' => $failed, 'oldest_pending_seconds' => $delay]);
+    $this->line('pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
+    if ($failed > 0 || $staleProcessing > 0 || $failedQueueJobs > 0 || $delay >= 300 || $queueDelay >= 300) {
+        Log::warning('FARAST workflow queue health threshold exceeded', [
+            'pending' => $pending,
+            'failed' => $failed,
+            'stale_processing' => $staleProcessing,
+            'queue_jobs' => $queueJobs,
+            'failed_queue_jobs' => $failedQueueJobs,
+            'oldest_pending_seconds' => $delay,
+            'oldest_queue_seconds' => $queueDelay,
+        ]);
     }
     return 0;
 })->purpose('Report workflow queue backlog, latency and terminal failures');
