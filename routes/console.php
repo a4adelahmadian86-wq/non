@@ -126,12 +126,19 @@ Artisan::command('farast:workflows:health', function () {
     $automationQueueJobs = Schema::hasTable('jobs') ? DB::table('jobs')->where('queue', 'automation')->count() : 0;
     $criticalQueueJobs = Schema::hasTable('jobs') ? DB::table('jobs')->where('queue', 'automation-critical')->count() : 0;
     $queueJobs = $automationQueueJobs + $criticalQueueJobs;
-    $oldestQueuedJob = Schema::hasTable('jobs')
-        ? DB::table('jobs')->whereIn('queue', ['automation', 'automation-critical'])->orderBy('created_at')->first()
+    $oldestAutomationJob = Schema::hasTable('jobs')
+        ? DB::table('jobs')->where('queue', 'automation')->orderBy('created_at')->first()
         : null;
-    $queueDelay = $oldestQueuedJob
-        ? max(0, now()->getTimestamp() - (int) $oldestQueuedJob->created_at)
+    $oldestCriticalJob = Schema::hasTable('jobs')
+        ? DB::table('jobs')->where('queue', 'automation-critical')->orderBy('created_at')->first()
+        : null;
+    $automationQueueDelay = $oldestAutomationJob
+        ? max(0, now()->getTimestamp() - (int) $oldestAutomationJob->created_at)
         : 0;
+    $criticalQueueDelay = $oldestCriticalJob
+        ? max(0, now()->getTimestamp() - (int) $oldestCriticalJob->created_at)
+        : 0;
+    $queueDelay = max($automationQueueDelay, $criticalQueueDelay);
     $failedQueueJobs = Schema::hasTable('failed_jobs')
         ? DB::table('failed_jobs')->whereIn('queue', ['automation', 'automation-critical'])->count()
         : 0;
@@ -144,7 +151,7 @@ Artisan::command('farast:workflows:health', function () {
     $failed = (int) ($counts['failed'] ?? 0);
     $pending = (int) ($counts['pending'] ?? 0);
     $queueConnection = (string) config('queue.default');
-    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' automation_jobs='.$automationQueueJobs.' critical_jobs='.$criticalQueueJobs.' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' stale_runs='.$staleRuns.' failed_runs_24h='.$failedRuns24h.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
+    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' automation_jobs='.$automationQueueJobs.' critical_jobs='.$criticalQueueJobs.' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' stale_runs='.$staleRuns.' failed_runs_24h='.$failedRuns24h.' oldest_pending_seconds='.$delay.' automation_queue_delay_seconds='.$automationQueueDelay.' critical_queue_delay_seconds='.$criticalQueueDelay);
     $unhealthy = ($queueConnection === 'sync' && $pending > 0)
         || $failed > 0
         || $staleProcessing > 0
@@ -152,7 +159,8 @@ Artisan::command('farast:workflows:health', function () {
         || $staleRuns > 0
         || $failedRuns24h > 0
         || $delay >= 300
-        || $queueDelay >= 300;
+        || $automationQueueDelay >= 300
+        || $criticalQueueDelay >= 300;
 
     if ($unhealthy) {
         Log::warning('FARAST workflow queue health threshold exceeded', [
@@ -167,7 +175,8 @@ Artisan::command('farast:workflows:health', function () {
             'stale_runs' => $staleRuns,
             'failed_runs_24h' => $failedRuns24h,
             'oldest_pending_seconds' => $delay,
-            'oldest_queue_seconds' => $queueDelay,
+            'automation_queue_delay_seconds' => $automationQueueDelay,
+            'critical_queue_delay_seconds' => $criticalQueueDelay,
         ]);
         $this->error('Workflow queue is unhealthy; inspect the metrics above and application logs.');
         return 1;
