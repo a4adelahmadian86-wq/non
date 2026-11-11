@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 class AdminStoreController extends Controller
@@ -1021,7 +1022,7 @@ class AdminStoreController extends Controller
         try {
             if ($snapshot['managed_file_id']) {
                 if ($snapshot['storage_disk'] === '' || $snapshot['storage_path'] === '') {
-                    throw new \\RuntimeException('intake_cancel_managed_reference_incomplete');
+                    throw new RuntimeException('intake_cancel_managed_reference_incomplete');
                 }
                 if (StorageManagedFile::query()->whereKey($snapshot['managed_file_id'])->exists()) {
                     $storage->delete($snapshot['storage_disk'], $snapshot['storage_path']);
@@ -1029,10 +1030,10 @@ class AdminStoreController extends Controller
             } elseif ($snapshot['staging_path'] !== '' && $snapshot['staging_path'] !== 'cancelled') {
                 $stagingDisk = Storage::disk($snapshot['staging_disk']);
                 if ($stagingDisk->exists($snapshot['staging_path']) && ! $stagingDisk->delete($snapshot['staging_path'])) {
-                    throw new \\RuntimeException('intake_cancel_staging_delete_failed');
+                    throw new RuntimeException('intake_cancel_staging_delete_failed');
                 }
                 if ($stagingDisk->exists($snapshot['staging_path'])) {
-                    throw new \\RuntimeException('intake_cancel_staging_delete_incomplete');
+                    throw new RuntimeException('intake_cancel_staging_delete_incomplete');
                 }
             }
         } catch (Throwable $exception) {
