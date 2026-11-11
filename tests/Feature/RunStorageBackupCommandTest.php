@@ -47,4 +47,28 @@ class RunStorageBackupCommandTest extends TestCase
                 ->count()
         );
     }
+
+    public function test_weekly_backup_command_recovers_a_worker_request_abandoned_beyond_its_timeout(): void
+    {
+        $abandoned = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'scheduler_request',
+            'status' => 'running',
+            'started_at' => now()->subHours(6),
+            'metadata' => ['request_only' => true],
+        ]);
+        Queue::fake();
+
+        $this->artisan('storage:backup-weekly')->assertExitCode(0);
+
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $abandoned->id,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'source_name' => 'scheduler_request',
+            'status' => 'queued',
+        ]);
+        Queue::assertPushedOn('backups', RunStorageBackupJob::class);
+    }
 }
