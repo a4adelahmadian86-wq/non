@@ -32,6 +32,11 @@ if [[ ! -f vendor/autoload.php ]]; then
   exit 1
 fi
 
+if [[ ! -x vendor/bin/phpunit ]]; then
+  echo "PHPUnit is missing. Install development dependencies with: composer install (do not use --no-dev)" >&2
+  exit 1
+fi
+
 composer dump-autoload --optimize --strict-psr
 php -r 'require "vendor/autoload.php"; if (!class_exists("Tests\\TestCase")) { fwrite(STDERR, "Tests\\TestCase is not autoloadable. Ensure require-dev dependencies are installed.\n"); exit(1); }'
 
