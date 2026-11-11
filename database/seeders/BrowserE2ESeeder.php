@@ -21,16 +21,24 @@ class BrowserE2ESeeder extends Seeder
             ['name' => 'سازمان آزمون رابط فراست', 'status' => 'active']
         );
 
-        User::updateOrCreate(
-            ['mobile' => '09150000001'],
-            [
-                'name' => 'کارمند آزمون رابط',
-                'password' => $password,
-                'role' => User::ROLE_EMPLOYEE,
-                'organization_id' => $organization->id,
-                'is_verified' => true,
-                'is_blocked' => false,
-            ]
-        );
+        $accounts = [
+            ['09150000001', 'کارمند آزمون رابط', User::ROLE_EMPLOYEE],
+            ['09150000002', 'مدیر سازمان آزمون رابط', User::ROLE_ORGANIZATION_MANAGER],
+            ['09150000003', 'سرپرست تیم آزمون رابط', User::ROLE_TEAM_SUPERVISOR],
+        ];
+
+        foreach ($accounts as [$mobile, $name, $role]) {
+            User::updateOrCreate(
+                ['mobile' => $mobile],
+                [
+                    'name' => $name,
+                    'password' => $password,
+                    'role' => $role,
+                    'organization_id' => $organization->id,
+                    'is_verified' => true,
+                    'is_blocked' => false,
+                ]
+            );
+        }
     }
 }
