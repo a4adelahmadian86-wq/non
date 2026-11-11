@@ -282,6 +282,7 @@ class AdminStoreController extends Controller
 
             $ingestions = StoreProductIngestion::query()
                 ->where('intake_session_id', $lockedSession->id)
+                ->where('user_id', $lockedSession->user_id)
                 ->whereNull('product_id')
                 ->where('status', 'uploaded')
                 ->where('supervisor_status', 'completed')
@@ -1076,6 +1077,7 @@ class AdminStoreController extends Controller
             $ingestion = StoreProductIngestion::query()
                 ->whereKey($ingestionId)
                 ->where('intake_session_id', $lockedSession->id)
+                ->where('user_id', $lockedSession->user_id)
                 ->whereNull('product_id')
                 ->lockForUpdate()
                 ->firstOrFail();
