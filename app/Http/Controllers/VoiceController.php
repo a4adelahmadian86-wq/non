@@ -270,7 +270,7 @@ class VoiceController extends Controller
         if (! $localVoiceOnly && $aiGatewayUrl !== '' && $secret !== '') {
             try {
                 $remoteStatus = Http::acceptJson()
-                    ->withToken(trim((string) config('services.ai_gateway.token', '')))
+                    ->withToken($secret)
                     ->connectTimeout(3)
                     ->timeout(6)
                     ->get($aiGatewayUrl.'/v1/status');
@@ -315,7 +315,7 @@ class VoiceController extends Controller
             'uid' => (int) $request->user()->id,
             'locale' => $request->string('locale')->toString(),
             'iat' => time(),
-            'exp' => time() + 120,
+            'exp' => time() + 600,
             'nonce' => bin2hex(random_bytes(16)),
         ];
         if (! (bool) config('services.voice.local_only', false) && $secret !== '') {
