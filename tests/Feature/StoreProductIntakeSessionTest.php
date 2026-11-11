@@ -115,6 +115,58 @@ class StoreProductIntakeSessionTest extends TestCase
         $this->assertDatabaseCount('store_product_intake_sessions', 0);
     }
 
+    public function test_manager_can_explicitly_review_a_file_when_automated_review_is_unavailable(): void
+    {
+        $admin = $this->admin();
+        $owner = User::create([
+            'name' => 'کارمند بارگذاری',
+            'mobile' => '09120000004',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $session = StoreProductIntakeSession::create([
+            'user_id' => $owner->id,
+            'product_type' => 'digital_file',
+            'status' => StoreProductIntakeSession::STATUS_FILES_UPLOADED,
+            'expires_at' => now()->addHours(12),
+        ]);
+        $file = StoreProductIntakeFile::create([
+            'intake_session_id' => $session->id,
+            'user_id' => $owner->id,
+            'status' => 'uploaded',
+            'supervisor_status' => 'manual_review_required',
+            'staging_disk' => 'private',
+            'original_name' => 'large-video.mp4',
+            'relative_path' => 'course/large-video.mp4',
+            'mime' => 'video/mp4',
+            'size_bytes' => 30 * 1024 * 1024,
+            'sha256' => str_repeat('a', 64),
+            'inspection_json' => ['safe' => true, 'risk_level' => 'low'],
+            'supervisor_review_json' => [
+                'security_gate' => 'manual_scan_required',
+                'reason' => 'file_exceeds_supervisor_limit',
+                'automated_publication' => false,
+            ],
+            'expires_at' => now()->addHours(12),
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.store.intake.show', $session))
+            ->assertOk()
+            ->assertSee('ثبت تأیید دستی فایل');
+
+        $this->actingAs($admin)->post(route('admin.store.intake.files.manual-review', [$session, $file]), [
+            'manager_notes' => 'فایل از نظر محتوا و تناسب با محصول توسط مدیر بررسی شد.',
+        ])->assertRedirect();
+
+        $this->assertSame('completed', $file->fresh()->supervisor_status);
+        $this->assertTrue((bool) data_get($file->fresh()->supervisor_review_json, 'manual_review.approved'));
+        $this->assertSame('manual_scan_required', data_get($file->fresh()->supervisor_review_json, 'security_gate'));
+
+        $this->actingAs($owner)->get(route('admin.store.intake.details', $session))
+            ->assertOk()
+            ->assertSee('intake_session_id');
+    }
+
     public function test_approved_file_is_moved_through_storage_manager_and_queued_for_supervisor_review(): void
     {
         Storage::fake('private');
