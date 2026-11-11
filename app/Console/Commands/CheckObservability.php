@@ -90,6 +90,18 @@ class CheckObservability extends Command
                 ]);
             }
 
+            $recoveredIncidentId = null;
+            try {
+                $candidateIncidentId = Cache::pull('farast:observability:active-incident-id');
+                $recoveredIncidentId = is_string($candidateIncidentId) && $candidateIncidentId !== ''
+                    ? $candidateIncidentId
+                    : null;
+            } catch (Throwable $exception) {
+                $this->safeLog('warning', 'farast.observability.incident_identity_cleanup_failed', [
+                    'exception_class' => get_class($exception),
+                ]);
+            }
+
             if (in_array($previous, ['critical', 'warning', 'unknown'], true)) {
                 $this->emitAlert(
                     'recovered',
@@ -97,7 +109,8 @@ class CheckObservability extends Command
                     'بررسی عملیاتی بعدی وضعیت همه اجزای پایش‌شده را سالم گزارش کرد.',
                     $snapshot,
                     $notifications,
-                    $auditEvents
+                    $auditEvents,
+                    $recoveredIncidentId
                 );
             }
 
@@ -156,7 +169,22 @@ class CheckObservability extends Command
                 array_keys($affected),
                 array_values($affected)
             ));
-            $this->emitAlert($severity, $title, $body, $snapshot, $notifications, $auditEvents);
+            $incidentId = null;
+            try {
+                $candidateIncidentId = Cache::get('farast:observability:active-incident-id');
+                $incidentId = is_string($candidateIncidentId) && $candidateIncidentId !== ''
+                    ? $candidateIncidentId
+                    : (string) Str::uuid();
+                Cache::put('farast:observability:active-incident-id', $incidentId, now()->addDays(30));
+            } catch (Throwable $exception) {
+                // Without shared cache, alert deduplication and stable incident identity are best-effort.
+                $incidentId = (string) Str::uuid();
+                $this->safeLog('warning', 'farast.observability.incident_identity_unavailable', [
+                    'exception_class' => get_class($exception),
+                ]);
+            }
+
+            $this->emitAlert($severity, $title, $body, $snapshot, $notifications, $auditEvents, $incidentId);
         }
 
         $this->safeLog($severity === 'critical' ? 'critical' : 'warning', 'farast.observability.health_degraded', [
@@ -252,7 +280,8 @@ class CheckObservability extends Command
         string $body,
         array $snapshot,
         NotificationService $notifications,
-        AuditEventService $auditEvents
+        AuditEventService $auditEvents,
+        ?string $incidentId
     ): void {
         $affected = [];
         foreach ((array) ($snapshot['components'] ?? []) as $name => $component) {
@@ -278,6 +307,7 @@ class CheckObservability extends Command
                     'status' => $snapshot['status'] ?? 'unknown',
                     'affected_components' => $affected,
                     'severity' => $severity,
+                    'incident_id' => $incidentId,
                 ],
                 'operations'
             );
@@ -289,7 +319,7 @@ class CheckObservability extends Command
             ]);
         }
 
-        $this->deliverWebhook($severity, $title, $body, $snapshot, $affected, $incidentEvent?->event_id, $alertKey);
+        $this->deliverWebhook($severity, $title, $body, $snapshot, $affected, $incidentId, $alertKey);
 
         $userIds = (array) config('observability.alerts.user_ids', []);
         if ($userIds === []) {
@@ -319,6 +349,7 @@ class CheckObservability extends Command
                     [
                         'severity' => $severity,
                         'status' => $snapshot['status'] ?? 'unknown',
+                        'incident_id' => $incidentId,
                         'url' => $url,
                     ],
                     false,
