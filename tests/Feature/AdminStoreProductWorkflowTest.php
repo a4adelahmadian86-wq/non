@@ -130,7 +130,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('draft', $product->fresh()->status);
         $this->assertDatabaseHas('store_product_publication_reviews', [
             'product_id' => $product->id,
-            'status' => StoreProductPublicationReview::STATUS_PENDING_AI,
+            'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
         ]);
 
         $this->actingAs($admin)
