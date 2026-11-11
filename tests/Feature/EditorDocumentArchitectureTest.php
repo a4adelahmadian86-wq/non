@@ -12,6 +12,12 @@ class EditorDocumentArchitectureTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['queue.default' => 'database']);
+    }
+
     private function makeUser(): User
     {
         $u = new User;
@@ -54,6 +60,12 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertDatabaseHas('farast_document_versions', [
             'document_id' => $legacy->fresh()->farast_document_id,
             'user_id' => $user->id,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'document:'.$result['document_id'].':revision:'.$result['revision'],
+            'event_type' => 'document.saved',
+            'user_id' => $user->id,
+            'status' => 'pending',
         ]);
     }
 
