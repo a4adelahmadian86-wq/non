@@ -9,6 +9,7 @@ use App\Services\EmailService;
 use App\Services\NotificationService;
 use App\Services\SmsService;
 use App\Services\SupportNotificationService;
+use App\Services\SupportTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -164,6 +165,41 @@ class SupportNotificationEventIdentityTest extends TestCase
             'user_id' => $staff->id,
             'type' => 'ticket_assigned',
             'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_assigned:identity:assignment:2:user:'.$staff->id,
+        ]);
+    }
+
+
+    public function test_ticket_service_uses_persisted_message_ids_for_reply_deduplication(): void
+    {
+        $customer = User::factory()->create();
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'assigned_to' => $staff->id,
+            'subject' => 'پاسخ‌های متوالی',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->instance(EmailService::class, \Mockery::mock(EmailService::class)->shouldIgnoreMissing());
+        $this->instance(SmsService::class, \Mockery::mock(SmsService::class)->shouldIgnoreMissing());
+
+        $service = app(SupportTicketService::class);
+        $first = $service->addMessage($ticket, $staff, 'پاسخ اول', ['is_staff' => true]);
+        $second = $service->addMessage($ticket, $staff, 'پاسخ دوم', ['is_staff' => true]);
+
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertDatabaseCount('farast_notifications', 2);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $customer->id,
+            'type' => 'ticket_reply',
+            'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_reply:identity:message:'.$first->id.':user:'.$customer->id,
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $customer->id,
+            'type' => 'ticket_reply',
+            'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_reply:identity:message:'.$second->id.':user:'.$customer->id,
         ]);
     }
 
