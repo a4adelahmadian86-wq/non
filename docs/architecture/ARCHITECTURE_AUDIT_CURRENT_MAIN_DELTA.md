@@ -430,7 +430,40 @@ commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه 
 6. اجرای runtime inventory روی main: `route:list`, migration fresh install/upgrade، تست‌های منفی Scope و مالکیت فایل.
 7. تکمیل call graph برای هر سرویس با مصرف‌کننده‌ها و تست‌های واقعی؛ سپس تعیین موارد retain/consolidate/deprecate.
 
-## 14. معیار تکمیل
+
+## 14. دفتر مالکیت canonical قابلیت‌ها
+
+این جدول مرجع عملیاتی فعلی و مرزهای حل‌نشده را خلاصه می‌کند. «canonical» به معنی مالک اصلی داده/عملیات است؛ لایه‌های مشتق‌شده یا تخصصی باید به این مالک ارجاع دهند.
+
+| قابلیت | منبع داده canonical | مالک عملیات | مصرف‌کننده/ورودی اصلی | وضعیت منبع حقیقت |
+|---|---|---|---|---|
+| هویت کاربر | `users` / `User` | Auth/security services | AuthController، account/security routes | مشخص |
+| RBAC پایه | `permissions + role_permissions + users.role` | `AuthorizationService` | `EnsurePermission`, `AdminConsoleService`, Policy | در main ساده؛ مدل چندنقشی PR #347 هنوز pending و نیازمند تعیین تکلیف grantهای پایه/سفارشی |
+| Scope مدیریت | `organizations/teams` + تنظیمات scope | `ResolveAdminScope` و `AdminConsoleService` | admin.section middleware | main دارای scope پایه؛ PR #347 محدودیت per-admin را اضافه می‌کند |
+| feature flags | `site_settings + user_capabilities` | `CapabilityService` | Editor/AI/Voice/Commerce | مشخص؛ با entitlement اشتباه نشود |
+| کاتالوگ محصول | `store_products` / `StoreProduct` | Store product domain services | StoreController، AdminStoreController | مشخص |
+| intake فایل محصول | `store_product_ingestions` / `StoreProductIngestion` | upload/preflight + `ProcessProductDocument` | AdminStoreController | منبع فعلی؛ خوشه #262/#265/#279/#318/#333 هنوز pipeline رقیب می‌سازد |
+| محتوای پردازش‌شده محصول | `store_product_documents` و artifact/page/chunk/factها | `ProcessProductDocument` + processing services | Reader، product operations | مشخص؛ خروجی مشتق‌شده، نه جایگزین کاتالوگ |
+| آمادگی/انتشار محصول | `StoreProduct.status/is_published` + readiness state | `ProductPublicationReadiness` | AdminStoreController | review state هوشمند هنوز بین PRهای باز canonical نشده |
+| فایل‌های مدیریت‌شده | `storage_managed_files + storage_volumes` | `StorageManager` | AdminStorage، Store، Support، Messenger | مالک مرکزی مشخص؛ برخی call-siteها هنوز bypass می‌کنند |
+| سبد و سفارش فروشگاه | `store_carts/store_cart_items`, `orders/store_order_items` | `StoreCartService` | StoreCartController | مشخص |
+| پرداخت فروشگاه | `payments` / `Payment` | PaymentController + gateway service | checkout/callback | مشخص؛ idempotency مالی در PR #340 pending |
+| کیف پول | `wallets/wallet_transactions` | WalletService/WalletController | checkout/top-up/admin adjustment | مشخص؛ با wallet reservationهای FARAST یکی نیست |
+| پلن/entitlement تجاری | `farast_commercial_plans`, `farast_entitlements` | `ProfessionalCommerceService`, `SubscriptionEntitlementService`, `CommerceAuthorizationService` | platform capabilities | مسیر جدید؛ legacy `farast_plans/ProjectBillingService` هنوز ناسازگار |
+| قیمت policy نسخه‌دار | `farast_pricing_policy_versions` | `PricingEngine` + `PricingPolicyAdminService` | CommerceAuthorizationService | موتور runtime نسخه‌دار؛ write UI و fallback legacy باید یکپارچه شوند |
+| free-tier quota | `free_credits` | `FreeQuotaService` | typing free allowance | مشخص به‌عنوان free tier |
+| daily AI rate cap | `ai_interactions` | `AiQuotaService` | Editor AI | مشخص به‌عنوان abuse/rate cap، نه billing ledger |
+| course enrollment/progress | `store_course_enrollments/store_course_lesson_progress` | `StoreCourseProgressService` | Learning + CRM | محاسبه مشترک و canonical |
+| تیکت پشتیبانی | `tickets/ticket_messages` | `SupportTicketService` | SupportController | مشخص |
+| مکالمه داخلی | `conversations/conversation_messages/participants` | `MessengerAccessService` | MessengerController | aggregate جدا از ticket؛ مشخص |
+| اعلان شخصی | `farast_notifications` | `NotificationService` | NotificationController | Route ownership در PR #371 اصلاح و CI آن سبز شده |
+| اطلاعیه عمومی | `announcements` | `AnnouncementService` | AnnouncementController | دامنه جدا از اعلان شخصی |
+| workflow | `farast_workflows/runs/events/event_workflows` | `WorkflowEngine` | PlatformCompletionController + scheduler | مشخص؛ job/event ledger باید حفظ شود |
+| audit domain | `farast_audit_events` | `AuditEventService` + `AuditIntegrityService` | observability/admin | hash-chain فقط برای همین ledger |
+| audit legacy admin | `audit_logs` | `AuditLogService` | AdminController | ثبت عمومی بدون hash-chain؛ تضمین متفاوت |
+| API/HTTP composition | `routes/web.php` و فایل‌های requireشده | Laravel router + middleware stack | صفحات و endpointها | API-prefixed endpointها در web routes هستند؛ `routes/api.php` وجود ندارد |
+
+## 15. معیار تکمیل
 
 این addendum وضعیت snapshot را ثبت می‌کند، نه پایان کل مرحله دوم را. مرحله دوم تنها وقتی بسته می‌شود که:
 - Routeها و نام‌ها در runtime یکتا باشند؛
