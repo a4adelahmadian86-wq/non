@@ -48,41 +48,41 @@ class FarastObservabilityService
     private function queue(): array
     {
         $connection = (string) config('queue.default', 'unknown');
+        $queueDatabase = config('queue.connections.database.connection') ?: config('database.default');
+        $failedDatabase = config('queue.failed.database') ?: config('database.default');
         $result = [
             'status' => 'healthy',
             'connection' => $connection,
+            'queue_database' => $queueDatabase,
             'pending_jobs' => null,
             'failed_jobs' => null,
             'oldest_pending_minutes' => null,
         ];
 
-        if ($connection === 'sync') {
-            $result['status'] = 'warning';
-            $result['message'] = 'پردازش صف به‌صورت هم‌زمان انجام می‌شود؛ backlog پایدار قابل اندازه‌گیری نیست.';
-
-            return $result;
-        }
-
         try {
-            if (Schema::hasTable('jobs')) {
-                $result['pending_jobs'] = (int) DB::table('jobs')->count();
-                $oldest = DB::table('jobs')->min('created_at');
+            if ($connection === 'sync') {
+                $result['status'] = 'warning';
+                $result['message'] = 'پردازش صف به‌صورت هم‌زمان انجام می‌شود؛ backlog پایدار قابل اندازه‌گیری نیست.';
+            } elseif (Schema::connection($queueDatabase)->hasTable('jobs')) {
+                $jobs = DB::connection($queueDatabase)->table('jobs');
+                $result['pending_jobs'] = (int) (clone $jobs)->count();
+                $oldest = (clone $jobs)->min('created_at');
                 $result['oldest_pending_minutes'] = $oldest
                     ? max(0, now()->timestamp - (int) $oldest) / 60
                     : 0;
             } else {
                 $result['status'] = 'warning';
-                $result['message'] = 'جدول صف در پایگاه داده وجود ندارد.';
+                $result['message'] = 'جدول صف در اتصال پایگاه دادهٔ پیکربندی‌شده وجود ندارد.';
             }
 
-            if (Schema::hasTable('failed_jobs')) {
-                $result['failed_jobs'] = (int) DB::table('failed_jobs')->count();
+            if (Schema::connection($failedDatabase)->hasTable('failed_jobs')) {
+                $result['failed_jobs'] = (int) DB::connection($failedDatabase)->table('failed_jobs')->count();
                 if ($result['failed_jobs'] > 0) {
                     $result['status'] = 'warning';
                 }
             } else {
                 $result['status'] = 'warning';
-                $result['message'] = 'جدول failed_jobs وجود ندارد.';
+                $result['failed_jobs_warning'] = 'جدول failed_jobs وجود ندارد.';
             }
         } catch (Throwable $exception) {
             report($exception);
