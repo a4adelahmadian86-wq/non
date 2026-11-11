@@ -253,9 +253,7 @@ class StorageManager
 
     private function localVolumePath(StorageVolume $volume, string $key): string
     {
-        $key = StoragePath::normalizeObjectKey($key);
-        $root = storage_path('app/storage-volumes/'.$volume->id);
-        return $root.'/'.$key;
+        return StoragePath::localVolumePath($volume, $key);
     }
 
     private function writeToVolume(StorageVolume $volume, string $key, string $localPath): void
