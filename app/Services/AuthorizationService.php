@@ -69,7 +69,7 @@ class AuthorizationService
             return null;
         }
 
-        return $assignments->pluck('team_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        return $assignments->pluck('team_id')->map(fn ($id) => (int) $id)->unique()->filter(fn (int $id): bool => $this->userHasTeamAccess($user, $id))->values()->all();
     }
 
     public function allows(?User $user, string $permission): bool
@@ -550,6 +550,17 @@ class AuthorizationService
             User::ROLE_TEAM_SUPERVISOR => 'team',
             default => 'own',
         };
+    }
+
+    private function userHasTeamAccess(User $user, int $teamId): bool
+    {
+        return \\App\\Models\\Team::query()
+            ->whereKey($teamId)
+            ->where(function ($query) use ($user): void {
+                $query->where('supervisor_id', $user->id)
+                    ->orWhereHas('members', fn ($members) => $members->where('users.id', $user->id));
+            })
+            ->exists();
     }
 
     private function scopeContains(User $user, string $scope, ?object $grant, Model $record): bool
