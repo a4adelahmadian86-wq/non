@@ -274,6 +274,15 @@ class StoreReaderAccessTest extends TestCase
         ]);
         \Illuminate\Support\Facades\Queue::fake();
 
+        $unauthorizedReader = User::create([
+            'name' => 'Unauthorized Reader',
+            'mobile' => '09123456791',
+            'password' => 'secret',
+        ]);
+        $this->actingAs($unauthorizedReader)
+            ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertForbidden();
+
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
