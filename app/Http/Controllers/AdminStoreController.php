@@ -153,8 +153,10 @@ class AdminStoreController extends Controller
             ->with('status', $archivedCount.' محصول با موفقیت به بایگانی منتقل شد.');
     }
 
-    public function create()
+    public function create(Request $request)
     {
+        $selectedProductType = $request->query('type');
+        $selectedProductType = in_array($selectedProductType, ['digital_file', 'course'], true) ? $selectedProductType : null;
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = collect();
@@ -162,11 +164,12 @@ class AdminStoreController extends Controller
             ->allows(auth()->user(), 'store.security_scan');
 
         return view('admin.store.form', [
-            'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
+            'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => $selectedProductType ?? 'digital_file']),
             'categories' => $categories,
             'tags' => $tags,
             'relatedProducts' => $relatedProducts,
             'canRequestAntivirus' => $canRequestAntivirus,
+            'selectedProductType' => $selectedProductType,
         ]);
     }
 
