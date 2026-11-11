@@ -70,3 +70,37 @@ test('annotations are restored from IndexedDB after localStorage is cleared',asy
   expect(restored).toHaveLength(1);
   expect(restored[0].type).toBe('highlight');
 });
+
+test('durable reader storage keeps product data isolated and restores a full workspace backup',async({page})=>{
+  await page.goto('/');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  const result=await page.evaluate(async()=>{
+    const store=window.FarastReaderDurableStore,product='storage-backup-test';
+    const annotationKey='farast-reader:annotations:v1:'+product,favoritesKey='farast-reader:studio-favorites:v1:'+product,otherKey='farast-reader:annotations:v1:another-product';
+    await store.set(annotationKey,JSON.stringify([{id:'a1',type:'note'}]));
+    await store.set(favoritesKey,JSON.stringify([{id:'pen',tool:'pen'}]));
+    await store.set(otherKey,'must-not-export');
+    const backup=await store.exportProduct(product);
+    await store.remove(annotationKey);await store.remove(favoritesKey);
+    const restored=await store.importProduct(backup,product);
+    return {count:restored,keys:backup.records.map(x=>x.key),annotation:await store.restore(annotationKey),favorites:await store.restore(favoritesKey),foreign:backup.records.some(x=>x.key===otherKey)};
+  });
+  expect(result.count).toBe(2);
+  expect(result.keys).toContain('farast-reader:annotations:v1:storage-backup-test');
+  expect(result.keys).toContain('farast-reader:studio-favorites:v1:storage-backup-test');
+  expect(result.annotation).toContain('a1');expect(result.favorites).toContain('pen');expect(result.foreign).toBe(false);
+});
+
+test('durable backup import rejects another product and malformed records',async({page})=>{
+  await page.goto('/');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  const result=await page.evaluate(async()=>{
+    const store=window.FarastReaderDurableStore;
+    const backup={format:'farast-reader-local-backup',version:2,productId:'reader-a',records:[{key:'farast-reader:annotations:v1:reader-b',value:'[]'}]};
+    let wrongProduct=false,wrongKey=false;
+    try{await store.importProduct({...backup,records:[]},'reader-b');}catch(_){wrongProduct=true;}
+    try{await store.importProduct(backup,'reader-a');}catch(_){wrongKey=true;}
+    return {wrongProduct,wrongKey};
+  });
+  expect(result.wrongProduct).toBe(true);expect(result.wrongKey).toBe(true);
+});
