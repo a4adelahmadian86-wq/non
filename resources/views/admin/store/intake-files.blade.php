@@ -35,6 +35,9 @@
             <div>{{ number_format($file->size_bytes) }} بایت · {{ $file->mime }}</div>
             <div>وضعیت: {{ $file->status === 'uploaded' ? 'منتقل‌شده به ذخیره‌سازی' : ($file->status === 'inspected' ? 'بازرسی‌شده؛ منتظر تأیید شما' : $file->status) }}</div>
             <div>ناظر هوشمند: {{ $file->supervisor_status }}</div>
+            @if($file->status === 'inspected')
+              <button type="button" class="store-primary-btn" data-intake-confirm-existing="{{ $file->id }}">تأیید گزارش و انتقال به ذخیره‌سازی</button>
+            @endif
           </article>
         @endforeach
       </div>
