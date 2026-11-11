@@ -29,6 +29,10 @@ class AuditEventService
         $payloadMeta = $this->sanitize($payloadMeta);
 
         return DB::transaction(function () use ($eventType, $userId, $projectId, $aggregateType, $aggregateId, $payloadMeta, $source) {
+            $this->lockLedgerAppend();
+
+            // This is a locking/current read after the stable append lock. It
+            // prevents repeatable-read snapshots from observing a stale chain head.
             $previous = FarastAuditEvent::query()->lockForUpdate()->latest('id')->value('payload_checksum');
             $payload = [
                 'event_type' => $eventType,
@@ -53,6 +57,42 @@ class AuditEventService
                 'previous_checksum' => $previous,
             ]);
         });
+    }
+
+    /**
+     * Serialize every append through a stable row that exists because the
+     * canonical ledger migration must exist before this table can be used.
+     *
+     * MySQL/PostgreSQL hold the row lock until the outer transaction commits.
+     * SQLite has no SELECT FOR UPDATE; a no-op UPDATE obtains its database
+     * writer lock before the chain head is read. No new lock/audit table is
+     * introduced, and the migration record is never changed.
+     */
+    private function lockLedgerAppend(): void
+    {
+        $connection = DB::connection();
+        $migration = '2026_09_30_000004_add_feedback_trust_and_audit_ledger';
+
+        if ($connection->getDriverName() === 'sqlite') {
+            $connection->table('migrations')
+                ->where('migration', $migration)
+                ->update(['batch' => DB::raw('batch')]);
+
+            if (! $connection->table('migrations')->where('migration', $migration)->exists()) {
+                throw new \\RuntimeException('Canonical audit ledger migration lock is unavailable.');
+            }
+
+            return;
+        }
+
+        $lock = $connection->table('migrations')
+            ->where('migration', $migration)
+            ->lockForUpdate()
+            ->first(['id']);
+
+        if (! $lock) {
+            throw new \\RuntimeException('Canonical audit ledger migration lock is unavailable.');
+        }
     }
 
     private function sanitize(array $data, int $depth = 0): array
