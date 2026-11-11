@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\FarastTraceContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,11 @@ class FarastObservability
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
+        $request->attributes->set('farast.request_id', $requestId);
+        $request->attributes->set('farast.correlation_id', $correlationId);
+
         try {
+            app(FarastTraceContext::class)->set($requestId, $correlationId);
             Log::withContext([
                 'request_id' => $requestId,
                 'correlation_id' => $correlationId,
@@ -43,6 +48,8 @@ class FarastObservability
                     Log::info('farast.request.completed', [
                         'method' => $request->method(),
                         'path' => $request->path(),
+                        'route' => $request->route()?->getName(),
+                        'actor_id' => $request->user()?->getAuthIdentifier(),
                         'status' => $response?->getStatusCode(),
                         'duration_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
                     ]);
@@ -60,6 +67,12 @@ class FarastObservability
                     Log::withoutContext();
                 } catch (Throwable $exception) {
                     error_log('FARAST request log context cleanup failed: '.get_class($exception));
+                } finally {
+                    try {
+                        app(FarastTraceContext::class)->clear();
+                    } catch (Throwable $exception) {
+                        error_log('FARAST trace context cleanup failed: '.get_class($exception));
+                    }
                 }
             }
         }
