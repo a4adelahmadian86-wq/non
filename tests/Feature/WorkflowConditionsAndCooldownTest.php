@@ -181,7 +181,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
                 'stale-worker-token'
             );
             $this->fail('A worker with an expired lease must not commit workflow actions.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Workflow event lease was lost before commit.', $exception->getMessage());
         }
 
