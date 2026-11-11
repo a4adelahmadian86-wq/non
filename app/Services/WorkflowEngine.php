@@ -287,6 +287,22 @@ class WorkflowEngine
         return $this->processEvent($event, $storedContext);
     }
 
+    /** Whether a failed event should consume another queue attempt. */
+    public function shouldRetryEvent(int $eventId, int $eventAttempts): bool
+    {
+        if (! Schema::hasTable('farast_workflow_event_workflows')) {
+            return $eventAttempts < 5;
+        }
+
+        $hasMappings = DB::table('farast_workflow_event_workflows')
+            ->where('event_id', $eventId)
+            ->exists();
+
+        return $hasMappings
+            ? $this->hasRetryableWorkflowSteps($eventId)
+            : $eventAttempts < 5;
+    }
+
     /** Whether an event still has workflow mappings below their retry limit. */
     public function hasRetryableWorkflowSteps(int $eventId): bool
     {
@@ -335,13 +351,14 @@ class WorkflowEngine
                 })->orWhereExists(function ($retryable) {
                     $retryable->select(DB::raw(1))->from('farast_workflow_event_workflows')
                         ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
-                        ->where('attempts', '<', 5)
                         ->where(function ($states) {
-                            $states->whereIn('status', ['pending', 'failed'])
-                                ->orWhere(function ($stale) {
-                                    $stale->where('status', 'running')
-                                        ->where('started_at', '<=', now()->subMinutes(30));
-                                });
+                            $states->where(function ($retryable) {
+                                $retryable->where('attempts', '<', 5)
+                                    ->whereIn('status', ['pending', 'failed']);
+                            })->orWhere(function ($stale) {
+                                $stale->where('status', 'running')
+                                    ->where('started_at', '<=', now()->subMinutes(30));
+                            });
                         });
                 })->orWhere(function ($allCompleted) {
                     $allCompleted->whereExists(function ($anyMapping) {
@@ -591,18 +608,18 @@ class WorkflowEngine
                     ->lockForUpdate()
                     ->first();
 
-                if (! $locked || in_array($locked->status, ['completed', 'paused'], true) || (int) $locked->attempts >= 5) {
+                if (! $locked || in_array($locked->status, ['completed', 'paused'], true)) {
                     return false;
                 }
 
-                if ($locked->status === 'running' && $locked->started_at
-                    && \Illuminate\Support\Carbon::parse($locked->started_at)->gt(now()->subMinutes(30))) {
+                $staleLease = $locked->status === 'running' && $locked->started_at
+                    && \Illuminate\Support\Carbon::parse($locked->started_at)->lte(now()->subMinutes(30));
+
+                if ($locked->status === 'running' && $locked->started_at && ! $staleLease) {
                     return false;
                 }
 
-                if ($locked->status === 'running' && $locked->started_at
-                    && \Illuminate\Support\Carbon::parse($locked->started_at)->lte(now()->subMinutes(30))
-                    && ! empty($locked->run_id)) {
+                if ($staleLease && ! empty($locked->run_id)) {
                     DB::table('farast_workflow_runs')
                         ->where('id', $locked->run_id)
                         ->where('status', 'running')
@@ -612,6 +629,24 @@ class WorkflowEngine
                             'finished_at' => now(),
                             'updated_at' => now(),
                         ]);
+                }
+
+                if ((int) $locked->attempts >= 5) {
+                    if ($staleLease) {
+                        DB::table('farast_workflow_event_workflows')
+                            ->where('id', $locked->id)
+                            ->where('status', 'running')
+                            ->update([
+                                'status' => 'failed',
+                                'last_error' => 'Workflow mapping exhausted its retry limit after lease expiry.',
+                                'finished_at' => now(),
+                                'lease_token' => null,
+                                'run_id' => null,
+                                'updated_at' => now(),
+                            ]);
+                    }
+
+                    return false;
                 }
 
                 DB::table('farast_workflow_events')->where('id', $event->id)->update([
