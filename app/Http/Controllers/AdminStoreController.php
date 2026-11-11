@@ -440,7 +440,7 @@ class AdminStoreController extends Controller
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException
-                || ($exception instanceof \\Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface && $exception->getStatusCode() === 403)) {
+                || ($exception instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $exception->getStatusCode() === 403)) {
                 throw $exception;
             }
             $failureCode = class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed';
@@ -495,7 +495,7 @@ class AdminStoreController extends Controller
             try {
                 $avResult = $antivirus->scan($disk->path($stagingPath));
             } catch (\\RuntimeException $exception) {
-                throw new \\Symfony\\Component\\HttpKernel\\Exception\\HttpException(503, 'موتور آنتی‌ویروس در دسترس نیست؛ فایل تأیید نشد.', $exception);
+                throw new \Symfony\Component\HttpKernel\Exception\HttpException(503, 'موتور آنتی‌ویروس در دسترس نیست؛ فایل تأیید نشد.', $exception);
             }
             if (($avResult['status'] ?? null) === 'infected') {
                 $disk->delete((string) $file->staging_path);
