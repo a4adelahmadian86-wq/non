@@ -29,9 +29,9 @@ class EnsureResourcePermission
             // could grant access to a record whose authoritative owner is absent.
             'owner_id' => array_key_exists('owner_id', $attributes)
                 ? $attributes['owner_id']
-                : (array_key_exists('user_id', $attributes)
-                    ? $attributes['user_id']
-                    : ($attributes['created_by'] ?? null)),
+                : (array_key_exists('resource_user_id', $attributes)
+                    ? $attributes['resource_user_id']
+                    : ($attributes['user_id'] ?? null)),
             'organization_id' => $attributes['organization_id'] ?? null,
             'team_id' => $attributes['team_id'] ?? null,
             'status' => $attributes['status'] ?? null,
