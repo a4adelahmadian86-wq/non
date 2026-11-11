@@ -15,7 +15,7 @@ require __DIR__.'/product_operations.php';
 // instead of failing in middleware before the readiness check executes.
 Route::get('/ready', ReadinessController::class)
     ->withoutMiddleware([
-        \\Illuminate\\Session\\Middleware\\StartSession::class,
-        \\Illuminate\\View\\Middleware\\ShareErrorsFromSession::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
     ])
     ->name('health.ready');
