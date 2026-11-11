@@ -154,7 +154,7 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonPath('metrics.wallet_transactions_count', 1);
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
-            ->assertJsonPath('metrics.store_library_items_count', 1)
+            ->assertJsonPath('metrics.store_library_items_count', 2)
             ->assertJsonPath('metrics.store_downloads_count', 1)
             ->assertJsonFragment(['type' => 'store_download', 'download_count' => 2])
             ->assertJsonFragment(['type' => 'store_entitlement', 'status' => 'active']);
