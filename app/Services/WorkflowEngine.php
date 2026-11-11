@@ -157,7 +157,9 @@ class WorkflowEngine
      */
     public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
-        $this->validateEventContract($eventType, $context);
+        if (! array_key_exists($eventType, self::EVENT_CONTRACTS)) {
+            throw new \InvalidArgumentException('Unsupported workflow event.');
+        }
 
         $idempotencyKey = trim($idempotencyKey);
         if ($idempotencyKey === '' || mb_strlen($idempotencyKey) > 190) {
@@ -174,6 +176,8 @@ class WorkflowEngine
         if ($unknownContextFields !== []) {
             throw new \InvalidArgumentException('Workflow event context contains unsupported fields.');
         }
+
+        $this->validateEventContract($eventType, $context);
 
         foreach ($context as $field => $value) {
             if ($field === 'user_id') {
