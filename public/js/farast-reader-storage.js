@@ -19,6 +19,7 @@ const open=()=>{
   request.onsuccess=()=>{
    const db=request.result;
    db.onversionchange=()=>invalidateDatabase(db);
+   window.dispatchEvent(new Event('farast:storage-database-ready'));
    resolve(db);
   };
   request.onerror=()=>reject(request.error||new Error('IndexedDB open failed'));
