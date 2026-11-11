@@ -247,6 +247,41 @@ class WorkflowEngine
         });
     }
 
+    /** Start a new, explicitly requested recovery cycle for a terminally failed event. */
+    public function retryFailedEvent(int $eventId): bool
+    {
+        $retried = DB::transaction(function () use ($eventId): bool {
+            $event = DB::table('farast_workflow_events')->where('id', $eventId)->lockForUpdate()->first();
+            if (! $event || $event->status !== 'failed') return false;
+
+            DB::table('farast_workflow_event_workflows')
+                ->where('event_id', $eventId)
+                ->whereNotIn('status', ['completed'])
+                ->update([
+                    'status' => 'pending',
+                    'attempts' => 0,
+                    'last_error' => null,
+                    'started_at' => null,
+                    'finished_at' => null,
+                    'lease_token' => null,
+                    'updated_at' => now(),
+                ]);
+            DB::table('farast_workflow_events')->where('id', $eventId)->update([
+                'status' => 'pending',
+                'attempts' => 0,
+                'failed_at' => null,
+                'error_summary' => null,
+                'processed_at' => null,
+                'updated_at' => now(),
+            ]);
+
+            return true;
+        });
+
+        if ($retried) ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+        return $retried;
+    }
+
     /** Resume paused mappings and enqueue the original immutable event. */
     public function resumeEvent(int $eventId): bool
     {
