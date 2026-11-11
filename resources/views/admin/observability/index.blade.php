@@ -75,6 +75,14 @@
             <h2>تاریخچه هشدارها و بازیابی</h2>
             <span class="text-sm text-slate-500">آخرین ۲۰ تغییر وضعیت</span>
         </div>
+        @if(!empty($health['incident_trend_24h']))
+            <div class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 text-sm">
+                <div class="rounded border p-2">بحرانی: {{ $health['incident_trend_24h']['critical'] }}</div>
+                <div class="rounded border p-2">هشدار: {{ $health['incident_trend_24h']['warning'] }}</div>
+                <div class="rounded border p-2">بازیابی: {{ $health['incident_trend_24h']['recovered'] }}</div>
+                <div class="rounded border p-2">نمونه بررسی‌شده: {{ $health['incident_trend_24h']['sampled'] }}@if($health['incident_trend_24h']['truncated'])+ @endif</div>
+            </div>
+        @endif
         @if(!empty($health['incidents']))
             <div class="mt-3 overflow-x-auto">
                 <table class="w-full text-sm text-right">
