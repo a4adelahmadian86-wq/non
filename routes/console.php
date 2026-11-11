@@ -88,13 +88,19 @@ Artisan::command('farast:workflows:pause {eventId}', function (WorkflowEngine $e
 
 Artisan::command('farast:workflows:resume {eventId}', function (WorkflowEngine $engine) {
     $resumed = $engine->resumeEvent((int) $this->argument('eventId'));
-    $this->info($resumed ? 'Workflow event queued for recovery.' : 'Event is not paused or does not exist.');
+    $message = config('queue.default') === 'sync'
+        ? 'Event resumed and stored as pending; configure QUEUE_CONNECTION=database and start the automation worker.'
+        : 'Workflow event queued for recovery.';
+    $this->info($resumed ? $message : 'Event is not paused or does not exist.');
     return $resumed ? 0 : 1;
 })->purpose('Resume a paused workflow event');
 
 Artisan::command('farast:workflows:retry-event {eventId}', function (WorkflowEngine $engine) {
     $retried = $engine->retryFailedEvent((int) $this->argument('eventId'));
-    $this->info($retried ? 'Terminally failed event queued for a new recovery cycle.' : 'Event is not in terminal failed state.');
+    $message = config('queue.default') === 'sync'
+        ? 'Event reset to pending; configure QUEUE_CONNECTION=database and start the automation worker.'
+        : 'Terminally failed event queued for a new recovery cycle.';
+    $this->info($retried ? $message : 'Event is not in terminal failed state.');
     return $retried ? 0 : 1;
 })->purpose('Manually retry a terminally failed workflow event');
 
@@ -122,9 +128,11 @@ Artisan::command('farast:workflows:health', function () {
         : 0;
     $failed = (int) ($counts['failed'] ?? 0);
     $pending = (int) ($counts['pending'] ?? 0);
-    $this->line('pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
-    if ($failed > 0 || $staleProcessing > 0 || $failedQueueJobs > 0 || $delay >= 300 || $queueDelay >= 300) {
+    $queueConnection = (string) config('queue.default');
+    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
+    if (($queueConnection === 'sync' && $pending > 0) || $failed > 0 || $staleProcessing > 0 || $failedQueueJobs > 0 || $delay >= 300 || $queueDelay >= 300) {
         Log::warning('FARAST workflow queue health threshold exceeded', [
+            'queue_connection' => $queueConnection,
             'pending' => $pending,
             'failed' => $failed,
             'stale_processing' => $staleProcessing,
