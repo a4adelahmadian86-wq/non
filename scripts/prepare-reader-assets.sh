@@ -49,7 +49,7 @@ fi
 # npm package layouts may nest them under legacy/.
 LEGACY_WEB_DIR="$PACKAGE_DIR/legacy/web"
 if [ ! -s "$LEGACY_WEB_DIR/pdf_viewer.mjs" ] || [ ! -s "$LEGACY_WEB_DIR/pdf_viewer.css" ]; then
-  echo "Verified PDF.js archive is missing the legacy PDF viewer module or stylesheet." >&2
+  echo "Pinned PDF.js npm distribution is missing the legacy PDF viewer module or stylesheet." >&2
   unzip -Z1 "$ARCHIVE_PATH" | grep -E 'legacy/web/pdf_viewer\.(mjs|css)' | head -80 >&2 || true
   exit 1
 fi
@@ -86,9 +86,6 @@ for asset_dir in cmaps standard_fonts wasm; do
   fi
 done
 
-if [ -d "$PACKAGE_DIR/legacy/web/images" ]; then
-  cp -a "$PACKAGE_DIR/legacy/web/images" "$TARGET_DIR/legacy/web/images"
-fi
 if [ -d "$PACKAGE_DIR/web/images" ]; then
   cp -a "$PACKAGE_DIR/web/images" "$TARGET_DIR/web/images"
 fi
