@@ -59,8 +59,8 @@ class ReviewProductIntakeFile implements ShouldQueue
         }
 
         if (! $supervisor->configured()) {
-            $this->storeResult($ingestion, $session, 'awaiting_supervisor', [
-                'status' => 'awaiting_supervisor',
+            $this->storeResult($ingestion, $session, 'manual_review_required', [
+                'status' => 'manual_review_required',
                 'reason' => 'supervisor_not_configured',
                 'reviewed_at' => now()->toISOString(),
                 'automated_publication' => false,
@@ -120,7 +120,7 @@ class ReviewProductIntakeFile implements ShouldQueue
         $status = match (true) {
             $securityGate === 'blocked' => 'blocked',
             $securityGate === 'manual_scan_required' => 'manual_review_required',
-            ! $aiAnalysisComplete => 'awaiting_supervisor',
+            ! $aiAnalysisComplete => 'manual_review_required',
             default => 'completed',
         };
 
@@ -176,7 +176,10 @@ class ReviewProductIntakeFile implements ShouldQueue
     {
         DB::transaction(function () use ($ingestion, $session, $status, $review) {
             $lockedIngestion = StoreProductIngestion::query()->whereKey($ingestion->id)->lockForUpdate()->first();
-            if (! $lockedIngestion || $lockedIngestion->product_id !== null) {
+            if (! $lockedIngestion
+                || $lockedIngestion->product_id !== null
+                || $lockedIngestion->status !== 'uploaded'
+                || ($lockedIngestion->supervisor_status === 'completed' && $lockedIngestion->supervisor_reviewed_at !== null)) {
                 return;
             }
 
@@ -191,10 +194,13 @@ class ReviewProductIntakeFile implements ShouldQueue
                 return;
             }
 
-            $statuses = $lockedSession->ingestions()->pluck('supervisor_status');
+            $statuses = $lockedSession->ingestions()
+                ->where('status', 'uploaded')
+                ->pluck('supervisor_status');
             $nextStatus = match (true) {
+                $statuses->isEmpty() => 'selecting_files',
                 $statuses->contains(fn ($value) => in_array($value, ['blocked', 'failed', 'manual_review_required'], true)) => 'review_attention',
-                $statuses->isNotEmpty() && $statuses->every(fn ($value) => $value === 'completed') => 'files_reviewed',
+                $statuses->every(fn ($value) => $value === 'completed') => 'files_reviewed',
                 default => 'review_pending',
             };
             $lockedSession->update(['status' => $nextStatus]);
