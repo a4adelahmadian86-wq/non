@@ -141,7 +141,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
 <script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>
 @endif
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
-@stack('scripts')<script>
+@stack('scripts')@if(!$isReader)<script>
 (() => {
   const shell = document.querySelector('.farast-admin');
   const sidebar = shell?.querySelector('.farast-admin-nav');
@@ -212,5 +212,5 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
     if (!nav.contains(event.target) && !toggle.contains(event.target)) close();
   });
 })();
-</script><script>document.documentElement.classList.add('js-ready');</script>
+</script><script>document.documentElement.classList.add('js-ready');</script>@endif
 </body></html>
