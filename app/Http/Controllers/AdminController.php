@@ -1092,18 +1092,19 @@ class AdminController extends Controller
 
     public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
-        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر موجودی کیف پول خودتان مجاز نیست.');
-        $console->authorizeAction($r->user(), 'finance', $user->id, 'finance.manage');
-
         $d = $r->validate([
             'type' => ['required', 'in:credit,debit'],
             'amount_rials' => ['required', 'integer', 'min:1000', 'max:10000000000'],
             'description' => ['nullable', 'string', 'max:500'],
         ]);
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'زیرساخت ثبت ممیزی مالی در دسترس نیست.');
 
-        DB::transaction(function () use ($d, $user) {
-            $wallet = Wallet::firstOrCreate(['user_id' => $user->id], ['balance_rials' => 0]);
+        DB::transaction(function () use ($r, $d, $user, $console, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر موجودی کیف پول خودتان مجاز نیست.');
+            $console->authorizeAction($r->user(), 'finance', (int) $lockedUser->id, 'finance.manage');
+
+            $wallet = Wallet::firstOrCreate(['user_id' => $lockedUser->id], ['balance_rials' => 0]);
             $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
             $before = (int) $wallet->balance_rials;
 
@@ -1121,20 +1122,23 @@ class AdminController extends Controller
                 'balance_before' => $before,
                 'balance_after' => $after,
                 'reference_type' => 'admin',
-                'reference_id' => auth()->id(),
+                'reference_id' => $r->user()->id,
                 'description' => $d['description'] ?: ($d['type'] === 'credit' ? 'شارژ توسط مدیر' : 'کسر توسط مدیر'),
-                'idempotency_key' => 'admin-'.auth()->id().'-'.bin2hex(random_bytes(12)),
+                'idempotency_key' => 'admin-'.$r->user()->id.'-'.bin2hex(random_bytes(12)),
+            ]);
+
+            $audit->record((int) $r->user()->id, 'admin.wallet.adjusted', $r->ip(), [
+                'target_user_id' => (int) $lockedUser->id,
+                'type' => $d['type'],
+                'amount_rials' => $d['amount_rials'],
+                'balance_before' => $before,
+                'balance_after' => $after,
             ]);
         });
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record(auth()->id(), 'admin.wallet.adjusted', request()->ip(), [
-                'target_user_id' => $user->id, 'type' => $d['type'], 'amount_rials' => $d['amount_rials'],
-            ]);
-        }
-
         return back()->with('status', 'موجودی کیف پول کاربر به‌روزرسانی شد.');
     }
+
     private function recordAccessAudit(Request $request, string $action, int $subjectUserId, array $before, array $after): void
     {
         abort_unless(Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ممیزی دسترسی در دسترس نیست.');
