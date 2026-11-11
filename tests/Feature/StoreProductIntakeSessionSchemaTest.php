@@ -65,7 +65,7 @@ class StoreProductIntakeSessionSchemaTest extends TestCase
     {
         $user = User::factory()->create();
         $session = StoreProductIntakeSession::create([
-            'id' => (string) \\Illuminate\\Support\\Str::uuid(),
+            'id' => (string) \Illuminate\Support\Str::uuid(),
             'user_id' => $user->id,
             'product_type' => 'digital_file',
             'status' => 'selecting_files',
@@ -73,7 +73,7 @@ class StoreProductIntakeSessionSchemaTest extends TestCase
         ]);
 
         StoreProductIngestion::create([
-            'id' => (string) \\Illuminate\\Support\\Str::uuid(),
+            'id' => (string) \Illuminate\Support\Str::uuid(),
             'product_id' => null,
             'intake_session_id' => $session->id,
             'user_id' => $user->id,
