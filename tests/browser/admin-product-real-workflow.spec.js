@@ -137,7 +137,10 @@ test.describe('Real admin product workflow', () => {
     );
     await page.locator('#sendBtn').click();
     const replyResponse = await replyResponsePromise;
-    expect(replyResponse.status()).toBe(302);
+    expect(replyResponse.status()).toBe(200);
+    const replyPayload = await replyResponse.json();
+    expect(replyPayload.ok).toBe(true);
+    expect(replyPayload.message.body).toBe(reply);
     await expect(page.locator('#chatMessages')).toContainText(reply);
 
     await page.locator('#openCloseDialog').click();
