@@ -200,7 +200,7 @@ class EmailService
             headline: 'تیکت شما ثبت شد',
             body: 'تیکت شما با موفقیت ثبت شد و کارشناسان ما به‌زودی پاسخ می‌دهند.',
             staffUrl: false,
-            idempotencyKey: $eventIdentity ? 'ticket-closed:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
+            idempotencyKey: 'ticket-created:'.$ticket->id.':user:'.$user->id,
         );
     }
 
@@ -218,7 +218,7 @@ class EmailService
             headline: 'تیکت پشتیبانی جدید',
             body: 'از طرف '.$ticket->displayName()."\n\n".'موضوع: '.$ticket->subject,
             staffUrl: true,
-            idempotencyKey: $eventIdentity ? 'ticket-customer-reply:'.$ticket->id.':'.$eventIdentity.':staff:'.$staff->id : null,
+            idempotencyKey: 'ticket-created-staff:'.$ticket->id.':staff:'.$staff->id,
         );
     }
 
@@ -236,7 +236,7 @@ class EmailService
             headline: 'پاسخ جدید کاربر',
             body: mb_substr($body, 0, 800),
             staffUrl: true,
-            idempotencyKey: $eventIdentity ? 'ticket-assigned:'.$ticket->id.':'.$eventIdentity.':agent:'.$agent->id : null,
+            idempotencyKey: $eventIdentity ? 'ticket-customer-reply:'.$ticket->id.':'.$eventIdentity.':staff:'.$staff->id : null,
         );
     }
 
@@ -254,6 +254,7 @@ class EmailService
             headline: 'تیکت بسته شد',
             body: 'تیکت شما بسته شد. در صورت نیاز می‌توانید تیکت جدیدی ثبت کنید.',
             staffUrl: false,
+            idempotencyKey: $eventIdentity ? 'ticket-closed:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
         );
     }
 
@@ -271,6 +272,7 @@ class EmailService
             headline: 'تیکت به شما ارجاع شد',
             body: 'موضوع: '.$ticket->subject,
             staffUrl: true,
+            idempotencyKey: $eventIdentity ? 'ticket-assigned:'.$ticket->id.':'.$eventIdentity.':agent:'.$agent->id : null,
         );
     }
 
