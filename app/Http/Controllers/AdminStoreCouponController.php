@@ -157,9 +157,32 @@ class AdminStoreCouponController extends Controller
                 ->get()
             : collect();
 
+        // Keep a focused operational history beside the coupon controls. Scoped
+        // administrators see only actions performed by actors in their scope.
+        $auditLogs = DB::table('audit_logs')
+            ->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
+            ->where(function ($query) {
+                $query->where('audit_logs.action', 'like', 'store.smart_coupon.%')
+                    ->orWhere('audit_logs.action', 'like', 'store.coupon.%')
+                    ->orWhere('audit_logs.action', 'like', 'crm.campaign.%')
+                    ->orWhere('audit_logs.action', 'like', 'crm.segment.%');
+            })
+            ->when($visibleIds !== null, fn ($query) => $query->whereIn('audit_logs.user_id', $visibleIds))
+            ->latest('audit_logs.id')
+            ->limit(30)
+            ->get([
+                'audit_logs.action',
+                'audit_logs.meta',
+                'audit_logs.ip',
+                'audit_logs.created_at',
+                'users.name as actor_name',
+                'users.mobile as actor_mobile',
+            ]);
+
         return view('admin.store-coupons.index', [
             'assignments' => $assignments->latest('offered_at')->paginate(25)->withQueryString(),
             'genericCoupons' => $genericCoupons,
+            'auditLogs' => $auditLogs,
             'canManageGlobalCoupons' => $canManageGlobalCoupons,
             'filters' => ['status' => $status, 'q' => $request->query('q')],
             'stats' => [
