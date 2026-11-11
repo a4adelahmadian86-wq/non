@@ -53,7 +53,7 @@ Verify the existing append-only ledger with:
 php artisan farast:audit-ledger:verify
 ```
 
-The command exits non-zero and emits a critical, secret-free log event when the chain is invalid or cannot be verified. It does not repair or rewrite the ledger.
+The command exits non-zero and emits a critical, secret-free log event when the chain is invalid or cannot be verified. It does not repair or rewrite the ledger. Every append is serialized through a stable row in Laravel's existing `migrations` table for the ledger-creation migration; SQLite uses a no-op update to acquire its database writer lock, while MySQL/PostgreSQL use a transaction-held row lock. The chain head is read only after that lock, preventing concurrent first writers and normal concurrent appends from forking the checksum chain without introducing another audit table.
 
 Operational daily logs retain the existing 14-day Monolog rotation policy. The audit ledger is not automatically pruned: no destructive retention period is assumed without an approved business/legal schedule. This phase does not claim physical secure erasure on SSDs, snapshots or backups. Any future deletion process must include the database, replicas, backups and encryption-key lifecycle and must be tested before activation.
 
