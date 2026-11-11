@@ -161,7 +161,7 @@ class AdminConsoleService
                                 $subquery->select('team_id')
                                     ->from('team_user')
                                     ->where('user_id', $user->id)
-                                    ->where('team_role', 'manager');
+                                    ->whereIn('team_role', ['manager', 'owner', 'supervisor']);
                             });
                     })
                     ->pluck('id')
