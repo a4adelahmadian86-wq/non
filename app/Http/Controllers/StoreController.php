@@ -316,7 +316,58 @@ class StoreController extends Controller
 
         abort_unless(!in_array($kind, ['docx', 'xlsx'], true), 409, 'این پیش‌نمایش هنوز آماده‌سازی نشده است؛ نسخهٔ آماده را دوباره بارگذاری کنید.');
         $headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
-        return response($storage->get($previewDisk, $preview->path), 200, array_merge($headers, ['Content-Type' => $preview->mime ?: 'application/octet-stream']));
+
+        // PDF.js can request only the bytes it needs. Keep the file on the server's
+        // storage backend and stream a bounded range instead of materializing it in PHP memory.
+        $size = $storage->size($previewDisk, $preview->path);
+        abort_unless($size > 0, 404);
+        $start = 0;
+        $end = $size - 1;
+        $status = 200;
+        $range = request()->header('Range');
+
+        if (is_string($range) && preg_match('/^bytes=/i', $range)) {
+            if (preg_match('/\\Abytes=(\\d*)-(\\d*)\\z/i', trim($range), $matches)) {
+                if ($matches[1] === '' && $matches[2] !== '') {
+                    $suffixLength = (int) $matches[2];
+                    if ($suffixLength <= 0) {
+                        return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                    }
+                    $start = max(0, $size - $suffixLength);
+                } elseif ($matches[1] !== '') {
+                    $start = (int) $matches[1];
+                    $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
+                } else {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+
+                if ($start > $end || $start >= $size) {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+                $status = 206;
+            }
+            // Malformed and multi-range requests fall back to a normal full response.
+        }
+
+        $length = $end - $start + 1;
+        $headers['Content-Type'] = $preview->mime ?: 'application/octet-stream';
+        $headers['Content-Length'] = (string) $length;
+        $headers['Accept-Ranges'] = 'bytes';
+        if ($status === 206) {
+            $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+        }
+
+        return response()->stream(function () use ($storage, $previewDisk, $preview, $start, $length): void {
+            $output = fopen('php://output', 'wb');
+            if (! is_resource($output)) {
+                throw new \\RuntimeException('جریان خروجی سند در دسترس نیست.');
+            }
+            try {
+                $storage->streamRange($previewDisk, $preview->path, $start, $length, $output);
+            } finally {
+                fclose($output);
+            }
+        }, $status, $headers);
     }
 
     public function previewAudio(StoreProductPreview $preview, StorageManager $storage)
