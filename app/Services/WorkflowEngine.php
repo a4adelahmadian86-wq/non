@@ -289,9 +289,22 @@ class WorkflowEngine
             $event = DB::table('farast_workflow_events')->where('id', $eventId)->lockForUpdate()->first();
             if (! $event || $event->status !== 'paused') return false;
             DB::table('farast_workflow_event_workflows')->where('event_id', $eventId)
-                ->where('status', 'paused')->update(['status' => 'pending', 'updated_at' => now()]);
+                ->where('status', 'paused')->update([
+                    'status' => 'pending',
+                    'attempts' => 0,
+                    'last_error' => null,
+                    'started_at' => null,
+                    'finished_at' => null,
+                    'lease_token' => null,
+                    'updated_at' => now(),
+                ]);
             DB::table('farast_workflow_events')->where('id', $eventId)->update([
-                'status' => 'pending', 'failed_at' => null, 'updated_at' => now(),
+                'status' => 'pending',
+                'attempts' => 0,
+                'failed_at' => null,
+                'error_summary' => null,
+                'processed_at' => null,
+                'updated_at' => now(),
             ]);
             return true;
         });
