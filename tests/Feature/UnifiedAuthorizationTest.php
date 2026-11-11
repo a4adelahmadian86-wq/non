@@ -243,7 +243,7 @@ class UnifiedAuthorizationTest extends TestCase
         $assignment = $authorization->assignRole($manager, $memberA, 'employee', 'own');
         self::assertSame($memberA->id, (int) $assignment->user_id);
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         $authorization->assignRole($manager, $memberB, 'employee', 'own');
     }
 
