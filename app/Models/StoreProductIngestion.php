@@ -12,13 +12,15 @@ class StoreProductIngestion extends Model
 
     protected $fillable = [
         'id','product_id','user_id','status','staging_disk','staging_path','original_name',
-        'mime','size_bytes','sha256','inspection_json','is_primary','expires_at','confirmed_at',
+        'mime','size_bytes','sha256','inspection_json','is_primary','antivirus_requested','antivirus_status','antivirus_engine','antivirus_version','antivirus_scanned_at','expires_at','confirmed_at',
     ];
 
     protected $casts = [
         'inspection_json' => 'array',
         'size_bytes' => 'integer',
         'is_primary' => 'boolean',
+        'antivirus_requested' => 'boolean',
+        'antivirus_scanned_at' => 'datetime',
         'expires_at' => 'datetime',
         'confirmed_at' => 'datetime',
     ];
