@@ -57,10 +57,13 @@ class AppServiceProvider extends ServiceProvider
                 $requestId = is_string($trace['request_id'] ?? null) ? $trace['request_id'] : null;
                 $correlationId = is_string($trace['correlation_id'] ?? null) ? $trace['correlation_id'] : null;
 
-                app(FarastTraceContext::class)->set($requestId, $correlationId);
+                $traceContext = app(FarastTraceContext::class);
+                $traceContext->set($requestId, $correlationId);
+                $activeTrace = $traceContext->current();
+
                 Log::withContext(array_filter([
-                    'request_id' => $requestId,
-                    'correlation_id' => $correlationId,
+                    'request_id' => $activeTrace['request_id'],
+                    'correlation_id' => $activeTrace['correlation_id'],
                     'job_id' => $event->job->getJobId(),
                     'queue' => $event->job->getQueue(),
                 ], static fn ($value) => $value !== null));
@@ -106,9 +109,16 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(JobFailed::class, function (JobFailed $event): void {
             try {
                 $trace = (array) ($event->job->payload()['farast_trace'] ?? []);
+                $traceContext = app(FarastTraceContext::class);
+                $traceContext->set(
+                    is_string($trace['request_id'] ?? null) ? $trace['request_id'] : null,
+                    is_string($trace['correlation_id'] ?? null) ? $trace['correlation_id'] : null
+                );
+                $activeTrace = $traceContext->current();
+
                 Log::error('farast.queue.job.failed', array_filter([
-                    'request_id' => is_string($trace['request_id'] ?? null) ? $trace['request_id'] : null,
-                    'correlation_id' => is_string($trace['correlation_id'] ?? null) ? $trace['correlation_id'] : null,
+                    'request_id' => $activeTrace['request_id'],
+                    'correlation_id' => $activeTrace['correlation_id'],
                     'job_name' => $event->job->resolveName(),
                     'job_id' => $event->job->getJobId(),
                     'queue' => $event->job->getQueue(),
