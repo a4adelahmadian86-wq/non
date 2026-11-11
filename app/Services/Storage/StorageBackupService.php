@@ -13,6 +13,16 @@ class StorageBackupService
 {
     public function __construct(private readonly StorageManager $storage) {}
 
+    public function verifyArchive(string $archivePath): void
+    {
+        $backupKey = (string) config('storage_management.backup.encryption_key', '');
+        if ($backupKey === '') {
+            throw new RuntimeException('کلید رمزنگاری بکاپ برای بررسی آرشیو تنظیم نشده است.');
+        }
+
+        $this->assertArchiveReadable($archivePath, $backupKey);
+    }
+
     public function runWeekly(): array
     {
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
@@ -132,13 +142,31 @@ class StorageBackupService
             if (! is_resource($database)) {
                 throw new RuntimeException('فایل دیتابیس بکاپ پس از انتقال قابل رمزگشایی نیست.');
             }
+            $databaseBytes = 0;
             try {
-                $sample = fread($database, 64);
+                while (! feof($database)) {
+                    $chunk = fread($database, 1024 * 1024);
+                    if ($chunk === false) {
+                        throw new RuntimeException('خواندن کامل جریان دیتابیس بکاپ ناموفق بود.');
+                    }
+                    if ($chunk === '') {
+                        if (feof($database)) {
+                            break;
+                        }
+                        throw new RuntimeException('جریان دیتابیس بکاپ پیش از پایان متوقف شد.');
+                    }
+                    $databaseBytes += strlen($chunk);
+                }
             } finally {
                 fclose($database);
             }
-            if (! is_string($sample) || $sample === '') {
-                throw new RuntimeException('جریان دیتابیس بکاپ پس از انتقال خالی است.');
+            $databaseStat = $zip->statName('database/database.sql');
+            if (
+                $databaseBytes === 0
+                || ! is_array($databaseStat)
+                || $databaseBytes !== (int) ($databaseStat['size'] ?? -1)
+            ) {
+                throw new RuntimeException('خواندن کامل فایل دیتابیس بکاپ با اندازه ثبت‌شده مطابقت ندارد.');
             }
         } finally {
             $zip->close();
