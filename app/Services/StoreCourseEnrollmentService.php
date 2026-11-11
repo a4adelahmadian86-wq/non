@@ -52,15 +52,25 @@ class StoreCourseEnrollmentService
                 throw new RuntimeException('دسترسی دوره فقط پس از تسویه معتبر همان سفارش قابل اعطا است.');
             }
 
-            $orderItem = StoreOrderItem::query()
-                ->whereKey($lockedLibraryItem->order_item_id)
+            $orderItemsQuery = StoreOrderItem::query()
                 ->where('order_id', $order->id)
                 ->where('product_id', $product->id)
-                ->lockForUpdate()
-                ->first();
+                ->when(
+                    $lockedLibraryItem->order_item_id,
+                    fn ($query) => $query->whereKey($lockedLibraryItem->order_item_id),
+                )
+                ->lockForUpdate();
 
-            if (! $orderItem || (int) $orderItem->quantity < 1) {
+            $matchingOrderItems = $orderItemsQuery->get();
+            if ($matchingOrderItems->count() !== 1 || (int) $matchingOrderItems->first()->quantity < 1) {
                 throw new RuntimeException('قلم سفارش با محصول دوره و مجوز کتابخانه مطابقت ندارد.');
+            }
+
+            $orderItem = $matchingOrderItems->first();
+            if ((int) $lockedLibraryItem->order_item_id !== (int) $orderItem->id) {
+                // Backfill the canonical line reference for legacy library items only
+                // when the order contains exactly one unambiguous matching product line.
+                $lockedLibraryItem->forceFill(['order_item_id' => $orderItem->id])->save();
             }
 
             $payments = Payment::query()
