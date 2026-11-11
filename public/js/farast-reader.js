@@ -55,7 +55,7 @@
     if(!pdfjsPromise){
       pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
         .then(module=>{window.pdfjsLib=module;return module;})
-        .catch(error=>{pdfjsPromise=null;throw error;});
+        .catch(error=>{pdfjsPromise=null;if(error&&typeof error==='object')error.farastPdfEngineUnavailable=true;throw error;});
     }
     return pdfjsPromise;
   };
@@ -620,7 +620,7 @@
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
-    }catch(error){if(error?.message==='PDF_ENGINE_MISSING'&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
+    }catch(error){if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
   };
 
   const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
