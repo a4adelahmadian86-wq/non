@@ -94,6 +94,14 @@ return new class extends Migration
 
     private function ensureGatewayAuthorityIndex(): void
     {
+    }
+
+    private function ensureUniqueGatewayAuthorityIndex(): void
+    {
+        if (! Schema::hasTable('payments')) {
+            return;
+        }
+
         $hasUniqueIndex = collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false)
                 && ($index['columns'] ?? []) === ['gateway', 'authority']
@@ -103,6 +111,26 @@ return new class extends Migration
             Schema::table('payments', function (Blueprint $table): void {
                 $table->unique(['gateway', 'authority'], 'payments_gateway_authority_unique');
             });
+        }
+    }
+
+    private function assertNoDuplicateExistingIdempotencyKeys(string $tableName): void
+    {
+        if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'idempotency_key')) {
+            return;
+        }
+
+        $duplicate = DB::table($tableName)
+            ->select('idempotency_key')
+            ->whereNotNull('idempotency_key')
+            ->where('idempotency_key', '<>', '')
+            ->groupBy('idempotency_key')
+            ->havingRaw('COUNT(*) > 1')
+            ->limit(1)
+            ->exists();
+
+        if ($duplicate) {
+            throw new RuntimeException("Duplicate idempotency_key values exist in {$tableName}; resolve them before applying financial integrity constraints.");
         }
     }
 
