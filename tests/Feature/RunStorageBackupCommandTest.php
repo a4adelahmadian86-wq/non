@@ -57,12 +57,23 @@ class RunStorageBackupCommandTest extends TestCase
             'started_at' => now()->subHours(6),
             'metadata' => ['request_only' => true],
         ]);
+        $queuedTooLong = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'scheduler_request',
+            'status' => 'queued',
+            'created_at' => now()->subDays(2),
+            'metadata' => ['request_only' => true],
+        ]);
         Queue::fake();
 
         $this->artisan('storage:backup-weekly')->assertExitCode(0);
 
         $this->assertDatabaseHas('storage_backup_runs', [
             'id' => $abandoned->id,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $queuedTooLong->id,
             'status' => 'failed',
         ]);
         $this->assertDatabaseHas('storage_backup_runs', [
