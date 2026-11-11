@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 return new class extends Migration {
     public function up():void
     {
-        $this->alterRegistry(); $this->createTables(); $this->backfillStableIds(); $this->seedContracts();
+        $this->alterRegistry(); $this->createTables(); $this->ensureStorageObjectPathHash(); $this->backfillStableIds(); $this->seedContracts();
     }
     private function alterRegistry():void
     {
@@ -92,7 +92,7 @@ return new class extends Migration {
             $t->json('sla')->nullable();$t->json('input')->nullable();$t->json('output')->nullable();$t->json('qa')->nullable();$t->json('acceptance')->nullable();$t->json('billing')->nullable();$t->json('provenance')->nullable();$t->string('status',30)->default('queued');$t->uuid('correlation_id')->nullable();$t->timestamps();$t->index(['capability','status','created_at']);
         });
         if(!Schema::hasTable('farast_storage_objects'))Schema::create('farast_storage_objects',function(Blueprint $t){
-            $t->id();$t->uuid('object_id')->unique();$t->foreignId('user_id')->nullable()->constrained()->nullOnDelete();$t->foreignId('project_id')->nullable()->constrained('farast_projects')->nullOnDelete();$t->foreignId('document_id')->nullable()->constrained('farast_documents')->nullOnDelete();$t->string('disk',60);$t->string('path',1000);$t->string('mime',160)->nullable();$t->unsignedBigInteger('size')->default(0);$t->string('checksum',64);$t->string('status',30)->default('private');$t->string('classification',40)->default('user_content');$t->unsignedInteger('version')->default(1);$t->unsignedInteger('revision')->default(1);$t->json('provenance')->nullable();$t->timestamps();$t->unique(['disk','path']);
+            $t->id();$t->uuid('object_id')->unique();$t->foreignId('user_id')->nullable()->constrained()->nullOnDelete();$t->foreignId('project_id')->nullable()->constrained('farast_projects')->nullOnDelete();$t->foreignId('document_id')->nullable()->constrained('farast_documents')->nullOnDelete();$t->string('disk',60);$t->string('path',1000);$t->char('path_hash',64);$t->string('mime',160)->nullable();$t->unsignedBigInteger('size')->default(0);$t->string('checksum',64);$t->string('status',30)->default('private');$t->string('classification',40)->default('user_content');$t->unsignedInteger('version')->default(1);$t->unsignedInteger('revision')->default(1);$t->json('provenance')->nullable();$t->timestamps();$t->unique(['disk','path_hash'],'farast_storage_objects_disk_path_hash_unique');
         });
         if(!Schema::hasTable('farast_backup_manifests'))Schema::create('farast_backup_manifests',function(Blueprint $t){
             $t->id();$t->uuid('backup_id')->unique();$t->string('scope',80);$t->string('status',30)->default('started');$t->string('disk',60);$t->string('path',1000);$t->string('checksum',64)->nullable();$t->unsignedBigInteger('bytes')->default(0);$t->json('metadata')->nullable();$t->timestamp('started_at')->nullable();$t->timestamp('completed_at')->nullable();$t->timestamps();
@@ -104,6 +104,52 @@ return new class extends Migration {
             $t->id();$t->uuid('template_id')->unique();$t->string('code',120)->unique();$t->foreignId('application_id')->nullable()->constrained('farast_applications')->nullOnDelete();$t->string('project_type',80)->nullable();$t->string('version',40)->default('1.0.0');$t->json('settings');$t->string('status',30)->default('active');$t->string('checksum',64);$t->json('provenance')->nullable();$t->timestamps();
         });
     }
+    private function ensureStorageObjectPathHash(): void
+    {
+        // A disk+1000-character path index can exceed MySQL's 3072-byte key limit.
+        // The fixed-size digest preserves full-path uniqueness without truncation.
+        $table = 'farast_storage_objects';
+        if (! Schema::hasTable($table)) {
+            return;
+        }
+
+        if (! Schema::hasColumn($table, 'path_hash')) {
+            Schema::table($table, fn (Blueprint $blueprint) => $blueprint->char('path_hash', 64)->nullable());
+        }
+
+        DB::table($table)
+            ->whereNull('path_hash')
+            ->orderBy('id')
+            ->chunkById(500, function ($rows) use ($table): void {
+                foreach ($rows as $row) {
+                    DB::table($table)
+                        ->where('id', $row->id)
+                        ->update(['path_hash' => hash('sha256', (string) $row->path)]);
+                }
+            });
+
+        Schema::table($table, fn (Blueprint $blueprint) => $blueprint->char('path_hash', 64)->nullable(false)->change());
+
+        $indexes = Schema::getIndexes($table);
+        foreach ($indexes as $index) {
+            if (($index['unique'] ?? false) && ($index['columns'] ?? []) === ['disk', 'path'] && ! ($index['primary'] ?? false)) {
+                Schema::table($table, fn (Blueprint $blueprint) => $blueprint->dropUnique($index['name']));
+            }
+        }
+
+        $indexes = Schema::getIndexes($table);
+        $hasPathHashUnique = collect($indexes)->contains(
+            fn (array $index): bool => ($index['name'] ?? null) === 'farast_storage_objects_disk_path_hash_unique' || (($index['unique'] ?? false) && ($index['columns'] ?? []) === ['disk', 'path_hash'])
+        );
+
+        if (! $hasPathHashUnique) {
+            Schema::table($table, fn (Blueprint $blueprint) => $blueprint->unique(
+                ['disk', 'path_hash'],
+                'farast_storage_objects_disk_path_hash_unique'
+            ));
+        }
+    }
+
     private function backfillStableIds():void
     {
         foreach(['farast_applications','farast_capabilities','farast_tools','farast_tool_versions','farast_entitlements','farast_feedback_evidence','farast_evaluation_datasets','farast_evaluation_cases','farast_approved_knowledge','farast_usage_events','farast_usage_reservations'] as $table){
