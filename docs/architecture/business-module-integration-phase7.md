@@ -138,11 +138,11 @@ Commit مبنای مشاهده‌شده: `11a0427bf0a3beff9856d5790d6f97c3b1984b
 
 بنابراین پاسخ‌ها و transitionهای مستقل یک تیکت از هم تفکیک می‌شوند و replay همان رخداد به کلید یکسان می‌رسد. این مورد از فهرست مانع‌های حل‌نشده خارج می‌شود؛ پوشش runtime و رفتار کانال‌های ایمیل/SMS در تست‌های ادغام‌شده #358 نگهداری می‌شود.
 
-### 8.2 سیاست classification در StorageManager: اصلاح در حال اعتبارسنجی
+### 8.2 سیاست classification در StorageManager: اصلاح‌شده در main
 
-در خط مبنای `main` مقدار classification ناشناخته در `StorageManager::storeUploadedFile` به `non_critical` تبدیل می‌شود؛ این رفتار fail-open است و می‌تواند فایل حساس را به سیاست ذخیره‌سازی اشتباه هدایت کند. PR #381 این fallback را با allowlist صریح `critical` و `non_critical` جایگزین می‌کند و آزمون Feature دارد که ثابت می‌کند مقدار نامعتبر پیش از انتخاب Volume یا staging رد می‌شود.
+این ریسک با PR #381 اصلاح و ادغام شد. مقدار classification اکنون فقط در صورت برابر بودن دقیق با `critical` یا `non_critical` پذیرفته می‌شود؛ هر مقدار دیگر پیش از انتخاب Volume، نوشتن یا staging با `InvalidArgumentException` رد می‌شود. آزمون Feature ثابت می‌کند هیچ managed-file، volume یا فایل staging برای مقدار نامعتبر ساخته نمی‌شود. هر سه workflow اجباری PR #381 شامل FARAST CI، Phase 3 Commerce Tests و Phase 4 Agent موفق بودند.
 
-تا زمان موفقیت همه workflowها و ادغام PR #381، این گیت همچنان باز است.
+این مورد از گیت‌های باز Storage خارج می‌شود.
 
 ### 8.3 مسیرهای اعلان تجاری باید از نظر رویداد واحد تطبیق داده شوند
 
