@@ -229,6 +229,7 @@ class StoreReaderAccessTest extends TestCase
             'page_count' => 2,
             'structure_json' => [
                 'reader' => ['ready' => true, 'page_count' => 2],
+                'audio' => ['status' => 'pending'],
                 'completeness' => [
                     'extraction_complete' => true,
                     'analysis_batches_complete' => false,
@@ -276,13 +277,14 @@ class StoreReaderAccessTest extends TestCase
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
-            ->assertSee('data-reader-audio-status="unavailable"', false)
-            ->assertDontSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
+            ->assertSee('data-reader-audio-status="pending"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
 
         \Illuminate\Support\Facades\Queue::assertNothingPushed();
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\GenerateProductDocumentAudio::class);
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
