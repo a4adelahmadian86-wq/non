@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductDocumentArtifact;
 use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Jobs\ProcessProductDocument;
@@ -841,7 +842,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'فایل حذف شد.');
     }
 
-    public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security)
+    public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، نمونه‌ها را در ساختار جلسات دوره تعریف کنید.');
         $request->validate([
@@ -855,7 +856,7 @@ class AdminStoreController extends Controller
         $accessLevel = $request->input('access_level', 'sample');
         abort_if($accessLevel === 'full' && $product->download_policy !== 'reader_only', 422, 'محتوای کامل فقط برای محصول با سیاست فقط‌خواندنی قابل ثبت است.');
         $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
-        $preparedPath = null;
+        $managed = null;
         $sourcePageCount = null;
         $includedPageCount = null;
 
@@ -881,7 +882,7 @@ class AdminStoreController extends Controller
             }
 
             if (in_array($extension, ['pdf', 'docx'], true) && $accessLevel === 'sample') {
-                $sample = app(\App\Services\StorePdfPreviewPreparer::class)->prepareSample(
+                $sample = app(\\App\\Services\\StorePdfPreviewPreparer::class)->prepareSample(
                     $preparedBytes,
                     max(1, min(50, (int) ($product->preview_pages ?: 3)))
                 );
@@ -891,27 +892,35 @@ class AdminStoreController extends Controller
             }
 
             if ($extension === 'xlsx') {
-                $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
+                $preparedBytes = app(\\App\\Services\\StoreXlsxPreviewRenderer::class)->render(
                     $sourceBytes,
                     '__FARAST_READER_IDENTITY__',
                     $accessLevel === 'sample'
                 );
             }
 
-            $directory = 'store/previews/'.$product->id;
             $filename = Str::random(40).'.'.($kind === 'html' ? 'html' : ($kind === 'pdf' ? 'pdf' : $extension));
-            $preparedPath = $directory.'/'.$filename;
-            abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده پیش‌نمایش ممکن نشد.');
+            $managed = $storage->storeContents(
+                $preparedBytes,
+                $filename,
+                $mime,
+                StorageManager::CRITICAL,
+                'store-product-preview',
+                StoreProductPreview::class,
+                null,
+                (int) $product->id,
+                'private'
+            );
 
             Storage::disk('private')->delete($sourcePath);
 
-            DB::transaction(function () use ($product, $preparedPath, $mime, $request, $kind, $accessLevel, $sourcePageCount, $includedPageCount) {
+            DB::transaction(function () use ($product, $managed, $mime, $request, $kind, $accessLevel, $sourcePageCount, $includedPageCount, $storage): void {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
-                StoreProductPreview::create([
+                $preview = StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
-                    'disk' => 'private',
-                    'path' => $preparedPath,
+                    'disk' => $managed['disk'],
+                    'path' => $managed['path'],
                     'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
                     'source_page_count' => $sourcePageCount,
@@ -922,6 +931,7 @@ class AdminStoreController extends Controller
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $preview->id, (int) $lockedProduct->id, 'path');
                 $this->audit('store.product.preview_uploaded', $lockedProduct, [
                     'mime' => $mime,
                     'kind' => $kind,
@@ -933,12 +943,10 @@ class AdminStoreController extends Controller
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($sourcePath);
-            if ($preparedPath) {
-                Storage::disk('private')->delete($preparedPath);
+            if ($managed) {
+                try { $storage->delete($managed['disk'], $managed['path']); } catch (Throwable $cleanupException) { report($cleanupException); }
             }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
             report($exception);
             abort(503, 'آماده‌سازی امن پیش‌نمایش ناموفق بود؛ فایل اصلی در خوانشگر منتشر نشد.');
         }
