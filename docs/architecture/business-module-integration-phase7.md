@@ -173,7 +173,7 @@ Commit مبنای مشاهده‌شده: `11a0427bf0a3beff9856d5790d6f97c3b1984b
 
 در HEAD فعلی `main`، دو بخش لازم از قبل پیاده‌سازی شده‌اند: تشخیص نبود ورودی دیتابیس با مقایسه صریح `ZipArchive::locateName(...) === false` و بازسازی رکورد `StorageBackupRun` و ظرفیت Volume پس از restore؛ زیرا snapshot دیتابیس پیش از ثبت run و upload مقصد گرفته می‌شود. بنابراین اصلاح production جدیدی برای این مورد لازم نیست و نباید نسخه موازی ساخته شود.
 
-PR #398 فقط آزمون Integration regression را اضافه می‌کند. آزمون ZIP AES-256 می‌سازد که `database/database.sql` اولین ورودی آن است؛ run و آپلود را پس از snapshot ایجاد می‌کند؛ سپس وجود داده قبل از snapshot، حذف داده بعد از snapshot، بازیابی رکورد backup و ثبت صحیح `used_bytes/object_count` را بررسی می‌کند. این آزمون قرارداد فعلی main را تثبیت می‌کند.
+PR #407 فقط آزمون Integration regression را اضافه می‌کند. آزمون ZIP AES-256 می‌سازد که `database/database.sql` اولین ورودی آن است؛ run و آپلود را پس از snapshot ایجاد می‌کند؛ سپس وجود داده قبل از snapshot، حذف داده بعد از snapshot، بازیابی رکورد backup و ثبت صحیح `used_bytes/object_count` را بررسی می‌کند. این آزمون قرارداد فعلی main را تثبیت می‌کند.
 
 ### 8.7 هویت رخداد در اعلان پاسخ تیکت
 
@@ -187,4 +187,16 @@ PR #398 فقط آزمون Integration regression را اضافه می‌کند. 
 
 آزمون پذیرش سرتاسری در PR #389 روی HEAD جاری main اجرا شد و با موفقیت هر سه workflow اصلی FARAST CI، Phase 3 Commerce Tests و Phase 4 Agent ادغام شد. این تست زنجیره کاتالوگ محصول دوره‌ای، سبد، سفارش و snapshot قیمت، پرداخت کیف پول، Payment و WalletTransaction، entitlement کتابخانه، enrollment، اعلان و دسترسی نهایی به درس را بررسی می‌کند. همچنین تغییر قیمت کاتالوگ پس از checkout و replay پرداخت را بررسی می‌کند تا snapshot و side effectهای مالی/دسترسی/اعلان تکرار نشوند.
 
-یک آزمون تکمیلی برای اتصال همان رخداد `order.paid` به Workflow و ایجاد دقیقاً یک پیگیری CRM در PR #396 در حال اعتبارسنجی است.
+یک آزمون تکمیلی برای اتصال همان رخداد `order.paid` به Workflow و ایجاد دقیقاً یک پیگیری CRM در PR #405 در حال اعتبارسنجی است.
+
+### 8.10 کنترل محدوده دسترسی مدیریت فروشگاه
+
+در خط مبنای main، گروه routeهای مدیریتی فروشگاه هنوز باید با middleware موجود `admin.section:store` محافظت شود؛ پیکربندی این بخش حداقل scope برابر global تعریف کرده است. PR #402 این middleware را روی کل گروه مدیریت فروشگاه اعمال و دو حالت مثبت/منفی را آزمایش می‌کند: مدیر سازمانی حتی با permission `store.manage` نباید به scope سراسری فروشگاه دسترسی داشته باشد، درحالی‌که مدیر global مجاز است. تا ادغام و CI سبز PR #402، این گیت امنیتی باز است.
+
+### 8.11 یکسان‌سازی snapshot بررسی و انتشار محصول
+
+در main، endpoint بررسی محصول `document_knowledge` را به snapshot اضافه می‌کرد، اما editor و gate انتشار همان داده را hash نمی‌کردند. بنابراین review تأییدشده برای همان محصول نیز با snapshot انتشار برابر نمی‌شد. PR #400 یک سازنده canonical در `ProductSupervisorSnapshotBuilder` اضافه می‌کند و endpoint بررسی، محاسبه تازگی review و gate انتشار را به آن متصل می‌کند. آزمون‌ها انتشار snapshot تأییدشده، ابطال approval پس از تغییر قیمت و رد verdict غیرتأییدشده را پوشش می‌دهند. تا CI سبز و ادغام PR #400، چرخه review_gate را بسته تلقی نمی‌کنیم.
+
+### 8.12 الزام پرداخت و entitlement معتبر برای ثبت‌نام دوره
+
+در main، `StoreCourseEnrollmentService::grant()` صرفاً به وجود محصول و library item اعتماد می‌کرد و پرداخت موفق، مبلغ تطبیق‌شده، قلم سفارش و revoked state را مستقلاً enforce نمی‌کرد. هر دو مسیر wallet و Zarinpal نیز پیش از paid شدن سفارش/پرداخت، grant را صدا می‌زدند. PR #411 ترتیب اتمیک settlement و تحویل را اصلاح می‌کند و EnrollmentService را به منبع حقیقت Order/Payment/StoreOrderItem/LibraryItem متصل می‌سازد. آزمون‌ها سفارش pending، پرداخت معتبر idempotent و entitlement ابطال‌شده را پوشش می‌دهند. تا عبور CI و ادغام PR #411، این گیت تحویل دوره باز است.
