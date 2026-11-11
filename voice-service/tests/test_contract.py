@@ -38,3 +38,12 @@ def test_synthesis_rejects_wrong_voice_without_model():
     )
     # Voice identity validation occurs before model readiness validation.
     assert response.status_code == 400
+
+def test_synthesis_rejects_blank_text_before_model_readiness():
+    client = TestClient(main.app)
+    response = client.post(
+        "/v1/synthesize",
+        headers={"Authorization": "Bearer test-token-for-contract-tests"},
+        json={"text": "   ", "language": "fa-IR", "voice_id": main.VOICE_ID},
+    )
+    assert response.status_code == 400
