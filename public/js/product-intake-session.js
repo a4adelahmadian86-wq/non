@@ -140,7 +140,11 @@
     root.querySelector('[data-progress-attention]').textContent = String(progress.review_blocked_count || 0);
     reviewList.innerHTML = (progress.files || []).map(file =>
       '<div><span>' + escapeHtml(file.name) + '</span><small>' + bytes(file.size_bytes) + ' · ' +
-      escapeHtml(file.supervisor_status || file.status) + '</small></div>'
+      escapeHtml(file.supervisor_status || file.status) + '</small>' +
+      (state.type === 'digital_file'
+        ? '<label><input type="radio" name="intake-primary-existing" data-primary-ingestion="' + escapeHtml(file.id) + '"' +
+          (file.is_primary ? ' checked' : '') + '> فایل اصلی</label>'
+        : '') + '</div>'
     ).join('');
     const allDone = progress.file_count > 0
       && progress.uploaded_count === progress.file_count
@@ -155,6 +159,28 @@
     }
   };
 
+  reviewList.addEventListener('change', async (event) => {
+    const input = event.target.closest('[data-primary-ingestion]');
+    if (!input || !input.checked || !state.sessionId) return;
+
+    input.disabled = true;
+    try {
+      const target = url(
+        url(root.dataset.primaryUrlTemplate, '__SESSION__', state.sessionId),
+        '__INGESTION__',
+        input.dataset.primaryIngestion
+      );
+      await request(target, { method: 'POST' });
+      message.textContent = 'فایل اصلی محصول به‌روزرسانی شد.';
+      await pollProgress();
+    } catch (error) {
+      message.textContent = error.message || 'تغییر فایل اصلی انجام نشد.';
+      await pollProgress();
+    } finally {
+      input.disabled = false;
+    }
+  });
+
   const pollProgress = async () => {
     if (!state.sessionId) return;
     const target = url(root.dataset.progressUrlTemplate, '__SESSION__', state.sessionId);
@@ -162,8 +188,8 @@
       const payload = await request(target);
       renderProgress(payload);
       const status = payload.session?.status;
-      if (!['files_reviewed', 'review_attention', 'review_failed', 'submitted'].includes(status)) {
-        window.setTimeout(pollProgress, 3000);
+      if (!['files_reviewed', 'review_failed', 'submitted'].includes(status)) {
+        window.setTimeout(pollProgress, status === 'review_attention' ? 15000 : 3000);
       }
     } catch (error) {
       message.textContent = error.message || 'دریافت وضعیت فرایند ممکن نشد.';
