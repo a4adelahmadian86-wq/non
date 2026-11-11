@@ -40,28 +40,19 @@ test.describe('Real admin product workflow', () => {
     } catch (_) {}
   });
 
-  test('creates a category and product through the real UI, exposes validation errors, and persists a private draft', async ({ page }) => {
+  test('creates a product through the real UI, exposes validation errors, and persists a private draft', async ({ page }) => {
     test.setTimeout(120_000);
     const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
-    const categoryName = `دسته آزمون رابط ${runId}`;
     const productTitle = `محصول آزمون رابط ${runId}`;
 
     await signInAsSeededAdmin(page);
 
-    const categoryForm = page.locator('form[data-inline-create="category"]');
-    await categoryForm.locator('input[name="name"]').fill(categoryName);
-    await categoryForm.locator('input[name="slug"]').fill(`phase10-ui-${runId}`);
-    const categoryResponsePromise = page.waitForResponse(response =>
-      response.url().includes('/admin/store/categories') && response.request().method() === 'POST'
-    );
-    await categoryForm.getByRole('button', { name: 'افزودن دسته' }).click();
-    const categoryResponse = await categoryResponsePromise;
-    expect(categoryResponse.status()).toBe(302);
-    await expect(page.locator('.store-alert.success')).toContainText('دسته ذخیره شد.');
-
+    // The E2E database is populated with the repository's canonical demo category.
+    // Category creation has no current form in this editor, so the test does not invent one.
     const categorySelect = page.locator('select[name="category_id"]');
-    const categoryId = await categorySelect.locator('option').filter({ hasText: categoryName }).getAttribute('value');
-    expect(categoryId).toBeTruthy();
+    await categorySelect.selectOption({ label: 'آزمایشی' });
+    const categoryId = await categorySelect.inputValue();
+    expect(categoryId).not.toBe('');
 
     await page.locator('input[name="title"]').fill(productTitle);
     await page.locator('select[name="type"]').selectOption('digital_file');
@@ -151,6 +142,7 @@ test.describe('Real admin product workflow', () => {
     expect(closeResponse.status()).toBe(302);
     await expect(page).toHaveURL(ticketUrl);
     await expect(page.locator('#replyBox')).toHaveCount(0);
+    await expect(page.locator('#chatComposer')).toHaveCount(0);
     await expect(page.locator('#csatForm')).toBeVisible();
 
     await page.locator('.csat-star[data-score="5"]').click();
