@@ -56,18 +56,6 @@ class AdminConsoleService
         $requiredRank = $rank[$def['min_scope']] ?? 3;
         $allowed = $userRank <= $requiredRank;
 
-        // A restricted platform administrator keeps administrative capabilities
-        // only inside the explicitly assigned scope. Context-free permission
-        // checks intentionally fail for such accounts; record guards below
-        // enforce the concrete organization/team/owner boundary.
-        if ($user->isAdmin() && $scope !== self::SCOPE_GLOBAL) {
-            if ($allowed) {
-                request()->attributes->set('farast.section_permission', (string) $def['permission']);
-            }
-
-            return $allowed;
-        }
-
         if (! $this->authorization->allows($user, $def['permission'])) {
             return false;
         }
@@ -285,8 +273,7 @@ class AdminConsoleService
     ): void {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
-        if ($requiredPermission !== null
-            && ! ($user?->isAdmin() && self::scopeOf($user) !== self::SCOPE_GLOBAL)) {
+        if ($requiredPermission !== null) {
             abort_unless(
                 $this->authorization->allows($user, $requiredPermission),
                 403,
