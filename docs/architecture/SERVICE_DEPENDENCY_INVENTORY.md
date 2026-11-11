@@ -1,6 +1,6 @@
 # فهرست وابستگی سرویس‌های برنامه
 
-> مبنا: ۱۱۸ فایل `app/Services/*.php` در `main`. وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
+> مبنا: ۱۱۲ فایل PHP در `app/Services/` در `main` (۱۱۸ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
 
 | Service | Source | Service dependencies | Model imports | Direct table references | Storage disk names | Public methods | DB call count | Storage call count |
 |---|---|---|---|---|---|---|---:|---:|
