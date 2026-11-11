@@ -173,6 +173,7 @@ class StorageTransferService
             }
 
             $uploaded = false;
+            $writeAttempted = false;
             try {
                 $stream = $source->readStream($file->file_key);
                 if (! is_resource($stream)) {
@@ -199,6 +200,7 @@ class StorageTransferService
 
                 $objectKey = StoragePath::normalizeObjectKey($file->file_key);
                 if ($target->driver === 's3') {
+                    $writeAttempted = true;
                     $this->s3->putFile($target, $objectKey, $temp);
                     $uploaded = true;
                     $verificationPath = tempnam(sys_get_temp_dir(), 'farast-transfer-verify');
@@ -217,6 +219,7 @@ class StorageTransferService
                         throw new RuntimeException('ساخت پوشه مقصد ناموفق بود.');
                     }
                     $destinationTemp = dirname($destination).'/.farast-transfer-'.bin2hex(random_bytes(12)).'.tmp';
+                    $writeAttempted = true;
                     try {
                         if (! copy($temp, $destinationTemp) || ! rename($destinationTemp, $destination)) {
                             throw new RuntimeException('ثبت اتمیک فایل روی مقصد ناموفق بود.');
@@ -269,7 +272,7 @@ class StorageTransferService
                 $this->cleanupOrphanedSource($file->fresh());
                 $moved++;
             } catch (\Throwable $exception) {
-                if ($uploaded) {
+                if ($uploaded || $writeAttempted) {
                     try {
                         if ($target->driver === 's3') {
                             $this->s3->delete($target, $file->file_key);
