@@ -147,7 +147,7 @@ class UnifiedAuthorizationTest extends TestCase
 
         $root = User::factory()->create(['role' => 'admin']);
         $authorization->grantDirectPermission($root, $admin, 'access.manage', 'allow', 'own');
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         $authorization->assignRole($admin, $admin, 'employee', 'global');
     }
 
@@ -267,7 +267,7 @@ class UnifiedAuthorizationTest extends TestCase
         $assignment = $authorization->assignRole($manager, $memberA, 'employee', 'own');
         self::assertSame($memberA->id, (int) $assignment->user_id);
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         $authorization->assignRole($manager, $memberB, 'employee', 'own');
     }
 
