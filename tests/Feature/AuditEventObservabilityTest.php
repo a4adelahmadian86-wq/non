@@ -117,7 +117,7 @@ class AuditEventObservabilityTest extends TestCase
         $headIndex = null;
         $insertIndex = null;
         foreach ($queries as $index => $sql) {
-            if ($lockIndex === null && preg_match('/update\\s+["`]?migrations["`]?\\s+set\\s+["`]?batch["`]?\\s*=\\s*batch/i', $sql) === 1) {
+            if ($lockIndex === null && preg_match('/update\\s+["`]?migrations["`]?\\s+set\\s+["`]?batch["`]?\\s*=\\s*["`]?batch["`]?/i', $sql) === 1) {
                 $lockIndex = $index;
             }
             if ($headIndex === null && str_contains($sql, 'select "payload_checksum" from "farast_audit_events"')) {
