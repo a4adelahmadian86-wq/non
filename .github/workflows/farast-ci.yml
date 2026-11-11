@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh
+      - run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh && bash -n scripts/ops/health-check.sh
       - run: python -m compileall -q services/document-audio
       - run: python -m unittest discover -s services/document-audio/tests -v
       - uses: shivammathur/setup-php@v2
@@ -27,17 +27,13 @@ jobs:
           coverage: none
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
-      - name: Verify test namespace autoload
-        shell: bash
-        run: |
-          set -euo pipefail
-          composer dump-autoload --optimize --strict-psr
-          php -r 'require "vendor/autoload.php"; exit(class_exists("Tests\\TestCase") ? 0 : 1);'
+      - name: Verify PHP test environment and Composer autoload
+        run: composer dump-autoload --optimize --strict-psr && php scripts/verify-test-environment.php
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php -l database/seeders/SherpaOnnxVoiceProviderSeeder.php && php -l database/seeders/DatabaseSeeder.php && php -l app/Services/VoiceProviderRouter.php && php -l app/Services/ProviderRegistry.php && php -l app/Http/Controllers/AdminPlatformController.php && php -l app/Services/EditorDocumentService.php && php -l app/Services/EditorKernelToolHandler.php && php -l app/Http/Controllers/VoiceController.php && php -l app/Http/Controllers/GlobalAssistantController.php && php -l app/Services/Agent/FarastEditorAgent.php && php -l app/Http/Controllers/EditorAgentController.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
       - run: php -l app/Jobs/ProcessProductDocument.php && php -l app/Jobs/GenerateProductDocumentAudio.php && php -l app/Services/ProductDocumentAudioService.php && php -l app/Services/StoreProductDocumentPageBuilder.php && php -l app/Http/Controllers/StoreController.php && php -l config/services.php && php -l app/Services/ProductKnowledgeService.php && php -l app/Services/UploadSecurityService.php && php -l app/Console/Commands/PruneProductIngestions.php && php -l app/Models/StoreProductDocument.php && php -l app/Models/StoreProductDocumentChunk.php && php -l app/Models/StoreProductDocumentArtifact.php && php -l app/Models/StoreProductFile.php && php -l app/Models/StoreProductIngestion.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/AdminProductSupervisorController.php && php -l app/Services/ProductSupervisorClient.php && php -l database/migrations/2026_11_08_000001_create_store_product_ingestion_and_knowledge_tables.php && php -l routes/store_routes.php && php -l routes/console.php && php -l tests/Unit/UploadSecurityServiceTest.php && php -l tests/Unit/ProductDocumentAudioServiceTest.php && php -l tests/Unit/StoreProductDocumentPageBuilderTest.php
       - name: Lint centralized storage core and integrations
-        run: php -l app/Http/Controllers/ManagedStoragePublicController.php && php -l app/Console/Commands/MigrateLegacyProductAssets.php && php -l app/Console/Commands/MigrateLegacyEditorAssets.php && php -l database/migrations/2026_11_10_000011_add_storage_file_key_hash.php && php -l app/Services/Storage/S3CompatibleAdapter.php && php -l app/Services/Storage/StoragePath.php && php -l app/Services/Storage/StorageManager.php && php -l app/Services/Storage/StorageTransferService.php && php -l app/Services/Storage/StorageBackupService.php && php -l app/Services/StorageConnectionService.php && php -l app/Services/UserFileRetentionService.php && php -l app/Http/Controllers/AdminStorageController.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/AdminCourseController.php && php -l app/Http/Controllers/MessengerController.php && php -l app/Http/Controllers/SupportController.php && php -l app/Services/SupportTicketService.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/UserFileController.php && php -l app/Http/Controllers/StoreController.php && php -l app/Http/Controllers/StoreLibraryController.php && php -l app/Http/Controllers/StoreCourseLearningController.php && php -l app/Jobs/ProcessProductDocument.php && php -l app/Jobs/RunStorageBackupJob.php && php -l app/Console/Commands/RunStorageBackup.php && php -l app/Console/Commands/TransferPendingStorageFiles.php && php -l app/Console/Commands/CheckStorageVolumes.php && php -l app/Console/Commands/VerifyStorageBackup.php && php -l app/Console/Commands/CleanupDeferredStorageDeletes.php && php -l app/Console/Commands/RestoreStorageBackup.php && php -l tests/Feature/StorageCoreTest.php && php -l database/migrations/2026_11_10_000009_allow_storage_staging_without_remote_volume.php && php -l database/migrations/2026_11_10_000010_add_object_count_to_storage_volumes.php
+        run: php -l app/Http/Controllers/ManagedStoragePublicController.php && php -l app/Console/Commands/MigrateLegacyProductAssets.php && php -l app/Console/Commands/MigrateLegacyEditorAssets.php && php -l database/migrations/2026_11_10_000011_add_storage_file_key_hash.php && php -l app/Services/Storage/S3CompatibleAdapter.php && php -l app/Services/Storage/StoragePath.php && php -l app/Services/Storage/StorageManager.php && php -l app/Services/Storage/StorageTransferService.php && php -l app/Services/Storage/StorageBackupService.php && php -l app/Services/StorageConnectionService.php && php -l app/Services/UserFileRetentionService.php && php -l app/Http/Controllers/AdminStorageController.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/AdminCourseController.php && php -l app/Http/Controllers/MessengerController.php && php -l app/Http/Controllers/SupportController.php && php -l app/Services/SupportTicketService.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/UserFileController.php && php -l app/Http/Controllers/StoreController.php && php -l app/Http/Controllers/StoreLibraryController.php && php -l app/Http/Controllers/StoreCourseLearningController.php && php -l app/Jobs/ProcessProductDocument.php && php -l app/Jobs/RunStorageBackupJob.php && php -l app/Console/Commands/RunStorageBackup.php && php -l app/Console/Commands/TransferPendingStorageFiles.php && php -l app/Console/Commands/CheckStorageVolumes.php && php -l app/Console/Commands/VerifyStorageBackup.php && php -l app/Console/Commands/CleanupDeferredStorageDeletes.php && php -l app/Console/Commands/RestoreStorageBackup.php && php -l tests/Feature/StorageCoreTest.php && php -l database/migrations/2026_11_10_000009_allow_storage_staging_without_remote_volume.php && php -l database/migrations/2026_11_10_000010_add_object_count_to_storage_volumes.php && php -l app/Console/Commands/RecoverStaleBackupRuns.php && php -l app/Http/Controllers/ReadinessController.php && php -l routes/web.php && php -l tests/Feature/ReadinessCheckTest.php && php -l tests/Feature/RunStorageBackupCommandTest.php && php -l tests/Feature/RunStorageBackupJobTest.php && php -l tests/Feature/StorageBackupExecutionLockTest.php && php -l tests/Feature/StorageBackupRecoveryTest.php && php -l app/Console/Commands/BackendHealthCheck.php && php -l tests/Feature/BackendHealthCheckTest.php && php -l bootstrap/app.php && bash -n scripts/ops/health-check.sh
       - run: node --check public/js/editor-core.js
       - run: node --check public/js/editor-agent.js
       - run: node --check public/js/editor-layout.js
@@ -99,6 +95,49 @@ jobs:
           FARAST_SKIP_ADMIN_E2E: '1'
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
+
+  audit-mysql-integrity:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: farast_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: printf '%s\\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=mysql' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' 'DB_DATABASE=farast_test' 'DB_USERNAME=root' 'DB_PASSWORD=root' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate --force
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: farast_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|FarastFeedbackEvidenceSchemaTest'
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: farast_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
 
   reader-browser-regression:
     if: ${{ always() && needs.laravel.result == 'failure' }}
