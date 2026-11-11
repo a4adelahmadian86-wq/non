@@ -247,10 +247,18 @@ class AuthorizationService
         }
 
         $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
-        $assignments = $this->activeAssignments($actor);
-        $actorScope = $assignments->isNotEmpty()
-            ? $assignments->pluck('scope')->sortBy(fn ($value) => $rank[$value] ?? 4)->first()
-            : $this->legacyScope($actor);
+        $accessPermissionId = $this->permissionId('access.manage');
+        $manageableAssignments = $accessPermissionId === null
+            ? collect()
+            : $this->activeAssignments($actor)->filter(
+                fn (object $assignment): bool => RolePermission::query()
+                    ->where('role', $assignment->role_key)
+                    ->where('permission_id', $accessPermissionId)
+                    ->exists()
+            );
+        $actorScope = $manageableAssignments->isNotEmpty()
+            ? $manageableAssignments->pluck('scope')->sortBy(fn ($value) => $rank[$value] ?? 4)->first()
+            : ($this->activeAssignments($actor)->isEmpty() ? $this->legacyScope($actor) : 'own');
 
         if (! isset($rank[$actorScope]) || $rank[$scope] < $rank[$actorScope]) {
             return false;
