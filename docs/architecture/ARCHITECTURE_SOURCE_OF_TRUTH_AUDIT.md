@@ -1164,3 +1164,25 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 تا تکمیل این checkها، نتیجه تست جدید را موفق اعلام نکنید. در اجرای قبلی همین شاخه، Phase 3 موفق بود؛ اما آن نتیجه مربوط به HEAD قبلی است و برای HEAD جدید قابل انتقال نیست.
 
 **وضعیت مرحله دوم پس از این تکمیل:** inventoryهای ایستا اکنون شامل ۳۳۴ Route، ۱۰۴ Model، ۱۱۴ Migration، ۱۱۲ Service، ۵۱ Controller/Trait، ماتریس ۱۳ حوزه قابلیت و سطح View/API هستند. گیت‌های runtime، schema واقعی و CI همچنان بازند؛ بنابراین مرحله برای پذیرش نهایی هنوز بسته نشده است.
+
+
+## 26. یافته جدید: Route گزارش پشتیبانی از قرارداد بخش مدیریتی پیروی نمی‌کند
+
+**شواهد main:**
+- `routes/support_extra.php` گروه `/admin` را با `auth + admin` باز می‌کند.
+- `GET /admin/communications` صریحاً `admin.section:support_admin` دارد.
+- `GET /admin/support-report` با نام `admin.support.report` همان گروه را به ارث می‌برد، اما middleware بخش روی آن ثبت نشده است.
+- `config/farast_admin.php` بخش `support_admin` را با `support.manage` و `min_scope=global` تعریف کرده است.
+- `SupportReportController::__invoke` علاوه بر middleware، مستقیماً `auth()->user()?->isAdmin()` را enforce می‌کند.
+
+**تفسیر:** این مورد در main فعلاً به معنی دسترسی گسترده به همه dashboard roles نیست، چون Controller یک guard مستقیم super-admin دارد؛ اما این guard مسیر RBAC/section مرکزی را دور می‌زند و با قرارداد تعریف‌شده `support_admin` ناسازگار است. در نتیجه کاربر دارای مجوز و Scope معتبر ممکن است بی‌جهت رد شود و audit مسیر دسترسی در دو محل متفاوت بماند.
+
+**اقدام مرحله بعد:** پس از تثبیت هسته Authorization، middleware route باید `admin.section:support_admin` داشته باشد و guard داخلی Controller به قرارداد مرکزی منتقل شود؛ تست مثبت برای support manager global و تست منفی برای role فاقد مجوز و scope محدود لازم است. در این مرحله فقط یافته ثبت شد؛ کد همکار/عملیاتی تغییر داده نشد.
+
+## 27. شمارش ماشینی Routeهای مدیریتی فاقد section gate
+
+از ۳۳۴ ردیف Route inventory، **۴۰ Route** با middleware گروهی `auth, admin` و بدون `admin.section:*` شناسایی شدند:
+- ۳۹ Route در سطح Store Admin شامل catalog CRUD، فایل، preview، AI supervisor، AI content، course sections/lessons/resources و product operations؛
+- ۱ Route گزارش پشتیبانی با نام `admin.support.report`.
+
+برای Store Admin، نبود section gate با نبود guard داخلی یکپارچه در Controllerهای CRUD/review همراه است و ریسک دسترسی واقعی دارد. برای گزارش پشتیبانی، guard داخلی `isAdmin()` وجود دارد اما با RBAC مرکزی هم‌راستا نیست. این دو مورد باید جداگانه و با آزمون منفی/مثبت رفع شوند؛ یک اصلاح گروهی بدون تست route-level کافی نیست.
