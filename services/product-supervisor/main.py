@@ -80,6 +80,7 @@ class ReviewResponse(BaseModel):
     findings: list[Finding]
     model: str
     generated_at: str
+    suggested_edits: dict[str, str] = Field(default_factory=dict)
     automated_publication: Literal[False] = False
 
 
@@ -664,6 +665,9 @@ async def review_product(snapshot: ProductSnapshot):
             "If description_truncated is true, review only the supplied excerpt and do not assume omitted text is absent.",
             "Return concise, actionable Persian findings. Empty findings are allowed when no issue is found.",
             "A verdict of approved means no material issue was found in the supplied snapshot; it never publishes the product.",
+            "When verdict is needs_changes, propose conservative suggested_edits only for title, short_description, description, seo_title, and seo_description. Use only facts supported by the supplied snapshot and evidence-backed document knowledge. Remove exaggeration, ambiguity, unsupported promises, and misleading wording; preserve correct content and tone.",
+            "Never invent facts, guarantees, certifications, outcomes, compatibility, pricing, discounts, licensing rights, or product features. Never change category, price, files, legal status, or product type. If a safe correction cannot be grounded, return an empty suggested_edits object.",
+            "Suggested edits are proposals for human review, not publication approval. Never publish or imply that a human approval has occurred.",
             "Never request or infer personal customer data, secrets, credentials, or payment details.",
         ],
         "selected_checks": snapshot.checks,
@@ -682,6 +686,13 @@ async def review_product(snapshot: ProductSnapshot):
                     "recommendation": "Persian next action",
                 }
             ],
+            "suggested_edits": {
+                "title": "optional corrected Persian title",
+                "short_description": "optional corrected short description",
+                "description": "optional corrected description",
+                "seo_title": "optional corrected SEO title",
+                "seo_description": "optional corrected SEO description"
+            },
         },
     }
 
@@ -767,6 +778,26 @@ async def review_product(snapshot: ProductSnapshot):
     summary = str(result.get("summary") or "بررسی انجام شد؛ نتیجه را با بازبینی انسانی نهایی کنید.")[:700]
     if blockers:
         summary = "انتشار محصول به دلیل یک یا چند الزام قطعی متوقف است. " + summary
+
+    allowed_edit_lengths = {
+        "title": 220,
+        "short_description": 2000,
+        "description": 8000,
+        "seo_title": 220,
+        "seo_description": 320,
+    }
+    suggested_edits: dict[str, str] = {}
+    raw_edits = result.get("suggested_edits", {})
+    if verdict == "needs_changes" and not blockers and isinstance(raw_edits, dict):
+        for field, raw_value in raw_edits.items():
+            if field not in allowed_edit_lengths or not isinstance(raw_value, str):
+                continue
+            corrected, _ = redact_sensitive_content(raw_value)
+            corrected = corrected.strip()[:allowed_edit_lengths[field]]
+            original = str(safe_snapshot.get(field) or "").strip()
+            if len(corrected) >= 2 and corrected != original:
+                suggested_edits[field] = corrected
+
     return ReviewResponse(
         review_id=str(uuid.uuid4()),
         product_id=snapshot.product_id,
@@ -774,6 +805,7 @@ async def review_product(snapshot: ProductSnapshot):
         score=score,
         summary=summary,
         findings=findings,
+        suggested_edits=suggested_edits,
         model=model,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
