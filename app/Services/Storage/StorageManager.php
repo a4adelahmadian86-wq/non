@@ -74,6 +74,55 @@ class StorageManager
         ]);
     }
 
+    public function storeContents(
+        string $contents,
+        string $originalName,
+        string $mime,
+        string $classification,
+        string $sourceModule,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $productId = null,
+        string $visibility = 'private'
+    ): array {
+        $originalName = basename(str_replace('\\', '/', trim($originalName)));
+        if ($originalName === '' || $originalName === '.' || $originalName === '..') {
+            throw new RuntimeException('نام فایل برای ذخیره‌سازی معتبر نیست.');
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-storage-content-');
+        if (! is_string($temporaryPath)) {
+            throw new RuntimeException('ساخت فایل موقت برای ذخیره محتوا ناموفق بود.');
+        }
+
+        try {
+            $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
+            if (! is_int($written) || $written !== strlen($contents)) {
+                throw new RuntimeException('نوشتن کامل محتوای فایل موقت ناموفق بود.');
+            }
+
+            $upload = new UploadedFile(
+                $temporaryPath,
+                $originalName,
+                $mime !== '' ? $mime : 'application/octet-stream',
+                UPLOAD_ERR_OK,
+                true
+            );
+
+            return $this->storeUploadedFile(
+                $upload,
+                $classification,
+                $sourceModule,
+                $sourceType,
+                $sourceId,
+                $productId,
+                $visibility
+            );
+        } finally {
+            @unlink($temporaryPath);
+        }
+    }
+
     public function adoptExistingPrivate(
         string $path,
         string $originalName,
