@@ -214,4 +214,94 @@ class StorageCoreTest extends TestCase
         $storage->delete($private['disk'], $private['path']);
     }
 
+
+    public function test_rebinding_a_restored_remote_file_releases_the_old_volume_counters(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran restore source', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('restore.txt', 'restore-content'),
+            StorageManager::CRITICAL,
+            'restore-test'
+        );
+        $stagingPath = 'restore-recovery/'.$stored['managed_file_id'].'/restore.txt';
+        Storage::disk('private')->put($stagingPath, 'restore-content');
+
+        $managed = StorageManagedFile::findOrFail($stored['managed_file_id']);
+        app(StorageTransferService::class)->rebindToStaging($managed, $stagingPath);
+
+        $volume->refresh();
+        $managed->refresh();
+        $this->assertSame(0, $volume->used_bytes);
+        $this->assertSame(0, $volume->object_count);
+        $this->assertNull($managed->storage_volume_id);
+        $this->assertSame('pending_transfer', $managed->status);
+        $this->assertSame($stagingPath, $managed->file_key);
+        $this->assertSame('private', data_get($managed->metadata, 'disk'));
+    }
+
+    public function test_staged_transfer_is_claimed_once_and_updates_inventory_once(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'foreign_primary', 'name' => 'Foreign transfer target', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $key = 'transfer-tests/one-file.txt';
+        $contents = 'exactly-once-transfer';
+        Storage::disk('private')->put($key, $contents);
+        $managed = StorageManagedFile::create([
+            'storage_volume_id' => null,
+            'drive_key' => 'foreign_primary',
+            'file_key' => $key,
+            'file_key_hash' => hash('sha256', $key),
+            'original_name' => 'one-file.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => strlen($contents),
+            'checksum' => hash('sha256', $contents),
+            'classification' => 'non_critical',
+            'source_module' => 'transfer-test',
+            'visibility' => 'private',
+            'status' => 'pending_transfer',
+            'metadata' => [
+                'disk' => 'private',
+                'staging_disk' => 'private',
+                'target_drive' => 'foreign_primary',
+                'reference_pending' => false,
+            ],
+        ]);
+
+        $transfer = app(StorageTransferService::class);
+        $this->assertSame(1, $transfer->transferPending());
+        $managed->refresh();
+        $volume->refresh();
+
+        $this->assertSame('active', $managed->status);
+        $this->assertSame($volume->id, $managed->storage_volume_id);
+        $this->assertSame('storage_volume:'.$volume->id, data_get($managed->metadata, 'disk'));
+        $this->assertSame(strlen($contents), $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+        $this->assertFalse(Storage::disk('private')->exists($key));
+        $this->assertSame(0, $transfer->transferPending());
+
+        $volume->refresh();
+        $this->assertSame(strlen($contents), $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+    }
+
+    public function test_storage_volume_paths_reject_parent_directory_segments(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran path guard', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $this->expectException(\\InvalidArgumentException::class);
+        app(StorageManager::class)->exists('storage_volume:'.$volume->id, '../outside.txt');
+    }
+
 }
