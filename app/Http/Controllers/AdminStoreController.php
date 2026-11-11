@@ -114,12 +114,22 @@ class AdminStoreController extends Controller
             });
         $attentionCount = (clone $attentionQuery)->count();
         $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
-        $supervisorConfigured = app(\App\Services\ProductSupervisorClient::class)->configured();
+        $supervisorConfigured = app(\\App\\Services\\ProductSupervisorClient::class)->configured();
+        $canManagePublication = app(\\App\\Services\\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.products.publish');
+        $publicationQueue = StoreProductPublicationReview::query()
+            ->with(['product:id,title,type,status', 'submitter:id,name'])
+            ->whereIn('status', [StoreProductPublicationReview::STATUS_PENDING_AI, StoreProductPublicationReview::STATUS_PENDING_MANAGER])
+            ->when(! $canManagePublication, fn ($query) => $query->where('submitted_by', auth()->id()))
+            ->orderByRaw("CASE WHEN status = 'pending_manager' THEN 0 ELSE 1 END")
+            ->orderBy('created_at')
+            ->limit(30)
+            ->get();
 
         return view('admin.store.index', compact(
             'products', 'categories', 'q', 'type', 'status', 'categoryId', 'sort', 'stats',
             'processingStats', 'ingestionStats', 'queueStats', 'attentionCount', 'attentionDocuments',
-            'supervisorConfigured'
+            'supervisorConfigured', 'publicationQueue', 'canManagePublication'
         ));
     }
 
