@@ -321,6 +321,21 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_admin_break_glass_honors_explicitly_narrowed_record_scope(): void
+    {
+        $admin = $this->user('09140000131', User::ROLE_ADMIN);
+        $other = $this->user('09140000132');
+
+        $this->actingAs($admin);
+        request()->attributes->set('farast.scope', 'own');
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allows($admin, 'documents.view'));
+        $this->assertTrue($authorization->allowsFor($admin, 'documents.view', ['owner_id' => $admin->id]));
+        $this->assertFalse($authorization->allowsFor($admin, 'documents.view', ['owner_id' => $other->id]));
+        $this->assertFalse($authorization->explain($admin, 'documents.view', ['owner_id' => $other->id])['allowed']);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
