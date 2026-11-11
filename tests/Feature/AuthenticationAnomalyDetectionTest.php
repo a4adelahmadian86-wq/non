@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Auth\Events\Failed as AuthenticationFailed;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +13,7 @@ use Tests\TestCase;
 
 class AuthenticationAnomalyDetectionTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_repeated_authentication_failures_emit_threshold_alerts_without_logging_ip_or_credentials(): void
     {
         Cache::flush();
