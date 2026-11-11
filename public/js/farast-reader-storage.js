@@ -1,10 +1,9 @@
 (()=>{'use strict';
 if(window.FarastReaderDurableStore)return;
 const DB_NAME='farast-reader-device-data',DB_VERSION=1,STORE='records';
-let databasePromise=null,persistPromise=null;
+let databasePromise=null,databaseInstance=null,persistPromise=null;
 const invalidateDatabase=db=>{
- if(db&&databasePromise){databasePromise.then(current=>{if(current===db)databasePromise=null;}).catch(()=>{databasePromise=null;});}
- else databasePromise=null;
+ if(!db||databaseInstance===db){databaseInstance=null;databasePromise=null;}
  try{db?.close();}catch(_){}
 };
 const open=()=>{
@@ -18,6 +17,7 @@ const open=()=>{
   };
   request.onsuccess=()=>{
    const db=request.result;
+   databaseInstance=db;
    db.onversionchange=()=>invalidateDatabase(db);
    window.dispatchEvent(new Event('farast:storage-database-ready'));
    resolve(db);
