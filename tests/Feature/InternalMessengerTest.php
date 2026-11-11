@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class InternalMessengerTest extends TestCase
@@ -28,6 +29,27 @@ class InternalMessengerTest extends TestCase
             'organization_id' => $organization->id,
             'role' => User::ROLE_EMPLOYEE,
             'is_blocked' => false,
+        ]);
+    }
+
+    private function denyPermission(User $user, string $permission): void
+    {
+        $permissionId = (int) DB::table('permissions')->where('key', $permission)->value('id');
+        $this->assertGreaterThan(0, $permissionId);
+
+        DB::table('farast_user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => $permissionId,
+            'effect' => 'deny',
+            'scope_type' => 'own',
+            'scope_id' => null,
+            'conditions' => null,
+            'reason' => 'Central messenger permission regression test',
+            'starts_at' => null,
+            'expires_at' => null,
+            'created_by' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
@@ -201,4 +223,52 @@ class InternalMessengerTest extends TestCase
         $this->actingAs($customer)->get(route('messenger.index'))->assertForbidden();
         $this->actingAs($unassignedEmployee)->get(route('messenger.index'))->assertForbidden();
     }
+
+    public function test_messenger_use_permission_is_enforced_by_the_central_authorization_service(): void
+    {
+        $organization = $this->makeOrganization();
+        $employee = $this->makeEmployee($organization);
+        $this->denyPermission($employee, 'messenger.use');
+
+        $this->actingAs($employee)->get(route('messenger.index'))->assertForbidden();
+    }
+
+    public function test_messenger_invite_permission_is_enforced_by_the_central_authorization_service(): void
+    {
+        $organization = $this->makeOrganization();
+        $sender = $this->makeEmployee($organization);
+        $recipient = $this->makeEmployee($organization);
+        $this->denyPermission($sender, 'messenger.invite');
+
+        $this->actingAs($sender)->postJson(route('messenger.store'), [
+            'type' => 'direct',
+            'participant_ids' => [$recipient->id],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('conversations', 0);
+    }
+
+    public function test_group_membership_changes_require_central_group_management_permission(): void
+    {
+        $organization = $this->makeOrganization();
+        $owner = $this->makeEmployee($organization);
+        $member = $this->makeEmployee($organization);
+        $newMember = $this->makeEmployee($organization);
+
+        $this->actingAs($owner)->post(route('messenger.store'), [
+            'type' => 'group',
+            'title' => 'گروه آزمایشی',
+            'participant_ids' => [$member->id],
+        ])->assertRedirect();
+
+        $conversation = Conversation::query()->where('type', 'group')->firstOrFail();
+        $this->denyPermission($owner, 'messenger.group.manage');
+
+        $this->actingAs($owner)->post(route('messenger.participants.add', $conversation), [
+            'participant_ids' => [$newMember->id],
+        ])->assertStatus(422);
+
+        $this->assertSame(2, $conversation->participants()->count());
+    }
+
 }
