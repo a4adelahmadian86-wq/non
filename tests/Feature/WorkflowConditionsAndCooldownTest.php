@@ -541,7 +541,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
     public function test_condition_equality_does_not_use_php_loose_numeric_string_comparison(): void
     {
-        $evaluator = app(\\App\\Services\\WorkflowConditionEvaluator::class);
+        $evaluator = app(\App\Services\WorkflowConditionEvaluator::class);
         $context = ['ticket_code' => '0e12345'];
 
         $this->assertFalse($evaluator->matches([
