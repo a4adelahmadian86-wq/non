@@ -5,6 +5,7 @@ namespace App\Services\Storage;
 use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -37,23 +38,52 @@ class StorageManager
         // never spill into a foreign region, and a non-critical file cannot
         // consume the Iranian primary pool.
         foreach ($volumes as $volume) {
+            $reservationKey = $this->reserveVolumeCapacity($volume, (int) $file->getSize(), 'upload', [
+                'object_key' => $key,
+            ]);
+            if ($reservationKey === null) {
+                continue;
+            }
+
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
                 $this->verifyWrittenObject($volume, $key, $checksum);
-                try {
-                    return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
-                } catch (\Throwable $exception) {
-                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
-                    else @unlink($this->localVolumePath($volume, $key));
-                    throw $exception;
-                }
+
+                return $this->register(
+                    $volume,
+                    $key,
+                    $file,
+                    $checksum,
+                    $classification,
+                    $sourceModule,
+                    $sourceType,
+                    $sourceId,
+                    $productId,
+                    $visibility,
+                    'active',
+                    [],
+                    $reservationKey
+                );
             } catch (\Throwable $exception) {
+                $cleaned = false;
                 try {
-                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
-                    elseif ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $key));
+                    if ($volume->driver === 's3') {
+                        $this->s3->delete($volume, $key);
+                    } elseif ($volume->driver === 'local') {
+                        $localPath = $this->localVolumePath($volume, $key);
+                        if (is_file($localPath) && ! @unlink($localPath)) {
+                            throw new RuntimeException('پاک‌سازی فایل ناقص مقصد ناموفق بود.');
+                        }
+                    }
+                    $cleaned = true;
                 } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                 }
+
+                if ($cleaned) {
+                    $this->releaseVolumeCapacityReservation($reservationKey);
+                }
+
                 $volume->forceFill([
                     'status' => 'error',
                     'last_checked_at' => now(),
@@ -269,6 +299,7 @@ class StorageManager
 
     public function cleanupDeferredDeletes(int $limit = 100): int
     {
+        $this->cleanupExpiredVolumeReservations(max(1, $limit));
         if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(8))->exists()) return 0;
         $files = StorageManagedFile::query()->where('status', 'delete_pending')->orderBy('id')->limit(max(1, $limit))->get();
         foreach ($files as $file) {
@@ -342,6 +373,116 @@ class StorageManager
     public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
     {
         $this->writeToVolume($volume, StoragePath::normalizeObjectKey($key), $localPath);
+    }
+
+    public function reserveVolumeCapacity(StorageVolume $volume, int $bytes, string $purpose, array $metadata = []): ?string
+    {
+        if ($bytes < 0) {
+            throw new RuntimeException('اندازه رزرو فضای ذخیره‌سازی معتبر نیست.');
+        }
+
+        return DB::transaction(function () use ($volume, $bytes, $purpose, $metadata): ?string {
+            $locked = StorageVolume::query()->lockForUpdate()->find($volume->id);
+            if (! $locked || ! $locked->is_active || $locked->status !== 'healthy') {
+                return null;
+            }
+
+            if ($locked->max_file_bytes !== null && $bytes > (int) $locked->max_file_bytes) {
+                return null;
+            }
+
+            $reservedBytes = (int) StorageVolumeReservation::query()
+                ->where('storage_volume_id', $locked->id)
+                ->sum('reserved_bytes');
+            $reservedObjects = (int) StorageVolumeReservation::query()
+                ->where('storage_volume_id', $locked->id)
+                ->sum('reserved_objects');
+
+            if ($locked->capacity_bytes !== null
+                && ((int) $locked->used_bytes + $reservedBytes + $bytes) > (int) $locked->capacity_bytes) {
+                return null;
+            }
+
+            if ($locked->file_limit !== null
+                && ((int) $locked->object_count + $reservedObjects + 1) > (int) $locked->file_limit) {
+                return null;
+            }
+
+            $key = (string) Str::uuid();
+            StorageVolumeReservation::create([
+                'storage_volume_id' => $locked->id,
+                'reservation_key' => $key,
+                'reserved_bytes' => $bytes,
+                'reserved_objects' => 1,
+                'purpose' => mb_substr($purpose, 0, 40),
+                'metadata' => array_merge($metadata, [
+                    'driver' => $locked->driver,
+                    'disk' => $this->volumeDisk($locked),
+                ]),
+                'expires_at' => now()->addHours(2),
+            ]);
+
+            return $key;
+        });
+    }
+
+    public function commitVolumeCapacityReservation(string $reservationKey): void
+    {
+        DB::transaction(function () use ($reservationKey): void {
+            $reservation = StorageVolumeReservation::query()
+                ->where('reservation_key', $reservationKey)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $volume = StorageVolume::query()->lockForUpdate()->findOrFail($reservation->storage_volume_id);
+            $volume->increment('used_bytes', (int) $reservation->reserved_bytes);
+            $volume->increment('object_count', (int) $reservation->reserved_objects);
+            $reservation->delete();
+        });
+    }
+
+    public function releaseVolumeCapacityReservation(string $reservationKey): void
+    {
+        StorageVolumeReservation::query()->where('reservation_key', $reservationKey)->delete();
+    }
+
+    public function cleanupExpiredVolumeReservations(int $limit = 100): int
+    {
+        $reservations = StorageVolumeReservation::query()
+            ->where('expires_at', '<=', now())
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get();
+
+        $cleaned = 0;
+        foreach ($reservations as $reservation) {
+            try {
+                $volume = StorageVolume::find($reservation->storage_volume_id);
+                $key = (string) data_get($reservation->metadata, 'object_key', '');
+                if ($volume && $key !== '') {
+                    $key = StoragePath::normalizeObjectKey($key);
+                    if ($volume->driver === 'local') {
+                        $localPath = $this->localVolumePath($volume, $key);
+                        if (is_file($localPath) && ! @unlink($localPath)) {
+                            throw new RuntimeException('پاک‌سازی فایل رزروشده منقضی‌شده ناموفق بود.');
+                        }
+                    } elseif ($volume->driver === 's3') {
+                        $this->s3->delete($volume, $key);
+                    }
+                }
+
+                DB::transaction(function () use ($reservation): void {
+                    StorageVolumeReservation::query()
+                        ->whereKey($reservation->id)
+                        ->lockForUpdate()
+                        ->delete();
+                });
+                $cleaned++;
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return $cleaned;
     }
 
     public function volumeDisk(StorageVolume $volume): string
@@ -418,9 +559,10 @@ class StorageManager
         ?int $productId,
         string $visibility,
         string $status,
-        array $metadata = []
+        array $metadata = [],
+        ?string $reservationKey = null
     ): array {
-        return DB::transaction(function () use ($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, $status, $metadata): array {
+        return DB::transaction(function () use ($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, $status, $metadata, $reservationKey): array {
             $disk = $volume ? $this->volumeDisk($volume) : 'private';
             $record = StorageManagedFile::create([
                 'storage_volume_id' => $volume?->id,
@@ -442,8 +584,24 @@ class StorageManager
             ]);
 
             if ($volume) {
-                $volume->increment('used_bytes', (int) $file->getSize());
-                $volume->increment('object_count');
+                if ($reservationKey !== null) {
+                    $reservation = StorageVolumeReservation::query()
+                        ->where('reservation_key', $reservationKey)
+                        ->where('storage_volume_id', $volume->id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+                    if ((int) $reservation->reserved_bytes !== (int) $file->getSize()) {
+                        throw new RuntimeException('رزرو ظرفیت با اندازه فایل مطابقت ندارد.');
+                    }
+
+                    $lockedVolume = StorageVolume::query()->lockForUpdate()->findOrFail($volume->id);
+                    $lockedVolume->increment('used_bytes', (int) $reservation->reserved_bytes);
+                    $lockedVolume->increment('object_count', (int) $reservation->reserved_objects);
+                    $reservation->delete();
+                } else {
+                    $volume->increment('used_bytes', (int) $file->getSize());
+                    $volume->increment('object_count');
+                }
             }
 
             return [
