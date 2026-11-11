@@ -477,15 +477,40 @@ class AdminController extends Controller
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
 
-        $old = $user->role;
-        $user->update(['role' => $d['role']]);
-        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
+        // The generic role editor must never grant platform-owner privileges.
+        abort_if($d['role'] === User::ROLE_ADMIN && ! $user->isAdmin(), 403, 'ارتقای حساب به مدیر اصلی از این مسیر مجاز نیست.');
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
-                'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
-            ]);
-        }
+        $old = $user->role;
+        DB::transaction(function () use ($request, $user, $d, $audit, &$old): void {
+            $current = User::query()->whereKey($user->id)->firstOrFail();
+
+            if ($current->isAdmin() && $d['role'] !== User::ROLE_ADMIN && ! $current->is_blocked) {
+                // Lock active administrator rows in a stable order. Concurrent
+                // demotions serialize on this same set, preventing the last
+                // active administrator from being removed by two requests.
+                $activeAdmins = User::query()
+                    ->where('role', User::ROLE_ADMIN)
+                    ->where('is_blocked', false)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get(['id']);
+
+                abort_if($activeAdmins->count() <= 1, 409, 'تنها مدیر اصلی فعال سامانه قابل تنزل نیست؛ ابتدا مدیر اصلی دیگری تعیین کنید.');
+                $current = $activeAdmins->firstWhere('id', $user->id) ?? $current;
+            } else {
+                $current = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            }
+
+            $old = $current->role;
+            $current->update(['role' => $d['role']]);
+
+            if (Schema::hasTable('audit_logs')) {
+                $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
+                    'target_user_id' => $current->id, 'from' => $old, 'to' => $d['role'],
+                ]);
+            }
+        });
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', "نقش کاربر «{$user->name}» از {$old} به {$d['role']} تغییر کرد.");
     }
