@@ -51,6 +51,7 @@ class StorageCoreTest extends TestCase
 
     public function test_unknown_file_classification_is_rejected_without_storing_or_staging_the_file(): void
     {
+        Storage::fake('private');
         try {
             app(StorageManager::class)->storeUploadedFile(
                 UploadedFile::fake()->createWithContent('misclassified.txt', 'must-not-leave-region'),
