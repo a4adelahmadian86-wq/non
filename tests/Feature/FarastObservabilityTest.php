@@ -18,6 +18,18 @@ use Tests\TestCase;
 class FarastObservabilityTest extends TestCase
 {
     use RefreshDatabase;
+    public function test_trace_context_is_scoped_and_cannot_leak_between_worker_lifecycles(): void
+    {
+        $first = app(\\App\\Services\\FarastTraceContext::class);
+        $first->set('request-one', 'correlation-one');
+
+        $this->app->forgetScopedInstances();
+
+        $second = app(\\App\\Services\\FarastTraceContext::class);
+        $this->assertNotSame($first, $second);
+        $this->assertSame(['request_id' => null, 'correlation_id' => null], $second->current());
+    }
+
     public function test_it_preserves_bounded_safe_trace_identifiers(): void
     {
         Log::spy();
