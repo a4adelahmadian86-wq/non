@@ -45,7 +45,7 @@ if (! array_filter($phpunitCandidates, 'is_file')) {
     $failures[] = 'PHPUnit is missing. Install development dependencies with composer install (do not use --no-dev).';
 }
 
-if (is_file($autoload) && ! class_exists(Tests\\TestCase::class)) {
+if (is_file($autoload) && ! class_exists(Tests\TestCase::class)) {
     $failures[] = 'Tests\\TestCase is not autoloadable. Check Composer PSR-4 mapping and install require-dev dependencies.';
 }
 
