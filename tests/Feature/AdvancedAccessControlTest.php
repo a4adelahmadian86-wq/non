@@ -331,6 +331,9 @@ class AdvancedAccessControlTest extends TestCase
         $organization = Organization::create(['name' => 'Capability Admin Org', 'slug' => 'capability-admin-org', 'status' => 'active']);
         $manager = $this->user('09140000147', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
         $target = $this->user('09140000148', User::ROLE_EMPLOYEE, $organization->id);
+        $viewRole = $this->role('capability-customer-view', 'organization', $organization->id);
+        $this->grant($viewRole, 'users.view', 'organization');
+        $this->assign($manager, $viewRole, 'organization', $organization->id);
         $roleId = $this->role('capability-administrator', 'organization', $organization->id);
         $this->grant($roleId, 'users.capabilities.manage', 'organization');
         $this->assign($manager, $roleId, 'organization', $organization->id);
