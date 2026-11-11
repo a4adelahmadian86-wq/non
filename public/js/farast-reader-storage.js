@@ -22,7 +22,7 @@ const open=()=>{
    resolve(db);
   };
   request.onerror=()=>reject(request.error||new Error('IndexedDB open failed'));
-  request.onblocked=()=>reject(new Error('IndexedDB upgrade is blocked by another open reader tab'));
+  request.onblocked=()=>window.dispatchEvent(new CustomEvent('farast:storage-blocked'));
  });
  databasePromise=pending;
  pending.catch(()=>{if(databasePromise===pending)databasePromise=null;});
