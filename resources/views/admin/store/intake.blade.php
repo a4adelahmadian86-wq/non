@@ -7,6 +7,7 @@
     data-preflight-url-template="{{ route('admin.store.intakes.files.preflight', ['session' => '__SESSION__']) }}"
     data-confirm-url-template="{{ route('admin.store.intakes.files.confirm', ['session' => '__SESSION__', 'ingestionId' => '__INGESTION__']) }}"
     data-cancel-url-template="{{ route('admin.store.intakes.files.cancel', ['session' => '__SESSION__', 'ingestionId' => '__INGESTION__']) }}"
+    data-primary-url-template="{{ route('admin.store.intakes.files.primary', ['session' => '__SESSION__', 'ingestionId' => '__INGESTION__']) }}"
     data-details-url-template="{{ route('admin.store.intakes.details', '__SESSION__') }}">
     <div class="store-container">
         <header class="store-section-head">
