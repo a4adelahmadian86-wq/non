@@ -215,7 +215,7 @@ class RestoreStorageBackup extends Command
         if (! is_dir($source)) return;
 
         File::ensureDirectoryExists($destination);
-        $iterator = new \\RecursiveIteratorIterator(new \\RecursiveDirectoryIterator($source, \\FilesystemIterator::SKIP_DOTS));
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS);
         foreach ($iterator as $item) {
             if (! $item->isFile()) continue;
             $relative = ltrim(substr($item->getPathname(), strlen($source)), DIRECTORY_SEPARATOR);
