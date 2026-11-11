@@ -942,4 +942,25 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_workflow_queue_health_detects_delayed_financial_jobs_separately(): void
+    {
+        config(['queue.default' => 'database']);
+        $createdAt = now()->subMinutes(10)->getTimestamp();
+
+        DB::table('jobs')->insert([
+            'queue' => 'automation-critical',
+            'payload' => '{}',
+            'attempts' => 0,
+            'reserved_at' => null,
+            'available_at' => $createdAt,
+            'created_at' => $createdAt,
+        ]);
+
+        $this->assertSame(1, Artisan::call('farast:workflows:health'));
+        $output = Artisan::output();
+        $this->assertStringContainsString('critical_jobs=1', $output);
+        $this->assertStringContainsString('critical_queue_delay_seconds=', $output);
+        $this->assertStringContainsString('unhealthy', $output);
+    }
+
 }
