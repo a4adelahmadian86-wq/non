@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
 use Illuminate\Console\Command;
@@ -122,6 +123,16 @@ class RestoreStorageBackup extends Command
                     ]);
                 }
             });
+
+            $reservationCount = StorageVolumeReservation::query()->count();
+            StorageVolumeReservation::query()->update([
+                'status' => 'active',
+                'expires_at' => now(),
+            ]);
+            $storage->cleanupExpiredVolumeReservations(max(100, $reservationCount));
+            if (StorageVolumeReservation::query()->exists()) {
+                throw new RuntimeException('بازیابی کامل نشد؛ برخی رزروهای قدیمی فضای ذخیره‌سازی هنوز پاک‌سازی نشده‌اند.');
+            }
 
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
