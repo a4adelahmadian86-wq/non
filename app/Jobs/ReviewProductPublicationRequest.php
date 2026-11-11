@@ -21,7 +21,7 @@ class ReviewProductPublicationRequest implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 30;
     public int $timeout = 180;
 
     public function __construct(public readonly int $publicationReviewId)
@@ -54,6 +54,15 @@ class ReviewProductPublicationRequest implements ShouldQueue
 
         $product = StoreProduct::query()->with(['category', 'tags', 'files.document', 'course.sections.lessons.resources'])
             ->findOrFail($queueItem->product_id);
+        $pendingDocuments = DB::table('store_product_documents')
+            ->where('product_id', $product->id)
+            ->whereIn('processing_status', ['pending', 'processing'])
+            ->exists();
+        if ($pendingDocuments) {
+            $this->release(60);
+            return;
+        }
+
         $settings = [
             'enabled' => true,
             'mode' => 'review_gate',
