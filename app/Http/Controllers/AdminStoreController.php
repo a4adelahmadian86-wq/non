@@ -156,15 +156,45 @@ class AdminStoreController extends Controller
 
     public function create()
     {
+        return view('admin.store.intake');
+    }
+
+    public function intakeDetails(Request $request, StoreProductIntakeSession $session, StoreProductIntakeService $intake)
+    {
+        $intake->assertOwnedAndActive($session, $request->user());
+        $progress = $intake->progress($session);
+        abort_unless(
+            $session->status === 'files_reviewed'
+                && $progress['file_count'] > 0
+                && $progress['uploaded_count'] === $progress['file_count']
+                && $progress['review_completed_count'] === $progress['file_count'],
+            409,
+            'ابتدا همه فایل‌ها را بارگذاری کنید و تا پایان بررسی ناظر منتظر بمانید.'
+        );
+
+        $ingestions = $session->ingestions()
+            ->where('status', 'uploaded')
+            ->where('supervisor_status', 'completed')
+            ->get();
+        abort_unless($session->product_type !== 'digital_file' || $ingestions->where('is_primary', true)->count() === 1, 409, 'برای محصول فایل‌محور باید دقیقاً یک فایل اصلی مشخص شده باشد.');
+
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = collect();
+        $product = new StoreProduct([
+            'status' => 'draft',
+            'price_rials' => 0,
+            'preview_pages' => 3,
+            'type' => $session->product_type,
+        ]);
 
         return view('admin.store.form', [
-            'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
+            'product' => $product,
             'categories' => $categories,
             'tags' => $tags,
             'relatedProducts' => $relatedProducts,
+            'intakeMode' => true,
+            'intakeSession' => $session,
         ]);
     }
 
