@@ -9,9 +9,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->assertUniqueGatewayAuthorities();
+        $this->preflightIdempotencyKeys('orders');
+        $this->preflightIdempotencyKeys('payments');
+        $this->preflightGatewayAuthorities();
+        $this->preflightCoreReferences();
+
         $this->ensureIdempotencyColumn('orders', 'legacy-order-');
         $this->ensureIdempotencyColumn('payments', 'legacy-payment-');
+        $this->ensureGatewayAuthorityIndex();
 
         // Financial history must survive account, wallet, and order deletion.
         $this->restrictDelete('wallets', 'user_id', 'users');
@@ -20,7 +25,27 @@ return new class extends Migration
         $this->restrictDelete('payments', 'order_id', 'orders');
     }
 
-    private function assertUniqueGatewayAuthorities(): void
+    private function preflightIdempotencyKeys(string $tableName): void
+    {
+        if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, 'idempotency_key')) {
+            return;
+        }
+
+        $duplicates = DB::table($tableName)
+            ->select('idempotency_key')
+            ->whereNotNull('idempotency_key')
+            ->where('idempotency_key', '<>', '')
+            ->groupBy('idempotency_key')
+            ->havingRaw('COUNT(*) > 1')
+            ->limit(1)
+            ->exists();
+
+        if ($duplicates) {
+            throw new RuntimeException("Duplicate idempotency_key values already exist in {$tableName}; no schema or data was changed.");
+        }
+    }
+
+    private function preflightGatewayAuthorities(): void
     {
         if (! Schema::hasTable('payments')) {
             return;
@@ -39,12 +64,36 @@ return new class extends Migration
             ->first();
 
         if ($duplicate) {
-            throw new RuntimeException(
-                'Duplicate payment authority exists for gateway '.$duplicate->gateway
-                .'. Reconcile duplicate gateway attempts before applying payment integrity constraints.'
-            );
+            throw new RuntimeException('Duplicate payment authority exists for gateway '.$duplicate->gateway.'; no schema or data was changed.');
         }
+    }
 
+    private function preflightCoreReferences(): void
+    {
+        foreach ([
+            ['wallets', 'user_id', 'users'],
+            ['wallet_transactions', 'wallet_id', 'wallets'],
+            ['orders', 'user_id', 'users'],
+            ['payments', 'order_id', 'orders'],
+        ] as [$child, $column, $parent]) {
+            if (! Schema::hasTable($child) || ! Schema::hasTable($parent) || ! Schema::hasColumn($child, $column)) {
+                throw new RuntimeException("Cannot enforce financial retention: required relation {$child}.{$column} -> {$parent}.id is missing.");
+            }
+
+            $orphans = DB::table($child.' as child')
+                ->leftJoin($parent.' as parent', 'child.'.$column, '=', 'parent.id')
+                ->whereNotNull('child.'.$column)
+                ->whereNull('parent.id')
+                ->count();
+
+            if ($orphans > 0) {
+                throw new RuntimeException("Financial retention preflight failed: {$child}.{$column} has {$orphans} orphan reference(s); no schema or data was changed.");
+            }
+        }
+    }
+
+    private function ensureGatewayAuthorityIndex(): void
+    {
         $hasUniqueIndex = collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false)
                 && ($index['columns'] ?? []) === ['gateway', 'authority']
