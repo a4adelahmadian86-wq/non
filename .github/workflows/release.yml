@@ -14,6 +14,7 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -40,7 +41,7 @@ jobs:
       - name: Checkout exact main commit
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Require successful FARAST CI for this exact commit
@@ -51,13 +52,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          latest="$(gh run list --workflow farast-ci.yml --branch main --limit 1 --json headSha,conclusion,status)"
-          sha="$(jq -r '.[0].headSha // empty' <<<"$latest")"
-          conclusion="$(jq -r '.[0].conclusion // empty' <<<"$latest")"
-          status="$(jq -r '.[0].status // empty' <<<"$latest")"
-          if [[ "$sha" != "$EXPECTED_SHA" || "$conclusion" != "success" || "$status" != "completed" ]]; then
-            echo "::error::Latest FARAST CI is not successful for the exact release SHA."
-            echo "Expected: $EXPECTED_SHA; observed: $sha; status: $status; conclusion: $conclusion"
+          runs="$(gh run list --workflow farast-ci.yml --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status)"
+          if ! jq -e --arg sha "$EXPECTED_SHA" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<<"$runs" >/dev/null; then
+            echo "::error::No successful completed FARAST CI run exists for the exact release SHA."
+            echo "Expected SHA: $EXPECTED_SHA"
+            jq -r '.[] | [.headSha, .status, (.conclusion // "pending")] | @tsv' <<<"$runs" || true
             exit 1
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
