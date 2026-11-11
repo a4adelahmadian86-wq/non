@@ -4,7 +4,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 return new class extends Migration
 {
@@ -50,7 +49,7 @@ return new class extends Migration
     {
         if (Schema::hasTable('store_product_ingestions')
             && DB::table('store_product_ingestions')->whereNull('product_id')->whereNotNull('intake_session_id')->exists()) {
-            throw new RuntimeException('Cannot roll back intake sessions while product-less intake records still exist.');
+            throw new \RuntimeException('Cannot roll back intake sessions while product-less intake records still exist.');
         }
 
         Schema::table('store_product_ingestions', function (Blueprint $table) {
