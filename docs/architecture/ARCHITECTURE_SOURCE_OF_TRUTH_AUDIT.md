@@ -26,7 +26,7 @@
 | فایل‌های PHP در `app/Services` | 112 |
 | فایل‌های PHP در `app/Http/Controllers` | 51 (شامل ۱ Trait) |
 | Middlewareهای برنامه | 11 |
-| فایل‌های آزمون PHP / Browser | 110 PHP + 18 JS |
+| فایل‌های آزمون PHP / Browser | 110 PHP + 17 JS |
 
 درخت کامل Git در این نسخه 1,151 ورودی داشت. مسیر app/Services شامل 112 فایل PHP و 6 directory entry؛ مسیر app/Http/Controllers شامل 51 فایل PHP و یک directory entry؛ مسیر tests شامل 110 فایل PHP و 18 فایل JS است. این اعداد شمار فایل/ورودی‌اند، نه شمار قابلیت‌های سالم.
 
@@ -1129,3 +1129,38 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 ### وضعیت اجرای تست این PR
 
 در commit قبلی ممیزی، Phase 3 Commerce Tests با موفقیت پایان یافت؛ job اصلی `test` نتیجه `success` داشت. پس از گسترش `NotificationRouteOwnershipTest` برای assert کردن هر ۸ endpoint اعلان، commit جدید ایجاد شد و CI باید روی HEAD جدید دوباره اجرا شود. وضعیت queued/pending را قبولی تلقی نکنید.
+
+
+## 23. تکمیل ردیابی صفحه، API و تست
+
+برای بستن شکاف بین Route و سطح مصرف‌کننده، دو سند مکمل اضافه شدند:
+
+- `docs/architecture/CAPABILITY_TRACEABILITY_MATRIX.md`: ۱۳ حوزه اصلی را به جدول/مدل، سرویس، Controller/Route، Gate، تست‌های موجود و شکاف‌های اثبات‌نشده وصل می‌کند.
+- `docs/architecture/CONTROLLER_VIEW_API_SURFACE_INVENTORY.md`: ۵۱ فایل Controller/Trait را به Viewهای مستقیم، JSON/stream/download/redirect/back response surface متصل می‌کند.
+
+خط مبنای تعداد فایل‌های تست در HEAD فعلی main:
+- ۱۱۰ فایل PHP در Feature/Unit؛
+- ۱۷ فایل JavaScript در Browser؛
+- جمعاً ۱۲۷ فایل آزمون در مسیرهای بررسی‌شده.
+
+این عدد شمار فایل است، نه تعداد test method و نه نتیجه قبولی. ماتریس traceability عمداً شکاف‌های بدون تست منفی را باز نگه می‌دارد و ادعای پوشش کامل ۳۳۴ Route ندارد.
+
+## 24. اصلاح دقت استخراج Schema و Model
+
+در بازبینی مجدد inventoryها، دو نقص در خود سند شناسایی و اصلاح شد:
+
+1. ۴۷ ردیف Migration در نسخه قبلی برای index/unique ستونی عبارت مبهم `current column` داشتند. هر ۴۷ ردیف با خواندن Migration source بازبینی شدند و نام جدول/ستون یا مجموعه ستون‌ها ثبت شد؛ مورد dynamic loop در `2026_10_03_000001_create_farast_phase5_platform_layer.php` نیز به‌صورت صریح با فهرست ۱۱ جدول دارای `stable_id` یکتا ثبت شد. اکنون در inventory هیچ placeholder با عبارت `current column` باقی نمانده است.
+2. رابطه `Conversation::participants()` در inventory قبلی به علت طول فیلد بریده شده بود. فهرست کامل pivot columns شامل `role`, `last_read_message_id`, `read_at`, `muted_at`, `archived_at`, `joined_at`, `last_active_at`, `typing_until` و `withTimestamps` ثبت شد؛ فیلتر soft-delete در رابطه `messages()` نیز ثبت شد.
+
+این اصلاحات source inventory را دقیق‌تر می‌کنند، اما جایگزین introspection runtime نیستند.
+
+## 25. وضعیت اعتبارسنجی آخرین HEAD ممیزی
+
+پس از گسترش تست `NotificationRouteOwnershipTest` به هر ۸ endpoint اعلان و اضافه‌شدن دو inventory مکمل، CI روی HEAD جدید دوباره فعال شده است:
+- Phase 3 Commerce Tests: در snapshot فعلی در حالت pending/در صف؛
+- FARAST CI: jobهای Laravel و smoke در صف؛
+- Phase 4 Agent: در صف.
+
+تا تکمیل این checkها، نتیجه تست جدید را موفق اعلام نکنید. در اجرای قبلی همین شاخه، Phase 3 موفق بود؛ اما آن نتیجه مربوط به HEAD قبلی است و برای HEAD جدید قابل انتقال نیست.
+
+**وضعیت مرحله دوم پس از این تکمیل:** inventoryهای ایستا اکنون شامل ۳۳۴ Route، ۱۰۴ Model، ۱۱۴ Migration، ۱۱۲ Service، ۵۱ Controller/Trait، ماتریس ۱۳ حوزه قابلیت و سطح View/API هستند. گیت‌های runtime، schema واقعی و CI همچنان بازند؛ بنابراین مرحله برای پذیرش نهایی هنوز بسته نشده است.
