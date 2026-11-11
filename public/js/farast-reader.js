@@ -50,11 +50,12 @@
 
   let pdfjsPromise=null;
   const getPdfjs=()=>{
+    if(root.dataset.readerPdfEngine==='missing')return Promise.reject(new Error('PDF_ENGINE_MISSING'));
     if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
     if(!pdfjsPromise){
       pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
         .then(module=>{window.pdfjsLib=module;return module;})
-        .catch(error=>{pdfjsPromise=null;throw error;});
+        .catch(error=>{pdfjsPromise=null;if(error&&typeof error==='object')error.farastPdfEngineUnavailable=true;throw error;});
     }
     return pdfjsPromise;
   };
@@ -612,14 +613,14 @@
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
-        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,enableXfa:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
+        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
         loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
         pdfDoc=await loadingTask.promise;
       }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
-    }catch(error){showPdfError(error);}
+    }catch(error){if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
   };
 
   const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
@@ -671,10 +672,34 @@
     input.focus();
   };
 
+  const showNativePdfFallback=url=>{
+    const surface=activeArticle()?.querySelector('.farast-pdf-document');
+    if(!surface||!url)return false;
+    root.classList.add('is-native-pdf-fallback');
+    const notice=document.createElement('p');
+    notice.className='farast-pdf-native-notice';
+    notice.textContent='نمایشگر پیشرفته PDF روی این سرور نصب نیست؛ نمایشگر داخلی مرورگر فعال شد. برای جست‌وجو، نشانک و حاشیه‌نویسی کامل، موتور PDF محلی باید نصب شود.';
+    const frame=document.createElement('iframe');
+    frame.className='farast-pdf-native-frame';
+    frame.src=url;
+    frame.title='نمایش PDF با موتور داخلی مرورگر';
+    frame.loading='eager';
+    frame.referrerPolicy='no-referrer';
+    frame.setAttribute('allowfullscreen','');
+    surface.replaceChildren(notice,frame);
+    surface.style.display='block';
+    surface.style.width='100%';
+    surface.style.maxWidth='100%';
+    surface.style.minHeight='70vh';
+    surface.style.height='calc(100vh - 230px)';
+    return true;
+  };
+
   const showPdfError=error=>{
     const name=String(error?.name||'');
     let message='بارگذاری سند انجام نشد. اتصال را بررسی کنید یا فایل PDF دیگری را امتحان کنید.';
-    if(name==='InvalidPDFException'||name==='FormatError')message='ساختار این فایل PDF معتبر نیست یا بخشی از آن آسیب دیده است.';
+    if(error?.message==='PDF_ENGINE_MISSING')message='موتور PDF محلی روی این سرور کامل نصب نشده است؛ فایل‌های PDF.js، Worker، نقشه‌های CMap و فونت‌های استاندارد باید در مسیر محلی برنامه قرار داشته باشند.';
+    else if(name==='InvalidPDFException'||name==='FormatError')message='ساختار این فایل PDF معتبر نیست یا بخشی از آن آسیب دیده است.';
     else if(name==='MissingPDFException')message='فایل PDF دیگر در دسترس نیست یا نشانی آن معتبر نیست.';
     else if(name==='PasswordException')message='رمز عبور فایل PDF پذیرفته نشد یا دسترسی به سند ممکن نیست.';
     else if(name==='UnexpectedResponseException')message='سرور پاسخ قابل‌استفاده‌ای برای فایل PDF ارسال نکرد.';
@@ -685,12 +710,15 @@
       pdfLoading.replaceChildren();
       const text=document.createElement('p');
       text.textContent=message;
-      const retry=document.createElement('button');
-      retry.type='button';
-      retry.className='farast-pdf-retry';
-      retry.textContent='تلاش دوباره';
-      retry.addEventListener('click',()=>{pdfLoading.hidden=true;showItem(itemIndex).catch(showPdfError);});
-      pdfLoading.append(text,retry);
+      pdfLoading.append(text);
+      if(error?.message!=='PDF_ENGINE_MISSING'){
+        const retry=document.createElement('button');
+        retry.type='button';
+        retry.className='farast-pdf-retry';
+        retry.textContent='تلاش دوباره';
+        retry.addEventListener('click',()=>{pdfLoading.hidden=true;showItem(itemIndex).catch(showPdfError);});
+        pdfLoading.append(retry);
+      }
     }
     console.error('FARAST reader PDF error',error);
   };
