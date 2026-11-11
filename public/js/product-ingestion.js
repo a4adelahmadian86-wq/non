@@ -16,6 +16,7 @@
   const cancelButton = root.querySelector('[data-ingestion-cancel]');
   const closeButton = root.querySelector('[data-ingestion-close]');
   const primaryInput = root.querySelector('[data-ingestion-primary]');
+  const antivirusInput = root.querySelector('[data-ingestion-antivirus]');
   const csrf = root.querySelector('[data-ingestion-csrf]').value;
   const queueView = root.querySelector('[data-ingestion-queue]');
   const selectedView = root.querySelector('[data-ingestion-selected]');
@@ -26,6 +27,9 @@
   const state = {
     queue: [],
     rejected: [],
+    productId: root.dataset.productId || null,
+    nextUrlCandidate: null,
+    nextUrl: null,
     current: null,
     ingestionId: null,
     primaryForCurrent: false,
@@ -94,6 +98,7 @@
     state.current = file;
     state.ingestionId = null;
     state.archiveEntries = [];
+    if (antivirusInput) antivirusInput.checked = false;
     filename.textContent = file.webkitRelativePath || file.name;
     setProgress(0, '', false);
     report.innerHTML = '<p>فایل انتخاب شد. پیش از انتقال به قرنطینه، فهرست و مشخصات اولیه را بررسی کنید؛ هنوز چیزی آپلود یا ذخیره نشده است.</p>';
@@ -179,11 +184,15 @@
     const infoNotes = metadataNotes.map((item) =>
       '<div class="product-ingestion-info">' + escapeHtml(item) + '</div>'
     ).join('');
+    const antivirus = payload.antivirus || {requested: false, status: 'not_requested'};
+    const antivirusNote = antivirus.requested
+      ? '<div class="product-ingestion-info">اسکن آنتی‌ویروس ClamAV: ' + escapeHtml(antivirus.status === 'clean' ? 'پاک؛ بدون تشخیص' : antivirus.status) + (antivirus.version ? ' · ' + escapeHtml(antivirus.version) : '') + '</div>'
+      : '<div class="product-ingestion-info">اسکن آنتی‌ویروس تکمیلی درخواست نشد؛ بررسی ساختاری داخلی انجام شد.</div>';
 
     const hasWarnings = inspection.risk_level === 'warning' || findings.length > 0 || warnings.length > 0;
     report.innerHTML =
       '<h4>خلاصه بررسی سایت، بدون استفاده از هوش مصنوعی</h4>' +
-      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes + infoNotes +
+      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes + infoNotes + antivirusNote +
       '<p><strong>نتیجه بررسی:</strong> ' + (!inspection.safe
         ? 'فایل برای ذخیره‌سازی پذیرفته نشده است.'
         : (hasWarnings
@@ -194,6 +203,9 @@
   const processNext = async () => {
     if (state.busy || state.current || state.queue.length === 0) {
       updateQueue();
+      if (!state.busy && !state.current && state.queue.length === 0 && state.nextUrl) {
+        window.location.assign(state.nextUrl);
+      }
       return;
     }
     const file = state.queue.shift();
@@ -217,16 +229,22 @@
     form.append('file', file, file.name);
     state.primaryForCurrent = !!primaryInput.checked && !state.primaryCommitted;
     form.append('is_primary', state.primaryForCurrent ? '1' : '0');
+    form.append('security_scan', antivirusInput?.checked ? '1' : '0');
 
     try {
       setStep('upload', ['received']);
       setProgress(0, 'در حال انتقال فایل به قرنطینه خصوصی...');
-      const payload = await sendPreflight(root.dataset.preflightUrl, form, (percent, uploaded) => {
+      const preflightUrl = state.productId && root.dataset.productPreflightUrlTemplate
+        ? root.dataset.productPreflightUrlTemplate.replace('__PRODUCT__', encodeURIComponent(state.productId))
+        : root.dataset.preflightUrl;
+      const payload = await sendPreflight(preflightUrl, form, (percent, uploaded) => {
         setProgress(percent, uploaded ? 'انتقال کامل شد؛ بررسی ساختار و امنیت در حال اجراست...' : 'در حال انتقال امن فایل · ' + percent + '٪');
         if (uploaded) setStep('inspect', ['received', 'upload']);
       });
       setProgress(100, 'بررسی اولیه کامل شد؛ گزارش آماده است.');
       state.ingestionId = payload.ingestion_id;
+      if (payload.product_id) state.productId = String(payload.product_id);
+      if (payload.next_url) state.nextUrlCandidate = payload.next_url;
       renderReport(payload);
       setStep('review', ['received', 'upload', 'inspect']);
       confirmButton.disabled = !payload.inspection?.safe;
@@ -250,7 +268,9 @@
     state.busy = true;
     try {
       if (state.ingestionId) {
-        const url = root.dataset.cancelUrlTemplate.replace('__INGESTION__', encodeURIComponent(state.ingestionId));
+        const url = root.dataset.cancelUrlTemplate
+          .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+          .replace('__INGESTION__', encodeURIComponent(state.ingestionId));
         await fetch(url, {
           method: 'DELETE',
           headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
@@ -267,7 +287,9 @@
   const pollProcessing = async (fileId) => {
     const template = root.dataset.statusUrlTemplate;
     if (!template || !fileId) return;
-    const url = template.replace('__FILE__', encodeURIComponent(fileId));
+    const url = template
+      .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+      .replace('__FILE__', encodeURIComponent(fileId));
     let attempts = 0;
     const completedSteps = ['received', 'upload', 'inspect', 'review', 'store'];
 
@@ -374,7 +396,9 @@
     setStep('store', ['received', 'inspect', 'review']);
 
     try {
-      const url = root.dataset.confirmUrlTemplate.replace('__INGESTION__', encodeURIComponent(state.ingestionId));
+      const url = root.dataset.confirmUrlTemplate
+        .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+        .replace('__INGESTION__', encodeURIComponent(state.ingestionId));
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
@@ -416,6 +440,13 @@
           const detail = contentRow.querySelector('small');
           if (detail) detail.textContent = 'نیازمند پردازش مجدد';
         }
+      }
+      if (state.nextUrlCandidate) {
+        state.nextUrl = state.nextUrlCandidate;
+        state.queue = state.queue.filter((file) => file !== state.current);
+        closeModal();
+        processNext();
+        return;
       }
       if (payload.file?.id) {
         await pollProcessing(payload.file.id);
@@ -485,6 +516,7 @@
   const renderSelectedFiles = () => {
     if (!selectedView) return;
     const files = [state.current, ...state.queue].filter(Boolean);
+    const totalBytes = files.reduce((total, file) => total + (Number(file.size) || 0), 0);
     const rows = files.map((file, index) => {
       const relative = file.webkitRelativePath || file.relativePath || file.name;
       return '<div><strong>' + escapeHtml(relative) + '</strong><small>' + formatBytes(file.size) +
@@ -505,7 +537,7 @@
         '</dl></div>'
       : '';
     selectedView.innerHTML = files.length
-      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong>' + rows + currentDetails + errors
+      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong><div class="product-ingestion-aggregate"><span>تعداد فایل‌ها: <b>' + files.length + '</b></span><span>حجم کل: <b>' + formatBytes(totalBytes) + '</b></span><span>تعداد فایل‌های آرشیو: <b>پس از بررسی هر آرشیو مشخص می‌شود</b></span></div>' + rows + currentDetails + errors
       : errors;
   };
 
