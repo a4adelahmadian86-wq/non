@@ -113,7 +113,7 @@ function makePdfFixture(pageCount = 1) {
 function makePdfAnnotationFixture() {
   const stream = '/OC /OC1 BDC BT /F1 18 Tf 72 600 Td (OPTIONAL LAYER TEXT) Tj ET EMC BT /F1 24 Tf 72 720 Td (PDF annotation and AcroForm fixture) Tj ET';
   const objects = [
-    '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >> /OCProperties << /OCGs [8 0 R] /D << /Order [8 0 R] /ON [8 0 R] >> >> >>',
+    '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> /OCProperties << /OCGs [8 0 R] /D << /BaseState /ON /Order [8 0 R] /ON [8 0 R] >> >> >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> /Properties << /OC1 8 0 R >> >> /Contents 5 0 R /Annots [6 0 R 7 0 R] >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
