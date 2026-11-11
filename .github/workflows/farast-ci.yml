@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.11'
       - run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh
       - run: python -m compileall -q services/document-audio
       - run: python -m unittest discover -s services/document-audio/tests -v
@@ -192,3 +195,26 @@ jobs:
           if [ "$ready" -ne 1 ]; then cat /tmp/farast-sherpa.log; exit 1; fi
           SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006 node voice-stream/scripts/sherpa-sidecar-smoke.mjs
           cat /tmp/farast-sherpa.log
+
+  python-service-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.11'
+          cache: pip
+          cache-dependency-path: |
+            services/product-supervisor/requirements-test.txt
+            voice-service/requirements-test.txt
+      - run: python -m pip install --upgrade pip
+      - run: pip install --no-cache-dir -r services/product-supervisor/requirements-test.txt
+      - run: pytest -q
+        working-directory: services/product-supervisor
+      - run: pip install --no-cache-dir -r voice-service/requirements-test.txt
+      - run: pytest -q tests
+        working-directory: voice-service
+        env:
+          FARAST_TTS_AUTO_DOWNLOAD: 'false'
+          FARAST_VOICE_TOKEN: 'test-token-for-contract-tests'
