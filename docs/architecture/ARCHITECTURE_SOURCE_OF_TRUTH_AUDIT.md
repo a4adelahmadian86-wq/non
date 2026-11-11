@@ -1013,3 +1013,33 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 - PR #318: تست اصلی موفق، اما Laravel check ناموفق؛ PR #333 هنوز check-run قابل اتکا نداشت.
 - PR #353 و #354: checkها در صف/در حال اجرا بودند.
 
+
+
+## 19. ممیزی سطح دسترسی Store Admin و زنجیره Intake
+
+### مالکیت فعلی در main
+
+- routes/store_routes.php گروه مدیریت فروشگاه را با auth + admin باز می‌کند؛ admin.section:store در گروه وجود ندارد.
+- routes/product_operations.php نیز گروه auth + admin دارد و admin.section:store ندارد.
+- config/farast_admin.php از قبل بخش store را با store.manage و min_scope=global تعریف کرده، اما دو فایل Route از این قرارداد استفاده نمی‌کنند.
+- AdminOnly در حالت multi_role_console فعال، تمام DASHBOARD_ROLES را می‌پذیرد.
+- AdminStoreController، AdminCourseController، AdminProductContentController، AdminProductSupervisorController و AdminProductOperationsController در مسیرهای اصلی بررسی‌شده guard داخلی مشترک isAdmin/AuthorizationService/Policy ندارند.
+
+**اثر:** نقش‌های dashboard غیر از مدیر اصلی می‌توانند به عملیات catalog، course، upload، preview، AI content generation، AI supervisor review و retry عملیات محصول برسند، مگر آنکه مسیر خاصی middleware جدا داشته باشد. این یک نقص route authorization در main است.
+
+### تفاوت branchهای فعال
+
+| مسیر | Gate فعلی در branch | شکاف باقی‌مانده |
+|---|---|---|
+| main | auth + admin | فاقد admin.section:store |
+| PR #318 | auth + permission:store.manage | permission به‌تنهایی scope سراسری را enforce نمی‌کند |
+| PR #333 | auth + admin؛ فقط برخی intake endpoints permission دارند | CRUD و عملیات موجود فروشگاه همچنان به section gate سراسری نیاز دارند |
+| PR #335 | auth + admin | اصلاح Storage نباید با group بدون section ادغام شود |
+| PR #347 | auth + admin + admin.section:store در store_routes و product_operations | مسیر کاندید اصلاح؛ باید تست منفی roleهای غیر global داشته باشد |
+
+**قاعده ادغام:** تغییرهای محصول و Storage نباید قبل از اضافه‌شدن admin.section:store به گروه‌های کامل مدیریت فروشگاه ادغام شوند. این وابستگی در PRهای #318، #333 و #335 به صاحبان آن‌ها اعلام شده است.
+
+### Intake جدید و مرز دسترسی reviewer
+
+در PR #333، owner بودن session به user_id کنترل می‌شود؛ اما reviewer با permission store.products.publish و role dashboard می‌تواند sessionهای پیش از ایجاد product را مشاهده/بررسی کند. چون session هنوز organization_id/team_id ندارد و reviewer path به AdminConsoleService resource scope متصل نیست، در صورت اعطای permission به نقش غیر global، reviewer می‌تواند session سازمان‌های دیگر را ببیند. permission باید با resource scope یا tenant ownership روی submitter اعمال شود، نه صرفاً با role permission.
+
