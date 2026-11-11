@@ -107,7 +107,6 @@ class StoreCartController extends Controller
 
         $current = $cart->current($request)->load('items.product.files');
         $payload = $cart->payload($current, $request);
-        abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
         $requestFingerprint = hash('sha256', json_encode([
             'items' => $payload['items'],
             'coupon_code' => $payload['coupon_code'] ?? null,
@@ -119,14 +118,18 @@ class StoreCartController extends Controller
             ->where('idempotency_key', $idempotencyKey)
             ->first();
         if ($existingOrder) {
-            abort_unless(
-                hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
-                409,
-                'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
-            );
+            if (! empty($payload['items'])) {
+                abort_unless(
+                    hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
+                    409,
+                    'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
+                );
+            }
 
             return redirect()->route('checkout', $existingOrder);
         }
+
+        abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
 
         try {
             $order = DB::transaction(function () use ($request, $current, $payload, $idempotencyKey, $requestFingerprint) {
@@ -281,6 +284,11 @@ class StoreCartController extends Controller
             if (! $existingOrder || (int) $existingOrder->user_id !== (int) $request->user()->id) {
                 throw $exception;
             }
+            abort_unless(
+                hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
+                409,
+                'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
+            );
 
             return redirect()->route('checkout', $existingOrder);
         }
