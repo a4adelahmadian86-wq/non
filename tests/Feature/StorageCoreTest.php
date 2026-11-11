@@ -302,7 +302,7 @@ class StorageCoreTest extends TestCase
             'status' => 'healthy', 'is_active' => true, 'priority' => 1,
         ]);
 
-        $this->expectException(\\InvalidArgumentException::class);
+        $this->expectException(\InvalidArgumentException::class);
         app(StorageManager::class)->exists('storage_volume:'.$volume->id, '../outside.txt');
     }
 
