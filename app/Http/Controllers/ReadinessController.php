@@ -1,9 +1,9 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Support\\Facades\\DB;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class ReadinessController extends Controller
