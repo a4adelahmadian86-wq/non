@@ -1,15 +1,16 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Http\\Middleware\\ResolveAdminScope;
-use App\\Models\\Organization;
-use App\\Models\\Team;
-use App\\Models\\User;
-use App\\Services\\AuthorizationService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\DB;
-use Tests\\TestCase;
+use App\Http\Middleware\ResolveAdminScope;
+use App\Models\Organization;
+use App\Models\Team;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Tests\TestCase;
 
 class RestrictedAdministratorScopeTest extends TestCase
 {
@@ -19,7 +20,7 @@ class RestrictedAdministratorScopeTest extends TestCase
     {
         return Organization::create([
             'name' => 'سازمان '.$suffix,
-            'slug' => 'restricted-admin-'.$suffix.'-'.strtolower(str()->random(8)),
+            'slug' => 'restricted-admin-'.$suffix.'-'.strtolower(Str::random(8)),
             'status' => 'active',
         ]);
     }
@@ -95,12 +96,12 @@ class RestrictedAdministratorScopeTest extends TestCase
         $teamA = Team::create([
             'organization_id' => $organizationA->id,
             'name' => 'تیم محدود',
-            'slug' => 'restricted-team-'.strtolower(str()->random(8)),
+            'slug' => 'restricted-team-'.strtolower(Str::random(8)),
         ]);
         $teamB = Team::create([
             'organization_id' => $organizationB->id,
             'name' => 'تیم دیگر',
-            'slug' => 'foreign-team-'.strtolower(str()->random(8)),
+            'slug' => 'foreign-team-'.strtolower(Str::random(8)),
         ]);
         $memberA = $this->employee($organizationA);
         $memberB = $this->employee($organizationB);
