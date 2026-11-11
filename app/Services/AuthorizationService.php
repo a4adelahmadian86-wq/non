@@ -1,14 +1,13 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\Permission;
-use App\\Models\\RolePermission;
-use App\\Models\\User;
-use Illuminate\\Database\\Eloquent\\Model;
-use Illuminate\\Support\\Carbon;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Http\\Request;
+use App\Models\Permission;
+use App\Models\RolePermission;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
 /**
  * Central authorization decision point.
