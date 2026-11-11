@@ -114,7 +114,7 @@ class AdminStoreController extends Controller
             });
         $attentionCount = (clone $attentionQuery)->count();
         $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
-        $supervisorConfigured = app(\\App\\Services\\ProductSupervisorClient::class)->configured();
+        $supervisorConfigured = app(\App\\Services\\ProductSupervisorClient::class)->configured();
         $canManagePublication = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.products.publish');
         $publicationQueue = StoreProductPublicationReview::query()
