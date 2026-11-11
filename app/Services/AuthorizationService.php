@@ -360,11 +360,13 @@ class AuthorizationService
         abort_unless($permissionId !== null, 404, 'مجوز پیدا نشد.');
 
         return DB::transaction(function () use ($actor, $subject, $permission, $permissionId, $effect, $scope, $organizationId, $teamId, $startsAt, $expiresAt, $request): object {
-            DB::table('users')->where('id', $subject->id)->update([
-                'access_control_managed' => true,
-                'updated_at' => now(),
-            ]);
-            $subject->setAttribute('access_control_managed', true);
+            if ($subject->role === User::ROLE_ADMIN) {
+                DB::table('users')->where('id', $subject->id)->update([
+                    'access_control_managed' => true,
+                    'updated_at' => now(),
+                ]);
+                $subject->setAttribute('access_control_managed', true);
+            }
 
             $id = DB::table('user_permission_grants')->insertGetId([
                 'user_id' => $subject->id,
