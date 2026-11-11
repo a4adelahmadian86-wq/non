@@ -17,6 +17,22 @@ class BackendHealthCheckTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_production_health_check_requires_a_backup_encryption_key(): void
+    {
+        $this->app['env'] = 'production';
+        config([
+            'app.debug' => false,
+            'app.key' => 'base64:health-check-test-key',
+            'storage_management.backup.encryption_key' => '',
+        ]);
+
+        Storage::fake('private');
+
+        $this->artisan('farast:health-check')
+            ->expectsOutputToContain('backup_configuration: failed')
+            ->assertExitCode(1);
+    }
+
     public function test_production_health_check_rejects_debug_mode(): void
     {
         $this->app['env'] = 'production';
