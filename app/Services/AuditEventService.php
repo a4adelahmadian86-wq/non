@@ -64,7 +64,7 @@ class AuditEventService
         $safe = [];
         foreach (array_slice($data, 0, 50, true) as $key => $value) {
             $name = (string) $key;
-            if (preg_match('/password|secret|token|authorization|cookie|api[_-]?key|credential|recovery[_-]?code|otp|session|csrf|private[_-]?key|signature|auth/i', $name)) {
+            if (preg_match('/password|secret|token|authorization|cookie|api[_-]?key|credential|recovery[_-]?code|otp|session|csrf|private[_-]?key|signature|authentication|auth[_-]?token/i', $name)) {
                 $safe[$name] = '[REDACTED]';
                 continue;
             }
@@ -73,7 +73,7 @@ class AuditEventService
                 $safe[$name] = $this->sanitize($value, $depth + 1);
             } elseif (is_string($value)) {
                 $redacted = preg_replace(
-                    '/([?&](?:access_token|api_key|key|password|secret|signature|token|code|session|csrf)=)[^&#]*/i',
+                    '/([?&](?:access_token|api_key|key|password|secret|signature|token|code|session|csrf|auth_token)=)[^&#]*/i',
                     '$1[REDACTED]',
                     $value
                 );
