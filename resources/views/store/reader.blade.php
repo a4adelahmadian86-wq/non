@@ -183,8 +183,8 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
-<script src="/js/farast-reader.js?v=20261111pdfcompat6"></script>
+<script src="/js/farast-reader-storage.js?v=20261111durable4"></script>
+<script src="/js/farast-reader.js?v=20261111pdfcompat7"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
