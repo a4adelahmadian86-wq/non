@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\ReadinessController;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -40,17 +41,14 @@ class ReadinessCheckTest extends TestCase
     }
 
 
-    public function test_readiness_route_reaches_the_probe_when_database_backed_sessions_are_unavailable(): void
+    public function test_readiness_route_does_not_depend_on_database_backed_sessions(): void
     {
         config(['session.driver' => 'database']);
-
-        DB::shouldReceive('connection')
-            ->once()
-            ->andThrow(new RuntimeException('private database host and credentials'));
+        Schema::dropIfExists('sessions');
 
         $response = $this->getJson(route('health.ready'))
-            ->assertStatus(503)
-            ->assertExactJson(['status' => 'not_ready']);
+            ->assertOk()
+            ->assertExactJson(['status' => 'ready']);
 
         $cacheControl = (string) $response->headers->get('Cache-Control');
         $this->assertStringContainsString('no-store', $cacheControl);
