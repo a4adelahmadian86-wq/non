@@ -547,8 +547,14 @@ class StoreController extends Controller
                     // Reading a PDF must never trigger a remote speech-provider call.
                     // Audio generation is scheduled by the document-processing pipeline, not by this page request.
                     $audioState = (string) data_get($structure, 'audio.status', '');
-                    $audioPending = in_array($audioState, ['pending', 'queued', 'processing', 'upgrading'], true);
-                    $readerAudioStatus = $audioArtifactReady ? 'ready' : ($audioPending ? 'pending' : 'unavailable');
+                    $audioPending = in_array($audioState, ['pending', 'queued', 'processing'], true)
+                        || ($audioState === 'upgrading' && ! $audioArtifactReady);
+                    $audioUpgrading = $audioState === 'upgrading' && $audioArtifactReady;
+                    $audioFailed = ! $audioArtifactReady && in_array($audioState, ['failed', 'partial', 'completed', 'ready'], true);
+                    $audioUnavailable = in_array($audioState, ['awaiting_provider', 'unavailable'], true);
+                    $readerAudioStatus = $audioArtifactReady
+                        ? ($audioUpgrading ? 'upgrading' : 'ready')
+                        : ($audioPending ? 'pending' : ($audioFailed ? 'failed' : ($audioUnavailable ? 'unavailable' : '')));
 
                     if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
@@ -574,6 +580,11 @@ class StoreController extends Controller
                                 'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
                                 'page' => $page,
                             ];
+                        }
+
+                        if ($audioUpgrading) {
+                            // Keep the current playable artifact while polling for the newer version.
+                            $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
                         }
                     } elseif ($audioPending) {
                         // The browser polls the same entitlement-checked endpoint with HEAD until
