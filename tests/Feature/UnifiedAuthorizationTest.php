@@ -123,7 +123,7 @@ class UnifiedAuthorizationTest extends TestCase
         ]);
         RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $permission->id]);
         RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $accessPermission->id]);
-        DB::table('role_assignments')->insert([
+        $assignmentId = DB::table('role_assignments')->insertGetId([
             'user_id' => $admin->id,
             'role_id' => $roleId,
             'scope' => 'own',
@@ -135,6 +135,14 @@ class UnifiedAuthorizationTest extends TestCase
             $admin,
             'documents.view',
             $this->record(['user_id' => $other->id]),
+        ));
+        $authorization = app(AuthorizationService::class);
+        $authorization->revokeRoleAssignment($admin, $assignmentId);
+        self::assertFalse($authorization->allows($admin, 'access.manage'));
+        self::assertFalse($authorization->allowsRecord(
+            $admin,
+            'documents.view',
+            $this->record(['user_id' => $admin->id]),
         ));
     }
 
