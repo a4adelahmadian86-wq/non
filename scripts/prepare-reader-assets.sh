@@ -42,18 +42,17 @@ if [ -z "$BUILD_DIR" ] || [ ! -s "$BUILD_DIR/pdf.mjs" ] || [ ! -s "$BUILD_DIR/pd
   exit 1
 fi
 
-PDF_VIEWER_CSS="$(find "$DIST_DIR" -type f -name pdf_viewer.css -print -quit)"
 LICENSE_PATH="$(find "$DIST_DIR" -maxdepth 4 -type f -name LICENSE -print -quit)"
-if [ -z "$PDF_VIEWER_CSS" ] || [ -z "$LICENSE_PATH" ]; then
-  echo "Verified PDF.js archive is missing viewer CSS or LICENSE. Archive entries:" >&2
-  unzip -Z1 "$ARCHIVE_PATH" | grep -E 'pdf_viewer.css|LICENSE|pdf.mjs|pdf.worker.mjs' | head -80 >&2 || true
+if [ -z "$LICENSE_PATH" ]; then
+  echo "Verified PDF.js archive is missing LICENSE. Archive entries:" >&2
+  unzip -Z1 "$ARCHIVE_PATH" | grep -E 'LICENSE|pdf.mjs|pdf.worker.mjs' | head -80 >&2 || true
   exit 1
 fi
 
 mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/web"
 cp "$BUILD_DIR/pdf.mjs" "$TARGET_DIR/legacy/build/pdf.mjs"
 cp "$BUILD_DIR/pdf.worker.mjs" "$TARGET_DIR/legacy/build/pdf.worker.mjs"
-cp "$PDF_VIEWER_CSS" "$TARGET_DIR/web/pdf_viewer.css"
+rm -f "$TARGET_DIR/web/pdf_viewer.css"
 cp "$LICENSE_PATH" "$TARGET_DIR/LICENSE"
 
 for asset_dir in cmaps standard_fonts wasm; do
