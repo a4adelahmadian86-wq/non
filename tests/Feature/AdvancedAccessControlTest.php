@@ -292,6 +292,15 @@ class AdvancedAccessControlTest extends TestCase
 
         $roleId = $this->role('ordinary-member-team-role', 'team', $team->id);
         $this->grant($roleId, 'access.audit', 'team');
+
+        $admin = $this->user('09140000133', User::ROLE_ADMIN);
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$supervisor->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $team->id,
+        ])->assertUnprocessable();
+
+        // Even a stale/manual assignment must not grant team-management scope.
         $this->assign($supervisor, $roleId, 'team', $team->id);
 
         $this->assertFalse(app(AuthorizationService::class)->allowsFor($supervisor, 'access.audit', [
