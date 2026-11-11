@@ -363,7 +363,7 @@ class StorageTransferService
                 unset($metadata['orphaned_source']);
                 $locked->update(['metadata' => $metadata]);
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $locked = StorageManagedFile::find($file->id);
             if ($locked) {
                 $metadata = (array) $locked->metadata;
