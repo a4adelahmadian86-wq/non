@@ -119,9 +119,12 @@ class RestoreStorageBackup extends Command
                 $externalAttributes = 0;
                 if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
                     $unixFileType = ($externalAttributes >> 16) & 0170000;
-                    if ($operatingSystem === ZipArchive::OPSYS_UNIX && $unixFileType === 0120000) {
+                    if (
+                        $operatingSystem === ZipArchive::OPSYS_UNIX
+                        && ! in_array($unixFileType, [0, 0100000, 0040000], true)
+                    ) {
                         $zip->close();
-                        throw new RuntimeException('پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                        throw new RuntimeException('نوع فایل ویژه یا پیوند نمادین در آرشیو بازیابی مجاز نیست.');
                     }
                 }
             }

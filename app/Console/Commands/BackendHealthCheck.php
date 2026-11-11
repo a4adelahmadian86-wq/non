@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\RunStorageBackupJob;
+use App\Models\StorageVolume;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,6 +26,7 @@ class BackendHealthCheck extends Command
             'cache' => fn (): bool => $this->checkCacheStorage(),
             'sessions' => fn (): bool => $this->checkSessionStorage(),
             'production_config' => fn (): bool => $this->checkProductionConfig(),
+            'backup_configuration' => fn (): bool => $this->checkBackupConfiguration(),
         ];
 
         $failed = 0;
@@ -113,6 +116,50 @@ class BackendHealthCheck extends Command
 
         if (! Schema::connection(config('session.connection'))->hasTable(config('session.table', 'sessions'))) {
             throw new \RuntimeException('Database session table is missing.');
+        }
+
+        return true;
+    }
+
+    private function checkBackupConfiguration(): bool
+    {
+        if (! app()->environment('production')) {
+            return true;
+        }
+
+        if (trim((string) config('storage_management.backup.encryption_key', '')) === '') {
+            throw new \RuntimeException('FARAST_BACKUP_ENCRYPTION_KEY is not configured.');
+        }
+
+        if (! class_exists(\ZipArchive::class)) {
+            throw new \RuntimeException('The PHP Zip extension is not available.');
+        }
+
+        $connection = (array) config('queue.connections.backups', []);
+        if (($connection['driver'] ?? null) !== 'database') {
+            throw new \RuntimeException('The dedicated backups queue must use the database driver.');
+        }
+
+        $queueConnection = $connection['connection'] ?? null;
+        $queueTable = (string) ($connection['table'] ?? 'jobs');
+        if (! Schema::connection($queueConnection)->hasTable($queueTable)) {
+            throw new \RuntimeException('The dedicated backups queue table is missing.');
+        }
+
+        $retryAfter = (int) ($connection['retry_after'] ?? 0);
+        $jobTimeout = (new RunStorageBackupJob(0))->timeout;
+        if ($retryAfter <= $jobTimeout) {
+            throw new \RuntimeException('The backups queue retry_after must exceed the backup job timeout.');
+        }
+
+        $hasDestination = StorageVolume::query()
+            ->where('drive_key', 'foreign_backup')
+            ->where('is_active', true)
+            ->where('status', 'healthy')
+            ->exists();
+
+        if (! $hasDestination) {
+            throw new \RuntimeException('No active healthy foreign backup destination is configured.');
         }
 
         return true;
