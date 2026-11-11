@@ -169,7 +169,16 @@ class StorageTransferService
         $files = DB::transaction(function () use ($limit) {
             $candidates = StorageManagedFile::query()
                 ->whereNull('storage_volume_id')
-                ->whereIn('status', ['pending_transfer', 'transfer_error'])
+                ->where(function ($query) {
+                    $query->where('status', 'pending_transfer')
+                        ->orWhere(function ($retry) {
+                            $retry->where('status', 'transfer_error')
+                                ->where(function ($eligible) {
+                                    $eligible->whereNull('metadata->next_transfer_at')
+                                        ->orWhere('metadata->next_transfer_at', '<=', now()->toIso8601String());
+                                });
+                        });
+                })
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->limit(max(1, $limit))
@@ -183,6 +192,7 @@ class StorageTransferService
                 }
 
                 $metadata = (array) $file->metadata;
+                unset($metadata['next_transfer_at']);
                 $metadata['transfer_started_at'] = now()->toIso8601String();
                 $metadata['transfer_attempts'] = (int) ($metadata['transfer_attempts'] ?? 0) + 1;
                 $file->update(['status' => 'transferring', 'metadata' => $metadata]);
@@ -223,7 +233,8 @@ class StorageTransferService
             }
 
             if (! $target || $reservationKey === null) {
-                $file->update(['status' => 'pending_transfer']);
+                $metadata = $this->scheduleRetry((array) $file->metadata);
+                $file->update(['status' => 'transfer_error', 'metadata' => $this->scheduleRetry($metadata)]);
                 continue;
             }
 
@@ -244,9 +255,10 @@ class StorageTransferService
                 $this->storage->releaseVolumeCapacityReservation($reservationKey);
                 $metadata = (array) $file->metadata;
                 unset($metadata['capacity_reservation_key']);
+                $metadata = $this->scheduleRetry(array_merge($metadata, ['transfer_error' => 'staging_file_missing']));
                 $file->update([
                     'status' => 'transfer_error',
-                    'metadata' => array_merge($metadata, ['transfer_error' => 'staging_file_missing']),
+                    'metadata' => $metadata,
                 ]);
                 continue;
             }
@@ -340,6 +352,7 @@ class StorageTransferService
                             'disk' => $newDisk,
                             'transferred_at' => now()->toIso8601String(),
                             'transfer_error' => null,
+                            'next_transfer_at' => null,
                         ]),
                     ]);
                     $this->syncSourceReference($lockedFile->fresh(), $newDisk);
@@ -391,11 +404,12 @@ class StorageTransferService
                     'last_checked_at' => now(),
                     'metadata' => array_merge((array) $target->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)]),
                 ]);
+                $metadata = $this->scheduleRetry(array_merge($metadata, [
+                    'transfer_error' => mb_substr($exception->getMessage(), 0, 400),
+                ]));
                 $file->update([
                     'status' => 'transfer_error',
-                    'metadata' => array_merge($metadata, [
-                        'transfer_error' => mb_substr($exception->getMessage(), 0, 400),
-                    ]),
+                    'metadata' => $metadata,
                 ]);
             } finally {
                 @unlink($temp);
@@ -403,6 +417,15 @@ class StorageTransferService
         }
 
         return $moved;
+    }
+
+    private function scheduleRetry(array $metadata): array
+    {
+        $attempts = max(1, (int) ($metadata['transfer_attempts'] ?? 1));
+        $delayMinutes = min(360, 2 ** min(9, $attempts - 1));
+        $metadata['next_transfer_at'] = now()->addMinutes($delayMinutes)->toIso8601String();
+
+        return $metadata;
     }
 
     private function cleanupOrphanedSources(int $limit): void
