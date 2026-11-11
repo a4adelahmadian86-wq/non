@@ -88,3 +88,41 @@ test('IndexedDB write failures emit a visible storage warning event',async({page
  await expect.poll(()=>page.evaluate(()=>window.__storageWriteErrors.length)).toBe(1);
  expect(await page.evaluate(()=>window.__storageWriteErrors[0].key)).toBe('farast-reader:blocked-write');
 });
+
+test('device records survive Cache API cleanup and local backup round-trips only this reader',async({page})=>{
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const result=await page.evaluate(async()=>{
+  const store=window.FarastReaderDurableStore;
+  const product='42';
+  const key='farast-reader:v1:'+product;
+  const annotationKey='farast-reader:annotations:v1:'+product;
+  await store.set(key,JSON.stringify({progress:{section:1,page:9},bookmarks:[]}));
+  await store.set(annotationKey,JSON.stringify([{id:'local-note',text:'یادداشت محلی'}]));
+  await store.set('farast-reader:v1:other-product',JSON.stringify({private:'must not export'}));
+  const cache=await caches.open('reader-cache-cleanup-test');
+  await cache.put('/reader-cache-cleanup-test',new Response('temporary cache entry'));
+  await caches.delete('reader-cache-cleanup-test');
+  const afterCacheCleanup=await store.restore(key);
+  const backup=await store.exportProduct(product);
+  await store.remove(key);
+  await store.remove(annotationKey);
+  const restoredCount=await store.importProduct(backup,product);
+  return {
+   afterCacheCleanup,
+   restored:await store.restore(key),
+   annotation:await store.restore(annotationKey),
+   restoredCount,
+   exportedKeys:backup.records.map(record=>record.key),
+   leakedOtherProduct:backup.records.some(record=>record.key.includes('other-product'))
+  };
+ });
+ expect(JSON.parse(result.afterCacheCleanup)).toEqual({progress:{section:1,page:9},bookmarks:[]});
+ expect(JSON.parse(result.restored)).toEqual({progress:{section:1,page:9},bookmarks:[]});
+ expect(JSON.parse(result.annotation)).toEqual([{id:'local-note',text:'یادداشت محلی'}]);
+ expect(result.restoredCount).toBe(2);
+ expect(result.exportedKeys).toContain('farast-reader:v1:42');
+ expect(result.exportedKeys).toContain('farast-reader:annotations:v1:42');
+ expect(result.leakedOtherProduct).toBe(false);
+});
+
