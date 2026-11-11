@@ -43,7 +43,7 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean', 'marketing_consent' => 'boolean', 'marketing_consent_updated_at' => 'datetime', 'two_factor_enabled_at' => 'datetime'];
+        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean', 'access_control_managed' => 'boolean', 'marketing_consent' => 'boolean', 'marketing_consent_updated_at' => 'datetime', 'two_factor_enabled_at' => 'datetime'];
     }
 
     public function documents(): HasMany { return $this->hasMany(TypingDocument::class); }

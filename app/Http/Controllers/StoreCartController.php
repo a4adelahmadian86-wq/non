@@ -13,6 +13,8 @@ use App\Services\StoreCourseEnrollmentService;
 use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 
 class StoreCartController extends Controller
 {
@@ -99,11 +101,38 @@ class StoreCartController extends Controller
         $request->validate(['accept_terms' => ['accepted']]);
         abort_unless($request->user(), 401);
 
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : (string) Str::uuid();
+        abort_if(strlen($idempotencyKey) > 120, 422, 'کلید تکرارپذیری درخواست معتبر نیست.');
+
         $current = $cart->current($request)->load('items.product.files');
         $payload = $cart->payload($current, $request);
+        $requestFingerprint = hash('sha256', json_encode([
+            'items' => $payload['items'],
+            'coupon_code' => $payload['coupon_code'] ?? null,
+            'coupon_assignment_id' => $payload['coupon_assignment_id'] ?? null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+        $existingOrder = Order::query()
+            ->where('user_id', $request->user()->id)
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+        if ($existingOrder) {
+            if (! empty($payload['items'])) {
+                abort_unless(
+                    hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
+                    409,
+                    'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
+                );
+            }
+
+            return redirect()->route('checkout', $existingOrder);
+        }
+
         abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
 
-        $order = DB::transaction(function () use ($request, $current, $payload) {
+        try {
+            $order = DB::transaction(function () use ($request, $current, $payload, $idempotencyKey, $requestFingerprint) {
             $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
@@ -115,6 +144,7 @@ class StoreCartController extends Controller
             $order = Order::create([
                 'user_id' => $request->user()->id,
                 'document_id' => null,
+                'idempotency_key' => $idempotencyKey,
                 'subtotal_rials' => $subtotal,
                 'discount_rials' => $discount,
                 'tax_rials' => $tax,
@@ -122,6 +152,7 @@ class StoreCartController extends Controller
                 'status' => 'pending',
                 'pricing_snapshot' => [
                     'kind' => 'store',
+                    'request_fingerprint' => $requestFingerprint,
                     'tax_rate' => $taxRate,
                     'cart_items' => $payload['items'],
                     'coupon_code' => $payload['coupon_code'],
@@ -226,6 +257,7 @@ class StoreCartController extends Controller
                     'amount_rials' => 0,
                     'status' => 'paid',
                     'transaction_id' => 'STORE-FREE-'.$order->id.'-'.now()->timestamp,
+                    'idempotency_key' => 'free-order-'.$order->id,
                     'paid_at' => now(),
                 ]);
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
@@ -246,7 +278,20 @@ class StoreCartController extends Controller
             }
 
             return $order->fresh();
-        });
+            });
+        } catch (QueryException $exception) {
+            $existingOrder = Order::query()->where('idempotency_key', $idempotencyKey)->first();
+            if (! $existingOrder || (int) $existingOrder->user_id !== (int) $request->user()->id) {
+                throw $exception;
+            }
+            abort_unless(
+                hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
+                409,
+                'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
+            );
+
+            return redirect()->route('checkout', $existingOrder);
+        }
 
         if ((int) $order->total_rials === 0 && $order->status === 'paid') {
             return redirect()->route('library')->with('status', 'سفارش رایگان ثبت شد؛ فایل یا دسترسی دوره در کتابخانه شما فعال است.');

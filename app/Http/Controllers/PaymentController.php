@@ -19,6 +19,7 @@ use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
@@ -38,7 +39,13 @@ class PaymentController extends Controller
         $total = max(0, $gross - $depositCredit);
         $hash = hash('sha256', (string) $document->content);
 
-        $order = Order::create([
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : (string) Str::uuid();
+        abort_if(strlen($idempotencyKey) > 120, 422, 'کلید تکرارپذیری درخواست معتبر نیست.');
+
+        $order = Order::firstOrCreate([
+            'idempotency_key' => $idempotencyKey,
+        ], [
             'user_id' => auth()->id(),
             'document_id' => $document->id,
             'subtotal_rials' => $subtotal,
@@ -59,6 +66,14 @@ class PaymentController extends Controller
             'free_pages_applied' => $freeApplied,
             'terms_accepted_at' => now(),
         ]);
+
+        abort_unless(
+            (int) $order->user_id === (int) auth()->id()
+                && (int) $order->document_id === (int) $document->id
+                && hash_equals((string) $order->content_hash, $hash),
+            409,
+            'کلید تکرارپذیری قبلاً برای سفارش دیگری استفاده شده است.'
+        );
 
         return redirect()->route('checkout', $order);
     }
@@ -156,6 +171,7 @@ class PaymentController extends Controller
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
+                    'idempotency_key' => 'wallet-order-'.$locked->id,
                     'amount_rials' => $total,
                     'status' => 'paid',
                     'transaction_id' => 'WALLET-'.$locked->id.'-'.now()->timestamp,
@@ -287,6 +303,7 @@ class PaymentController extends Controller
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
+                    'idempotency_key' => 'store-wallet-order-'.$locked->id,
                     'amount_rials' => $total,
                     'status' => 'paid',
                     'transaction_id' => 'STORE-WALLET-'.$locked->id.'-'.now()->timestamp,
@@ -387,6 +404,7 @@ class PaymentController extends Controller
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
+                    'idempotency_key' => 'deposit-wallet-order-'.$locked->id,
                     'amount_rials' => $amount,
                     'status' => 'paid',
                     'transaction_id' => 'DEPOSIT-WALLET-'.$locked->id.'-'.now()->timestamp,

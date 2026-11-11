@@ -5,12 +5,22 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
+    protected static function booted(): void
+    {
+        static::creating(function (Order $order): void {
+            if (blank($order->idempotency_key)) {
+                $order->idempotency_key = (string) Str::uuid();
+            }
+        });
+    }
+
     protected $fillable = [
         'user_id','document_id','subtotal_rials','discount_rials','tax_rials','total_rials','status',
-        'pricing_snapshot','free_pages_applied','terms_accepted_at','paid_at','content_hash',
+        'pricing_snapshot','free_pages_applied','terms_accepted_at','paid_at','content_hash','idempotency_key',
     ];
 
     protected $casts = [
