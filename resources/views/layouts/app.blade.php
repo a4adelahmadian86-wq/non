@@ -5,14 +5,17 @@
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
+$isReader=request()->routeIs('store.reader');
 $isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*')||request()->routeIs('platform.notifications')||request()->routeIs('platform.communications')||request()->routeIs('platform.security')||request()->routeIs('messenger.*'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
 $footerSocial=[]; $farastCapabilities=null;
 if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityService::class)->forUser(auth()->user());}
 if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
 @endphp
+@if(!$isReader)
 <link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+@endif
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
-@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
+@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
@@ -24,7 +27,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @stack('styles')
 </head>
 <body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }} {{ !$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage ? 'has-mobile-dock' : '' }}">
-@if(!$isEditor&&!$isAdmin&&!$isDashboard)
+@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard)
 <a class="farast-skip-link" href="#app-main">رفتن به محتوای اصلی</a>
 <header class="top premium-header" data-app-header>
   <div class="farast-public-topline"><div class="farast-public-topline__inner"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i> محصولات دیجیتال و ابزارهای کار با سند</span><a href="{{ route('editor') }}">شروع با تایپ و ویرایش سند <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a></div></div>
@@ -73,7 +76,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @yield('content')
 @if($isDashboard && !$isAdmin && auth()->check())</div>@endif
 </main>
-@if(!$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage)
+@if(!$isReader && !$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage)
 <nav class="farast-mobile-dock" aria-label="ناوبری سریع فراست">
   <a href="{{ route('home') }}" @if(request()->routeIs('home')) aria-current="page" @endif>
     <i class="fa-solid fa-house" aria-hidden="true"></i><span>خانه</span>
@@ -128,9 +131,9 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 </footer>@endif
 <button type="button" id="farastInstallApp" class="farast-install-app" aria-label="نصب اپلیکیشن فراست" hidden><i class="fa-solid fa-download" aria-hidden="true"></i><span>نصب فراست</span></button>
 <div id="farastPwaHelp" class="farast-pwa-help" role="dialog" aria-modal="false" aria-labelledby="farastPwaHelpTitle" hidden><button type="button" class="farast-pwa-help__close" aria-label="بستن">×</button><strong id="farastPwaHelpTitle">افزودن فراست به صفحه اصلی</strong><p>در نوار پایین مرورگر روی «اشتراک‌گذاری» بزنید و سپس «افزودن به صفحه اصلی» را انتخاب کنید.</p></div>
-@include('components.support-chat-widget')
-<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
-<script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>
+@if(!$isReader)@include('components.support-chat-widget')@endif
+<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isReader&&!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
+<script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>@endif
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
 @stack('scripts')<script>
 (() => {
