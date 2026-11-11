@@ -43,6 +43,8 @@ class StorageBackupRecoveryTest extends TestCase
         if ($this->bootstrapArchive) @unlink($this->bootstrapArchive);
         @unlink(storage_path('app/private/backup-recovery-fixture.txt'));
         @unlink(storage_path('app/private/backup-recovery-target-only.txt'));
+        @unlink(storage_path('app/private/bootstrap-recovery-fixture.txt'));
+        @unlink(storage_path('app/private/bootstrap-target-only.txt'));
 
         foreach ([$this->sourceDatabase, $this->targetDatabase] as $path) {
             @unlink($path);
