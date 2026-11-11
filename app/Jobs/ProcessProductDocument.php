@@ -423,7 +423,7 @@ class ProcessProductDocument implements ShouldQueue
             }
 
             $structure = (array) ($document->structure_json ?? []);
-            if (data_get($structure, 'audio.status') === 'pending') {
+            if (in_array(data_get($structure, 'audio.status'), ['pending', 'upgrading'], true)) {
                 $structure['audio'] = ['status' => 'failed'];
             }
 
