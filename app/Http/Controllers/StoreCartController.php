@@ -13,6 +13,8 @@ use App\Services\StoreCourseEnrollmentService;
 use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 
 class StoreCartController extends Controller
 {
@@ -99,11 +101,24 @@ class StoreCartController extends Controller
         $request->validate(['accept_terms' => ['accepted']]);
         abort_unless($request->user(), 401);
 
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : (string) Str::uuid();
+        abort_if(strlen($idempotencyKey) > 120, 422, 'کلید تکرارپذیری درخواست معتبر نیست.');
+
+        $existingOrder = Order::query()
+            ->where('user_id', $request->user()->id)
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+        if ($existingOrder) {
+            return redirect()->route('checkout', $existingOrder);
+        }
+
         $current = $cart->current($request)->load('items.product.files');
         $payload = $cart->payload($current, $request);
         abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
 
-        $order = DB::transaction(function () use ($request, $current, $payload) {
+        try {
+            $order = DB::transaction(function () use ($request, $current, $payload, $idempotencyKey) {
             $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
@@ -226,6 +241,7 @@ class StoreCartController extends Controller
                     'amount_rials' => 0,
                     'status' => 'paid',
                     'transaction_id' => 'STORE-FREE-'.$order->id.'-'.now()->timestamp,
+                    'idempotency_key' => 'free-order-'.$order->id,
                     'paid_at' => now(),
                 ]);
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
@@ -246,7 +262,15 @@ class StoreCartController extends Controller
             }
 
             return $order->fresh();
-        });
+            });
+        } catch (QueryException $exception) {
+            $existingOrder = Order::query()->where('idempotency_key', $idempotencyKey)->first();
+            if (! $existingOrder || (int) $existingOrder->user_id !== (int) $request->user()->id) {
+                throw $exception;
+            }
+
+            return redirect()->route('checkout', $existingOrder);
+        }
 
         if ((int) $order->total_rials === 0 && $order->status === 'paid') {
             return redirect()->route('library')->with('status', 'سفارش رایگان ثبت شد؛ فایل یا دسترسی دوره در کتابخانه شما فعال است.');
