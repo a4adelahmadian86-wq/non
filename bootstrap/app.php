@@ -33,11 +33,26 @@ return Application::configure(basePath:dirname(__DIR__))
         $middleware->web(append: [App\Http\Middleware\EnsureActiveAccount::class, App\Http\Middleware\ResolveAdminScope::class, App\Http\Middleware\TrackAuthenticatedSession::class, App\Http\Middleware\RequireTwoFactorChallenge::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
         // The middleware checks its cached configuration after the application is bootstrapped.
-        $middleware->append(App\Http\Middleware\FarastObservability::class);
+        // Run first so even failures in later global middleware receive a trace ID.
+        $middleware->prepend(App\Http\Middleware\FarastObservability::class);
     })
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
         $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
+        $exceptions->respond(function (\\Symfony\\Component\\HttpFoundation\\Response $response) {
+            $request = request();
+            $requestId = $request?->attributes->get('farast.request_id');
+            $correlationId = $request?->attributes->get('farast.correlation_id');
+
+            if (is_string($requestId) && $requestId !== '') {
+                $response->headers->set('X-Request-Id', $requestId);
+            }
+            if (is_string($correlationId) && $correlationId !== '') {
+                $response->headers->set('X-Correlation-Id', $correlationId);
+            }
+
+            return $response;
+        });
         $exceptions->render(function (\Throwable $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return null;
