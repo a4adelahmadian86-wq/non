@@ -46,7 +46,7 @@ class EnsureResourcePermission
                 report($exception);
             }
 
-            abort(403, 'دسترسی به این رکورد برای حساب شما مجاز نیست.');
+            abort(404);
         }
 
         return $next($request);
