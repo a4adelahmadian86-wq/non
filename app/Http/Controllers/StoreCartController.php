@@ -173,7 +173,9 @@ class StoreCartController extends Controller
             ]);
 
             $orderItems = [];
-            $cartItems = $current->items->values();
+            // Build order lines from the cart snapshot protected by this transaction's row lock.
+            // The pre-transaction $current instance may be stale under concurrent cart edits.
+            $cartItems = $lockedCart->items->values();
             $remainingDiscount = $discount;
             $remainingTax = $tax;
             $remainingSubtotal = $subtotal;
