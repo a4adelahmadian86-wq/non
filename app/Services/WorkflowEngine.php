@@ -403,7 +403,7 @@ class WorkflowEngine
                     ->lockForUpdate()
                     ->first();
 
-                if (! $locked || $locked->status === 'completed' || (int) $locked->attempts >= 5) {
+                if (! $locked || in_array($locked->status, ['completed', 'paused'], true) || (int) $locked->attempts >= 5) {
                     return false;
                 }
 
