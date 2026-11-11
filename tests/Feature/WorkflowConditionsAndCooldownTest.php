@@ -6,6 +6,7 @@ use App\Jobs\ProcessWorkflowEvent;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -395,6 +396,42 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseHas('farast_workflow_event_workflows', [
             'event_id' => $eventId, 'workflow_id' => $workflow, 'status' => 'pending',
         ]);
+    }
+
+    public function test_database_queue_worker_processes_a_real_automation_job(): void
+    {
+        $owner = $this->owner('09140000231');
+        config(['queue.default' => 'database']);
+
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'worker-smoke:document:231',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 231, 'event_type' => 'document.saved']),
+            'status' => 'pending',
+            'attempts' => 0,
+            'matched_workflows' => 0,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        ProcessWorkflowEvent::dispatch($eventId)->onConnection('database')->onQueue('automation');
+        $this->assertDatabaseHas('jobs', ['queue' => 'automation']);
+
+        Artisan::call('queue:work', [
+            'connection' => 'database',
+            '--queue' => 'automation',
+            '--once' => true,
+            '--tries' => 5,
+            '--timeout' => 300,
+        ]);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseMissing('jobs', ['queue' => 'automation']);
     }
 
 }
