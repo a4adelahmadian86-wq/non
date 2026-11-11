@@ -369,17 +369,6 @@ class AdminStoreController extends Controller
         }, 3);
 
         [$product, $bindings, $publicationReviewId] = $created;
-        try {
-            ReviewProductPublicationRequest::dispatch($publicationReviewId);
-        } catch (Throwable $exception) {
-            StoreProductPublicationReview::query()->whereKey($publicationReviewId)->update([
-                'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
-                'ai_verdict' => 'unavailable',
-                'ai_review_json' => ['error' => class_basename($exception), 'automated_publication' => false],
-            ]);
-            report($exception);
-        }
-
         foreach ($product->files()->where('purpose', $product->type === 'course' ? 'course_asset' : 'product_download')->get() as $productFile) {
             $documentId = (int) DB::table('store_product_documents')->where('product_file_id', $productFile->id)->value('id');
             if ($documentId && $productFile->size_bytes <= 25 * 1024 * 1024) {
@@ -394,6 +383,17 @@ class AdminStoreController extends Controller
                     report($exception);
                 }
             }
+        }
+
+        try {
+            ReviewProductPublicationRequest::dispatch($publicationReviewId);
+        } catch (Throwable $exception) {
+            StoreProductPublicationReview::query()->whereKey($publicationReviewId)->update([
+                'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
+                'ai_verdict' => 'unavailable',
+                'ai_review_json' => ['error' => class_basename($exception), 'automated_publication' => false],
+            ]);
+            report($exception);
         }
 
         $publicationReview = StoreProductPublicationReview::query()->find($publicationReviewId);
@@ -656,6 +656,7 @@ class AdminStoreController extends Controller
         $supervisorReviewFresh = false;
         if (is_array($storedSupervisorReview) && filled($storedSupervisorReview['snapshot_hash'] ?? null)) {
             $currentSnapshot = $snapshotBuilder->build($product, $supervisorSettings);
+            $currentSnapshot['document_knowledge'] = app(\\App\\Services\\ProductKnowledgeService::class)->contextForProduct($product, 12000);
             $supervisorReviewFresh = hash_equals(
                 (string) $storedSupervisorReview['snapshot_hash'],
                 $snapshotBuilder->fingerprint($currentSnapshot)
@@ -809,6 +810,7 @@ class AdminStoreController extends Controller
                     && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
                     $lastReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
                     $snapshot = $snapshotBuilder->build($lockedProduct, $supervisorSettings);
+                    $snapshot['document_knowledge'] = app(\\App\\Services\\ProductKnowledgeService::class)->contextForProduct($lockedProduct, 12000);
                     $snapshotMatches = is_array($lastReview)
                         && filled($lastReview['snapshot_hash'] ?? null)
                         && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
