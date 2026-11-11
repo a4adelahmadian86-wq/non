@@ -18,6 +18,32 @@
       <div><span>دوره آموزشی</span><b>{{ number_format($stats['courses']) }}</b></div>
       <div><span>فایل دانلودی</span><b>{{ number_format($stats['files']) }}</b></div>
     </div>
+    @if(isset($intakeManualReviewQueue) && $intakeManualReviewQueue->isNotEmpty())
+      <section class="product-pipeline-panel" aria-label="صف بازبینی دستی فایل‌های ورود محصول">
+        <div class="product-pipeline-heading">
+          <div><strong>صف بازبینی دستی فایل‌های ورود محصول</strong><small>تأیید این مرحله به‌معنای انتشار محصول نیست؛ کنترل نهایی انتشار مستقل باقی می‌ماند.</small></div>
+          <span class="is-unconfigured">{{ number_format($intakeManualReviewQueue->sum(fn ($session) => $session->ingestions->count())) }} فایل منتظر</span>
+        </div>
+        @foreach($intakeManualReviewQueue as $session)
+          <div class="product-pipeline-attention" style="margin-top:12px">
+            <strong>{{ $session->user?->name ?? 'کاربر حذف‌شده' }} · {{ $session->product_type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</strong>
+            <small>شناسه فرایند: {{ $session->id }} · پایان مهلت: {{ $session->expires_at?->format('Y/m/d H:i') }}</small>
+            @foreach($session->ingestions as $ingestion)
+              <div class="product-pipeline-attention-row">
+                <span><b>{{ $ingestion->original_name }}</b><small>{{ number_format($ingestion->size_bytes) }} بایت · {{ $ingestion->supervisor_status }}</small></span>
+                <form method="post" action="{{ route('admin.store.intakes.files.manual-review', [$session, $ingestion->id]) }}" style="display:grid;gap:8px;min-width:min(420px,100%)">
+                  @csrf
+                  <label>یادداشت مستند بازبینی (حداقل ۲۰ نویسه)
+                    <textarea name="manager_notes" minlength="20" maxlength="2000" required placeholder="نتیجه بررسی فایل، کنترل‌های انجام‌شده و دلیل تأیید دستی را ثبت کنید"></textarea>
+                  </label>
+                  <button type="submit" class="store-outline-btn">ثبت بازبینی دستی و ادامه بررسی</button>
+                </form>
+              </div>
+            @endforeach
+          </div>
+        @endforeach
+      </section>
+    @endif
     <section class="product-pipeline-panel" aria-label="وضعیت زیرساخت پردازش محصولات">
       <div class="product-pipeline-heading">
         <div><strong>وضعیت زیرساخت پردازش محصولات</strong><small>وضعیت واقعی استخراج، دانش محصول و صف پردازش</small></div>
