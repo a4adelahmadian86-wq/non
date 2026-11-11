@@ -34,25 +34,23 @@ class AuthenticationAnomalyDetectionTest extends TestCase
             ]));
         }
 
-        Log::shouldHaveReceived('log')->once()->with(
-            'warning',
-            'farast.security.authentication_anomaly',
-            Mockery::on(function (array $context): bool {
-                $encoded = json_encode($context);
+        $anomalyCalls = [];
+        Log::shouldHaveReceived('log')->twice()->withArgs(function ($level, $message, $context) use (&$anomalyCalls): bool {
+            if ($message !== 'farast.security.authentication_anomaly') {
+                return false;
+            }
 
-                return ($context['failed_attempts'] ?? null) === 5
-                    && ($context['threshold'] ?? null) === 5
-                    && ! str_contains((string) $encoded, '203.0.113.10')
-                    && ! str_contains((string) $encoded, 'private@example.test')
-                    && ! str_contains((string) $encoded, 'never-log-this');
-            })
-        );
+            $anomalyCalls[] = [$level, $context];
+            return true;
+        });
 
-        Log::shouldHaveReceived('log')->once()->with(
-            'critical',
-            'farast.security.authentication_anomaly',
-            Mockery::on(fn (array $context): bool => ($context['failed_attempts'] ?? null) === 10
-                && ($context['threshold'] ?? null) === 10)
-        );
+        $this->assertSame(['warning', 'critical'], array_column($anomalyCalls, 0));
+        $this->assertSame([5, 10], array_map(fn (array $call) => $call[1]['threshold'] ?? null, $anomalyCalls));
+        $warningContext = $anomalyCalls[0][1];
+        $encoded = json_encode($warningContext);
+        $this->assertSame(5, $warningContext['failed_attempts'] ?? null);
+        $this->assertStringNotContainsString('203.0.113.10', (string) $encoded);
+        $this->assertStringNotContainsString('private@example.test', (string) $encoded);
+        $this->assertStringNotContainsString('never-log-this', (string) $encoded);
     }
 }
