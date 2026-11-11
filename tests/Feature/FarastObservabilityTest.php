@@ -129,36 +129,36 @@ class FarastObservabilityTest extends TestCase
     {
         Log::spy();
 
-        $job = \\Mockery::mock(Job::class);
+        $job = \Mockery::mock(Job::class);
         $job->shouldReceive('payload')->andReturn([
             'farast_trace' => [
-                'request_id' => "bad\\nrequest",
+                'request_id' => "bad\nrequest",
                 'correlation_id' => str_repeat('x', 65),
             ],
         ]);
         $job->shouldReceive('getJobId')->andReturn('job-untrusted-trace');
         $job->shouldReceive('getQueue')->andReturn('default');
-        $job->shouldReceive('resolveName')->andReturn('App\\Jobs\\UntrustedTraceJob');
+        $job->shouldReceive('resolveName')->andReturn('App\Jobs\UntrustedTraceJob');
         $job->shouldReceive('attempts')->andReturn(1);
 
         Event::dispatch(new JobProcessing('database', $job));
-        $activeTrace = app(\\App\\Services\\FarastTraceContext::class)->current();
+        $activeTrace = app(\App\Services\FarastTraceContext::class)->current();
 
         $this->assertNull($activeTrace['request_id']);
-        $this->assertTrue(\\Illuminate\\Support\\Str::isUuid($activeTrace['correlation_id']));
+        $this->assertTrue(\Illuminate\Support\Str::isUuid($activeTrace['correlation_id']));
 
-        Event::dispatch(new JobFailed('database', $job, new \\RuntimeException('expected test failure')));
+        Event::dispatch(new JobFailed('database', $job, new \RuntimeException('expected test failure')));
 
         Log::shouldHaveReceived('error')->once()->with(
             'farast.queue.job.failed',
-            \\Mockery::on(function (array $context): bool {
+            \Mockery::on(function (array $context): bool {
                 return ! array_key_exists('request_id', $context)
-                    && \\Illuminate\\Support\\Str::isUuid($context['correlation_id'] ?? null)
+                    && \Illuminate\Support\Str::isUuid($context['correlation_id'] ?? null)
                     && ($context['job_id'] ?? null) === 'job-untrusted-trace';
             })
         );
 
-        $this->assertSame(['request_id' => null, 'correlation_id' => null], app(\\App\\Services\\FarastTraceContext::class)->current());
+        $this->assertSame(['request_id' => null, 'correlation_id' => null], app(\App\Services\FarastTraceContext::class)->current());
     }
 
     public function test_queue_job_lifecycle_restores_and_clears_the_originating_trace(): void
