@@ -96,4 +96,45 @@ class WorkflowSyncDriverTest extends TestCase
         $this->assertDatabaseCount('farast_notifications', 0);
     }
 
+    public function test_sync_scheduler_fallback_processes_pending_outbox_events_without_a_queue_worker(): void
+    {
+        config(['queue.default' => 'sync']);
+
+        $owner = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $workflowId = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $owner->id,
+            'name' => 'Sync scheduler fallback',
+            'enabled' => true,
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'بازیابی رویداد']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'sync-scheduler:document:7803',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 7803, 'event_type' => 'document.saved']),
+            'status' => 'pending',
+            'attempts' => 0,
+            'matched_workflows' => 0,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $processed = app(WorkflowEngine::class)->dispatchPendingEvents();
+
+        $this->assertSame(1, $processed);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+            'matched_workflows' => 1,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflowId,
+            'status' => 'completed',
+        ]);
+    }
+
 }
