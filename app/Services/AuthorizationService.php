@@ -103,7 +103,7 @@ class AuthorizationService
             ];
         }
 
-        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
+        if (! $user->isAdmin() && $this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return ['allowed' => true, 'reason' => 'legacy_role_grant', 'source' => 'legacy_role', 'permission' => $permission];
         }
 
@@ -173,7 +173,7 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = true;
         }
 
-        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
+        if (! $user->isAdmin() && $this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return $this->decisionCache[$cacheKey] = true;
         }
 
