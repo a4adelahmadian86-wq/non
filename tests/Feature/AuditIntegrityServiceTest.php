@@ -22,6 +22,41 @@ class AuditIntegrityServiceTest extends TestCase
         $this->assertSame(0, Artisan::call('farast:audit-ledger:verify'));
     }
 
+    public function test_audit_append_normalizes_invalid_utf8_before_checksumming(): void
+    {
+        $event = app(\App\Services\AuditEventService::class)->record(
+            'test.invalid_utf8',
+            payloadMeta: ['label' => "bad\\xB1"],
+            source: 'test'
+        );
+
+        $this->assertSame("bad\u{FFFD}", $event->payload_meta['label']);
+        $result = (new AuditIntegrityService())->verify();
+        $this->assertTrue($result['ok']);
+        $this->assertSame(1, $result['checked']);
+    }
+
+    public function test_integrity_verification_caps_error_samples_but_reports_total_count(): void
+    {
+        for ($index = 0; $index < 101; $index++) {
+            FarastAuditEvent::create([
+                'event_id' => (string) Str::uuid(),
+                'event_type' => 'test.tampered',
+                'source' => 'test',
+                'payload_meta' => ['index' => $index],
+                'payload_checksum' => str_repeat('0', 64),
+                'previous_checksum' => null,
+            ]);
+        }
+
+        $result = (new AuditIntegrityService())->verify();
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame(101, $result['error_count']);
+        $this->assertCount(100, $result['errors']);
+        $this->assertTrue($result['errors_truncated']);
+    }
+
     public function test_audit_ledger_command_fails_and_emits_safe_failure_when_chain_is_tampered(): void
     {
         $payload = [
