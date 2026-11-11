@@ -86,6 +86,63 @@ class StorageCoreTest extends TestCase
         ]);
     }
 
+    public function test_generated_contents_use_the_central_managed_storage_pipeline(): void
+    {
+        StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Generated content volume', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $contents = '%PDF-1.4 generated preview payload';
+        $storage = app(StorageManager::class);
+        $stored = $storage->storeContents(
+            $contents,
+            'generated-preview.pdf',
+            'application/pdf',
+            StorageManager::CRITICAL,
+            'store-product-preview'
+        );
+
+        $this->assertSame($contents, $storage->get($stored['disk'], $stored['path']));
+        $this->assertSame(strlen($contents), $stored['size_bytes']);
+        $this->assertSame(hash('sha256', $contents), $stored['sha256']);
+        $this->assertDatabaseHas('storage_managed_files', [
+            'id' => $stored['managed_file_id'],
+            'status' => 'active',
+            'checksum' => hash('sha256', $contents),
+        ]);
+    }
+
+    public function test_size_reads_local_volume_and_private_staging_objects(): void
+    {
+        StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Local size volume', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $localContents = 'measured-local-content';
+        $local = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('local-size.txt', $localContents),
+            StorageManager::CRITICAL,
+            'size-test'
+        );
+
+        $this->assertSame(strlen($localContents), $storage->size($local['disk'], $local['path']));
+
+        $stagedContents = 'measured-staging-content';
+        $staged = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('staged-size.txt', $stagedContents),
+            StorageManager::NON_CRITICAL,
+            'size-test'
+        );
+
+        $this->assertNull($staged['volume_id']);
+        $this->assertSame(strlen($stagedContents), $storage->size($staged['disk'], $staged['path']));
+    }
+
     public function test_managed_deletes_are_deferred_until_backup_snapshot_finishes(): void
     {
         $volume = StorageVolume::create([
