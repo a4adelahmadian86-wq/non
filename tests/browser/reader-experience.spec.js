@@ -21,26 +21,32 @@ test('syncs authenticated reading progress to the account endpoint', async ({ pa
 
 });
 
-test('reopens durable reader storage after another tab closes the database', async ({ page }) => {
+test('reopens durable reader storage after another tab invalidates the database connection', async ({ page }) => {
   await page.goto('/');
-  await page.setContent('<!doctype html><html><head></head><body></body></html>');
   await page.addScriptTag({ url: '/js/farast-reader-storage.js' });
+  await page.evaluate(async () => {
+    await window.FarastReaderDurableStore.set('reader-storage-reconnect-probe', 'before-close');
+  });
 
-  const restored = await page.evaluate(async () => {
-    const store = window.FarastReaderDurableStore;
-    await store.set('reader-storage-reconnect-probe', 'before-close');
-    await new Promise((resolve, reject) => {
+  const otherTab = await page.context().newPage();
+  try {
+    await otherTab.goto('/');
+    await otherTab.evaluate(() => new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase('farast-reader-device-data');
       request.onsuccess = resolve;
       request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error('Database deletion was blocked'));
-    });
-    await store.set('reader-storage-reconnect-probe', 'after-reopen');
-    const record = await store.get('reader-storage-reconnect-probe');
-    return record?.value ?? null;
-  });
+    }));
 
-  expect(restored).toBe('after-reopen');
+    const restored = await page.evaluate(async () => {
+      const store = window.FarastReaderDurableStore;
+      await store.set('reader-storage-reconnect-probe', 'after-reopen');
+      const record = await store.get('reader-storage-reconnect-probe');
+      return record?.value ?? null;
+    });
+    expect(restored).toBe('after-reopen');
+  } finally {
+    await otherTab.close();
+  }
 });
 
 test('keeps reader data in IndexedDB after local storage and Cache API are cleared', async ({ page }) => {
