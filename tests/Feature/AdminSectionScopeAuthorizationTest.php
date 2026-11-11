@@ -14,6 +14,7 @@ use App\Models\Wallet;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class AdminSectionScopeAuthorizationTest extends TestCase
@@ -300,6 +301,17 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $employee = $this->makeUser('09123456786', User::ROLE_EMPLOYEE);
         $this->actingAs($employee)->get('/admin/store')->assertForbidden();
         $this->post('/admin/store', ['name' => 'Must Not Be Created Either'])->assertForbidden();
+
+        $supportPermission = Permission::query()->where('key', 'support.manage')->firstOrFail();
+        RolePermission::firstOrCreate([
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'permission_id' => $supportPermission->id,
+        ]);
+        $this->actingAs($manager)->get('/admin/support-report')->assertForbidden();
+
+        $supportReportRoute = Route::getRoutes()->getByName('admin.support.report');
+        $this->assertNotNull($supportReportRoute);
+        $this->assertContains('admin.section:support_admin', $supportReportRoute->gatherMiddleware());
     }
 
 }
