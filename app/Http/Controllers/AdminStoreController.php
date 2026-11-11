@@ -924,32 +924,147 @@ class AdminStoreController extends Controller
     public function cancelIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId, StoreProductIntakeService $intake, StorageManager $storage)
     {
         $intake->assertOwnedAndActive($session, $request->user());
-        $ingestion = StoreProductIngestion::query()
-            ->whereKey($ingestionId)
-            ->where('intake_session_id', $session->id)
-            ->whereNull('product_id')
-            ->where('user_id', $request->user()->id)
-            ->whereIn('status', ['inspected', 'uploaded'])
-            ->firstOrFail();
 
-        if ($ingestion->status === 'uploaded' && $ingestion->managed_file_id) {
-            $storage->delete((string) $ingestion->storage_disk, (string) $ingestion->storage_path);
-        } else {
-            Storage::disk($ingestion->staging_disk ?: 'private')->delete($ingestion->staging_path);
+        $snapshot = DB::transaction(function () use ($request, $session, $ingestionId) {
+            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $lockedSession->user_id === (int) $request->user()->id, 404);
+            abort_if($lockedSession->product_id !== null, 409, 'فایل متصل به محصول قابل لغو در این مرحله نیست.');
+
+            $ingestion = StoreProductIngestion::query()
+                ->whereKey($ingestionId)
+                ->where('intake_session_id', $lockedSession->id)
+                ->whereNull('product_id')
+                ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['inspected', 'uploaded', 'cancel_pending'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($ingestion->status !== 'cancel_pending') {
+                $ingestion->update([
+                    'status' => 'cancel_pending',
+                    'supervisor_status' => 'cancelled',
+                ]);
+            }
+
+            $lockedSession->update(['status' => 'selecting_files']);
+
+            return [
+                'ingestion_id' => (string) $ingestion->id,
+                'managed_file_id' => $ingestion->managed_file_id ? (int) $ingestion->managed_file_id : null,
+                'storage_disk' => (string) ($ingestion->storage_disk ?: ''),
+                'storage_path' => (string) ($ingestion->storage_path ?: ''),
+                'staging_disk' => (string) ($ingestion->staging_disk ?: 'private'),
+                'staging_path' => (string) ($ingestion->staging_path ?: ''),
+            ];
+        }, 3);
+
+        try {
+            if ($snapshot['managed_file_id']) {
+                if (StorageManagedFile::query()->whereKey($snapshot['managed_file_id'])->exists()) {
+                    $storage->delete($snapshot['storage_disk'], $snapshot['storage_path']);
+                }
+            } elseif ($snapshot['staging_path'] !== '' && $snapshot['staging_path'] !== 'cancelled') {
+                Storage::disk($snapshot['staging_disk'])->delete($snapshot['staging_path']);
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'لغو فایل ثبت شد، اما پاک‌سازی فضای ذخیره‌سازی کامل نشد؛ درخواست پاک‌سازی دوباره قابل اجرا است.',
+                'cleanup_pending' => true,
+            ], 503);
         }
 
-        $ingestion->update([
-            'status' => 'rejected',
-            'staging_path' => 'cancelled',
-            'storage_disk' => null,
-            'storage_path' => null,
-            'managed_file_id' => null,
-            'supervisor_status' => 'cancelled',
+        DB::transaction(function () use ($snapshot) {
+            $ingestion = StoreProductIngestion::query()->whereKey($snapshot['ingestion_id'])->lockForUpdate()->first();
+            if (! $ingestion || $ingestion->status !== 'cancel_pending' || $ingestion->product_id !== null) {
+                return;
+            }
+
+            $ingestion->update([
+                'status' => 'rejected',
+                'staging_path' => 'cancelled',
+                'storage_disk' => null,
+                'storage_path' => null,
+                'managed_file_id' => null,
+                'supervisor_status' => 'cancelled',
+            ]);
+        }, 3);
+
+        return response()->json([
+            'success' => true,
+            'progress' => $intake->progress($session->fresh()),
+        ]);
+    }
+
+    public function manualReviewIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId)
+    {
+        abort_unless(
+            app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'),
+            403
+        );
+
+        $data = $request->validate([
+            'manager_notes' => 'required|string|min:20|max:2000',
         ]);
 
-        $session->update(['status' => 'selecting_files']);
+        DB::transaction(function () use ($request, $session, $ingestionId, $data) {
+            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedSession->expires_at?->isFuture() && $lockedSession->product_id === null, 410);
+            abort_unless((int) $lockedSession->user_id !== (int) $request->user()->id, 403, 'بازبینی دستی باید توسط فردی غیر از ثبت‌کننده فایل انجام شود.');
 
-        return response()->json(['success' => true, 'progress' => $intake->progress($session->fresh())]);
+            $ingestion = StoreProductIngestion::query()
+                ->whereKey($ingestionId)
+                ->where('intake_session_id', $lockedSession->id)
+                ->whereNull('product_id')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_unless(
+                $ingestion->status === 'uploaded'
+                    && in_array($ingestion->supervisor_status, ['manual_review_required', 'awaiting_supervisor'], true),
+                409,
+                'این فایل در وضعیت قابل بازبینی دستی نیست.'
+            );
+
+            $review = (array) ($ingestion->supervisor_review_json ?? []);
+            $review['status'] = 'completed';
+            $review['security_gate'] = 'manual_scan_required';
+            $review['publication_authorized'] = false;
+            $review['automated_publication'] = false;
+            $review['manual_review'] = [
+                'approved' => true,
+                'reviewed_by' => (int) $request->user()->id,
+                'reviewed_at' => now()->toISOString(),
+                'notes' => $data['manager_notes'],
+                'automated_publication' => false,
+            ];
+
+            $ingestion->update([
+                'supervisor_status' => 'completed',
+                'supervisor_review_json' => $review,
+                'supervisor_reviewed_at' => now(),
+            ]);
+
+            $statuses = $lockedSession->ingestions()
+                ->where('status', 'uploaded')
+                ->pluck('supervisor_status');
+            $nextStatus = match (true) {
+                $statuses->isEmpty() => 'selecting_files',
+                $statuses->contains(fn ($value) => in_array($value, ['blocked', 'failed', 'manual_review_required', 'awaiting_supervisor'], true)) => 'review_attention',
+                $statuses->every(fn ($value) => $value === 'completed') => 'files_reviewed',
+                default => 'review_pending',
+            };
+            $lockedSession->update(['status' => $nextStatus]);
+
+            $this->audit('store.product.intake_file_manager_reviewed', $ingestion, [
+                'intake_session_id' => $lockedSession->id,
+                'reviewed_by' => $request->user()->id,
+            ]);
+        }, 3);
+
+        return back()->with('status', 'بازبینی دستی ثبت شد؛ انتشار نهایی محصول همچنان نیازمند تأیید مستقل است.');
     }
 
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
