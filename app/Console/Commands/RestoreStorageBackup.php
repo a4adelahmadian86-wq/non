@@ -61,11 +61,33 @@ class RestoreStorageBackup extends Command
             $zip = new ZipArchive();
             if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
             $zip->setPassword($password);
+            $seenEntries = [];
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $name = $zip->getNameIndex($index);
-                if (! is_string($name) || str_starts_with($name, '/') || str_contains($name, '\\') || preg_match('#(^|/)\.\.?(/|$)#', $name) || str_contains($name, "\0")) {
+                if (
+                    ! is_string($name)
+                    || $name === ''
+                    || strlen($name) > 4096
+                    || str_starts_with($name, '/')
+                    || preg_match('/^[A-Za-z]:/', $name)
+                    || str_contains($name, '\\\\')
+                    || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
+                    || str_contains($name, "\\0")
+                    || isset($seenEntries[$name])
+                ) {
                     $zip->close();
-                    throw new RuntimeException('مسیر ناامن در آرشیو بازیابی شناسایی شد.');
+                    throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بازیابی شناسایی شد.');
+                }
+                $seenEntries[$name] = true;
+
+                $operatingSystem = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
+                    $unixFileType = ($externalAttributes >> 16) & 0170000;
+                    if ($operatingSystem === ZipArchive::OPSYS_UNIX && $unixFileType === 0120000) {
+                        $zip->close();
+                        throw new RuntimeException('پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                    }
                 }
             }
             $manifestJson = $zip->getFromName('manifest.json');
@@ -75,6 +97,14 @@ class RestoreStorageBackup extends Command
             }
             $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
             $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+            $currentDriver = (string) config(
+                'database.connections.'.config('database.default').'.driver',
+                config('database.default')
+            );
+            if (! in_array($databaseDriver, ['sqlite', 'mysql', 'mariadb', 'pgsql'], true) || $databaseDriver !== $currentDriver) {
+                $zip->close();
+                throw new RuntimeException('درایور پایگاه داده بکاپ با درایور پشتیبانی‌شده و محیط مقصد یکسان نیست.');
+            }
             if (! $zip->locateName('database/database.sql')) {
                 $zip->close();
                 throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
