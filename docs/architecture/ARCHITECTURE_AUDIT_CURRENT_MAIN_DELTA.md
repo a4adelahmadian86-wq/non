@@ -468,6 +468,7 @@ commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه 
 | سبد و سفارش فروشگاه | `store_carts/store_cart_items`, `orders/store_order_items` | `StoreCartService` | StoreCartController | مشخص |
 | پرداخت فروشگاه | `payments` / `Payment` | PaymentController + gateway service | checkout/callback | مشخص؛ idempotency مالی در PR #340 pending |
 | کیف پول | `wallets/wallet_transactions` | WalletService/WalletController | checkout/top-up/admin adjustment | مشخص؛ با wallet reservationهای FARAST یکی نیست |
+| محصول تجاری پلتفرم | `farast_commercial_products` / `FarastCommercialProduct` | `ProfessionalCommerceService` | تعریف قابلیت/سرویس قابل فروش پلتفرم | aggregate جدا از `StoreProduct` فروشگاه؛ رابطه plan/product نیازمند یک canonical link |
 | پلن/entitlement تجاری | `farast_commercial_plans`, `farast_entitlements` | `ProfessionalCommerceService`, `SubscriptionEntitlementService`, `CommerceAuthorizationService` | platform capabilities | مسیر جدید؛ legacy `farast_plans/ProjectBillingService` هنوز ناسازگار |
 | قیمت policy نسخه‌دار | `farast_pricing_policy_versions` | `PricingEngine` + `PricingPolicyAdminService` | CommerceAuthorizationService | موتور runtime نسخه‌دار؛ write UI و fallback legacy باید یکپارچه شوند |
 | free-tier quota | `free_credits` | `FreeQuotaService` | typing free allowance | مشخص به‌عنوان free tier |
