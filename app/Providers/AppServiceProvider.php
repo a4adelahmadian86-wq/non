@@ -127,6 +127,7 @@ class AppServiceProvider extends ServiceProvider
                     'guard' => $event->guard,
                     'actor_id' => $event->user?->getAuthIdentifier(),
                 ]);
+                $this->recordAuthenticationAnomaly();
             } catch (Throwable $exception) {
                 error_log('FARAST authentication failure logging failed: '.get_class($exception));
             }
@@ -182,6 +183,42 @@ class AppServiceProvider extends ServiceProvider
                 error_log('FARAST password reset logging failed: '.get_class($exception));
             }
         });
+    }
+
+
+    private function recordAuthenticationAnomaly(): void
+    {
+        try {
+            $ip = request()->ip();
+            if (! is_string($ip) || $ip === '') {
+                return;
+            }
+
+            $window = max(1, (int) config('observability.security.failed_authentication_window_minutes', 10));
+            $fingerprint = hash_hmac('sha256', $ip, (string) config('app.key'));
+            $key = 'farast:security:failed-auth:'.$fingerprint;
+            Cache::add($key, 0, now()->addMinutes($window));
+            $count = (int) Cache::increment($key);
+
+            $warningThreshold = max(2, (int) config('observability.security.failed_authentication_warning_threshold', 5));
+            $criticalThreshold = max($warningThreshold + 1, (int) config('observability.security.failed_authentication_critical_threshold', 10));
+
+            foreach ([$warningThreshold => 'warning', $criticalThreshold => 'critical'] as $threshold => $level) {
+                if ($count < $threshold || ! Cache::add($key.':alert:'.$threshold, true, now()->addMinutes($window))) {
+                    continue;
+                }
+
+                Log::log($level, 'farast.security.authentication_anomaly', [
+                    'source_fingerprint' => substr($fingerprint, 0, 16),
+                    'failed_attempts' => $count,
+                    'threshold' => $threshold,
+                    'window_minutes' => $window,
+                ]);
+            }
+        } catch (Throwable $exception) {
+            // Authentication must remain available when the cache/telemetry layer fails.
+            error_log('FARAST authentication anomaly detection failed: '.get_class($exception));
+        }
     }
 
     private function clearQueueTrace(): void
