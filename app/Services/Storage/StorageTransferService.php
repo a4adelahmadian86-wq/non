@@ -331,8 +331,10 @@ class StorageTransferService
             $locked = StorageManagedFile::query()->lockForUpdate()->find($file->id);
             $orphan = data_get($locked?->metadata, 'orphaned_source');
             if (! $locked || ! data_get($orphan, 'pending_cleanup', false)) return false;
+            $retryAfter = data_get($orphan, 'cleanup_retry_after');
+            if ($retryAfter && Carbon::parse($retryAfter)->isFuture()) return false;
             $startedAt = data_get($orphan, 'cleanup_started_at');
-            if ($startedAt && Carbon::parse($startedAt)->gt(now()->subHours(4))) return false;
+            if ($startedAt && Carbon::parse($startedAt)->gt(now()->subMinutes(15))) return false;
             $metadata = (array) $locked->metadata;
             $metadata['orphaned_source']['cleanup_started_at'] = now()->toIso8601String();
             $locked->update(['metadata' => $metadata]);
@@ -370,8 +372,10 @@ class StorageTransferService
             $locked = StorageManagedFile::find($file->id);
             if ($locked) {
                 $metadata = (array) $locked->metadata;
+                unset($metadata['orphaned_source']['cleanup_started_at']);
                 $metadata['orphaned_source']['last_error'] = mb_substr($exception->getMessage(), 0, 300);
                 $metadata['orphaned_source']['last_attempt_at'] = now()->toIso8601String();
+                $metadata['orphaned_source']['cleanup_retry_after'] = now()->addMinutes(10)->toIso8601String();
                 $locked->update(['metadata' => $metadata]);
             }
             report($exception);
