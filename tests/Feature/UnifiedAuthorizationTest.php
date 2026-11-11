@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Organization;
 use App\Models\Permission;
 use App\Models\RolePermission;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Database\Eloquent\Model;
@@ -146,7 +147,7 @@ class UnifiedAuthorizationTest extends TestCase
 
         self::assertSame('team', app(AuthorizationService::class)->effectiveScope($user));
         self::assertSame([$team->id], app(AuthorizationService::class)->effectiveTeamIds($user));
-        self::assertSame('team', \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($user));
+        self::assertSame('team', \App\Http\Middleware\ResolveAdminScope::scopeFor($user));
         self::assertTrue(app(AuthorizationService::class)->allowsRecord(
             $user,
             'reports.team',
