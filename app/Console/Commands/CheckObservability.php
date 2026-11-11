@@ -28,12 +28,20 @@ class CheckObservability extends Command
     ): int {
         $correlationId = (string) Str::uuid();
         $trace->set(null, $correlationId);
-        Log::withContext(['correlation_id' => $correlationId, 'operation' => 'farast:observability:check']);
+        try {
+            Log::withContext(['correlation_id' => $correlationId, 'operation' => 'farast:observability:check']);
+        } catch (Throwable $exception) {
+            error_log('FARAST operational log context initialization failed: '.get_class($exception));
+        }
 
         try {
             return $this->run($observability, $notifications, $auditEvents);
         } finally {
-            Log::withoutContext();
+            try {
+                Log::withoutContext();
+            } catch (Throwable $exception) {
+                error_log('FARAST operational log context cleanup failed: '.get_class($exception));
+            }
             $trace->clear();
         }
     }
@@ -46,7 +54,7 @@ class CheckObservability extends Command
         try {
             $snapshot = $observability->snapshot();
         } catch (Throwable $exception) {
-            Log::critical('farast.observability.snapshot_failed', [
+            $this->safeLog('critical', 'farast.observability.snapshot_failed', [
                 'exception_class' => get_class($exception),
             ]);
             $this->error('Health snapshot failed; inspect protected application logs.');
@@ -60,7 +68,7 @@ class CheckObservability extends Command
             $previous = Cache::get('farast:observability:last-status');
             Cache::put('farast:observability:last-status', $status, now()->addDays(30));
         } catch (Throwable $exception) {
-            Log::warning('farast.observability.alert_state_unavailable', [
+            $this->safeLog('warning', 'farast.observability.alert_state_unavailable', [
                 'exception_class' => get_class($exception),
             ]);
         }
@@ -102,7 +110,7 @@ class CheckObservability extends Command
             $shouldNotify = Cache::add($gateKey, true, now()->addMinutes($cooldown));
         } catch (Throwable $exception) {
             // A cache outage must not suppress the durable operational log.
-            Log::warning('farast.observability.alert_deduplication_unavailable', [
+            $this->safeLog('warning', 'farast.observability.alert_deduplication_unavailable', [
                 'exception_class' => get_class($exception),
             ]);
             $shouldNotify = $previous !== $status;
@@ -120,7 +128,7 @@ class CheckObservability extends Command
             $this->emitAlert($severity, $title, $body, $snapshot, $notifications, $auditEvents);
         }
 
-        Log::log($severity === 'critical' ? 'critical' : 'warning', 'farast.observability.health_degraded', [
+        $this->safeLog($severity === 'critical' ? 'critical' : 'warning', 'farast.observability.health_degraded', [
             'status' => $status,
             'affected_components' => $affected,
         ]);
@@ -130,6 +138,16 @@ class CheckObservability extends Command
         return $severity === 'critical' ? self::FAILURE : self::SUCCESS;
     }
 
+
+
+    private function safeLog(string $level, string $message, array $context = []): void
+    {
+        try {
+            Log::log($level, $message, $context);
+        } catch (Throwable $exception) {
+            error_log('FARAST operational logging failed: '.get_class($exception));
+        }
+    }
 
     private function deliverWebhook(
         string $severity,
@@ -146,7 +164,7 @@ class CheckObservability extends Command
 
         $parts = parse_url($url);
         if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || empty($parts['host'])) {
-            Log::error('farast.observability.webhook_misconfigured', [
+            $this->safeLog('error', 'farast.observability.webhook_misconfigured', [
                 'reason' => 'https_required',
             ]);
             return;
@@ -177,19 +195,19 @@ class CheckObservability extends Command
             ]);
 
             if (! $response->successful()) {
-                Log::warning('farast.observability.webhook_delivery_failed', [
+                $this->safeLog('warning', 'farast.observability.webhook_delivery_failed', [
                     'http_status' => $response->status(),
                 ]);
                 return;
             }
 
-            Log::info('farast.observability.webhook_delivered', [
+            $this->safeLog('info', 'farast.observability.webhook_delivered', [
                 'incident_id' => $incidentId,
                 'severity' => $severity,
             ]);
         } catch (Throwable $exception) {
             // Never log the destination URL or response body; webhook URLs commonly contain secrets.
-            Log::warning('farast.observability.webhook_delivery_failed', [
+            $this->safeLog('warning', 'farast.observability.webhook_delivery_failed', [
                 'exception_class' => get_class($exception),
             ]);
         }
@@ -228,7 +246,7 @@ class CheckObservability extends Command
             );
         } catch (Throwable $exception) {
             // The alert log remains the fallback if the database/audit ledger is unavailable.
-            Log::critical('farast.observability.incident_audit_failed', [
+            $this->safeLog('critical', 'farast.observability.incident_audit_failed', [
                 'severity' => $severity,
                 'exception_class' => get_class($exception),
             ]);
@@ -238,7 +256,7 @@ class CheckObservability extends Command
 
         $userIds = (array) config('observability.alerts.user_ids', []);
         if ($userIds === []) {
-            Log::notice('farast.observability.alert_recipients_not_configured', [
+            $this->safeLog('notice', 'farast.observability.alert_recipients_not_configured', [
                 'severity' => $severity,
             ]);
             return;
@@ -261,7 +279,7 @@ class CheckObservability extends Command
                     'farast-observability:'.Str::uuid()
                 );
             } catch (Throwable $exception) {
-                Log::warning('farast.observability.notification_failed', [
+                $this->safeLog('warning', 'farast.observability.notification_failed', [
                     'recipient_id' => $user->id,
                     'exception_class' => get_class($exception),
                 ]);
