@@ -715,7 +715,7 @@ class StoreController extends Controller
             ->header('Cross-Origin-Resource-Policy', 'same-origin');
     }
 
-    public function readerAudio(StoreProduct $product, StoreProductDocument $document)
+    public function readerAudio(StoreProduct $product, StoreProductDocument $document, StorageManager $storage)
     {
         $user = request()->user();
         abort_unless(
@@ -753,12 +753,13 @@ class StoreController extends Controller
             $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
         }
         $artifact = $artifactQuery->get()
-            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
-                && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+            ->first(fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+                && $storage->exists($candidate->disk ?: 'private', $candidate->path));
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
-        $disk = Storage::disk($artifact->disk ?: 'private');
-        $size = (int) $disk->size($artifact->path);
+        $artifactDisk = $artifact->disk ?: 'private';
+        $size = $storage->size($artifactDisk, $artifact->path);
+        abort_unless($size > 0, 404);
         $start = 0;
         $end = max(0, $size - 1);
         $status = 200;
@@ -800,20 +801,32 @@ class StoreController extends Controller
             return response('', $status, $headers);
         }
 
-        $stream = $disk->readStream($artifact->path);
-        abort_unless(is_resource($stream), 404);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-reader-audio');
+        if (! is_string($temporary)) abort(503, 'فضای موقت برای پخش فایل صوتی در دسترس نیست.');
+        try {
+            $storage->downloadTo($artifactDisk, $artifact->path, $temporary);
+            $stream = fopen($temporary, 'rb');
+            if (! is_resource($stream)) throw new \\RuntimeException('جریان فایل صوتی برای پخش باز نشد.');
+        } catch (\\Throwable $exception) {
+            @unlink($temporary);
+            throw $exception;
+        }
 
-        return response()->stream(function () use ($stream, $start, $length) {
-            if ($start > 0) fseek($stream, $start);
-            $remaining = $length;
-            while ($remaining > 0 && ! feof($stream)) {
-                $chunk = fread($stream, min(8192, $remaining));
-                if (! is_string($chunk) || $chunk === '') break;
-                echo $chunk;
-                $remaining -= strlen($chunk);
-                flush();
+        return response()->stream(function () use ($stream, $temporary, $start, $length) {
+            try {
+                if ($start > 0) fseek($stream, $start);
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remaining));
+                    if (! is_string($chunk) || $chunk === '') break;
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                    flush();
+                }
+            } finally {
+                fclose($stream);
+                @unlink($temporary);
             }
-            fclose($stream);
         }, $status, $headers);
     }
 
