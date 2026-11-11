@@ -724,6 +724,7 @@
         input.dataset.ocgId=String(id);
         input.addEventListener('change',async()=>{
           pdfOptionalContentConfig.setVisibility(id,input.checked);
+          refreshPdfLayerControls();
           try{
             if(continuousMode)await refreshContinuousVisiblePages(true);
             else await renderPdfPage(pdfPage);
