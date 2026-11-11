@@ -44,21 +44,40 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Require successful FARAST CI for this exact commit
+      - name: Require successful production test workflows for this exact main commit
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
           EXPECTED_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          runs="$(gh run list --workflow farast-ci.yml --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status)"
-          if ! jq -e --arg sha "$EXPECTED_SHA" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<<"$runs" >/dev/null; then
-            echo "::error::No successful completed FARAST CI run exists for the exact release SHA."
-            echo "Expected SHA: $EXPECTED_SHA"
-            jq -r '.[] | [.headSha, .status, (.conclusion // "pending")] | @tsv' <<<"$runs" || true
-            exit 1
-          fi
+          required_workflows=(farast-ci.yml phase3-commerce.yml phase4-agent.yml)
+          optional_workflows=(assistant-browser-tests.yml voice-assistant-tests.yml product-supervisor.yml)
+
+          require_successful_push_run() {
+            local workflow="$1"
+            local optional="$2"
+            local runs
+            runs="$(gh run list --workflow "$workflow" --branch main --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status,event)"
+            if [[ "$optional" == "true" && "$(jq 'length' <<<"$runs")" -eq 0 ]]; then
+              echo "No path-triggered run for $workflow on this commit; skipping."
+              return 0
+            fi
+            if ! jq -e --arg sha "$EXPECTED_SHA" 'any(.[]; .headSha == $sha and .event == "push" and .status == "completed" and .conclusion == "success")' <<<"$runs" >/dev/null; then
+              echo "::error::No successful completed main-branch push run for $workflow at $EXPECTED_SHA."
+              jq -r '.[] | [.headSha, .event, .status, (.conclusion // "pending")] | @tsv' <<<"$runs" || true
+              return 1
+            fi
+          }
+
+          for workflow in "${required_workflows[@]}"; do
+            require_successful_push_run "$workflow" false
+          done
+          for workflow in "${optional_workflows[@]}"; do
+            require_successful_push_run "$workflow" true
+          done
+
+          VERSION="${{ inputs.version }}"
           if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
             echo "::error::Tag $VERSION already exists."
             exit 1
