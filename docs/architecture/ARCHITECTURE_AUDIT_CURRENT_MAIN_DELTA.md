@@ -132,6 +132,32 @@ PR `feat(platform): scoped RBAC and transactional workflow core` همین سه �
 
 **وضعیت:** اصلاح هنوز در main این snapshot نیست؛ PR #347 باز است. فایل‌های Route و سرویس‌های Authorization در PR #347 تغییر می‌کنند، بنابراین اصلاح موازی همان فایل‌ها در شاخه دیگری انجام نمی‌شود. ادغام فقط پس از rebase/بررسی تعارض و CI کامل مجاز است.
 
+
+### نکته معماری پیش از ادغام PR #347: ورودی‌های چندگانه، یک evaluator
+
+بازبینی کد head فعلی PR #347 نشان می‌دهد این PR **کاتالوگ مجوز جدید موازی** نمی‌سازد؛ جدول `permissions` را reuse می‌کند. اما مدل تخصیص نقش و grant چندمنبعی می‌شود:
+
+| ورودی سیاست | جدول/مدل | معنای آن |
+|---|---|---|
+| نقش پایه | `users.role` + `role_permissions` | نقش‌های سیستمی/پایه و مجوزهای پیش‌فرض آن‌ها |
+| نقش سفارشی | `farast_roles` + `farast_role_permissions` + `farast_user_roles` | نقش‌های قابل تعریف و انتساب با scope و زمان اعتبار |
+| استثنای مستقیم | `farast_user_permission_overrides` | allow/deny صریح روی کاربر و محدوده |
+| محدودیت مدیر | `farast_user_admin_scopes` | محدودسازی دامنه یک مدیر |
+| کاتالوگ مشترک | `permissions` | شناسه و کلید واحد مجوزها |
+| تصمیم نهایی | `AuthorizationService::allows/allowsFor` | evaluator مرکزی |
+
+در کد PR #347 ترتیب تصمیم چنین است: مدیر سراسریِ بدون محدودیت bypass؛ سپس override مستقیم (deny بر allow و grantهای inherited مقدم است)؛ سپس grant نقش پایه legacy؛ سپس grant نقش سفارشی. در نتیجه grant قدیمی همچنان می‌تواند دسترسی بدهد حتی اگر نقش سفارشی جدید آن grant را نداشته باشد؛ برای منع آن، deny override لازم است.
+
+این رفتار می‌تواند یک مدل سازگاری عمدی برای حفظ نقش‌های پایه در کنار نقش‌های سفارشی باشد، اما نباید به‌اشتباه «یک جدول واحد نقش/مجوز» توصیف شود. قبل از پذیرش PR #347 باید یکی از این دو قرارداد صریحاً انتخاب و در UI/تست تثبیت شود:
+1. **مدل ترکیبی پایدار:** نقش پایه و نقش سفارشی دو نوع grant مستقل با union و deny precedence هستند؛ باید این قرارداد در مستندات، رابط مدیریت و آزمون‌های revoke/expiry ثبت شود.
+2. **مهاجرت به منبع واحد:** نقش‌های پایه نیز به `farast_roles/farast_user_roles` منتقل شوند، سپس خواندن legacy `role_permissions` پس از reconciliation داده‌ها حذف شود.
+
+در PR فعلی، `AdminAccessCenterController::updateBaseRole` همچنان `role_permissions` را تغییر می‌دهد، در حالی که `syncPermissions/assignRole` جداول `farast_role_permissions/farast_user_roles` را مدیریت می‌کنند. پس دو مسیر مدیریت grant واقعاً وجود دارد؛ یکسان بودن evaluator مانع نیاز به تعیین تکلیف مالکیت داده نیست.
+
+Scope نیز دو لایه دارد: محدودیت per-admin از `farast_user_admin_scopes` و override سراسریِ صرفاً محدودکننده از `site_settings` با کلید `scope_override_key`. این دو به‌خودی‌خود رقیب نیستند، به شرط آنکه override سراسری هرگز scope را بازتر نکند و precedence فعلی با تست حفظ شود.
+
+**وضعیت:** این توصیف مربوط به head ادغام‌نشده PR #347 است، نه main فعلی. قبل از ادغام، تست‌های migration از دیتابیس خالی و دیتابیس legacy، حذف/انقضای grant، deny precedence و cache invalidation باید در CI سبز باشند.
+
 ## 6. Storage: شکاف main و اصلاح موجود در PR فعال #335
 
 ### وضعیت main این snapshot
