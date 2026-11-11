@@ -262,14 +262,39 @@ class AdminConsoleService
      * گارد عملیاتی برای متدهای نوشتاری کنسول:
      * هم بخش و هم مالکیت رکورد هدف بررسی می‌شود.
      */
-    public function authorizeAction(?User $user, string $section, ?int $targetUserId = null): void
-    {
+    public function authorizeAction(
+        ?User $user,
+        string $section,
+        ?int $targetUserId = null,
+        ?string $requiredPermission = null
+    ): void {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
+        if ($requiredPermission !== null) {
+            abort_unless(
+                $this->authorization->allows($user, $requiredPermission),
+                403,
+                'مجوز عملیاتی لازم برای این تغییر در اختیار شما نیست.'
+            );
+        }
+
         if ($targetUserId !== null && $user) {
-            $permission = config("farast_admin.sections.$section.permission");
-            $ids = $this->visibleUserIds($user, is_string($permission) ? $permission : null);
-            abort_if($ids !== null && ! in_array($targetUserId, $ids, true), 403, 'این کاربر خارج از دامنهٔ دسترسی شماست.');
+            $sectionPermission = config("farast_admin.sections.$section.permission");
+            $sectionIds = $this->visibleUserIds($user, is_string($sectionPermission) ? $sectionPermission : null);
+            abort_if(
+                $sectionIds !== null && ! in_array($targetUserId, $sectionIds, true),
+                403,
+                'این کاربر خارج از دامنهٔ مشاهدهٔ شماست.'
+            );
+
+            if ($requiredPermission !== null) {
+                $actionIds = $this->visibleUserIds($user, $requiredPermission);
+                abort_if(
+                    $actionIds !== null && ! in_array($targetUserId, $actionIds, true),
+                    403,
+                    'این کاربر خارج از دامنهٔ عملیاتی شماست.'
+                );
+            }
         }
     }
 
