@@ -192,7 +192,7 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: true, chat_gateway_health_url: 'https://voice.example.test/health' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (String(url).startsWith('https://voice.example.test/health')) {
+    if (url === '/editor/voice/health') {
       window.__order.push('health');
       if (window.__order.filter(item => item === 'health').length === 1) return new Response(JSON.stringify({ status: 'starting', chat_configured: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       return new Response(JSON.stringify({ status: 'ok', chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
