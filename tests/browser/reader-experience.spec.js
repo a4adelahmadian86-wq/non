@@ -245,7 +245,7 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-fit').click();
     await expect(root.locator('#reader-zoom-label')).toHaveText('تناسب عرض');
     // The watermark must be painted into the page bitmap, not merely placed as removable HTML.
-    const watermarkPixels = await canvas.evaluate(element => {
+    await expect.poll(() => canvas.evaluate(element => {
       const context = element.getContext('2d');
       const { data, width, height } = context.getImageData(0, 0, element.width, element.height);
       let darkPixels = 0;
@@ -256,8 +256,7 @@ test.describe('FARAST sample reader interactions', () => {
         }
       }
       return darkPixels;
-    });
-    expect(watermarkPixels).toBeGreaterThan(50);
+    }), { timeout: 10000 }).toBeGreaterThan(50);
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
     await expect(textSpan).toHaveCSS('user-select', 'text');
