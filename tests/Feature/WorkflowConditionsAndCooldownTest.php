@@ -519,7 +519,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
                 'document_id' => 234,
             ], 'document:234:missing-revision');
             $this->fail('A document event without a revision must be rejected.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('revision', $exception->getMessage());
         }
 
@@ -532,7 +532,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
                 'status' => 'deposit_paid',
             ], 'order:234:wrong-paid-status');
             $this->fail('A deposit status cannot satisfy the paid-order contract.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('status does not match', $exception->getMessage());
         }
 
