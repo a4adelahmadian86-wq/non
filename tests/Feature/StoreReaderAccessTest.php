@@ -588,10 +588,12 @@ class StoreReaderAccessTest extends TestCase
             "frame-ancestors 'self'",
             "base-uri 'self'",
             "form-action 'self'",
+            "script-src 'self' blob: 'wasm-unsafe-eval'",
             "worker-src 'self' blob:",
         ] as $directive) {
             $this->assertStringContainsString($directive, $contentSecurityPolicy);
         }
+        $this->assertStringNotContainsString("default-src *", $contentSecurityPolicy);
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
@@ -703,8 +705,14 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee(route('store.preview.audio', $preview))
             ->assertSee('data-audio-timing')
             ->assertSee('farast-reader-audio.js')
-            ->assertSee('سلام')
             ->assertDontSee('store/reader-audio/sample/narration.mp3');
+
+        $html = new \\DOMDocument();
+        @$html->loadHTML($response->getContent());
+        $timingNode = (new \\DOMXPath($html))->query('//*[@data-audio-timing]')->item(0);
+        $this->assertNotNull($timingNode, 'The reader must expose the safe timing manifest in its page data.');
+        $timings = json_decode($timingNode->getAttribute('data-audio-timing'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('سلام', $timings[0]['text'] ?? null);
     }
 
 
