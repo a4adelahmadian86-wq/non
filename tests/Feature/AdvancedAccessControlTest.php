@@ -301,7 +301,12 @@ class AdvancedAccessControlTest extends TestCase
         $admin = $this->user('09140000145', User::ROLE_ADMIN);
         $target = $this->user('09140000146', User::ROLE_EMPLOYEE, $organization->id);
 
-        $this->actingAs($admin)->post('/admin/users/'.$target->id.'/role', [
+        $this->actingAs($admin)->post('/admin/users/'.$admin->id.'/role', [
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+        ])->assertConflict();
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => User::ROLE_ADMIN]);
+
+        $this->post('/admin/users/'.$target->id.'/role', [
             'role' => User::ROLE_ORGANIZATION_MANAGER,
         ])->assertRedirect();
 
