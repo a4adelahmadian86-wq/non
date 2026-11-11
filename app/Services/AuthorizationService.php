@@ -188,7 +188,7 @@ class AuthorizationService
                 RolePermission::firstOrCreate(['role' => $key, 'permission_id' => $permissionId]);
             }
 
-            $this->audit('role.created', $actor, null, null, ['role_key' => $key], $request);
+            $this->audit('role.created', $actor, null, null, ['role_key' => $key, 'permissions' => array_values(array_unique($permissionKeys))], $request);
             return DB::table('roles')->where('id', $roleId)->first();
         });
     }
@@ -209,14 +209,20 @@ class AuthorizationService
         $name = trim($name);
         abort_unless($name !== '' && mb_strlen($name) <= 160, 422, 'نام نقش معتبر نیست.');
 
+        $previousPermissionKeys = DB::table('role_permissions')
+            ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+            ->where('role_permissions.role', $key)
+            ->pluck('permissions.key')
+            ->all();
+        $permissionKeys = array_values(array_unique($permissionKeys));
         $permissionIds = [];
-        foreach (array_values(array_unique($permissionKeys)) as $permissionKey) {
+        foreach ($permissionKeys as $permissionKey) {
             $permissionId = $this->permissionId((string) $permissionKey);
             abort_unless($permissionId !== null, 422, 'مجوز تعریف‌نشده: '.(string) $permissionKey);
             $permissionIds[] = $permissionId;
         }
 
-        return DB::transaction(function () use ($actor, $role, $key, $name, $permissionIds, $isActive, $request): object {
+        return DB::transaction(function () use ($actor, $role, $key, $name, $permissionIds, $permissionKeys, $previousPermissionKeys, $isActive, $request): object {
             DB::table('roles')->where('id', $role->id)->update([
                 'name' => $name,
                 'is_active' => $isActive,
@@ -231,7 +237,8 @@ class AuthorizationService
             $this->audit('role.updated', $actor, null, null, [
                 'role_key' => $key,
                 'is_active' => $isActive,
-                'permission_count' => count($permissionIds),
+                'previous_permissions' => $previousPermissionKeys,
+                'permissions' => $permissionKeys,
             ], $request);
 
             return DB::table('roles')->where('id', $role->id)->first();
