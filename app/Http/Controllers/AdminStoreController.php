@@ -1077,6 +1077,7 @@ class AdminStoreController extends Controller
 
         $data = $request->validate([
             'manager_notes' => 'required|string|min:20|max:2000',
+            'antivirus_confirmed' => 'required|accepted',
         ]);
 
         DB::transaction(function () use ($request, $session, $ingestionId, $data) {
@@ -1109,6 +1110,8 @@ class AdminStoreController extends Controller
                 'reviewed_by' => (int) $request->user()->id,
                 'reviewed_at' => now()->toISOString(),
                 'notes' => $data['manager_notes'],
+                'antivirus_confirmed' => true,
+                'antivirus_engine' => 'manual_review',
                 'automated_publication' => false,
             ];
 
@@ -1116,6 +1119,9 @@ class AdminStoreController extends Controller
                 'supervisor_status' => 'completed',
                 'supervisor_review_json' => $review,
                 'supervisor_reviewed_at' => now(),
+                'antivirus_status' => 'clean',
+                'antivirus_engine' => 'manual_review',
+                'antivirus_scanned_at' => now(),
             ]);
 
             $statuses = $lockedSession->ingestions()
