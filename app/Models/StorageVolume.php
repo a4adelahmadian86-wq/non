@@ -47,8 +47,19 @@ class StorageVolume extends Model
         return $this->hasMany(StorageManagedFile::class);
     }
 
+    public function getReservedBytesAttribute(): int
+    {
+        if (array_key_exists('reservations_sum_reserved_bytes', $this->attributes)) {
+            return (int) $this->attributes['reservations_sum_reserved_bytes'];
+        }
+
+        return (int) $this->reservations()->sum('reserved_bytes');
+    }
+
     public function getFreeBytesAttribute(): ?int
     {
-        return $this->capacity_bytes === null ? null : max(0, $this->capacity_bytes - $this->used_bytes);
+        return $this->capacity_bytes === null
+            ? null
+            : max(0, $this->capacity_bytes - $this->used_bytes - $this->reserved_bytes);
     }
 }
