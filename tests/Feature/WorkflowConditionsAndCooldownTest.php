@@ -536,6 +536,17 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             $this->assertStringContainsString('status does not match', $exception->getMessage());
         }
 
+        try {
+            $engine->enqueue('ticket.created', [
+                'user_id' => $owner->id,
+                'ticket_id' => 234,
+                'ticket_code' => ['not-a-string'],
+            ], 'ticket:234:invalid-code');
+            $this->fail('Ticket codes must be strings, not arrays.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('ticket_code', $exception->getMessage());
+        }
+
         $this->assertDatabaseCount('farast_workflow_events', 0);
     }
 
