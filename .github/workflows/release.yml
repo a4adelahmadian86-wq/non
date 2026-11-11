@@ -59,14 +59,16 @@ jobs:
             local workflow="$1"
             local optional="$2"
             local runs
-            runs="$(gh run list --workflow "$workflow" --branch main --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status,event)"
+            local latest
+            runs="$(gh run list --workflow "$workflow" --branch main --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status,event,createdAt)"
             if [[ "$optional" == "true" && "$(jq 'length' <<<"$runs")" -eq 0 ]]; then
               echo "No path-triggered run for $workflow on this commit; skipping."
               return 0
             fi
-            if ! jq -e --arg sha "$EXPECTED_SHA" 'any(.[]; .headSha == $sha and .event == "push" and .status == "completed" and .conclusion == "success")' <<<"$runs" >/dev/null; then
-              echo "::error::No successful completed main-branch push run for $workflow at $EXPECTED_SHA."
-              jq -r '.[] | [.headSha, .event, .status, (.conclusion // "pending")] | @tsv' <<<"$runs" || true
+            latest="$(jq -c --arg sha "$EXPECTED_SHA" '[.[] | select(.headSha == $sha and .event == "push")] | sort_by(.createdAt) | last // empty' <<<"$runs")"
+            if [[ -z "$latest" ]] || ! jq -e '.status == "completed" and .conclusion == "success"' <<<"$latest" >/dev/null; then
+              echo "::error::The latest main-branch push run for $workflow is not successful for $EXPECTED_SHA."
+              jq -r '.[] | [.headSha, .event, .status, (.conclusion // "pending"), .createdAt] | @tsv' <<<"$runs" || true
               return 1
             fi
           }
