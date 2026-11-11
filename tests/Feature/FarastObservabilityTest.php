@@ -175,23 +175,21 @@ class FarastObservabilityTest extends TestCase
             );
         }
 
-        Log::shouldHaveReceived('log')->once()->with(
-            'warning',
-            'farast.security.authorization_anomaly',
-            \Mockery::on(function (array $context): bool {
-                $encoded = json_encode($context);
+        $anomalyCalls = [];
+        Log::shouldHaveReceived('log')->twice()->withArgs(function ($level, $message, $context) use (&$anomalyCalls): bool {
+            if ($message !== 'farast.security.authorization_anomaly') {
+                return false;
+            }
 
-                return ($context['denied_requests'] ?? null) === 10
-                    && ($context['threshold'] ?? null) === 10
-                    && ! str_contains((string) $encoded, '203.0.113.44');
-            })
-        );
-        Log::shouldHaveReceived('log')->once()->with(
-            'critical',
-            'farast.security.authorization_anomaly',
-            \Mockery::on(fn (array $context): bool => ($context['denied_requests'] ?? null) === 25
-                && ($context['threshold'] ?? null) === 25)
-        );
+            $anomalyCalls[] = [$level, $context];
+            return true;
+        });
+
+        $this->assertSame(['warning', 'critical'], array_column($anomalyCalls, 0));
+        $this->assertSame([10, 25], array_map(fn (array $call) => $call[1]['threshold'] ?? null, $anomalyCalls));
+        $warningContext = $anomalyCalls[0][1];
+        $this->assertSame(10, $warningContext['denied_requests'] ?? null);
+        $this->assertStringNotContainsString('203.0.113.44', (string) json_encode($warningContext));
     }
 
     public function test_exception_responses_keep_request_and_correlation_headers(): void
