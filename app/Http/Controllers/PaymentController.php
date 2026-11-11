@@ -282,8 +282,6 @@ class PaymentController extends Controller
                     ]);
                 }
 
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
-
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
@@ -292,6 +290,8 @@ class PaymentController extends Controller
                     'transaction_id' => 'STORE-WALLET-'.$locked->id.'-'.now()->timestamp,
                     'paid_at' => now(),
                 ]);
+                $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
 
                 foreach ($validatedItems as [$item, $product, $file]) {
                     $libraryItem = StoreLibraryItem::firstOrCreate(
@@ -307,7 +307,6 @@ class PaymentController extends Controller
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
-                $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
