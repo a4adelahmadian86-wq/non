@@ -33,7 +33,7 @@ class UnifiedAuthorizationTest extends TestCase
 
     private function permission(string $key): Permission
     {
-        return Permission::create(['key' => $key, 'label' => $key, 'group' => 'test']);
+        return Permission::firstOrCreate(['key' => $key], ['label' => $key, 'group' => 'test']);
     }
 
     public function test_blocked_users_never_receive_permissions(): void
@@ -46,7 +46,7 @@ class UnifiedAuthorizationTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'employee']);
         $permission = $this->permission('documents.delete');
-        RolePermission::create(['role' => 'employee', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'employee', 'permission_id' => $permission->id]);
 
         DB::table('user_permission_grants')->insert([
             'user_id' => $user->id,
@@ -65,7 +65,7 @@ class UnifiedAuthorizationTest extends TestCase
         $owner = User::factory()->create(['role' => 'employee']);
         $other = User::factory()->create(['role' => 'employee']);
         $permission = $this->permission('documents.view');
-        RolePermission::create(['role' => 'employee', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'employee', 'permission_id' => $permission->id]);
         $record = $this->record(['user_id' => $other->id]);
 
         self::assertFalse(app(AuthorizationService::class)->allowsRecord($owner, 'documents.view', $record));
@@ -79,7 +79,7 @@ class UnifiedAuthorizationTest extends TestCase
         $manager = User::factory()->create(['role' => 'organization_manager', 'organization_id' => $first->id]);
         $member = User::factory()->create(['role' => 'employee', 'organization_id' => $second->id]);
         $permission = $this->permission('documents.view');
-        RolePermission::create(['role' => 'organization_manager', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'organization_manager', 'permission_id' => $permission->id]);
 
         self::assertFalse(app(AuthorizationService::class)->allowsRecord(
             $manager,
@@ -102,8 +102,8 @@ class UnifiedAuthorizationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        RolePermission::create(['role' => 'limited_admin', 'permission_id' => $permission->id]);
-        RolePermission::create(['role' => 'limited_admin', 'permission_id' => $accessPermission->id]);
+        RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $accessPermission->id]);
         DB::table('role_assignments')->insert([
             'user_id' => $admin->id,
             'role_id' => $roleId,
@@ -134,7 +134,7 @@ class UnifiedAuthorizationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        RolePermission::create(['role' => 'team_reporter', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'team_reporter', 'permission_id' => $permission->id]);
         DB::table('role_assignments')->insert([
             'user_id' => $user->id,
             'role_id' => $roleId,
@@ -190,7 +190,7 @@ class UnifiedAuthorizationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        RolePermission::create(['role' => 'workflow_operator', 'permission_id' => $permission->id]);
+        RolePermission::firstOrCreate(['role' => 'workflow_operator', 'permission_id' => $permission->id]);
         DB::table('role_assignments')->insert([
             'user_id' => $user->id,
             'role_id' => $roleId,
