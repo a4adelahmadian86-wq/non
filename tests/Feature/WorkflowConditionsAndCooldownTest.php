@@ -564,4 +564,59 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ], $context));
     }
 
+    public function test_stale_worker_lease_cannot_commit_workflow_side_effects(): void
+    {
+        $owner = $this->owner('09140000235');
+        $workflow = $this->workflow($owner);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'lease-fence:document:235',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 235, 'revision' => 1]),
+            'status' => 'processing',
+            'attempts' => 1,
+            'matched_workflows' => 1,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'attempts' => 1,
+            'started_at' => now(),
+            'lease_token' => 'current-worker-token',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            app(WorkflowEngine::class)->run(
+                $workflow,
+                ['user_id' => $owner->id, 'event_type' => 'document.saved', 'event_id' => $eventId],
+                $mappingId,
+                false,
+                'stale-worker-token',
+            );
+            $this->fail('A stale worker must not complete a mapping owned by a newer lease.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('lease was lost', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'running',
+            'lease_token' => 'current-worker-token',
+        ]);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $owner->id,
+            'type' => 'workflow',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'failed',
+        ]);
+    }
+
 }
