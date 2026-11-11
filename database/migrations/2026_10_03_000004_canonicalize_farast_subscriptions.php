@@ -76,7 +76,8 @@ return new class extends Migration
                 }
             }
             if ($legacyFields !== []) {
-                $metadata['legacy_fields'] = array_merge($metadata['legacy_fields'] ?? [], $legacyFields);
+                $existingLegacyFields = is_array($metadata['legacy_fields'] ?? null) ? $metadata['legacy_fields'] : [];
+                $metadata['legacy_fields'] = array_merge($existingLegacyFields, $legacyFields);
             }
             if (! isset($metadata['legacy_id'])) {
                 $metadata['legacy_id'] = $row->id;
@@ -101,11 +102,11 @@ return new class extends Migration
             $table->id();
             // Keep the historical string contract; do not narrow identifiers
             // that may already be consumed by integrations.
-            $table->string('subscription_id', 80)->unique('farast_subscriptions_phase_20261003_staging_subscription_id_unique');
-            $table->unsignedBigInteger('user_id')->nullable()->index('farast_subscriptions_phase_20261003_staging_user_id_index');
-            $table->unsignedBigInteger('organization_id')->nullable()->index('farast_subscriptions_phase_20261003_staging_organization_id_index');
-            $table->unsignedBigInteger('plan_id')->index('farast_subscriptions_phase_20261003_staging_plan_id_index');
-            $table->string('status', 30)->default('active')->index('farast_subscriptions_phase_20261003_staging_status_index');
+            $table->string('subscription_id', 80)->unique('farast_subs_stg_subscription_id_unique');
+            $table->unsignedBigInteger('user_id')->nullable()->index('farast_subs_stg_user_id_index');
+            $table->unsignedBigInteger('organization_id')->nullable()->index('farast_subs_stg_org_id_index');
+            $table->unsignedBigInteger('plan_id')->index('farast_subs_stg_plan_id_index');
+            $table->string('status', 30)->default('active')->index('farast_subs_stg_status_id_index');
             $table->timestamp('starts_at');
             $table->timestamp('ends_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
