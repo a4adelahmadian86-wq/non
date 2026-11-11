@@ -23,7 +23,10 @@ class CheckObservabilityCommandTest extends TestCase
         config([
             'observability.alerts.user_ids' => [$recipient->id],
             'observability.alerts.cooldown_minutes' => 30,
+            'observability.webhook.url' => 'https://alerts.example.test/farast',
+            'observability.webhook.token' => 'webhook-secret',
         ]);
+        Http::fake();
 
         $observability = \Mockery::mock(FarastObservabilityService::class);
         $observability->shouldReceive('snapshot')->twice()->andReturn([
@@ -55,11 +58,20 @@ class CheckObservabilityCommandTest extends TestCase
             'type' => 'security_operational_alert',
             'title' => 'سلامت فراست بازیابی شد',
         ]);
+        Http::assertSentCount(2);
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'https://alerts.example.test/farast'
+            && $request->hasHeader('Authorization', 'Bearer webhook-secret')
+            && ($request['severity'] ?? null) === 'critical');
+
     }
 
     public function test_alerts_are_not_broadcast_when_no_explicit_recipients_are_configured(): void
     {
-        config(['observability.alerts.user_ids' => []]);
+        config([
+            'observability.alerts.user_ids' => [],
+            'observability.webhook.url' => 'http://untrusted.example.test/hook',
+        ]);
+        Http::fake();
         $observability = \Mockery::mock(FarastObservabilityService::class);
         $observability->shouldReceive('snapshot')->once()->andReturn([
             'status' => 'warning',
@@ -69,5 +81,7 @@ class CheckObservabilityCommandTest extends TestCase
 
         $this->assertSame(0, Artisan::call('farast:observability:check'));
         $this->assertDatabaseCount('farast_notifications', 0);
+        Http::assertNothingSent();
+
     }
 }
