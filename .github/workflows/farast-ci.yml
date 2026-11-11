@@ -92,6 +92,7 @@ jobs:
       - run: npx playwright test --workers=1 --fail-on-flaky-tests
         env:
           FARAST_E2E_URL: http://127.0.0.1:8000
+          ADMIN_MOBILE: '09151234567'
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
