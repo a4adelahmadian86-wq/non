@@ -105,20 +105,31 @@ class StoreCartController extends Controller
         $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : (string) Str::uuid();
         abort_if(strlen($idempotencyKey) > 120, 422, 'کلید تکرارپذیری درخواست معتبر نیست.');
 
+        $current = $cart->current($request)->load('items.product.files');
+        $payload = $cart->payload($current, $request);
+        abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
+        $requestFingerprint = hash('sha256', json_encode([
+            'items' => $payload['items'],
+            'coupon_code' => $payload['coupon_code'] ?? null,
+            'coupon_assignment_id' => $payload['coupon_assignment_id'] ?? null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
         $existingOrder = Order::query()
             ->where('user_id', $request->user()->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
         if ($existingOrder) {
+            abort_unless(
+                hash_equals((string) ($existingOrder->pricing_snapshot['request_fingerprint'] ?? ''), $requestFingerprint),
+                409,
+                'کلید تکرارپذیری قبلاً برای محتوای سفارش دیگری استفاده شده است.'
+            );
+
             return redirect()->route('checkout', $existingOrder);
         }
 
-        $current = $cart->current($request)->load('items.product.files');
-        $payload = $cart->payload($current, $request);
-        abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
-
         try {
-            $order = DB::transaction(function () use ($request, $current, $payload, $idempotencyKey) {
+            $order = DB::transaction(function () use ($request, $current, $payload, $idempotencyKey, $requestFingerprint) {
             $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
@@ -130,6 +141,7 @@ class StoreCartController extends Controller
             $order = Order::create([
                 'user_id' => $request->user()->id,
                 'document_id' => null,
+                'idempotency_key' => $idempotencyKey,
                 'subtotal_rials' => $subtotal,
                 'discount_rials' => $discount,
                 'tax_rials' => $tax,
@@ -137,6 +149,7 @@ class StoreCartController extends Controller
                 'status' => 'pending',
                 'pricing_snapshot' => [
                     'kind' => 'store',
+                    'request_fingerprint' => $requestFingerprint,
                     'tax_rate' => $taxRate,
                     'cart_items' => $payload['items'],
                     'coupon_code' => $payload['coupon_code'],
