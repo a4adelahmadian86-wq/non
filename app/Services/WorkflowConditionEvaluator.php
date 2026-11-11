@@ -16,6 +16,7 @@ class WorkflowConditionEvaluator
         'document_id',
         'revision',
         'ticket_id',
+        'ticket_code',
         'product_id',
         'organization_id',
         'team_id',
