@@ -137,7 +137,7 @@ class AdminConsoleService
     /**
      * شناسه تیم‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
      */
-    public function visibleTeamIds(?User $user): ?array
+    public function visibleTeamIds(?User $user, ?string $permission = null): ?array
     {
         if (! $user) {
             return [];
@@ -167,7 +167,7 @@ class AdminConsoleService
             return [];
         }
 
-        $permission = request()->attributes->get('farast.section_permission');
+        $permission ??= request()->attributes->get('farast.section_permission');
         if (! is_string($permission) || $permission === '' || $ids === []) {
             return $ids;
         }
@@ -190,7 +190,7 @@ class AdminConsoleService
     /**
      * شناسه سازمان‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
      */
-    public function visibleOrganizationIds(?User $user): ?array
+    public function visibleOrganizationIds(?User $user, ?string $permission = null): ?array
     {
         if (! $user) {
             return [];
@@ -209,7 +209,7 @@ class AdminConsoleService
             return [];
         }
 
-        $permission = request()->attributes->get('farast.section_permission');
+        $permission ??= request()->attributes->get('farast.section_permission');
         if (! is_string($permission) || $permission === '' || $ids === []) {
             return $ids;
         }
@@ -262,7 +262,8 @@ class AdminConsoleService
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
         if ($targetUserId !== null && $user) {
-            $ids = $this->visibleUserIds($user);
+            $permission = config("farast_admin.sections.$section.permission");
+            $ids = $this->visibleUserIds($user, is_string($permission) ? $permission : null);
             abort_if($ids !== null && ! in_array($targetUserId, $ids, true), 403, 'این کاربر خارج از دامنهٔ دسترسی شماست.');
         }
     }
