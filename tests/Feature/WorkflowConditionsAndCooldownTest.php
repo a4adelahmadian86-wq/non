@@ -908,4 +908,38 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_stale_manual_runs_are_recovered_without_touching_recent_runs(): void
+    {
+        $owner = $this->owner('09140000241');
+        $workflow = $this->workflow($owner);
+        $staleRunId = DB::table('farast_workflow_runs')->insertGetId([
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'context' => json_encode(['user_id' => $owner->id, 'manual' => true]),
+            'started_at' => now()->subMinutes(31),
+            'created_at' => now()->subMinutes(31),
+            'updated_at' => now()->subMinutes(31),
+        ]);
+        $activeRunId = DB::table('farast_workflow_runs')->insertGetId([
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'context' => json_encode(['user_id' => $owner->id, 'manual' => true]),
+            'started_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame(1, app(WorkflowEngine::class)->recoverStaleRuns());
+
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'id' => $staleRunId,
+            'status' => 'failed',
+            'error' => 'Execution lease expired before workflow completion.',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'id' => $activeRunId,
+            'status' => 'running',
+        ]);
+    }
+
 }
