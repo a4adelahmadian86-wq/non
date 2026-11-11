@@ -237,12 +237,23 @@ class StorageCoreTest extends TestCase
 
         $volume->refresh();
         $managed->refresh();
-        $this->assertSame(0, $volume->used_bytes);
-        $this->assertSame(0, $volume->object_count);
+        $this->assertSame((int) $stored['size_bytes'], $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
         $this->assertNull($managed->storage_volume_id);
         $this->assertSame('pending_transfer', $managed->status);
         $this->assertSame($stagingPath, $managed->file_key);
         $this->assertSame('private', data_get($managed->metadata, 'disk'));
+        $this->assertTrue(app(StorageManager::class)->exists('storage_volume:'.$volume->id, data_get($managed->metadata, 'orphaned_source.file_key')));
+
+        $this->assertSame(1, app(StorageTransferService::class)->transferPending());
+        $managed->refresh();
+        $volume->refresh();
+        $this->assertSame('active', $managed->status);
+        $this->assertSame($volume->id, $managed->storage_volume_id);
+        $this->assertSame((int) $stored['size_bytes'], $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+        $this->assertNull(data_get($managed->metadata, 'orphaned_source'));
+        $this->assertTrue(app(StorageManager::class)->exists($managed->metadata['disk'], $managed->file_key));
     }
 
     public function test_staged_transfer_is_claimed_once_and_updates_inventory_once(): void
