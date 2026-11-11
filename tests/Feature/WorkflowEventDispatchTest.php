@@ -37,8 +37,8 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $first = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17], 'document:17:revision:1');
-        $second = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17], 'document:17:revision:1');
+        $first = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17, 'revision' => 1], 'document:17:revision:1');
+        $second = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17, 'revision' => 1], 'document:17:revision:1');
 
         $this->assertSame(1, $first);
         $this->assertSame(0, $second);
@@ -61,12 +61,12 @@ class WorkflowEventDispatchTest extends TestCase
 
         $first = app(WorkflowEngine::class)->dispatch(
             'order.paid',
-            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000, 'order_kind' => 'store', 'status' => 'paid'],
             'order:125:paid',
         );
         $second = app(WorkflowEngine::class)->dispatch(
             'order.paid',
-            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000, 'order_kind' => 'store', 'status' => 'paid'],
             'order:125:paid',
         );
 
@@ -88,7 +88,7 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $context = ['user_id' => $user->id, 'order_id' => 502, 'order_kind' => 'typing_deposit'];
+        $context = ['user_id' => $user->id, 'order_id' => 502, 'order_kind' => 'typing_deposit', 'amount_rials' => 100000, 'status' => 'deposit_paid'];
         $first = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
         $second = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
 
@@ -110,7 +110,7 @@ class WorkflowEventDispatchTest extends TestCase
 
         $count = app(WorkflowEngine::class)->dispatch(
             'ticket.created',
-            ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 91],
+            ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 91, 'ticket_code' => 'T-91'],
             'ticket:91:created',
         );
 
@@ -236,11 +236,11 @@ class WorkflowEventDispatchTest extends TestCase
         $other = $this->user('09152223353');
         $engine = app(WorkflowEngine::class);
 
-        $engine->dispatch('document.saved', ['user_id' => $owner->id], 'shared-event-key');
+        $engine->dispatch('document.saved', ['user_id' => $owner->id, 'document_id' => 1, 'revision' => 1], 'shared-event-key');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already bound to another event');
-        $engine->dispatch('document.saved', ['user_id' => $other->id], 'shared-event-key');
+        $engine->dispatch('document.saved', ['user_id' => $other->id, 'document_id' => 1, 'revision' => 1], 'shared-event-key');
     }
 
     public function test_event_dispatch_never_runs_another_users_workflow(): void
@@ -253,7 +253,7 @@ class WorkflowEventDispatchTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $count = app(WorkflowEngine::class)->dispatch('ticket.created', ['user_id' => $owner->id], 'ticket:unique-1');
+        $count = app(WorkflowEngine::class)->dispatch('ticket.created', ['user_id' => $owner->id, 'ticket_id' => 1, 'ticket_code' => 'T-1'], 'ticket:unique-1');
         $this->assertSame(0, $count);
         $this->assertSame(0, DB::table('farast_workflow_runs')->count());
     }
