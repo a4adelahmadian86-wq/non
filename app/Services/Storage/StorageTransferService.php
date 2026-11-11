@@ -234,7 +234,7 @@ class StorageTransferService
 
             if (! $target || $reservationKey === null) {
                 $metadata = $this->scheduleRetry((array) $file->metadata);
-                $file->update(['status' => 'transfer_error', 'metadata' => $this->scheduleRetry($metadata)]);
+                $file->update(['status' => 'transfer_error', 'metadata' => $metadata]);
                 continue;
             }
 
