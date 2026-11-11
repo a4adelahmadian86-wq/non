@@ -56,6 +56,11 @@ class StoreProductIntakeService
             'review_completed_count' => $active->where('status', 'uploaded')->where('supervisor_status', 'completed')->count(),
             'review_blocked_count' => $active->where('status', 'uploaded')->whereIn('supervisor_status', ['blocked', 'failed', 'manual_review_required'])->count(),
             'cancelled_count' => $ingestions->whereIn('status', ['rejected', 'cancel_pending'])->count(),
+            'cleanup_pending_files' => $ingestions->where('status', 'cancel_pending')->map(fn ($item) => [
+                'id' => $item->id,
+                'name' => $item->original_name,
+                'size_bytes' => $item->size_bytes,
+            ])->values()->all(),
             'archive_file_count' => $active->sum(fn ($item) => (int) data_get($item->inspection_json, 'archive_entry_count', 0)),
             'total_size_bytes' => (int) $active->sum('size_bytes'),
             'files' => $active->map(fn ($item) => [
