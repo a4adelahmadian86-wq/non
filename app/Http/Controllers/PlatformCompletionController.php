@@ -85,13 +85,54 @@ class PlatformCompletionController extends Controller {
  public function notifications(Request $r){return app(NotificationController::class)->index($r);}
  public function readNotification(Request $r,$id){return app(NotificationController::class)->read($r,(int)$id);}
  public function workflow(Request $r){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.view'),403);
-  $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
-  $canManageWorkflows=app(AuthorizationService::class)->allows($r->user(),'workflows.manage');
-  return view('platform.workflows',compact('items','canManageWorkflows'));
+  $authorization=app(AuthorizationService::class);
+  $canManageWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.create');
+  $canEditWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.edit');
+  $canRunWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.run')
+   ||$authorization->allows($r->user(),'automation.run');
+  $canViewWorkflowAudit=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.audit')
+   ||$authorization->allows($r->user(),'automation.audit');
+  $canDeleteWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.delete');
+  abort_unless($authorization->allows($r->user(),'workflows.view')||$canEditWorkflows||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit||$canDeleteWorkflows,403);
+
+  $editingWorkflow=null;
+  if($r->filled('edit')){
+   abort_unless($canEditWorkflows,403);
+   $editingWorkflow=DB::table('farast_workflows')
+    ->where('id',(int)$r->query('edit'))
+    ->where('user_id',$r->user()->id)
+    ->first();
+   abort_unless($editingWorkflow,404);
+  }
+  $showWorkflowBuilder=$canManageWorkflows||$editingWorkflow!==null;
+
+  $items=DB::table('farast_workflows')
+   ->where('user_id',$r->user()->id)
+   ->select('farast_workflows.*')
+   ->selectSub(DB::table('farast_workflow_runs')->selectRaw('COUNT(*)')->whereColumn('workflow_id','farast_workflows.id'),'runs_count')
+   ->selectSub(DB::table('farast_workflow_event_workflows')->selectRaw('COUNT(*)')->whereColumn('workflow_id','farast_workflows.id'),'event_mappings_count')
+   ->orderByDesc('updated_at')->get();
+  $runs=$canViewWorkflowAudit?DB::table('farast_workflow_runs as runs')
+   ->join('farast_workflows as workflows','workflows.id','=','runs.workflow_id')
+   ->where('workflows.user_id',$r->user()->id)
+   ->select('runs.id','runs.workflow_id','runs.status','runs.error','runs.started_at','runs.finished_at','workflows.name as workflow_name')
+   ->orderByDesc('runs.id')->limit(30)->get():collect();
+  $workflowAudit=$canViewWorkflowAudit?DB::table('farast_workflow_audit_logs')->where('owner_id',$r->user()->id)->orderByDesc('id')->limit(50)->get():collect();
+  return view('platform.workflows',compact('items','canManageWorkflows','canEditWorkflows','showWorkflowBuilder','editingWorkflow','canRunWorkflows','canViewWorkflowAudit','canDeleteWorkflows','workflowAudit','runs'));
  }
  public function saveWorkflow(Request $r){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $conditionFields=\App\Services\WorkflowConditionEvaluator::FIELDS;
+  $conditionOperators=\App\Services\WorkflowConditionEvaluator::OPERATORS;
   $x=$r->validate([
    'id'=>'nullable|integer|min:1',
    'name'=>'required|string|max:160',
@@ -103,36 +144,107 @@ class PlatformCompletionController extends Controller {
    'steps.*.description'=>'nullable|string|max:4000',
    'steps.*.priority'=>'nullable|in:low,normal,high',
    'steps.*.due_at'=>'nullable|date',
+   'conditions'=>'nullable|array|max:10',
+   'conditions.*.field'=>['required',\Illuminate\Validation\Rule::in($conditionFields)],
+   'conditions.*.operator'=>['required',\Illuminate\Validation\Rule::in($conditionOperators)],
+   'conditions.*.value'=>'nullable|string|max:500',
+   'cooldown_seconds'=>'nullable|integer|min:0|max:86400',
   ]);
+  $requiredPermission=!empty($x['id'])?'workflows.edit':'workflows.create';
+  $authorization=app(AuthorizationService::class);
+  abort_unless(
+   $authorization->allows($r->user(),$requiredPermission)
+   ||$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage'),
+   403
+  );
   $payload=[
    'name'=>$x['name'],
    'trigger_type'=>$x['trigger_type'],
-   'steps'=>json_encode($x['steps'],JSON_UNESCAPED_UNICODE),
-   'enabled'=>$r->boolean('enabled',true),
+   'steps'=>json_encode(array_values($x['steps']),JSON_UNESCAPED_UNICODE),
+   'conditions'=>!empty($x['conditions'])?json_encode(array_values($x['conditions']),JSON_UNESCAPED_UNICODE):null,
+   'cooldown_seconds'=>(int)($x['cooldown_seconds']??0),
+   'enabled'=>$r->boolean('enabled',false),
    'updated_at'=>now(),
   ];
   DB::transaction(function()use($r,$x,$payload){
    if(!empty($x['id'])){
-    $owned=DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->exists();
+    $owned=DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->lockForUpdate()->first();
     abort_unless($owned,404);
     DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->update($payload);
+    $this->auditWorkflow($r,(int)$r->user()->id,(int)$x['id'],'workflow.updated',(array)$owned,$payload);
     return;
    }
    $payload['user_id']=$r->user()->id;
    $payload['created_at']=now();
-   DB::table('farast_workflows')->insert($payload);
+   $workflowId=(int)DB::table('farast_workflows')->insertGetId($payload);
+   $this->auditWorkflow($r,(int)$r->user()->id,$workflowId,'workflow.created',null,$payload);
   });
   return back()->with('status','گردش‌کار ذخیره شد.');
  }
  public function runWorkflow(Request $r,$id, \App\Services\WorkflowEngine $engine){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $authorization=app(AuthorizationService::class);
+  abort_unless(
+   $authorization->allows($r->user(),'workflows.run')
+   ||$authorization->allows($r->user(),'automation.run')
+   ||$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage'),
+   403
+  );
   $w=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->first();
   abort_unless($w,404);
   abort_unless((bool)$w->enabled,409,'گردش‌کار غیرفعال است.');
-  $context=$r->validate(['context'=>'nullable|array'])['context']??[];
-  $context['user_id']=$r->user()->id;
-  $run=$engine->run((int)$id,$context);
+
+  // A browser request is not a trusted business event. Never accept caller-
+  // supplied order, payment, ticket, document or organization attributes here.
+  // Conditional workflows with business-data predicates must run from the
+  // corresponding server-side domain event, not from a forged manual payload.
+  $context=['user_id'=>(int)$r->user()->id,'customer_id'=>(int)$r->user()->id,'manual_run'=>true];
+  abort_unless(
+   app(\App\Services\WorkflowConditionEvaluator::class)->matches($w->conditions??null,$context),
+   409,
+   'این گردش‌کار به اطلاعات یک رویداد واقعی نیاز دارد و از اجرای دستی قابل تأمین نیست.'
+  );
+
+  $run=$engine->run((int)$id,$context,null,true);
   return response()->json(['run_id'=>$run,'status'=>'completed']);
+ }
+ public function deleteWorkflow(Request $r,$id){
+  $authorization=app(AuthorizationService::class);
+  abort_unless(
+   $authorization->allows($r->user(),'workflows.delete')
+   ||$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage'),
+   403
+  );
+
+  DB::transaction(function()use($r,$id){
+   $workflow=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->lockForUpdate()->first();
+   abort_unless($workflow,404);
+   $hasRuns=DB::table('farast_workflow_runs')->where('workflow_id',$id)->exists();
+   $hasEventMappings=DB::table('farast_workflow_event_workflows')->where('workflow_id',$id)->exists();
+   abort_if($hasRuns||$hasEventMappings,409,'این گردش‌کار سابقه اجرا یا رویداد دارد؛ برای حفظ تاریخچه آن را غیرفعال کنید، نه حذف.');
+
+   $this->auditWorkflow($r,(int)$r->user()->id,(int)$id,'workflow.deleted',(array)$workflow,null);
+   DB::table('farast_workflows')->where('id',$id)->delete();
+  });
+
+  return back()->with('status','گردش‌کار بدون سابقه حذف شد و رویداد ممیزی آن حفظ شد.');
+ }
+
+ public function deleteWorkflow(Request $r,$id){
+  $authorization=app(AuthorizationService::class);
+  abort_unless($authorization->allows($r->user(),'workflows.delete')||$authorization->allows($r->user(),'workflows.manage')||$authorization->allows($r->user(),'automation.manage'),403);
+  DB::transaction(function()use($r,$id){
+   $workflow=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->lockForUpdate()->first();
+   abort_unless($workflow,404);
+   $hasRuns=DB::table('farast_workflow_runs')->where('workflow_id',$id)->exists();
+   $hasEventMappings=DB::table('farast_workflow_event_workflows')->where('workflow_id',$id)->exists();
+   abort_if($hasRuns||$hasEventMappings,409,'این گردش‌کار سابقه اجرا یا رویداد دارد؛ برای حفظ تاریخچه آن را غیرفعال کنید، نه حذف.');
+   $this->auditWorkflow($r,(int)$r->user()->id,(int)$id,'workflow.deleted',(array)$workflow,null);
+   DB::table('farast_workflows')->where('id',$id)->delete();
+  });
+  return back()->with('status','گردش‌کار بدون سابقه حذف شد و رویداد ممیزی آن حفظ شد.');
  }
  public function security(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'audit.view'),403);
@@ -259,4 +371,18 @@ class PlatformCompletionController extends Controller {
  public function teamMembers(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$t=DB::table('teams')->find($team);abort_unless($t,404);return response()->json(DB::table('team_user')->join('users','users.id','=','team_user.user_id')->where('team_id',$team)->select('users.id','users.name','users.email','team_user.team_role')->get());}
  public function addTeamMember(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['user_id'=>'required|integer','team_role'=>'required|in:owner,supervisor,employee']);DB::table('team_user')->updateOrInsert(['team_id'=>$team,'user_id'=>$x['user_id']],['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','عضو تیم به‌روزرسانی شد.');}
  public function removeTeamMember(Request $r,$team,$user){abort_unless(auth()->user()->isAdmin(),403);DB::table('team_user')->where('team_id',$team)->where('user_id',$user)->delete();return back();}
+ private function auditWorkflow(Request $request,int $ownerId,?int $workflowId,string $action,?array $before,?array $after):void
+ {
+  DB::table('farast_workflow_audit_logs')->insert([
+   'workflow_id'=>$workflowId,
+   'owner_id'=>$ownerId,
+   'actor_id'=>$request->user()?->id,
+   'action'=>$action,
+   'before_state'=>$before?json_encode($before,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):null,
+   'after_state'=>$after?json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):null,
+   'ip_address'=>$request->ip(),
+   'user_agent'=>mb_substr((string)$request->userAgent(),0,4000),
+   'created_at'=>now(),
+  ]);
+ }
 }
