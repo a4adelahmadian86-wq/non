@@ -239,6 +239,10 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 
 `ProfessionalCommerceService::subscribe` از `FarastCommercialPlan` شناسه `plan_id` را در `farast_subscriptions` می‌نویسد و entitlementهای جدید می‌سازد. اما `ProjectBillingService::includedAllowance` هنوز همان `plan_id` را به `farast_plans.id` وصل می‌کند و usage را از ستون‌های legacy می‌خواند. پس یک ستون `plan_id` در دو مسیر با دو catalog ID space متفاوت تفسیر می‌شود و counterهای جدید نیز لزوماً در محاسبه سهمیه پروژه دیده نمی‌شوند.
 
+در خود catalog جدید نیز دو نمایش برای ارتباط plan و product وجود دارد: `farast_commercial_plans.product_code` و pivot `farast_commercial_plan_products(plan_id, product_id)`. مدل `FarastCommercialPlan` در main فقط `product_code` را fillable می‌کند و relation/pivot writer ندارد؛ `ProfessionalCommerceService::createPlan` نیز pivot را sync نمی‌کند. باید مشخص شود plan دقیقاً به یک product با code وصل است یا می‌تواند چند product داشته باشد؛ فعلاً دو ساختار برای یک مفهوم در schema وجود دارد.
+
+همچنین `SubscriptionEntitlementService::sync` هر دو کلید `typing_pages` و `pages` را به capability یکسان `document.editing` map می‌کند. اگر هر دو در `quotas` یک plan باشند، iteration دوم entitlement اول را با status=`replaced` می‌بندد و entitlement دوم را می‌سازد؛ در مقابل `ProjectBillingService` مقدار `typing_pages` را با اولویت بر `pages` می‌خواند. بنابراین در حضور هر دو کلید، entitlement تجاری و project billing می‌توانند مقدار متفاوتی برای یک quota ببینند. این aliasها باید پیش از sync به یک مقدار canonical normalize شوند و تست conflict داشته باشند.
+
 PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را برای انتقال subscriptionها به catalog جدید اضافه می‌کند، اما در head بررسی‌شده:
 - جدول قدیمی را قبل از اثبات کامل mapping حذف می‌کند؛
 - اگر عدد `plan_id` تصادفاً در catalog جدید موجود باشد، بدون تطبیق `code` پذیرفته می‌شود؛
