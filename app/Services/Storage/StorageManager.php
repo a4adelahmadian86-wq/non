@@ -524,7 +524,7 @@ class StorageManager
                     }
                 });
                 $cleaned++;
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 DB::transaction(function () use ($claimed): void {
                     $locked = StorageVolumeReservation::query()
                         ->whereKey($claimed->id)
