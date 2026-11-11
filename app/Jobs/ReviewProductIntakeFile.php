@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Jobs;
+namespace App\Jobs;
 
-use App\\Models\\StoreProductIntakeFile;
-use App\\Services\\ProductSupervisorClient;
-use App\\Services\\Storage\\StorageManager;
-use Illuminate\\Bus\\Queueable;
-use Illuminate\\Contracts\\Queue\\ShouldQueue;
-use Illuminate\\Foundation\\Bus\\Dispatchable;
-use Illuminate\\Queue\\InteractsWithQueue;
-use Illuminate\\Queue\\SerializesModels;
+use App\Models\StoreProductIntakeFile;
+use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 
 class ReviewProductIntakeFile implements ShouldQueue
@@ -75,7 +75,7 @@ class ReviewProductIntakeFile implements ShouldQueue
         }
     }
 
-    public function failed(\\Throwable $exception): void
+    public function failed(\Throwable $exception): void
     {
         StoreProductIntakeFile::query()->whereKey($this->intakeFileId)
             ->where('supervisor_status', 'pending')
