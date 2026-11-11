@@ -47,7 +47,8 @@ class FarastObservabilityService
             'environment' => (string) config('app.env'),
             'observability_enabled' => (bool) config('observability.enabled', true),
             'components' => $components,
-            'incidents' => $this->recentIncidents(),
+            'incidents' => ($incidentHistory = $this->recentIncidents())['items'],
+            'incident_history_available' => $incidentHistory['available'],
             'incident_trend_24h' => $this->incidentTrend(),
         ];
     }
@@ -61,10 +62,10 @@ class FarastObservabilityService
     {
         try {
             if (! Schema::hasTable('farast_audit_events')) {
-                return [];
+                return ['available' => false, 'items' => []];
             }
 
-            return DB::table('farast_audit_events')
+            $items = DB::table('farast_audit_events')
                 ->where('event_type', 'like', 'observability.incident.%')
                 ->orderByDesc('id')
                 ->limit(20)
@@ -100,7 +101,7 @@ class FarastObservabilityService
      */
     private function incidentTrend(): array
     {
-        $trend = ['critical' => 0, 'warning' => 0, 'recovered' => 0, 'sampled' => 0, 'truncated' => false];
+        $trend = ['available' => false, 'critical' => 0, 'warning' => 0, 'recovered' => 0, 'sampled' => 0, 'truncated' => false];
 
         try {
             if (! Schema::hasTable('farast_audit_events')) {
@@ -114,6 +115,7 @@ class FarastObservabilityService
                 ->limit(501)
                 ->get(['event_type', 'payload_meta']);
 
+$trend['available'] = true;
             $trend['truncated'] = $events->count() > 500;
             foreach ($events->take(500) as $event) {
                 $meta = is_array($event->payload_meta)
