@@ -12,6 +12,12 @@ class WorkflowEventDispatchTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['queue.default' => 'database']);
+    }
+
     private function user(string $mobile): User
     {
         return User::create([

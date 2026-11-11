@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Ticket;
 use App\Policies\TicketPolicy;
 use App\Services\SupportTicketService;
+use App\Services\AuthorizationService;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -15,6 +16,9 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SupportTicketService::class);
+        // Reuse authorization query caches within one HTTP/job lifecycle only.
+        // Laravel flushes scoped services between long-running worker requests.
+        $this->app->scoped(AuthorizationService::class);
     }
 
     public function boot(): void
