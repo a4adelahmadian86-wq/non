@@ -61,6 +61,7 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->actingAs($employee)->get('/admin')->assertOk();
         $this->get('/admin/access')->assertForbidden();
+        $this->get('/admin/access-center')->assertForbidden();
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
@@ -181,6 +182,9 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'role' => User::ROLE_ORGANIZATION_MANAGER,
             'permission_id' => $financePermission->id,
         ]);
+        app(AuthorizationService::class)->forgetUser();
+        $this->assertTrue(app(AuthorizationService::class)->allows($manager, 'finance.view'));
+        $this->assertTrue(app(\App\Services\AdminConsoleService::class)->sectionAllowed($manager, 'finance'));
         $finance = $this->get('/admin/finance')->assertOk();
         $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
         $finance->assertViewHas('walletTotal', 300);
@@ -276,5 +280,42 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
+    }
+
+
+    public function test_last_active_admin_cannot_demote_themselves(): void
+    {
+        $admin = $this->makeUser('09123456801', User::ROLE_ADMIN);
+
+        $this->actingAs($admin)
+            ->post('/admin/users/'.$admin->id.'/role', ['role' => User::ROLE_EMPLOYEE])
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => User::ROLE_ADMIN]);
+    }
+
+    public function test_admin_can_demote_themselves_when_another_active_admin_remains(): void
+    {
+        $admin = $this->makeUser('09123456802', User::ROLE_ADMIN);
+        $otherAdmin = $this->makeUser('09123456803', User::ROLE_ADMIN);
+
+        $this->actingAs($admin)
+            ->post('/admin/users/'.$admin->id.'/role', ['role' => User::ROLE_EMPLOYEE])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => User::ROLE_EMPLOYEE]);
+        $this->assertDatabaseHas('users', ['id' => $otherAdmin->id, 'role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+    }
+
+    public function test_generic_role_editor_cannot_promote_an_employee_to_platform_admin(): void
+    {
+        $admin = $this->makeUser('09123456804', User::ROLE_ADMIN);
+        $employee = $this->makeUser('09123456805', User::ROLE_EMPLOYEE);
+
+        $this->actingAs($admin)
+            ->post('/admin/users/'.$employee->id.'/role', ['role' => User::ROLE_ADMIN])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('users', ['id' => $employee->id, 'role' => User::ROLE_EMPLOYEE]);
     }
 }
