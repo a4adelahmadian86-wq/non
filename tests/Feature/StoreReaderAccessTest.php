@@ -282,6 +282,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
 
+        \\Illuminate\\Support\\Facades\\Queue::assertNothingPushed();
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
