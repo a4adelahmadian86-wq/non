@@ -1198,3 +1198,18 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 - این خطا در commit `315831edec7e825c1930f5f28ba515cf3dbfb534` با بازگرداندن namespace separator استاندارد PHP اصلاح شد. این اصلاح فقط فایل تست را تغییر داده و به کد اجرایی یا schema دست نزده است.
 
 **نتیجه معتبر فعلی:** clean-install migration روی SQLite در آن HEAD موفق بوده است. این نتیجه هنوز upgrade از دیتابیس قدیمی، MySQL/PostgreSQL، آزمون‌های کامل و route ownership test روی HEAD اصلاح‌شده را ثابت نمی‌کند. CI باید روی HEAD پس از اصلاح دوباره اجرا شود؛ failure قبلی نباید به‌عنوان شکست migration ثبت شود.
+
+
+## 29. Phase 9 candidate: observability and audit-ledger hardening (PR #353)
+
+این بخش وضعیت شاخه infra/observability-phase9 را ثبت می‌کند و تا ادغام PR و تأیید CI نباید به‌عنوان وضعیت قطعی main تفسیر شود.
+
+- مالکیت سه منبع موجود تغییر نکرده است: audit_logs برای audit مدیریتی legacy، farast_audit_events برای دفتر append-only و زنجیره checksum، و farast_security_events برای رخدادهای امنیت حساب/دستگاه. هیچ جدول یا سرویس ledger موازی ساخته نشده است.
+- AuditLogService فقط برای افزودن request/correlation context و پالایش metadata تقویت شده است؛ مالکیت صفحه و داده audit مدیریتی legacy جابه‌جا نشده است.
+- appendهای AuditEventService از طریق رکورد پایدار Migration مربوط به ایجاد دفتر audit serialize می‌شوند؛ MySQL/PostgreSQL قفل تراکنشی همان رکورد را می‌گیرند و SQLite با no-op update قفل نویسنده دیتابیس را قبل از خواندن chain head می‌گیرد.
+- برای رخدادهای جدید، ستون payload_canonical در همان جدول farast_audit_events serialization قطعی JSON را نگه می‌دارد. کلیدهای associative به‌صورت بازگشتی مرتب می‌شوند تا normalization نوع JSON در MySQL بایت‌های hash را تغییر ندهد. این ستون store یا ledger جدید نیست.
+- ردیف‌های قدیمی که payload_canonical ندارند با الگوریتم legacy و canonical قابل بررسی‌اند. اگر normalization تاریخی JSON در MySQL ترتیب اصلی کلیدها را از بین برده باشد، verifier mismatch را گزارش می‌کند؛ هیچ repair یا rehash خودکاری مجاز نیست.
+- رخدادهای anomaly احراز هویت/مجوز و رخدادهای incident عملیاتی در farast_audit_events ثبت می‌شوند. شناسه incident در طول هشدارها و recovery ثابت می‌ماند و از event_id هر رخداد جداست.
+- health dashboard فقط وضعیت و metadata پالایش‌شده را نمایش می‌دهد و از مسیر مجوز موجود admin.section:audit استفاده می‌کند.
+
+**گیت پذیرش:** CI باید روی آخرین HEAD همین PR سبز شود. پیش از فعال‌سازی Production، verifier باید روی نسخه backup‌شده و دیتابیس production-like اجرا شود؛ append هم‌زمان از چند connection روی موتور واقعی دیتابیس آزموده شود؛ و scheduler، shared cache، گیرندگان اعلان و webhook از تنظیمات واقعی محیط تأیید شوند. نتیجه SQLite به‌تنهایی اثبات رفتار MySQL نیست.

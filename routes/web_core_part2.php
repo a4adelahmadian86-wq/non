@@ -66,7 +66,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspace/documents/{id}/versions', [PlatformCompletionController::class, 'versions'])->name('platform.documents.versions');
     Route::post('/workspace/documents/{id}/share', [PlatformCompletionController::class, 'share'])->name('platform.documents.share');
     Route::delete('/workspace/shares/{id}', [PlatformCompletionController::class, 'revokeShare'])->name('platform.documents.shares.destroy');
-    // Notification routes are owned by routes/notifications.php and NotificationController.
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
     Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.save');
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
@@ -115,6 +114,11 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Read-only operational health view; reuses the existing global audit permission.
+    Route::get('/observability', [\App\Http\Controllers\Admin\ObservabilityController::class, 'index'])
+        ->middleware('admin.section:audit')
+        ->name('observability.index');
+
     // Central storage and backup management.
     Route::get('/storage', [\App\Http\Controllers\AdminStorageController::class, 'index'])->middleware('admin.section:storage')->name('storage.index');
     Route::get('/storage/backups', [\App\Http\Controllers\AdminStorageController::class, 'backups'])->middleware('admin.section:storage')->name('storage.backups');

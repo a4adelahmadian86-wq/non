@@ -37,7 +37,10 @@
         @if($adminConsole->sectionAllowed(auth()->user(), 'voice'))<a href="{{ route('admin.index') }}#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'ai_providers'))<a href="{{ route('admin.index') }}#groq-settings"><i class="fa-solid fa-brain"></i><span>ارائه‌دهندگان AI</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}" @if(request()->routeIs('admin.analytics')) aria-current="page" @endif><i class="fa-solid fa-chart-line"></i><span>تحلیل و گزارش</span></a>@endif
-        @if($adminConsole->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}" @if(request()->routeIs('admin.audit')) aria-current="page" @endif><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>@endif
+        @if($adminConsole->sectionAllowed(auth()->user(), 'audit'))
+            <a href="{{ route('admin.audit') }}" @if(request()->routeIs('admin.audit')) aria-current="page" @endif><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>
+            <a href="{{ route('admin.observability.index') }}" @if(request()->routeIs('admin.observability.*')) aria-current="page" @endif><i class="fa-solid fa-heart-pulse"></i><span>سلامت و پایش سامانه</span></a>
+        @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}" @if(request()->routeIs('admin.access')) aria-current="page" @endif><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}" @if(request()->routeIs('admin.organizations')) aria-current="page" @endif><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'announcements'))<a href="{{ route('admin.announcements.index') }}" @if(request()->routeIs('admin.announcements.*')) aria-current="page" @endif><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان‌ها</span></a>@endif

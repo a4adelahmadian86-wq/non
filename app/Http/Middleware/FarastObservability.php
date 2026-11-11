@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\FarastTraceContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,14 @@ class FarastObservability
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
+        $request->attributes->set('farast.request_id', $requestId);
+        $request->attributes->set('farast.correlation_id', $correlationId);
+        // Exception handlers also need generated IDs when the client sent no trace headers.
+        $request->headers->set('X-Request-Id', $requestId);
+        $request->headers->set('X-Correlation-Id', $correlationId);
+
         try {
+            app(FarastTraceContext::class)->set($requestId, $correlationId);
             Log::withContext([
                 'request_id' => $requestId,
                 'correlation_id' => $correlationId,
@@ -32,20 +40,35 @@ class FarastObservability
 
         $started = hrtime(true);
         $response = null;
+        $failure = null;
 
         try {
             $response = $next($request);
 
             return $response;
+        } catch (Throwable $exception) {
+            $failure = $exception;
+            throw $exception;
         } finally {
             try {
                 try {
-                    Log::info('farast.request.completed', [
+                    $context = [
                         'method' => $request->method(),
                         'path' => $request->path(),
+                        'route' => $request->route()?->getName(),
+                        'actor_id' => $request->user()?->getAuthIdentifier(),
                         'status' => $response?->getStatusCode(),
                         'duration_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
-                    ]);
+                    ];
+                    if ($failure) {
+                        $context['exception_class'] = get_class($failure);
+                        Log::error('farast.request.failed', $context);
+                    } else {
+                        Log::info('farast.request.completed', $context);
+                    }
+                    if ($response?->getStatusCode() === 403) {
+                        $this->recordAuthorizationAnomaly($request);
+                    }
                 } catch (Throwable $exception) {
                     error_log('FARAST request completion logging failed: '.get_class($exception));
                 }
@@ -60,8 +83,73 @@ class FarastObservability
                     Log::withoutContext();
                 } catch (Throwable $exception) {
                     error_log('FARAST request log context cleanup failed: '.get_class($exception));
+                } finally {
+                    try {
+                        app(FarastTraceContext::class)->clear();
+                    } catch (Throwable $exception) {
+                        error_log('FARAST trace context cleanup failed: '.get_class($exception));
+                    }
                 }
             }
+        }
+    }
+
+
+    private function recordAuthorizationAnomaly(Request $request): void
+    {
+        try {
+            $actorId = $request->user()?->getAuthIdentifier();
+            $source = $actorId !== null ? 'user:'.$actorId : (string) $request->ip();
+            if ($source === '') {
+                return;
+            }
+
+            $window = max(1, (int) config('observability.security.authorization_denied_window_minutes', 10));
+            $fingerprint = hash_hmac('sha256', $source, (string) config('app.key'));
+            $key = 'farast:security:authorization-denied:'.$fingerprint;
+            \Illuminate\Support\Facades\Cache::add($key, 0, now()->addMinutes($window));
+            $count = (int) \Illuminate\Support\Facades\Cache::increment($key);
+
+            $warningThreshold = max(2, (int) config('observability.security.authorization_denied_warning_threshold', 10));
+            $criticalThreshold = max($warningThreshold + 1, (int) config('observability.security.authorization_denied_critical_threshold', 25));
+
+            foreach ([$warningThreshold => 'warning', $criticalThreshold => 'critical'] as $threshold => $level) {
+                if ($count < $threshold || ! \Illuminate\Support\Facades\Cache::add($key.':alert:'.$threshold, true, now()->addMinutes($window))) {
+                    continue;
+                }
+
+                $metadata = [
+                    'source_fingerprint' => substr($fingerprint, 0, 16),
+                    'denied_requests' => $count,
+                    'threshold' => $threshold,
+                    'window_minutes' => $window,
+                    'route' => $request->route()?->getName(),
+                ];
+                try {
+                    Log::log($level, 'farast.security.authorization_anomaly', $metadata);
+                } catch (Throwable $loggingException) {
+                    error_log('FARAST authorization anomaly log write failed: '.get_class($loggingException));
+                }
+
+                try {
+                    app(\App\Services\AuditEventService::class)->record(
+                        'security.authorization_anomaly',
+                        null,
+                        null,
+                        'authorization',
+                        null,
+                        $metadata + ['severity' => $level],
+                        'security'
+                    );
+                } catch (Throwable $auditException) {
+                    Log::critical('farast.security.authorization_anomaly_audit_failed', [
+                        'exception_class' => get_class($auditException),
+                    ]);
+                }
+            }
+        } catch (Throwable $exception) {
+            // An unavailable cache or audit store must never alter the authorization response.
+            error_log('FARAST authorization anomaly detection failed: '.get_class($exception));
         }
     }
 
