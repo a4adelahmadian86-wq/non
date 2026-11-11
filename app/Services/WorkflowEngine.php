@@ -83,7 +83,14 @@ class WorkflowEngine
     }
 
     /** Dispatch a domain event once and retain failed workflow runs for safe retry. */
-    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    /**
+     * Persist a trusted domain event in the caller's transaction.
+     *
+     * This is the transactional outbox boundary: domain state and the pending
+     * workflow event commit or roll back together. Processing is deliberately
+     * deferred to dispatch() after commit or to the scheduled retry worker.
+     */
+    public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
             throw new \InvalidArgumentException('Unsupported workflow event.');
@@ -104,6 +111,7 @@ class WorkflowEngine
         if ($unknownContextFields !== []) {
             throw new \InvalidArgumentException('Workflow event context contains unsupported fields.');
         }
+
         foreach ($context as $field => $value) {
             if ($field === 'user_id') {
                 continue;
@@ -120,7 +128,7 @@ class WorkflowEngine
         }
 
         $context['user_id'] = (int) $userId;
-        unset($context['event_type']); // The event type is authoritative from the dispatcher argument.
+        unset($context['event_type']);
         try {
             $encodedContext = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         } catch (\JsonException $exception) {
@@ -131,7 +139,7 @@ class WorkflowEngine
         }
 
         try {
-            $eventId = DB::table('farast_workflow_events')->insertGetId([
+            return (int) DB::table('farast_workflow_events')->insertGetId([
                 'event_type' => $eventType,
                 'idempotency_key' => $idempotencyKey,
                 'user_id' => (int) $userId,
@@ -154,7 +162,17 @@ class WorkflowEngine
             if (($existing->status ?? null) === 'completed') {
                 return 0;
             }
-            $eventId = (int) $existing->id;
+
+            return (int) $existing->id;
+        }
+    }
+
+    /** Persist or find an event, then process its immutable outbox payload. */
+    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    {
+        $eventId = $this->enqueue($eventType, $context, $idempotencyKey);
+        if ($eventId < 1) {
+            return 0;
         }
 
         $event = DB::table('farast_workflow_events')->where('id', $eventId)->first();
@@ -162,7 +180,7 @@ class WorkflowEngine
             return 0;
         }
 
-        // Always retry using the original immutable event payload, not a later caller's payload.
+        // Always process the original immutable payload, never a later caller's payload.
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
             throw new \RuntimeException('Stored workflow event context is invalid.');
