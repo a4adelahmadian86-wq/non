@@ -245,6 +245,39 @@ class AuthorizationService
         });
     }
 
+    public function updateRolePermissions(User $actor, string $role, array $permissionKeys, ?Request $request = null): void
+    {
+        abort_unless($this->canManageScope($actor, $actor, 'global', null, null), 403);
+        abort_unless(in_array($role, User::DASHBOARD_ROLES, true) && $role !== User::ROLE_ADMIN, 422);
+
+        $permissionKeys = array_values(array_unique($permissionKeys));
+        $permissionIds = [];
+        foreach ($permissionKeys as $permissionKey) {
+            $permissionId = $this->permissionId((string) $permissionKey);
+            abort_unless($permissionId !== null, 422, 'مجوز تعریف‌نشده: '.(string) $permissionKey);
+            $permissionIds[] = $permissionId;
+        }
+
+        $previousPermissionKeys = DB::table('role_permissions')
+            ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+            ->where('role_permissions.role', $role)
+            ->pluck('permissions.key')
+            ->all();
+
+        DB::transaction(function () use ($actor, $role, $permissionKeys, $permissionIds, $previousPermissionKeys, $request): void {
+            RolePermission::query()->where('role', $role)->delete();
+            foreach ($permissionIds as $permissionId) {
+                RolePermission::firstOrCreate(['role' => $role, 'permission_id' => $permissionId]);
+            }
+
+            $this->audit('role.permissions.updated', $actor, null, null, [
+                'role_key' => $role,
+                'previous_permissions' => $previousPermissionKeys,
+                'permissions' => $permissionKeys,
+            ], $request);
+        });
+    }
+
     public function assignRole(
         User $actor,
         User $subject,
