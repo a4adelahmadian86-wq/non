@@ -10,6 +10,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
 use App\Models\StoreProductIntakeSession;
 use App\Models\StoreProductIntakeFile;
+use App\Models\StoreProductPublicationReview;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
 use App\Models\StorageManagedFile;
@@ -126,6 +127,11 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertNotEmpty($product->sku);
         $this->assertStringStartsWith('PRD-', $product->sku);
         $this->assertNotEmpty($product->slug);
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertDatabaseHas('store_product_publication_reviews', [
+            'product_id' => $product->id,
+            'status' => StoreProductPublicationReview::STATUS_PENDING_AI,
+        ]);
 
         $this->actingAs($admin)
             ->get(route('admin.store.edit', $product))
