@@ -486,8 +486,14 @@ class StorageManager
                         $managed = StorageManagedFile::query()->lockForUpdate()->find($managedFileId);
                         if ($managed) {
                             $metadata = (array) $managed->metadata;
-                            unset($metadata['capacity_reservation_key']);
-                            $managed->update(['metadata' => $metadata]);
+                            if (hash_equals((string) data_get($metadata, 'capacity_reservation_key', ''), (string) $lockedReservation->reservation_key)) {
+                                unset($metadata['capacity_reservation_key']);
+                                $changes = ['metadata' => $metadata];
+                                if ($managed->status === 'transferring') {
+                                    $changes['status'] = 'transfer_error';
+                                }
+                                $managed->update($changes);
+                            }
                         }
                     }
                 });
