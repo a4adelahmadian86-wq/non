@@ -140,8 +140,9 @@ class StorageBackupRestoreIntegrationTest extends TestCase
 
         $storage = app(StorageManager::class);
         $objectKey = 'integration/restore/backup.zip';
-        $reservation = $storage->uploadBackup($volume, $objectKey, $archive, (int) $run->id);
-        $storage->commitVolumeCapacityReservation($reservation);
+        $storage->uploadBackup($volume, $objectKey, $archive);
+        $volume->increment('used_bytes', $size);
+        $volume->increment('object_count');
         $run->update([
             'status' => 'completed',
             'object_key' => $objectKey,
