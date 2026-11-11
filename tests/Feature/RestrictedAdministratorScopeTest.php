@@ -104,6 +104,16 @@ class RestrictedAdministratorScopeTest extends TestCase
 
         $roleId = $this->createScopedRole('restricted-admin-org-'.$organizationA->id, 'organization', $organizationA->id);
         $this->assignScopedRole($platformAdmin, $restrictedAdmin, $roleId, 'organization', $organizationA->id);
+
+        $foreignRoleId = $this->createScopedRole('foreign-admin-org-'.$organizationB->id, 'organization', $organizationB->id);
+        $this->actingAs($platformAdmin)
+            ->post(route('admin.access-center.users.roles.store', $restrictedAdmin), [
+                'role_id' => $foreignRoleId,
+                'scope_type' => 'organization',
+                'scope_id' => $organizationB->id,
+            ])
+            ->assertUnprocessable();
+
         $restrictedAdmin->refresh();
         $this->actingAs($restrictedAdmin);
         $this->get('/dashboard')->assertOk();
