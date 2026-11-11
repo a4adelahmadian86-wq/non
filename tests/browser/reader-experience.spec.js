@@ -383,6 +383,8 @@ test.describe('FARAST sample reader interactions', () => {
   test('keyboard navigation works and copy, cut, drag and context-menu events are suppressed', async ({ page }) => {
     await mountReader(page);
     const root = page.locator('[data-reader-root]');
+    // Avoid inheriting focus from the homepage's search/input before testing global shortcuts.
+    await root.locator('#reader-next').focus();
     await page.keyboard.press('ArrowLeft');
     await expect(root.locator('.farast-reader-page-item.is-active')).toHaveAttribute('data-index', '1');
 
