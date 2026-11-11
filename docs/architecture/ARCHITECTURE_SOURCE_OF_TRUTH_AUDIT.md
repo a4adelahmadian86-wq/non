@@ -23,12 +23,12 @@
 | Laravel / PHP constraint | Laravel `^12.0` / PHP `^8.2` |
 | فایل‌های Migration | 114 |
 | فایل‌های Model در `app/Models` | 104 |
-| فایل‌های Service در `app/Services` | 118 |
-| Controllerها در `app/Http/Controllers` | 52 |
+| فایل‌های PHP در `app/Services` | 112 |
+| فایل‌های PHP در `app/Http/Controllers` | 51 (شامل ۱ Trait) |
 | Middlewareهای برنامه | 11 |
-| فایل‌های تست و Browser/E2E | 134 |
+| فایل‌های آزمون PHP / Browser | 110 PHP + 18 JS |
 
-درخت کامل Git در این نسخه 1,151 ورودی داشت. اعداد بالا شمار فایل‌های مسیرهای مشخص‌اند، نه شمار قابلیت‌های سالم.
+درخت کامل Git در این نسخه 1,151 ورودی داشت. مسیر app/Services شامل 112 فایل PHP و 6 directory entry؛ مسیر app/Http/Controllers شامل 51 فایل PHP و یک directory entry؛ مسیر tests شامل 110 فایل PHP و 18 فایل JS است. این اعداد شمار فایل/ورودی‌اند، نه شمار قابلیت‌های سالم.
 
 ### وضعیت CI و حفاظت شاخه در لحظه ممیزی
 
