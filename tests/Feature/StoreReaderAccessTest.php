@@ -686,9 +686,9 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader-audio.js')
             ->assertDontSee('store/reader-audio/sample/narration.mp3');
 
-        $html = new \\DOMDocument();
+        $html = new \DOMDocument();
         @$html->loadHTML($response->getContent());
-        $timingNode = (new \\DOMXPath($html))->query('//*[@data-audio-timing]')->item(0);
+        $timingNode = (new \DOMXPath($html))->query('//*[@data-audio-timing]')->item(0);
         $this->assertNotNull($timingNode, 'The reader must expose the safe timing manifest in its page data.');
         $timings = json_decode($timingNode->getAttribute('data-audio-timing'), true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('سلام', $timings[0]['text'] ?? null);
