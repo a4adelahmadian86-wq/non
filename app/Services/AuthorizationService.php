@@ -47,7 +47,7 @@ class AuthorizationService
 
         $assignments = $this->activeAssignments($user);
         if ($assignments->isEmpty()) {
-            return $this->legacyScope($user);
+            return $user->access_control_managed ? 'own' : $this->legacyScope($user);
         }
 
         $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
@@ -84,6 +84,7 @@ class AuthorizationService
             (string) $user->role,
             (string) $user->is_blocked,
             (string) ($user->organization_id ?? ''),
+            (string) $user->access_control_managed,
             $permission,
         ]);
         if (array_key_exists($cacheKey, $this->decisionCache)) {
@@ -111,7 +112,15 @@ class AuthorizationService
             return $this->assignedRoleAllows($assignments, $permission);
         }
 
-        // Compatibility for the existing single-role installation.
+        if ($user->access_control_managed) {
+            return false;
+        }
+
+        // Compatibility for users not yet migrated to scoped access control.
+        if ($user->access_control_managed) {
+            return false;
+        }
+
         if ($user->role === User::ROLE_ADMIN) {
             return true;
         }
@@ -298,6 +307,11 @@ class AuthorizationService
             $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
             abort_unless($role, 404, 'نقش فعال پیدا نشد.');
 
+            DB::table('users')->where('id', $subject->id)->update([
+                'access_control_managed' => true,
+                'updated_at' => now(),
+            ]);
+
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id,
                 'role_id' => $role->id,
@@ -344,6 +358,11 @@ class AuthorizationService
         abort_unless($permissionId !== null, 404, 'مجوز پیدا نشد.');
 
         return DB::transaction(function () use ($actor, $subject, $permission, $permissionId, $effect, $scope, $organizationId, $teamId, $startsAt, $expiresAt, $request): object {
+            DB::table('users')->where('id', $subject->id)->update([
+                'access_control_managed' => true,
+                'updated_at' => now(),
+            ]);
+
             $id = DB::table('user_permission_grants')->insertGetId([
                 'user_id' => $subject->id,
                 'permission_id' => $permissionId,
