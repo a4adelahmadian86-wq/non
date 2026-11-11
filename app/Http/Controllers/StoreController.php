@@ -652,7 +652,6 @@ class StoreController extends Controller
             : (string) request()->ip();
         $readerPdfEngineReady = is_file(public_path('vendor/pdfjs/legacy/build/pdf.mjs'))
             && is_file(public_path('vendor/pdfjs/legacy/build/pdf.worker.mjs'))
-            && is_file(public_path('vendor/pdfjs/web/pdf_viewer.css'))
             && is_dir(public_path('vendor/pdfjs/cmaps'))
             && is_dir(public_path('vendor/pdfjs/standard_fonts'));
 
