@@ -386,7 +386,7 @@ class PlatformCompletionController extends Controller {
     $teamRecord->update(['supervisor_id'=>null]);
    }
    $teamRecord->refresh();
-   $this->auditAccessChange($r,'team.member.added',(int)$member->id,$beforeState,[
+   $this->auditAccessChange($r,$beforeState['team_role']!==null?'team.member.updated':'team.member.added',(int)$member->id,$beforeState,[
     'team_id'=>(int)$teamRecord->id,
     'organization_id'=>(int)$teamRecord->organization_id,
     'user_id'=>(int)$member->id,
