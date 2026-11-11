@@ -287,6 +287,20 @@ class WorkflowEngine
         return $this->processEvent($event, $storedContext);
     }
 
+    /** Whether an event still has workflow mappings below their retry limit. */
+    public function hasRetryableWorkflowSteps(int $eventId): bool
+    {
+        if (! Schema::hasTable('farast_workflow_event_workflows')) {
+            return false;
+        }
+
+        return DB::table('farast_workflow_event_workflows')
+            ->where('event_id', $eventId)
+            ->where('attempts', '<', 5)
+            ->whereIn('status', ['pending', 'failed'])
+            ->exists();
+    }
+
     /** Process a committed outbox event from the dedicated automation queue. */
     public function processQueuedEvent(int $eventId): int
     {
@@ -304,20 +318,50 @@ class WorkflowEngine
     /** Queue pending and recoverable outbox events in bounded batches. */
     public function dispatchPendingEvents(int $limit = 50): int
     {
-        if (! Schema::hasTable('farast_workflow_events') || config('queue.default') === 'sync') return 0;
+        if (! Schema::hasTable('farast_workflow_events') || config('queue.default') === 'sync') {
+            return 0;
+        }
+
         $events = DB::table('farast_workflow_events')
-            ->whereIn('status', ['pending', 'failed', 'processing'])
-            ->where('attempts', '<', 5)
-            ->where(function ($query) {
-                $query->whereIn('status', ['pending', 'failed'])
-                    ->orWhere(function ($stale) {
-                        $stale->where('status', 'processing')->where('updated_at', '<=', now()->subMinutes(30));
+            ->whereNotIn('status', ['completed', 'paused'])
+            ->where(function ($eligible) {
+                $eligible->where(function ($withoutMappings) {
+                    $withoutMappings->whereNotExists(function ($empty) {
+                        $empty->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                            ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id');
+                    })->where('attempts', '<', 5);
+                })->orWhereExists(function ($retryable) {
+                    $retryable->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
+                        ->where('attempts', '<', 5)
+                        ->where(function ($states) {
+                            $states->whereIn('status', ['pending', 'failed'])
+                                ->orWhere(function ($stale) {
+                                    $stale->where('status', 'running')
+                                        ->where('started_at', '<=', now()->subMinutes(30));
+                                });
+                        });
+                })->orWhereNotExists(function ($allCompleted) {
+                    $allCompleted->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
+                        ->where('status', '!=', 'completed');
+                });
+            })
+            ->where(function ($states) {
+                $states->whereIn('status', ['pending', 'failed'])
+                    ->orWhere(function ($staleEvent) {
+                        $staleEvent->where('status', 'processing')
+                            ->where('updated_at', '<=', now()->subMinutes(30));
                     });
             })
-            ->orderBy('id')->limit(max(1, min($limit, 200)))->get(['id']);
+            ->orderBy('id')
+            ->limit(max(1, min($limit, 200)))
+            ->get(['id']);
+
         foreach ($events as $event) {
             $this->queueEvent((int) $event->id, false);
         }
+
         return $events->count();
     }
 
