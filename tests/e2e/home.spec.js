@@ -37,7 +37,7 @@ test.describe('FARAST homepage discovery', () => {
     await page.goto(baseURL + '/');
 
     await page.getByRole('button', { name: /از صفر شروع می‌کنم/ }).click();
-    await page.getByRole('button', { name: /مقاله/ }).click();
+    await page.locator('#stepContent').getByRole('button', { name: /مقاله \/ پژوهش/ }).click();
     await page.waitForURL(/\/editor\?project=\d+|\/editor$/);
     await expect(page.locator('#farastWord')).toBeVisible();
     await expect(page.locator('#pagesViewport')).toBeVisible();
