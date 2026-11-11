@@ -116,7 +116,7 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     // Read-only operational health view; reuses the existing global audit permission.
-    Route::get('/observability', [\\App\\Http\\Controllers\\Admin\\ObservabilityController::class, 'index'])
+    Route::get('/observability', [\App\\Http\\Controllers\\Admin\\ObservabilityController::class, 'index'])
         ->middleware('admin.section:audit')
         ->name('observability.index');
 
