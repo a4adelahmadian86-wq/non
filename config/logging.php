@@ -20,6 +20,8 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'info'),
             'days' => 14,
+            'permission' => 0640,
+            'locking' => true,
             'tap' => [CustomizeJsonLogging::class],
         ],
         'stderr' => [
