@@ -95,6 +95,49 @@ jobs:
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
+  audit-mysql-integrity:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: farast_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=mysql' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' 'DB_DATABASE=farast_test' 'DB_USERNAME=root' 'DB_PASSWORD=root' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate --force
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: farast_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest'
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: farast_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+
   reader-browser-regression:
     if: ${{ always() && needs.laravel.result == 'failure' }}
     needs: [laravel]
