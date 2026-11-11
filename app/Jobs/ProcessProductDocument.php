@@ -427,9 +427,15 @@ class ProcessProductDocument implements ShouldQueue
                 $structure['audio'] = ['status' => 'failed'];
             }
 
+            // A retry/reprocessing failure must not invalidate already-published reader content.
+            // The reader controller still verifies the source hash before serving any page.
+            $hasReadyContent = in_array($document->processing_status, ['completed', 'extracted'], true)
+                && (bool) data_get($structure, 'reader.ready', false)
+                && $document->pages()->exists();
+
             $document->update([
-                'processing_status' => 'failed',
-                'failure_code' => 'document_processing_failed',
+                'processing_status' => $hasReadyContent ? $document->processing_status : 'failed',
+                'failure_code' => $hasReadyContent ? $document->failure_code : 'document_processing_failed',
                 'structure_json' => $structure,
                 'updated_at' => now(),
             ]);
