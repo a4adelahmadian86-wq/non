@@ -267,6 +267,7 @@ class StorageTransferService
                     ])]);
                 }
 
+                $this->cleanupOrphanedSource($file->fresh());
                 $moved++;
             } catch (\Throwable $exception) {
                 if ($uploaded) {
