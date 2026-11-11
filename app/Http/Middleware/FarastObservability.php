@@ -125,7 +125,11 @@ class FarastObservability
                     'window_minutes' => $window,
                     'route' => $request->route()?->getName(),
                 ];
-                Log::log($level, 'farast.security.authorization_anomaly', $metadata);
+                try {
+                    Log::log($level, 'farast.security.authorization_anomaly', $metadata);
+                } catch (Throwable $loggingException) {
+                    error_log('FARAST authorization anomaly log write failed: '.get_class($loggingException));
+                }
 
                 try {
                     app(\App\Services\AuditEventService::class)->record(
