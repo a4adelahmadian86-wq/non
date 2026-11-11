@@ -21,27 +21,30 @@ class StoreCourseEnrollmentService
         }
 
         return DB::transaction(function () use ($libraryItem, $product): StoreCourseEnrollment {
+            // Keep the global lock order consistent with checkout/callback paths:
+            // Order → Library entitlement → Payment → Course.
+            $order = Order::query()
+                ->whereKey($libraryItem->order_id)
+                ->lockForUpdate()
+                ->first();
+
             $lockedLibraryItem = StoreLibraryItem::query()
                 ->whereKey($libraryItem->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
             if (
-                (int) $lockedLibraryItem->product_id !== (int) $product->id
+                ! $order
+                || (int) $lockedLibraryItem->order_id !== (int) $order->id
+                || (int) $lockedLibraryItem->product_id !== (int) $product->id
                 || ! $lockedLibraryItem->user_id
                 || $lockedLibraryItem->revoked_at !== null
             ) {
                 throw new RuntimeException('مجوز کتابخانه برای اعطای دسترسی دوره معتبر یا فعال نیست.');
             }
 
-            $order = Order::query()
-                ->whereKey($lockedLibraryItem->order_id)
-                ->lockForUpdate()
-                ->first();
-
             if (
-                ! $order
-                || (int) $order->user_id !== (int) $lockedLibraryItem->user_id
+                (int) $order->user_id !== (int) $lockedLibraryItem->user_id
                 || $order->status !== 'paid'
                 || ! $order->paid_at
                 || data_get($order->pricing_snapshot, 'kind') !== 'store'
