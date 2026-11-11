@@ -18,12 +18,18 @@ class EnsureResourcePermission
     {
     }
 
-    public function handle(Request $request, Closure $next, string $permission, string $parameter): Response
+    public function handle(Request $request, Closure $next, string $permission, string $parameter, ?string $modelClass = null): Response
     {
         $user = $request->user();
         $record = $request->route($parameter);
 
         abort_unless($user, 401);
+        if (! $record instanceof Model && is_string($modelClass) && class_exists($modelClass)) {
+            $candidate = app($modelClass);
+            if ($candidate instanceof Model) {
+                $record = $candidate->resolveRouteBinding($record);
+            }
+        }
         abort_unless($record instanceof Model, 404);
 
         if (! $this->authorization->allowsRecord($user, $permission, $record)) {
