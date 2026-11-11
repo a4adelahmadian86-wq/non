@@ -163,7 +163,7 @@ class StoreReaderAccessTest extends TestCase
 
         $previewResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])->get(route('store.preview', $preview));
         $previewResponse->assertOk();
-        $this->assertSame('%PDF-1.4 sample', $previewResponse->getContent());
+        $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
     }
 
     public function test_reader_only_purchase_unlocks_page_text_but_never_the_original_file_or_download(): void
@@ -276,8 +276,7 @@ class StoreReaderAccessTest extends TestCase
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
-            ->assertSee('data-reader-audio-status="pending"', false)
-            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
+            ->assertSee('data-reader-audio-status="unavailable"', false)
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
@@ -314,8 +313,32 @@ class StoreReaderAccessTest extends TestCase
             'mime' => 'audio/wav',
             'size_bytes' => strlen($audioBytes),
             'sha256' => hash('sha256', $audioBytes),
-            'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 1000],
+            'metadata_json' => [
+                'source_sha256' => $document->source_sha256,
+                'duration_ms' => 1000,
+                'segments' => [[
+                    'chunk_index' => 0,
+                    'text' => 'متن مجاز صفحه اول کتاب',
+                    'start_ms' => 0,
+                    'end_ms' => 1000,
+                ]],
+            ],
         ]);
+        $document->chunks()->create([
+            'chunk_index' => 0,
+            'chunk_type' => 'paragraph',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'متن مجاز صفحه اول کتاب',
+            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
+        ]);
+        $readyReaderResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
+        $readyReaderResponse->assertOk()
+            ->assertSee('data-reader-audio-status="ready"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        preg_match('/data-reader-audio-timing="([^"]*)"/', $readyReaderResponse->getContent(), $timingMatch);
+        $timing = json_decode(html_entity_decode($timingMatch[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame('متن مجاز صفحه اول کتاب', data_get($timing, '0.text'));
+
         $headResponse = $this->actingAs($user)
             ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3');
         $headResponse->assertOk()
@@ -390,7 +413,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline');
 
-        $pdf = $response->getContent();
+        $pdf = $response->streamedContent();
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertGreaterThan(1000, strlen($pdf));
         $this->assertStringContainsString('/Subtype /Image', $pdf);
@@ -557,8 +580,14 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader.js')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
-            ->assertHeader('Referrer-Policy', 'no-referrer')
-            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:");
+            ->assertHeader('Referrer-Policy', 'no-referrer');
+
+        $readerCsp = (string) $this->get(route('store.reader', $product->slug))->headers->get('Content-Security-Policy');
+        $this->assertStringContainsString("frame-ancestors 'self'", $readerCsp);
+        $this->assertStringContainsString("object-src 'none'", $readerCsp);
+        $this->assertStringContainsString("base-uri 'self'", $readerCsp);
+        $this->assertStringContainsString("form-action 'self'", $readerCsp);
+        $this->assertStringContainsString("worker-src 'self' blob:", $readerCsp);
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
@@ -656,22 +685,103 @@ class StoreReaderAccessTest extends TestCase
 
     public function test_reader_exposes_only_the_audio_route_and_word_timing_manifest(): void
     {
-        [$product, $preview] = $this->makePreviewFixture();
-        Storage::disk('private')->put('store/reader-audio/sample/narration.mp3', 'audio-bytes');
-        $preview->update([
-            'audio_disk' => 'private',
-            'audio_path' => 'store/reader-audio/sample/narration.mp3',
-            'audio_mime' => 'audio/mpeg',
-            'audio_timing' => [['text' => 'سلام', 'start' => 0, 'end' => 0.4, 'page' => 1]],
+        [$product] = $this->makePreviewFixture();
+        $product->update(['download_policy' => 'reader_only']);
+
+        $user = $this->makeReaderUser();
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
         ]);
 
-        $response = $this->get(route('store.reader', $product->slug));
+        $sourceBytes = 'reader source document';
+        $sourceHash = hash('sha256', $sourceBytes);
+        $sourcePath = 'store/products/'.$product->id.'/reader-source.pdf';
+        Storage::disk('private')->put($sourcePath, $sourceBytes);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $sourcePath,
+            'original_name' => 'reader-source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($sourceBytes),
+            'sha256' => $sourceHash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $sourceHash,
+            'processing_status' => 'extracted',
+            'detected_type' => 'pdf',
+            'page_count' => 1,
+            'structure_json' => ['reader' => ['ready' => true, 'page_count' => 1]],
+        ]);
+        $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'pdf_page',
+            'locator_key' => 'page:1',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'سلام',
+            'content_html' => '<p>سلام</p>',
+            'content_sha256' => hash('sha256', 'سلام'),
+            'has_extracted_text' => true,
+        ]);
+        $document->chunks()->create([
+            'chunk_index' => 0,
+            'chunk_type' => 'paragraph',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'سلام',
+            'content_sha256' => hash('sha256', 'سلام'),
+        ]);
+
+        $audioPath = 'store/products/'.$product->id.'/artifacts/'.$sourceHash.'/audio-v3.wav';
+        Storage::disk('private')->put($audioPath, 'audio-bytes');
+        $document->artifacts()->create([
+            'artifact_type' => 'audio_full_wav',
+            'version' => 3,
+            'disk' => 'private',
+            'path' => $audioPath,
+            'mime' => 'audio/wav',
+            'size_bytes' => strlen('audio-bytes'),
+            'sha256' => hash('sha256', 'audio-bytes'),
+            'metadata_json' => [
+                'source_sha256' => $sourceHash,
+                'duration_ms' => 400,
+                'segments' => [[
+                    'chunk_index' => 0,
+                    'text' => 'سلام',
+                    'start_ms' => 0,
+                    'end_ms' => 400,
+                    'words' => [['text' => 'سلام', 'start_ms' => 0, 'end_ms' => 400]],
+                ]],
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $response->assertOk()
-            ->assertSee(route('store.preview.audio', $preview))
-            ->assertSee('data-audio-timing')
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
+            ->assertSee('data-reader-audio-timing', false)
             ->assertSee('farast-reader-audio.js')
-            ->assertSee('سلام')
-            ->assertDontSee('store/reader-audio/sample/narration.mp3');
+            ->assertDontSee($audioPath);
+        preg_match('/data-reader-audio-timing="([^"]*)"/', $response->getContent(), $timingMatch);
+        $timing = json_decode(html_entity_decode($timingMatch[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame('سلام', data_get($timing, '0.text'));
     }
 
 
