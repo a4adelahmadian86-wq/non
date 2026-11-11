@@ -406,15 +406,10 @@ class StoreController extends Controller
 
         $audioDisk = $preview->audio_disk ?: 'private';
         abort_unless($storage->exists($audioDisk, $preview->audio_path), 404);
-        $temporary = tempnam(sys_get_temp_dir(), 'farast-preview-audio');
-        try {
-            $storage->downloadTo($audioDisk, $preview->audio_path, $temporary);
-        } catch (\Throwable $exception) {
-            @unlink($temporary);
-            throw $exception;
-        }
-        $size = (int) filesize($temporary);
-        if ($size < 1) { @unlink($temporary); abort(404); }
+        // Stream audio directly from its configured storage backend. Avoid creating a
+        // complete temporary copy for every player request, especially for long narration.
+        $size = $storage->size($audioDisk, $preview->audio_path);
+        abort_unless($size > 0, 404);
 
         $start = 0;
         $end = $size - 1;
@@ -425,11 +420,9 @@ class StoreController extends Controller
                 if ($matches[1] === '' && $matches[2] !== '') {
                     $suffixLength = (int) $matches[2];
                     if ($suffixLength <= 0) {
-                        @unlink($temporary);
                         return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
                     }
-                    $suffix = min($size, $suffixLength);
-                    $start = $size - $suffix;
+                    $start = max(0, $size - min($size, $suffixLength));
                 } elseif ($matches[1] !== '') {
                     $start = (int) $matches[1];
                     $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
@@ -442,15 +435,26 @@ class StoreController extends Controller
                 }
                 $status = 206;
             }
-            // Malformed or multi-range requests are ignored and served as a full response.
+            // Malformed and multi-range requests are ignored and served as a full response.
         }
 
         $length = $end - $start + 1;
+        $version = (string) ($preview->updated_at?->getTimestamp() ?? 0);
+        $etag = '"'.hash('sha256', $preview->id.'|'.$preview->audio_path.'|'.$version.'|'.$size).'"';
+        $ifRange = request()->header('If-Range');
+        if ($status === 206 && is_string($ifRange) && $ifRange !== '' && ! hash_equals($etag, trim($ifRange))) {
+            $start = 0;
+            $end = $size - 1;
+            $length = $size;
+            $status = 200;
+        }
+
         $headers = [
             'Content-Type' => $preview->audio_mime ?: 'audio/mpeg',
             'Content-Disposition' => 'inline; filename="farast-reader-audio"',
             'Content-Length' => (string) $length,
             'Accept-Ranges' => 'bytes',
+            'ETag' => $etag,
             'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
@@ -458,40 +462,22 @@ class StoreController extends Controller
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Referrer-Policy' => 'no-referrer',
         ];
+        if ($preview->updated_at) {
+            $headers['Last-Modified'] = $preview->updated_at->copy()->utc()->format('D, d M Y H:i:s').' GMT';
+        }
         if ($status === 206) {
             $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
         }
 
-        return response()->stream(function () use ($temporary, $start, $length) {
-            $stream = fopen($temporary, 'rb');
-            if (! is_resource($stream)) {
-                @unlink($temporary);
-                return;
+        return response()->stream(function () use ($storage, $audioDisk, $preview, $start, $length): void {
+            $output = fopen('php://output', 'wb');
+            if (! is_resource($output)) {
+                throw new \RuntimeException('جریان خروجی صوت در دسترس نیست.');
             }
             try {
-                $remainingSkip = $start;
-                while ($remainingSkip > 0 && ! feof($stream)) {
-                    $chunk = fread($stream, min(8192, $remainingSkip));
-                    if ($chunk === false || $chunk === '') {
-                        break;
-                    }
-                    $remainingSkip -= strlen($chunk);
-                }
-                $remaining = $length;
-                while ($remaining > 0 && ! feof($stream)) {
-                    $chunk = fread($stream, min(8192, $remaining));
-                    if ($chunk === false || $chunk === '') {
-                        break;
-                    }
-                    echo $chunk;
-                    $remaining -= strlen($chunk);
-                    if (connection_aborted()) {
-                        break;
-                    }
-                }
+                $storage->streamRange($audioDisk, $preview->audio_path, $start, $length, $output);
             } finally {
-                fclose($stream);
-                @unlink($temporary);
+                fclose($output);
             }
         }, $status, $headers);
     }
