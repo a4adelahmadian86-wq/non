@@ -112,7 +112,7 @@ class MigrateLegacyProductAssets extends Command
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $locked->id, (int) $document->product_id);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
@@ -140,7 +140,7 @@ class MigrateLegacyProductAssets extends Command
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductFile::class, (int) $locked->id, (int) $locked->product_id);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
@@ -171,7 +171,7 @@ class MigrateLegacyProductAssets extends Command
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $locked->id, (int) $locked->product_id, $field);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
