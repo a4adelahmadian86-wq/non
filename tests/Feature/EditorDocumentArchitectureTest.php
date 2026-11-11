@@ -55,6 +55,12 @@ class EditorDocumentArchitectureTest extends TestCase
             'document_id' => $legacy->fresh()->farast_document_id,
             'user_id' => $user->id,
         ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'document:'.$result['document_id'].':revision:'.$result['revision'],
+            'event_type' => 'document.saved',
+            'user_id' => $user->id,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_http_save_preserves_space_only_canonical_runs(): void

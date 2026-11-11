@@ -61,6 +61,10 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->actingAs($employee)->get('/admin')->assertOk();
         $this->get('/admin/access')->assertForbidden();
+        // Store management remains global-admin only until granular product permissions are introduced.
+        $this->get('/admin/store')->assertForbidden();
+        $this->get('/admin/store/operations')->assertForbidden();
+        $this->get('/admin/support-report')->assertForbidden();
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
@@ -181,6 +185,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'role' => User::ROLE_ORGANIZATION_MANAGER,
             'permission_id' => $financePermission->id,
         ]);
+        // In production this write invalidates the request-scoped decision cache.
+        app(AuthorizationService::class)->forgetUser();
         $finance = $this->get('/admin/finance')->assertOk();
         $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
         $finance->assertViewHas('walletTotal', 300);

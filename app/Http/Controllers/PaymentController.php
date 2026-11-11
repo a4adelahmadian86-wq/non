@@ -164,6 +164,7 @@ class PaymentController extends Controller
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 $document->update(['status' => 'paid', 'price_rials' => $gross]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -308,6 +309,7 @@ class PaymentController extends Controller
                 }
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -394,6 +396,7 @@ class PaymentController extends Controller
                 ]);
 
                 $locked->update(['status' => 'deposit_paid', 'paid_at' => now()]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_deposit_paid',
@@ -466,6 +469,23 @@ class PaymentController extends Controller
             : 0;
     }
 
+    private function enqueuePaidOrderWorkflow(Order $order): void
+    {
+        $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
+        app(\App\Services\WorkflowEngine::class)->enqueue(
+            $eventType,
+            [
+                'user_id' => (int) $order->user_id,
+                'customer_id' => (int) $order->user_id,
+                'order_id' => (int) $order->id,
+                'amount_rials' => (int) $order->total_rials,
+                'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                'status' => (string) $order->status,
+            ],
+            'order:'.$order->id.':'.$eventType,
+        );
+    }
+
     private function dispatchPaidOrderWorkflow(Order $order): void
     {
         try {
@@ -478,6 +498,7 @@ class PaymentController extends Controller
                     'order_id' => (int) $order->id,
                     'amount_rials' => (int) $order->total_rials,
                     'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                'status' => (string) $order->status,
                 ],
                 'order:'.$order->id.':'.$eventType,
             );

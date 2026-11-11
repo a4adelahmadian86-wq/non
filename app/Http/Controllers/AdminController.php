@@ -35,7 +35,7 @@ class AdminController extends Controller
         // دامنهٔ کاربر از middleware یا محاسبهٔ مستقیم نقش.
         $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($actor);
         $globalScope = $scope === AdminConsoleService::SCOPE_GLOBAL;
-        $visibleIds = $console->visibleUserIds($actor);
+        $visibleIds = $console->visibleUserIds($actor, 'dashboard.view');
 
         // دسترسی‌های کنسول بر پایهٔ RBAC + Scope — همین‌جا منبع واحد ناوبری است.
         $allowedSections = $console->allowedSections($actor);
@@ -70,6 +70,10 @@ class AdminController extends Controller
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
         $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor, 'users.view') : [];
+        if ($canViewUsers && $userVisibleIds !== null) {
+            $usersQuery->whereIn('id', $userVisibleIds);
+        }
         $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
         // Do not hydrate personal user data unless users.view is granted in this scope.
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
@@ -236,8 +240,8 @@ class AdminController extends Controller
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
-        $visibleTeamIds = $console->visibleTeamIds($actor);
-        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $visibleTeamIds = $canViewAnalytics ? $console->visibleTeamIds($actor, 'reports.team') : [];
+        $visibleOrganizationIds = $canViewAnalytics ? $console->visibleOrganizationIds($actor, 'reports.team') : [];
         $paidPaymentsQuery = function () use ($visibleIds) {
             $query = DB::table('payments')->where('payments.status', 'paid');
             if ($visibleIds !== null) {
@@ -468,21 +472,52 @@ class AdminController extends Controller
     {
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
         abort_unless($console->sectionAllowed($request->user(), 'access'), 403, 'تغییر نقش فقط در دامنهٔ سراسری مجاز است.');
-        $console->authorizeAction($request->user(), 'users', $user->id);
-        abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
 
-        $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
+        $data = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
+        $oldRole = null;
 
-        $old = $user->role;
-        $user->update(['role' => $d['role']]);
+        DB::transaction(function () use ($request, $user, $data, $audit, &$oldRole): void {
+            // Serialize all administrator-role changes so two concurrent
+            // self-demotions cannot remove the final active break-glass account.
+            $adminRows = User::query()
+                ->where('role', User::ROLE_ADMIN)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['id', 'is_blocked']);
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
-                'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
+            $actor = User::query()->whereKey($request->user()->id)->firstOrFail();
+            abort_unless($actor->isAdmin() && ! $actor->is_blocked, 403, 'حساب مدیر اصلی فعال نیست.');
+
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin() && (int) $lockedUser->id !== (int) $actor->id, 403, 'نقش مدیر اصلی کاربر دیگری قابل تغییر نیست.');
+
+            if ((int) $lockedUser->id === (int) $actor->id && $data['role'] !== User::ROLE_ADMIN) {
+                $activeAdminCount = $adminRows->filter(fn ($row) => ! (bool) $row->is_blocked)->count();
+                abort_unless($activeAdminCount > 1, 409, 'حداقل یک مدیر اصلی فعال باید در سامانه باقی بماند.');
+            }
+
+            $oldRole = (string) $lockedUser->role;
+            $lockedUser->update(['role' => $data['role']]);
+
+            $this->recordAccessAudit($request, 'user.base_role.updated', (int) $lockedUser->id, [
+                'role' => $oldRole,
+            ], [
+                'role' => $data['role'],
             ]);
-        }
 
-        return back()->with('status', "نقش کاربر «{$user->name}» از {$old} به {$d['role']} تغییر کرد.");
+            if (Schema::hasTable('audit_logs')) {
+                $audit->record((int) $actor->id, 'admin.user.role_changed', $request->ip(), [
+                    'target_user_id' => (int) $lockedUser->id,
+                    'from' => $oldRole,
+                    'to' => $data['role'],
+                ]);
+            }
+        });
+
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
+
+        return back()->with('status', "نقش کاربر «{$user->name}» از {$oldRole} به {$data['role']} تغییر کرد.");
     }
 
     private function databaseReachable(): bool
@@ -760,17 +795,33 @@ class AdminController extends Controller
         return back()->with('status', 'تنظیمات کلی ذخیره شد.');
     }
 
-    public function toggleUser(User $user, AdminConsoleService $console, AuditLogService $audit)
+    public function toggleUser(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        abort_if($user->isAdmin(), 403);
-        // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
-        $console->authorizeAction(auth()->user(), 'users', $user->id);
+        abort_unless(Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ممیزی دسترسی در دسترس نیست.');
 
-        $user->update(['is_blocked' => ! $user->is_blocked]);
+        DB::transaction(function () use ($r, $user, $console, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin(), 403);
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id, 422, 'نمی‌توانید حساب خودتان را مسدود کنید.');
+            $console->authorizeAction($r->user(), 'users', (int) $lockedUser->id, 'users.suspend');
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record(auth()->id(), $user->is_blocked ? 'admin.user.blocked' : 'admin.user.unblocked', request()->ip(), ['target_user_id' => $user->id]);
-        }
+            $beforeBlocked = (bool) $lockedUser->is_blocked;
+            $afterBlocked = ! $beforeBlocked;
+            $lockedUser->update(['is_blocked' => $afterBlocked]);
+            $this->recordAccessAudit($r, $afterBlocked ? 'user.blocked' : 'user.unblocked', (int) $lockedUser->id, [
+                'is_blocked' => $beforeBlocked,
+            ], [
+                'is_blocked' => $afterBlocked,
+            ]);
+
+            if (Schema::hasTable('audit_logs')) {
+                $audit->record((int) $r->user()->id, $afterBlocked ? 'admin.user.blocked' : 'admin.user.unblocked', $r->ip(), [
+                    'target_user_id' => (int) $lockedUser->id,
+                ]);
+            }
+        });
+
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back();
     }
@@ -984,10 +1035,9 @@ class AdminController extends Controller
         return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
     }
 
-    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
+    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        abort_if($user->isAdmin(), 403);
-        $console->authorizeAction($r->user(), 'users', $user->id);
+        abort_unless(Schema::hasTable('audit_logs') && Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ثبت ممیزی در دسترس نیست.');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1011,24 +1061,50 @@ class AdminController extends Controller
             $values[$key] = array_key_exists($key, $data) && $data[$key] !== '' ? $data[$key] : null;
         }
 
-        UserCapability::updateOrCreate(['user_id' => $user->id], $values);
+        DB::transaction(function () use ($r, $user, $console, $values, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin(), 403);
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id, 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
+            $console->authorizeAction($r->user(), 'users', (int) $lockedUser->id, 'users.capabilities.manage');
+
+            $capability = UserCapability::query()->where('user_id', $lockedUser->id)->lockForUpdate()->first();
+            $before = $capability?->getAttributes() ?? [];
+
+            if ($capability) {
+                $capability->fill($values)->save();
+            } else {
+                $capability = UserCapability::create(['user_id' => $lockedUser->id, ...$values]);
+            }
+
+            $after = $capability->getAttributes();
+            $audit->record((int) $r->user()->id, 'admin.user.capabilities_updated', $r->ip(), [
+                'target_user_id' => (int) $lockedUser->id,
+                'before' => $before,
+                'after' => $after,
+            ]);
+            $this->recordAccessAudit($r, 'user.capabilities.updated', (int) $lockedUser->id, $before, $after);
+        });
+
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', 'دسترسی‌های کاربر ذخیره شد.');
     }
 
     public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
-        $console->authorizeAction($r->user(), 'finance', $user->id);
-
         $d = $r->validate([
             'type' => ['required', 'in:credit,debit'],
             'amount_rials' => ['required', 'integer', 'min:1000', 'max:10000000000'],
             'description' => ['nullable', 'string', 'max:500'],
         ]);
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'زیرساخت ثبت ممیزی مالی در دسترس نیست.');
 
-        DB::transaction(function () use ($d, $user) {
-            $wallet = Wallet::firstOrCreate(['user_id' => $user->id], ['balance_rials' => 0]);
+        DB::transaction(function () use ($r, $d, $user, $console, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر موجودی کیف پول خودتان مجاز نیست.');
+            $console->authorizeAction($r->user(), 'finance', (int) $lockedUser->id, 'finance.manage');
+
+            $wallet = Wallet::firstOrCreate(['user_id' => $lockedUser->id], ['balance_rials' => 0]);
             $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
             $before = (int) $wallet->balance_rials;
 
@@ -1046,18 +1122,40 @@ class AdminController extends Controller
                 'balance_before' => $before,
                 'balance_after' => $after,
                 'reference_type' => 'admin',
-                'reference_id' => auth()->id(),
+                'reference_id' => $r->user()->id,
                 'description' => $d['description'] ?: ($d['type'] === 'credit' ? 'شارژ توسط مدیر' : 'کسر توسط مدیر'),
-                'idempotency_key' => 'admin-'.auth()->id().'-'.bin2hex(random_bytes(12)),
+                'idempotency_key' => 'admin-'.$r->user()->id.'-'.bin2hex(random_bytes(12)),
+            ]);
+
+            $audit->record((int) $r->user()->id, 'admin.wallet.adjusted', $r->ip(), [
+                'target_user_id' => (int) $lockedUser->id,
+                'type' => $d['type'],
+                'amount_rials' => $d['amount_rials'],
+                'balance_before' => $before,
+                'balance_after' => $after,
             ]);
         });
 
-        if (Schema::hasTable('audit_logs')) {
-            $audit->record(auth()->id(), 'admin.wallet.adjusted', request()->ip(), [
-                'target_user_id' => $user->id, 'type' => $d['type'], 'amount_rials' => $d['amount_rials'],
-            ]);
-        }
-
         return back()->with('status', 'موجودی کیف پول کاربر به‌روزرسانی شد.');
     }
+
+    private function recordAccessAudit(Request $request, string $action, int $subjectUserId, array $before, array $after): void
+    {
+        abort_unless(Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ممیزی دسترسی در دسترس نیست.');
+
+        DB::table('farast_access_audit_logs')->insert([
+            'actor_id' => $request->user()?->id,
+            'subject_user_id' => $subjectUserId,
+            'role_id' => null,
+            'permission_id' => null,
+            'action' => $action,
+            'before_state' => json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'after_state' => json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 4000),
+            'created_at' => now(),
+        ]);
+    }
+
+
 }
