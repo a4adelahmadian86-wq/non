@@ -31,12 +31,17 @@
 # Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
-# After the release is staged and its shared storage/.env are wired:
+# After the release is staged and its shared storage/.env are wired.
+# Stop immediately on any failure; do not bring the site up after a failed migration.
+set -euo pipefail
 php artisan down --render="errors::503" --retry=60
 php artisan migrate:status
 php artisan migrate --force
 php artisan config:cache
-php artisan route:cache
+# Route caching is intentionally disabled: current route files still contain
+# Closure-based routes. Clear any stale cache; enable route:cache only after
+# those routes are converted to controller actions and the cache command is tested.
+php artisan route:clear
 php artisan view:cache
 php artisan event:cache
 php artisan queue:restart
