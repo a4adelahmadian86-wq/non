@@ -11,6 +11,7 @@ use App\Services\StoreCourseEnrollmentService;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 trait PaysWithZarinpal
 {
@@ -41,6 +42,7 @@ trait PaysWithZarinpal
                 $attempt = Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'zarinpal',
+                    'idempotency_key' => 'zarinpal-attempt-'.Str::uuid(),
                     'amount_rials' => $amount,
                     'status' => 'initiating',
                 ]);
