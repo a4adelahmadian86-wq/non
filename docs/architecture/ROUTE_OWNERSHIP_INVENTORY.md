@@ -2,21 +2,26 @@
 
 > آخرین تطبیق فایل‌های منبع: `main` در commit `1b9108fcedfb3f330a2ba19caba91a33cb00a966`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
 
-مبنای این نسخه: شاخه ممیزی پس از حذف Routeهای اعلان تکراری؛ فایل‌های فعال requireشده از `routes/web.php`. فهرست ایستا است و باید پس از اجرای runtime `php artisan route:list` با آن تطبیق داده شود.
+مبنای این نسخه: declarationهای خام فایل‌های فعال requireشده از `routes/web.php` در main؛ شمارش شامل declarationهای تکراری نیز هست و باید با خروجی runtime `php artisan route:list` تطبیق داده شود.
 
-- تعداد declarationهای استخراج‌شده: **334**
+- تعداد declarationهای استخراج‌شده: **336**
 - ورودی اصلی: `routes/web.php` که `web_core.php` و فایل‌های domain routes را require می‌کند.
 - `routes/legal.php` در ورودی اصلی require نشده و در inventory فعال نیست.
 - middlewareهای سراسری و گروه `web` در `bootstrap/app.php` تعریف شده‌اند؛ ستون‌های زیر فقط middleware گروه Route و middleware صریح هر route را نشان می‌دهند.
 - URI با prefix گروهی و route name با name prefix گروهی ترکیب شده‌اند.
 - controllerهای invokable (`Controller::class`) نیز به‌عنوان action ثبت شده‌اند.
 
-## تعارض‌ها در شاخه ممیزی
+## تعارض‌های موجود در main
 
-در اسکن ایستا این شاخه، نام تکراری یا Method/URI تکراری یافت نشد.
+در اسکن ایستای ۳۳۶ declaration خام، دو جفت تعارض Method/URI و دو جفت تعارض Route name ثبت شد:
+- `GET /workspace/notifications` با نام `platform.notifications` در `web_core_part2.php:69` به `PlatformCompletionController@notifications` و در `notifications.php:7` به `NotificationController@index` متصل است.
+- `POST /workspace/notifications/{id}/read` با نام `platform.notifications.read` در `web_core_part2.php:70` به `PlatformCompletionController@readNotification` و در `notifications.php:10` به `NotificationController@read` متصل است.
 
-## تغییر نسبت به main
-در main دو تعارض واقعی وجود داشت: `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` در `web_core_part2.php` و `notifications.php`. شاخه ممیزی دو تعریف متعلق به `PlatformCompletionController` را حذف کرده و `NotificationController` را مالک یگانه کرده است؛ تست `NotificationRouteOwnershipTest` این مالکیت را assert می‌کند.
+به علت ترتیب require در `routes/web.php`، فایل `routes/notifications.php` بعد از `web_core.php` بارگذاری می‌شود؛ بنابراین تعریف متأخر احتمالاً در RouteCollection runtime جایگزین تعریف قبلی می‌شود. این رفتار باید با `php artisan route:list` و تست runtime تأیید شود؛ تکیه به ترتیب بارگذاری به‌عنوان قرارداد معماری پذیرفته نیست.
+
+## تصمیم مالکیت پیشنهادی، بدون تغییر کد
+
+`NotificationController + NotificationService + FarastNotification` candidate مالک یگانه اعلان شخصی است. دو action اعلان در `PlatformCompletionController` و دو declaration آن در `web_core_part2.php` باید پس از ادغام تغییرهای RBAC که همین فایل Route را لمس می‌کنند، با یک PR مستقل حذف و با تست مالکیت runtime پوشش داده شوند. برای جلوگیری از تعارض با PR #347، این ممیزی Routeهای main را تغییر نداده است.
 
 ## Routeها به تفکیک فایل
 
@@ -151,137 +156,139 @@
 | DELETE | `/workspace/documents/{id}` | `platform.documents.destroy` | `PlatformCompletionController@destroy` | auth | — | `routes/web_core_part2.php:65` |
 | GET | `/workspace/documents/{id}/versions` | `platform.documents.versions` | `PlatformCompletionController@versions` | auth | — | `routes/web_core_part2.php:66` |
 | POST | `/workspace/documents/{id}/share` | `platform.documents.share` | `PlatformCompletionController@share` | auth | — | `routes/web_core_part2.php:67` |
+| GET | `/workspace/notifications` | `platform.notifications` | `PlatformCompletionController@notifications` | auth | — | `routes/web_core_part2.php:69` |
+| POST | `/workspace/notifications/{id}/read` | `platform.notifications.read` | `PlatformCompletionController@readNotification` | auth | — | `routes/web_core_part2.php:70` |
 | DELETE | `/workspace/shares/{id}` | `platform.documents.shares.destroy` | `PlatformCompletionController@revokeShare` | auth | — | `routes/web_core_part2.php:68` |
-| GET | `/workspace/workflows` | `platform.workflows` | `PlatformCompletionController@workflow` | auth | — | `routes/web_core_part2.php:70` |
-| POST | `/workspace/workflows` | `platform.workflows.save` | `PlatformCompletionController@saveWorkflow` | auth | throttle:20,1 | `routes/web_core_part2.php:71` |
-| POST | `/workspace/workflows/{id}/run` | `platform.workflows.run` | `PlatformCompletionController@runWorkflow` | auth | throttle:20,1 | `routes/web_core_part2.php:72` |
-| GET | `/workspace/security` | `platform.security` | `AccountSecurityController@index` | auth | — | `routes/web_core_part2.php:73` |
-| POST | `/workspace/security/two-factor/setup` | `platform.security.two-factor.setup` | `AccountTwoFactorController@startEnrollment` | auth | throttle:5,10 | `routes/web_core_part2.php:74` |
-| POST | `/workspace/security/two-factor/enable` | `platform.security.two-factor.enable` | `AccountTwoFactorController@enable` | auth | throttle:5,10 | `routes/web_core_part2.php:75` |
-| POST | `/workspace/security/two-factor/recovery-codes` | `platform.security.two-factor.recovery-codes` | `AccountTwoFactorController@regenerateRecoveryCodes` | auth | throttle:5,10 | `routes/web_core_part2.php:76` |
-| POST | `/workspace/security/two-factor/disable` | `platform.security.two-factor.disable` | `AccountTwoFactorController@disable` | auth | throttle:5,10 | `routes/web_core_part2.php:77` |
-| POST | `/workspace/security/sessions/{session}/revoke` | `platform.security.sessions.revoke` | `AccountSecurityController@revoke` | auth | throttle:10,10 | `routes/web_core_part2.php:78` |
-| POST | `/workspace/security/sessions/{session}/block-device` | `platform.security.devices.block` | `AccountSecurityController@blockDevice` | auth | throttle:5,10 | `routes/web_core_part2.php:79` |
-| POST | `/workspace/security/devices/{device}/unblock` | `platform.security.devices.unblock` | `AccountSecurityController@unblockDevice` | auth | throttle:5,10 | `routes/web_core_part2.php:80` |
-| POST | `/workspace/security/sessions/revoke-others` | `platform.security.sessions.revoke-others` | `AccountSecurityController@revokeOthers` | auth | throttle:5,10 | `routes/web_core_part2.php:81` |
-| POST | `/workspace/security/password` | `platform.security.password.update` | `AccountSecurityController@changePassword` | auth | throttle:5,10 | `routes/web_core_part2.php:82` |
-| POST | `/workspace/security/sessions/revoke-all` | `platform.security.sessions.revoke-all` | `AccountSecurityController@revokeAll` | auth | throttle:3,10 | `routes/web_core_part2.php:83` |
-| POST | `/workspace/ocr` | `platform.ocr` | `PlatformCompletionController@ocr` | auth | throttle:10,1 | `routes/web_core_part2.php:84` |
-| GET | `/workspace/ocr/{id}` | `platform.ocr.status` | `PlatformCompletionController@ocrStatus` | auth | throttle:60,1 | `routes/web_core_part2.php:85` |
-| GET | `/workspace/billing` | `platform.billing` | `PlatformCompletionController@billing` | auth | — | `routes/web_core_part2.php:86` |
-| POST | `/workspace/billing/{plan}` | `platform.billing.subscribe` | `PlatformCompletionController@subscribe` | auth | throttle:5,10 | `routes/web_core_part2.php:87` |
-| GET | `/support` | `support` | `SupportController@index` | auth | capability:can_support | `routes/web_core_part2.php:89` |
-| GET | `/support/create` | `support.create.form` | `SupportController@createForm` | auth | capability:can_support | `routes/web_core_part2.php:90` |
-| GET | `/support/tickets/{ticket}` | `support.show` | `SupportController@show` | auth | capability:can_support | `routes/web_core_part2.php:91` |
-| GET | `/support/tickets/{ticket}/messages` | `support.messages.poll` | `SupportController@pollMessages` | auth | capability:can_support, throttle:60,1 | `routes/web_core_part2.php:92` |
-| POST | `/support/tickets` | `support.create` | `SupportController@create` | auth | throttle:10,10, capability:can_support | `routes/web_core_part2.php:93` |
-| POST | `/support/tickets/{ticket}/messages` | `support.message` | `SupportController@message` | auth | throttle:30,10, capability:can_support | `routes/web_core_part2.php:94` |
-| POST | `/support/tickets/{ticket}/close` | `support.close` | `SupportController@close` | auth | throttle:10,10, capability:can_support | `routes/web_core_part2.php:95` |
-| GET | `/wallet` | `wallet` | `WalletController@index` | auth | — | `routes/web_core_part2.php:96` |
-| POST | `/wallet/top-up` | `wallet.topup` | `WalletController@topUp` | auth | throttle:10,10 | `routes/web_core_part2.php:97` |
-| GET | `/checkout/{order}` | `checkout` | `PaymentController@show` | auth | — | `routes/web_core_part2.php:98` |
-| POST | `/checkout/{order}/wallet` | `checkout.wallet` | `PaymentController@payWithWallet` | auth | throttle:10,10 | `routes/web_core_part2.php:99` |
-| POST | `/documents/{document}/checkout` | `documents.checkout` | `PaymentController@createForDocument` | auth | throttle:10,10 | `routes/web_core_part2.php:100` |
-| GET | `/shared/documents/{token}` | `platform.documents.shared` | `PlatformCompletionController@shared` | — | — | `routes/web_core_part2.php:103` |
-| GET | `/canva/connect` | `canva.connect` | `CanvaController@connect` | auth | — | `routes/web_core_part2.php:106` |
-| GET | `/canva/callback` | `canva.callback` | `CanvaController@callback` | auth | — | `routes/web_core_part2.php:107` |
-| POST | `/canva/disconnect` | `canva.disconnect` | `CanvaController@disconnect` | auth | — | `routes/web_core_part2.php:108` |
-| GET | `/canva/designs` | `canva.designs` | `CanvaController@designs` | auth | — | `routes/web_core_part2.php:109` |
-| POST | `/canva/designs` | `canva.designs.create` | `CanvaController@create` | auth | — | `routes/web_core_part2.php:110` |
-| POST | `/canva/designs/{design}/export` | `canva.designs.export` | `CanvaController@export` | auth | — | `routes/web_core_part2.php:111` |
-| GET | `/canva/exports/{job}` | `canva.exports.status` | `CanvaController@exportStatus` | auth | — | `routes/web_core_part2.php:112` |
-| POST | `/canva/imports` | `canva.imports.create` | `CanvaController@import` | auth | — | `routes/web_core_part2.php:113` |
-| GET | `/canva/imports/{job}` | `canva.imports.status` | `CanvaController@importStatus` | auth | — | `routes/web_core_part2.php:114` |
-| GET | `/admin/storage` | `admin.storage.index` | `\App\Http\Controllers\AdminStorageController@index` | auth, admin | admin.section:storage | `routes/web_core_part2.php:119` |
-| GET | `/admin/storage/backups` | `admin.storage.backups` | `\App\Http\Controllers\AdminStorageController@backups` | auth, admin | admin.section:storage | `routes/web_core_part2.php:120` |
-| POST | `/admin/storage/backups/run` | `admin.storage.backups.run` | `\App\Http\Controllers\AdminStorageController@requestBackup` | auth, admin | admin.section:storage, throttle:2,10 | `routes/web_core_part2.php:121` |
-| POST | `/admin/storage/volumes` | `admin.storage.store` | `\App\Http\Controllers\AdminStorageController@store` | auth, admin | admin.section:storage, throttle:5,10 | `routes/web_core_part2.php:122` |
-| GET | `/admin/storage/volumes/{volume}` | `admin.storage.volume` | `\App\Http\Controllers\AdminStorageController@show` | auth, admin | admin.section:storage | `routes/web_core_part2.php:123` |
-| GET | `/admin/storage/files/{file}/download` | `admin.storage.files.download` | `\App\Http\Controllers\AdminStorageController@downloadFile` | auth, admin | admin.section:storage | `routes/web_core_part2.php:124` |
-| POST | `/admin/storage/volumes/{volume}/verify` | `admin.storage.verify` | `\App\Http\Controllers\AdminStorageController@verify` | auth, admin | admin.section:storage, throttle:5,10 | `routes/web_core_part2.php:125` |
-| POST | `/admin/storage/volumes/{volume}/toggle` | `admin.storage.toggle` | `\App\Http\Controllers\AdminStorageController@toggle` | auth, admin | admin.section:storage | `routes/web_core_part2.php:126` |
-| DELETE | `/admin/storage/volumes/{volume}` | `admin.storage.destroy` | `\App\Http\Controllers\AdminStorageController@destroy` | auth, admin | admin.section:storage | `routes/web_core_part2.php:127` |
-| GET | `/admin/discussion-reports` | `admin.discussion-reports.index` | `ContentDiscussionController@adminReports` | auth, admin | admin.section:store | `routes/web_core_part2.php:129` |
-| PATCH | `/admin/discussion-reports/{report}` | `admin.discussion-reports.moderate` | `ContentDiscussionController@moderateReport` | auth, admin | admin.section:store, throttle:30,10 | `routes/web_core_part2.php:130` |
-| GET | `/admin/discussions` | `admin.discussions.index` | `ContentDiscussionController@adminIndex` | auth, admin | admin.section:store | `routes/web_core_part2.php:131` |
-| PATCH | `/admin/discussions/{discussion}/moderate` | `admin.discussions.moderate` | `ContentDiscussionController@moderate` | auth, admin | admin.section:store, throttle:30,10 | `routes/web_core_part2.php:132` |
-| POST | `/admin/discussions/{discussion}/reply` | `admin.discussions.reply` | `ContentDiscussionController@reply` | auth, admin | admin.section:store, throttle:20,10 | `routes/web_core_part2.php:133` |
-| GET | `/admin/store-coupons` | `admin.store-coupons.index` | `\App\Http\Controllers\AdminStoreCouponController@index` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:136` |
-| PUT | `/admin/store-coupons/settings` | `admin.store-coupons.settings` | `\App\Http\Controllers\AdminStoreCouponController@saveSettings` | auth, admin | admin.section:marketing, throttle:10,10 | `routes/web_core_part2.php:137` |
-| POST | `/admin/store-coupons` | `admin.store-coupons.store` | `\App\Http\Controllers\AdminStoreCouponController@store` | auth, admin | admin.section:marketing, throttle:10,10 | `routes/web_core_part2.php:138` |
-| PATCH | `/admin/store-coupons/{coupon}/toggle` | `admin.store-coupons.toggle` | `\App\Http\Controllers\AdminStoreCouponController@toggle` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:139` |
-| POST | `/admin/store-coupons/assignments/{assignment}/revoke` | `admin.store-coupons.assignments.revoke` | `\App\Http\Controllers\AdminStoreCouponController@revokeAssignment` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:140` |
-| GET | `/admin/crm/marketing` | `admin.crm.marketing.index` | `CrmMarketingController@dashboard` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:143` |
-| GET | `/admin/crm/marketing/segments` | `admin.crm.marketing.segments.index` | `CrmMarketingController@segments` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:144` |
-| POST | `/admin/crm/marketing/segments` | `admin.crm.marketing.segments.store` | `CrmMarketingController@storeSegment` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:145` |
-| POST | `/admin/crm/marketing/audience/preview` | `admin.crm.marketing.audience.preview` | `CrmMarketingController@previewAudience` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:146` |
-| GET | `/admin/crm/marketing/campaigns` | `admin.crm.marketing.campaigns.index` | `CrmMarketingController@campaigns` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:147` |
-| POST | `/admin/crm/marketing/campaigns` | `admin.crm.marketing.campaigns.store` | `CrmMarketingController@storeCampaign` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:148` |
-| POST | `/admin/crm/marketing/campaigns/{campaign}/send` | `admin.crm.marketing.campaigns.send` | `CrmMarketingController@sendCampaign` | auth, admin | admin.section:marketing, throttle:5,10 | `routes/web_core_part2.php:149` |
-| GET | `/admin/crm/analytics` | `admin.crm.analytics` | `CrmAnalyticsController` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:151` |
-| GET | `/admin/crm/projects` | `admin.crm.projects.index` | `CrmProjectController@index` | auth, admin | admin.section:users | `routes/web_core_part2.php:153` |
-| GET | `/admin/crm/projects/{project}` | `admin.crm.projects.show` | `CrmProjectController@show` | auth, admin | admin.section:users | `routes/web_core_part2.php:154` |
-| POST | `/admin/crm/projects/{project}/tasks/{task}/assign` | `admin.crm.projects.tasks.assign` | `CrmProjectController@assignHumanTask` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:155` |
-| GET | `/admin/crm/follow-ups` | `admin.crm.followups.index` | `CrmController@followUps` | auth, admin | admin.section:users | `routes/web_core_part2.php:158` |
-| GET | `/admin/crm/customers` | `admin.crm.customers.index` | `CrmController@customers` | auth, admin | admin.section:users | `routes/web_core_part2.php:159` |
-| GET | `/admin/crm/customers/{customer}` | `admin.crm.customers.show` | `CrmController@show` | auth, admin | admin.section:users | `routes/web_core_part2.php:160` |
-| POST | `/admin/crm/customers/{customer}/notes` | `admin.crm.customers.notes.store` | `CrmController@storeNote` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:161` |
-| POST | `/admin/crm/customers/{customer}/follow-ups` | `admin.crm.customers.followups.store` | `CrmController@storeFollowUp` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:162` |
-| PATCH | `/admin/crm/customers/{customer}/follow-ups/{task}` | `admin.crm.customers.followups.update` | `CrmController@updateFollowUp` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:163` |
-| GET | `/admin` | `admin.index` | `AdminController@index` | auth, admin | admin.section:overview | `routes/web_core_part2.php:164` |
-| GET | `/admin/users` | `admin.users` | `AdminController@users` | auth, admin | admin.section:users | `routes/web_core_part2.php:165` |
-| POST | `/admin/users/{user}/role` | `admin.users.role` | `AdminController@updateUserRole` | auth, admin | admin.section:users | `routes/web_core_part2.php:166` |
-| GET | `/admin/finance` | `admin.finance` | `AdminController@finance` | auth, admin | admin.section:finance | `routes/web_core_part2.php:167` |
-| POST | `/admin/finance` | `admin.finance.update` | `AdminController@updateFinance` | auth, admin | admin.section:finance_settings | `routes/web_core_part2.php:168` |
-| POST | `/admin/finance/users/{user}/wallet` | `admin.finance.wallet` | `AdminController@adjustWallet` | auth, admin | admin.section:finance_manage | `routes/web_core_part2.php:169` |
-| GET | `/admin/social` | `admin.social` | `SocialController@admin` | auth, admin | admin.section:social | `routes/web_core_part2.php:170` |
-| POST | `/admin/social` | `admin.social.update` | `SocialController@update` | auth, admin | admin.section:social | `routes/web_core_part2.php:171` |
-| POST | `/admin/settings` | `admin.settings.update` | `AdminController@updateSettings` | auth, admin | admin.section:settings | `routes/web_core_part2.php:172` |
-| POST | `/admin/voice-providers` | `admin.voice.providers.update` | `AdminController@updateVoiceProviders` | auth, admin | admin.section:voice | `routes/web_core_part2.php:173` |
-| POST | `/admin/pricing` | `admin.pricing.update` | `AdminController@updatePricing` | auth, admin | admin.section:pricing | `routes/web_core_part2.php:174` |
-| POST | `/admin/users/{user}/capabilities` | `admin.user.capabilities` | `AdminController@updateUserCapabilities` | auth, admin | admin.section:users | `routes/web_core_part2.php:175` |
-| POST | `/admin/users/{user}/block` | `admin.user.toggle` | `AdminController@toggleUser` | auth, admin | admin.section:users | `routes/web_core_part2.php:176` |
-| GET | `/admin/announcements` | `admin.announcements.index` | `AnnouncementController@manage` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:177` |
-| POST | `/admin/announcements` | `admin.announcements.store` | `AnnouncementController@store` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:178` |
-| PUT | `/admin/announcements/{announcement}` | `admin.announcements.update` | `AnnouncementController@update` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:179` |
-| POST | `/admin/announcements/{announcement}/toggle` | `admin.announcements.toggle` | `AnnouncementController@toggle` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:180` |
-| POST | `/admin/announcements/{announcement}/rebroadcast` | `admin.announcements.rebroadcast` | `AnnouncementController@rebroadcast` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:181` |
-| DELETE | `/admin/announcements/{announcement}` | `admin.announcements.destroy` | `AnnouncementController@destroy` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:182` |
-| POST | `/admin/announcements/{announcement}/archive` | `admin.announcements.archive` | `AnnouncementController@archive` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:183` |
-| POST | `/admin/announcements/{announcement}/restore` | `admin.announcements.restore` | `AnnouncementController@restore` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:184` |
-| GET | `/admin/emails` | `admin.emails` | `AdminController@emails` | auth, admin | admin.section:emails | `routes/web_core_part2.php:185` |
-| POST | `/admin/emails/settings` | `admin.emails.settings` | `AdminController@updateEmailSettings` | auth, admin | admin.section:emails | `routes/web_core_part2.php:186` |
-| POST | `/admin/emails/test` | `admin.emails.test` | `AdminController@sendTestEmail` | auth, admin | admin.section:emails | `routes/web_core_part2.php:187` |
-| GET | `/admin/integrations` | `admin.integrations` | `AdminPlatformController@integrations` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:188` |
-| POST | `/admin/integrations/canva` | `admin.integrations.canva.save` | `AdminPlatformController@saveCanva` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:189` |
-| GET | `/admin/integrations/canva/connect` | `admin.integrations.canva.connect` | `CanvaController@connect` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:190` |
-| GET | `/admin/integrations/canva/callback` | `admin.integrations.canva.callback` | `CanvaController@callback` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:191` |
-| POST | `/admin/integrations/canva/disconnect` | `admin.integrations.canva.disconnect` | `CanvaController@disconnect` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:192` |
-| GET | `/admin/access` | `admin.access` | `AdminPlatformController@access` | auth, admin | admin.section:access | `routes/web_core_part2.php:193` |
-| POST | `/admin/access/roles/{role}` | `admin.access.roles.update` | `AdminPlatformController@updateRole` | auth, admin | admin.section:access | `routes/web_core_part2.php:194` |
-| GET | `/admin/organizations` | `admin.organizations` | `AdminPlatformController@organizations` | auth, admin | admin.section:organizations | `routes/web_core_part2.php:195` |
-| POST | `/admin/organizations` | `admin.organizations.store` | `AdminPlatformController@storeOrganization` | auth, admin | admin.section:organizations | `routes/web_core_part2.php:196` |
-| GET | `/admin/analytics` | `admin.analytics` | `AdminPlatformController@analytics` | auth, admin | admin.section:analytics | `routes/web_core_part2.php:197` |
-| GET | `/admin/audit` | `admin.audit` | `AdminPlatformController@audit` | auth, admin | admin.section:audit | `routes/web_core_part2.php:198` |
-| POST | `/admin/providers/ai` | `admin.providers.ai.update` | `ProviderAdminController@updateAi` | auth, admin | admin.section:ai_providers | `routes/web_core_part2.php:199` |
-| GET | `/admin/providers/ai/test` | `admin.providers.ai.test` | `ProviderAdminController@testAi` | auth, admin | admin.section:ai_providers, throttle:5,1 | `routes/web_core_part2.php:200` |
-| GET | `/admin/providers/voice/{provider}/test` | `admin.providers.voice.test` | `ProviderAdminController@testVoice` | auth, admin | admin.section:voice | `routes/web_core_part2.php:201` |
-| POST | `/admin/providers/groq` | `admin.providers.groq.update` | `ProviderAdminController@updateGroq` | auth, admin | admin.section:ai_providers | `routes/web_core_part2.php:202` |
-| GET | `/admin/providers/groq/test` | `admin.providers.groq.test` | `ProviderAdminController@testGroq` | auth, admin | admin.section:ai_providers, throttle:5,1 | `routes/web_core_part2.php:203` |
-| GET | `/admin/support-sms` | `admin.support.sms` | `AdminController@supportSms` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:205` |
-| POST | `/admin/support-sms` | `admin.support.sms.update` | `AdminController@updateSupportSms` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:206` |
-| GET | `/admin/support-management` | `admin.support.management` | `SupportController@adminIndex` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:207` |
-| POST | `/admin/tickets/{ticket}/reply` | `admin.tickets.reply` | `SupportController@adminReply` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:208` |
-| POST | `/admin/tickets/{ticket}/status` | `admin.tickets.status` | `SupportController@adminStatus` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:209` |
-| POST | `/admin/tickets/{ticket}/assign` | `admin.tickets.assign` | `SupportController@adminAssign` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:210` |
-| POST | `/admin/tickets/{ticket}/meta` | `admin.tickets.meta` | `SupportController@adminMeta` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:211` |
-| GET | `/admin/plans` | `admin.plans` | `PlatformCompletionController@adminPlans` | auth, admin | admin.section:plans | `routes/web_core_part2.php:212` |
-| POST | `/admin/plans` | `admin.plans.save` | `PlatformCompletionController@savePlan` | auth, admin | admin.section:plans | `routes/web_core_part2.php:213` |
-| GET | `/admin/cms` | `admin.cms` | `PlatformCompletionController@cms` | auth, admin | admin.section:cms | `routes/web_core_part2.php:214` |
-| GET | `/admin/teams/{team}/members` | `admin.teams.members` | `PlatformCompletionController@teamMembers` | auth, admin | admin.section:access | `routes/web_core_part2.php:215` |
-| POST | `/admin/teams/{team}/members` | `admin.teams.members.add` | `PlatformCompletionController@addTeamMember` | auth, admin | admin.section:access | `routes/web_core_part2.php:216` |
-| DELETE | `/admin/teams/{team}/members/{user}` | `admin.teams.members.remove` | `PlatformCompletionController@removeTeamMember` | auth, admin | admin.section:access | `routes/web_core_part2.php:217` |
-| POST | `/admin/cms` | `admin.cms.save` | `PlatformCompletionController@saveCms` | auth, admin | admin.section:cms | `routes/web_core_part2.php:218` |
+| GET | `/workspace/workflows` | `platform.workflows` | `PlatformCompletionController@workflow` | auth | — | `routes/web_core_part2.php:72` |
+| POST | `/workspace/workflows` | `platform.workflows.save` | `PlatformCompletionController@saveWorkflow` | auth | throttle:20,1 | `routes/web_core_part2.php:73` |
+| POST | `/workspace/workflows/{id}/run` | `platform.workflows.run` | `PlatformCompletionController@runWorkflow` | auth | throttle:20,1 | `routes/web_core_part2.php:74` |
+| GET | `/workspace/security` | `platform.security` | `AccountSecurityController@index` | auth | — | `routes/web_core_part2.php:75` |
+| POST | `/workspace/security/two-factor/setup` | `platform.security.two-factor.setup` | `AccountTwoFactorController@startEnrollment` | auth | throttle:5,10 | `routes/web_core_part2.php:76` |
+| POST | `/workspace/security/two-factor/enable` | `platform.security.two-factor.enable` | `AccountTwoFactorController@enable` | auth | throttle:5,10 | `routes/web_core_part2.php:77` |
+| POST | `/workspace/security/two-factor/recovery-codes` | `platform.security.two-factor.recovery-codes` | `AccountTwoFactorController@regenerateRecoveryCodes` | auth | throttle:5,10 | `routes/web_core_part2.php:78` |
+| POST | `/workspace/security/two-factor/disable` | `platform.security.two-factor.disable` | `AccountTwoFactorController@disable` | auth | throttle:5,10 | `routes/web_core_part2.php:79` |
+| POST | `/workspace/security/sessions/{session}/revoke` | `platform.security.sessions.revoke` | `AccountSecurityController@revoke` | auth | throttle:10,10 | `routes/web_core_part2.php:80` |
+| POST | `/workspace/security/sessions/{session}/block-device` | `platform.security.devices.block` | `AccountSecurityController@blockDevice` | auth | throttle:5,10 | `routes/web_core_part2.php:81` |
+| POST | `/workspace/security/devices/{device}/unblock` | `platform.security.devices.unblock` | `AccountSecurityController@unblockDevice` | auth | throttle:5,10 | `routes/web_core_part2.php:82` |
+| POST | `/workspace/security/sessions/revoke-others` | `platform.security.sessions.revoke-others` | `AccountSecurityController@revokeOthers` | auth | throttle:5,10 | `routes/web_core_part2.php:83` |
+| POST | `/workspace/security/password` | `platform.security.password.update` | `AccountSecurityController@changePassword` | auth | throttle:5,10 | `routes/web_core_part2.php:84` |
+| POST | `/workspace/security/sessions/revoke-all` | `platform.security.sessions.revoke-all` | `AccountSecurityController@revokeAll` | auth | throttle:3,10 | `routes/web_core_part2.php:85` |
+| POST | `/workspace/ocr` | `platform.ocr` | `PlatformCompletionController@ocr` | auth | throttle:10,1 | `routes/web_core_part2.php:86` |
+| GET | `/workspace/ocr/{id}` | `platform.ocr.status` | `PlatformCompletionController@ocrStatus` | auth | throttle:60,1 | `routes/web_core_part2.php:87` |
+| GET | `/workspace/billing` | `platform.billing` | `PlatformCompletionController@billing` | auth | — | `routes/web_core_part2.php:88` |
+| POST | `/workspace/billing/{plan}` | `platform.billing.subscribe` | `PlatformCompletionController@subscribe` | auth | throttle:5,10 | `routes/web_core_part2.php:89` |
+| GET | `/support` | `support` | `SupportController@index` | auth | capability:can_support | `routes/web_core_part2.php:91` |
+| GET | `/support/create` | `support.create.form` | `SupportController@createForm` | auth | capability:can_support | `routes/web_core_part2.php:92` |
+| GET | `/support/tickets/{ticket}` | `support.show` | `SupportController@show` | auth | capability:can_support | `routes/web_core_part2.php:93` |
+| GET | `/support/tickets/{ticket}/messages` | `support.messages.poll` | `SupportController@pollMessages` | auth | capability:can_support, throttle:60,1 | `routes/web_core_part2.php:94` |
+| POST | `/support/tickets` | `support.create` | `SupportController@create` | auth | throttle:10,10, capability:can_support | `routes/web_core_part2.php:95` |
+| POST | `/support/tickets/{ticket}/messages` | `support.message` | `SupportController@message` | auth | throttle:30,10, capability:can_support | `routes/web_core_part2.php:96` |
+| POST | `/support/tickets/{ticket}/close` | `support.close` | `SupportController@close` | auth | throttle:10,10, capability:can_support | `routes/web_core_part2.php:97` |
+| GET | `/wallet` | `wallet` | `WalletController@index` | auth | — | `routes/web_core_part2.php:98` |
+| POST | `/wallet/top-up` | `wallet.topup` | `WalletController@topUp` | auth | throttle:10,10 | `routes/web_core_part2.php:99` |
+| GET | `/checkout/{order}` | `checkout` | `PaymentController@show` | auth | — | `routes/web_core_part2.php:100` |
+| POST | `/checkout/{order}/wallet` | `checkout.wallet` | `PaymentController@payWithWallet` | auth | throttle:10,10 | `routes/web_core_part2.php:101` |
+| POST | `/documents/{document}/checkout` | `documents.checkout` | `PaymentController@createForDocument` | auth | throttle:10,10 | `routes/web_core_part2.php:102` |
+| GET | `/shared/documents/{token}` | `platform.documents.shared` | `PlatformCompletionController@shared` | — | — | `routes/web_core_part2.php:105` |
+| GET | `/canva/connect` | `canva.connect` | `CanvaController@connect` | auth | — | `routes/web_core_part2.php:108` |
+| GET | `/canva/callback` | `canva.callback` | `CanvaController@callback` | auth | — | `routes/web_core_part2.php:109` |
+| POST | `/canva/disconnect` | `canva.disconnect` | `CanvaController@disconnect` | auth | — | `routes/web_core_part2.php:110` |
+| GET | `/canva/designs` | `canva.designs` | `CanvaController@designs` | auth | — | `routes/web_core_part2.php:111` |
+| POST | `/canva/designs` | `canva.designs.create` | `CanvaController@create` | auth | — | `routes/web_core_part2.php:112` |
+| POST | `/canva/designs/{design}/export` | `canva.designs.export` | `CanvaController@export` | auth | — | `routes/web_core_part2.php:113` |
+| GET | `/canva/exports/{job}` | `canva.exports.status` | `CanvaController@exportStatus` | auth | — | `routes/web_core_part2.php:114` |
+| POST | `/canva/imports` | `canva.imports.create` | `CanvaController@import` | auth | — | `routes/web_core_part2.php:115` |
+| GET | `/canva/imports/{job}` | `canva.imports.status` | `CanvaController@importStatus` | auth | — | `routes/web_core_part2.php:116` |
+| GET | `/admin/storage` | `admin.storage.index` | `\App\Http\Controllers\AdminStorageController@index` | auth, admin | admin.section:storage | `routes/web_core_part2.php:121` |
+| GET | `/admin/storage/backups` | `admin.storage.backups` | `\App\Http\Controllers\AdminStorageController@backups` | auth, admin | admin.section:storage | `routes/web_core_part2.php:122` |
+| POST | `/admin/storage/backups/run` | `admin.storage.backups.run` | `\App\Http\Controllers\AdminStorageController@requestBackup` | auth, admin | admin.section:storage, throttle:2,10 | `routes/web_core_part2.php:123` |
+| POST | `/admin/storage/volumes` | `admin.storage.store` | `\App\Http\Controllers\AdminStorageController@store` | auth, admin | admin.section:storage, throttle:5,10 | `routes/web_core_part2.php:124` |
+| GET | `/admin/storage/volumes/{volume}` | `admin.storage.volume` | `\App\Http\Controllers\AdminStorageController@show` | auth, admin | admin.section:storage | `routes/web_core_part2.php:125` |
+| GET | `/admin/storage/files/{file}/download` | `admin.storage.files.download` | `\App\Http\Controllers\AdminStorageController@downloadFile` | auth, admin | admin.section:storage | `routes/web_core_part2.php:126` |
+| POST | `/admin/storage/volumes/{volume}/verify` | `admin.storage.verify` | `\App\Http\Controllers\AdminStorageController@verify` | auth, admin | admin.section:storage, throttle:5,10 | `routes/web_core_part2.php:127` |
+| POST | `/admin/storage/volumes/{volume}/toggle` | `admin.storage.toggle` | `\App\Http\Controllers\AdminStorageController@toggle` | auth, admin | admin.section:storage | `routes/web_core_part2.php:128` |
+| DELETE | `/admin/storage/volumes/{volume}` | `admin.storage.destroy` | `\App\Http\Controllers\AdminStorageController@destroy` | auth, admin | admin.section:storage | `routes/web_core_part2.php:129` |
+| GET | `/admin/discussion-reports` | `admin.discussion-reports.index` | `ContentDiscussionController@adminReports` | auth, admin | admin.section:store | `routes/web_core_part2.php:131` |
+| PATCH | `/admin/discussion-reports/{report}` | `admin.discussion-reports.moderate` | `ContentDiscussionController@moderateReport` | auth, admin | admin.section:store, throttle:30,10 | `routes/web_core_part2.php:132` |
+| GET | `/admin/discussions` | `admin.discussions.index` | `ContentDiscussionController@adminIndex` | auth, admin | admin.section:store | `routes/web_core_part2.php:133` |
+| PATCH | `/admin/discussions/{discussion}/moderate` | `admin.discussions.moderate` | `ContentDiscussionController@moderate` | auth, admin | admin.section:store, throttle:30,10 | `routes/web_core_part2.php:134` |
+| POST | `/admin/discussions/{discussion}/reply` | `admin.discussions.reply` | `ContentDiscussionController@reply` | auth, admin | admin.section:store, throttle:20,10 | `routes/web_core_part2.php:135` |
+| GET | `/admin/store-coupons` | `admin.store-coupons.index` | `\App\Http\Controllers\AdminStoreCouponController@index` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:138` |
+| PUT | `/admin/store-coupons/settings` | `admin.store-coupons.settings` | `\App\Http\Controllers\AdminStoreCouponController@saveSettings` | auth, admin | admin.section:marketing, throttle:10,10 | `routes/web_core_part2.php:139` |
+| POST | `/admin/store-coupons` | `admin.store-coupons.store` | `\App\Http\Controllers\AdminStoreCouponController@store` | auth, admin | admin.section:marketing, throttle:10,10 | `routes/web_core_part2.php:140` |
+| PATCH | `/admin/store-coupons/{coupon}/toggle` | `admin.store-coupons.toggle` | `\App\Http\Controllers\AdminStoreCouponController@toggle` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:141` |
+| POST | `/admin/store-coupons/assignments/{assignment}/revoke` | `admin.store-coupons.assignments.revoke` | `\App\Http\Controllers\AdminStoreCouponController@revokeAssignment` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:142` |
+| GET | `/admin/crm/marketing` | `admin.crm.marketing.index` | `CrmMarketingController@dashboard` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:145` |
+| GET | `/admin/crm/marketing/segments` | `admin.crm.marketing.segments.index` | `CrmMarketingController@segments` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:146` |
+| POST | `/admin/crm/marketing/segments` | `admin.crm.marketing.segments.store` | `CrmMarketingController@storeSegment` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:147` |
+| POST | `/admin/crm/marketing/audience/preview` | `admin.crm.marketing.audience.preview` | `CrmMarketingController@previewAudience` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:148` |
+| GET | `/admin/crm/marketing/campaigns` | `admin.crm.marketing.campaigns.index` | `CrmMarketingController@campaigns` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:149` |
+| POST | `/admin/crm/marketing/campaigns` | `admin.crm.marketing.campaigns.store` | `CrmMarketingController@storeCampaign` | auth, admin | admin.section:marketing, throttle:20,10 | `routes/web_core_part2.php:150` |
+| POST | `/admin/crm/marketing/campaigns/{campaign}/send` | `admin.crm.marketing.campaigns.send` | `CrmMarketingController@sendCampaign` | auth, admin | admin.section:marketing, throttle:5,10 | `routes/web_core_part2.php:151` |
+| GET | `/admin/crm/analytics` | `admin.crm.analytics` | `CrmAnalyticsController` | auth, admin | admin.section:marketing | `routes/web_core_part2.php:153` |
+| GET | `/admin/crm/projects` | `admin.crm.projects.index` | `CrmProjectController@index` | auth, admin | admin.section:users | `routes/web_core_part2.php:155` |
+| GET | `/admin/crm/projects/{project}` | `admin.crm.projects.show` | `CrmProjectController@show` | auth, admin | admin.section:users | `routes/web_core_part2.php:156` |
+| POST | `/admin/crm/projects/{project}/tasks/{task}/assign` | `admin.crm.projects.tasks.assign` | `CrmProjectController@assignHumanTask` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:157` |
+| GET | `/admin/crm/follow-ups` | `admin.crm.followups.index` | `CrmController@followUps` | auth, admin | admin.section:users | `routes/web_core_part2.php:160` |
+| GET | `/admin/crm/customers` | `admin.crm.customers.index` | `CrmController@customers` | auth, admin | admin.section:users | `routes/web_core_part2.php:161` |
+| GET | `/admin/crm/customers/{customer}` | `admin.crm.customers.show` | `CrmController@show` | auth, admin | admin.section:users | `routes/web_core_part2.php:162` |
+| POST | `/admin/crm/customers/{customer}/notes` | `admin.crm.customers.notes.store` | `CrmController@storeNote` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:163` |
+| POST | `/admin/crm/customers/{customer}/follow-ups` | `admin.crm.customers.followups.store` | `CrmController@storeFollowUp` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:164` |
+| PATCH | `/admin/crm/customers/{customer}/follow-ups/{task}` | `admin.crm.customers.followups.update` | `CrmController@updateFollowUp` | auth, admin | admin.section:users, throttle:30,10 | `routes/web_core_part2.php:165` |
+| GET | `/admin` | `admin.index` | `AdminController@index` | auth, admin | admin.section:overview | `routes/web_core_part2.php:166` |
+| GET | `/admin/users` | `admin.users` | `AdminController@users` | auth, admin | admin.section:users | `routes/web_core_part2.php:167` |
+| POST | `/admin/users/{user}/role` | `admin.users.role` | `AdminController@updateUserRole` | auth, admin | admin.section:users | `routes/web_core_part2.php:168` |
+| GET | `/admin/finance` | `admin.finance` | `AdminController@finance` | auth, admin | admin.section:finance | `routes/web_core_part2.php:169` |
+| POST | `/admin/finance` | `admin.finance.update` | `AdminController@updateFinance` | auth, admin | admin.section:finance_settings | `routes/web_core_part2.php:170` |
+| POST | `/admin/finance/users/{user}/wallet` | `admin.finance.wallet` | `AdminController@adjustWallet` | auth, admin | admin.section:finance_manage | `routes/web_core_part2.php:171` |
+| GET | `/admin/social` | `admin.social` | `SocialController@admin` | auth, admin | admin.section:social | `routes/web_core_part2.php:172` |
+| POST | `/admin/social` | `admin.social.update` | `SocialController@update` | auth, admin | admin.section:social | `routes/web_core_part2.php:173` |
+| POST | `/admin/settings` | `admin.settings.update` | `AdminController@updateSettings` | auth, admin | admin.section:settings | `routes/web_core_part2.php:174` |
+| POST | `/admin/voice-providers` | `admin.voice.providers.update` | `AdminController@updateVoiceProviders` | auth, admin | admin.section:voice | `routes/web_core_part2.php:175` |
+| POST | `/admin/pricing` | `admin.pricing.update` | `AdminController@updatePricing` | auth, admin | admin.section:pricing | `routes/web_core_part2.php:176` |
+| POST | `/admin/users/{user}/capabilities` | `admin.user.capabilities` | `AdminController@updateUserCapabilities` | auth, admin | admin.section:users | `routes/web_core_part2.php:177` |
+| POST | `/admin/users/{user}/block` | `admin.user.toggle` | `AdminController@toggleUser` | auth, admin | admin.section:users | `routes/web_core_part2.php:178` |
+| GET | `/admin/announcements` | `admin.announcements.index` | `AnnouncementController@manage` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:179` |
+| POST | `/admin/announcements` | `admin.announcements.store` | `AnnouncementController@store` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:180` |
+| PUT | `/admin/announcements/{announcement}` | `admin.announcements.update` | `AnnouncementController@update` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:181` |
+| POST | `/admin/announcements/{announcement}/toggle` | `admin.announcements.toggle` | `AnnouncementController@toggle` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:182` |
+| POST | `/admin/announcements/{announcement}/rebroadcast` | `admin.announcements.rebroadcast` | `AnnouncementController@rebroadcast` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:183` |
+| DELETE | `/admin/announcements/{announcement}` | `admin.announcements.destroy` | `AnnouncementController@destroy` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:184` |
+| POST | `/admin/announcements/{announcement}/archive` | `admin.announcements.archive` | `AnnouncementController@archive` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:185` |
+| POST | `/admin/announcements/{announcement}/restore` | `admin.announcements.restore` | `AnnouncementController@restore` | auth, admin | admin.section:announcements | `routes/web_core_part2.php:186` |
+| GET | `/admin/emails` | `admin.emails` | `AdminController@emails` | auth, admin | admin.section:emails | `routes/web_core_part2.php:187` |
+| POST | `/admin/emails/settings` | `admin.emails.settings` | `AdminController@updateEmailSettings` | auth, admin | admin.section:emails | `routes/web_core_part2.php:188` |
+| POST | `/admin/emails/test` | `admin.emails.test` | `AdminController@sendTestEmail` | auth, admin | admin.section:emails | `routes/web_core_part2.php:189` |
+| GET | `/admin/integrations` | `admin.integrations` | `AdminPlatformController@integrations` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:190` |
+| POST | `/admin/integrations/canva` | `admin.integrations.canva.save` | `AdminPlatformController@saveCanva` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:191` |
+| GET | `/admin/integrations/canva/connect` | `admin.integrations.canva.connect` | `CanvaController@connect` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:192` |
+| GET | `/admin/integrations/canva/callback` | `admin.integrations.canva.callback` | `CanvaController@callback` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:193` |
+| POST | `/admin/integrations/canva/disconnect` | `admin.integrations.canva.disconnect` | `CanvaController@disconnect` | auth, admin | admin.section:integrations | `routes/web_core_part2.php:194` |
+| GET | `/admin/access` | `admin.access` | `AdminPlatformController@access` | auth, admin | admin.section:access | `routes/web_core_part2.php:195` |
+| POST | `/admin/access/roles/{role}` | `admin.access.roles.update` | `AdminPlatformController@updateRole` | auth, admin | admin.section:access | `routes/web_core_part2.php:196` |
+| GET | `/admin/organizations` | `admin.organizations` | `AdminPlatformController@organizations` | auth, admin | admin.section:organizations | `routes/web_core_part2.php:197` |
+| POST | `/admin/organizations` | `admin.organizations.store` | `AdminPlatformController@storeOrganization` | auth, admin | admin.section:organizations | `routes/web_core_part2.php:198` |
+| GET | `/admin/analytics` | `admin.analytics` | `AdminPlatformController@analytics` | auth, admin | admin.section:analytics | `routes/web_core_part2.php:199` |
+| GET | `/admin/audit` | `admin.audit` | `AdminPlatformController@audit` | auth, admin | admin.section:audit | `routes/web_core_part2.php:200` |
+| POST | `/admin/providers/ai` | `admin.providers.ai.update` | `ProviderAdminController@updateAi` | auth, admin | admin.section:ai_providers | `routes/web_core_part2.php:201` |
+| GET | `/admin/providers/ai/test` | `admin.providers.ai.test` | `ProviderAdminController@testAi` | auth, admin | admin.section:ai_providers, throttle:5,1 | `routes/web_core_part2.php:202` |
+| GET | `/admin/providers/voice/{provider}/test` | `admin.providers.voice.test` | `ProviderAdminController@testVoice` | auth, admin | admin.section:voice | `routes/web_core_part2.php:203` |
+| POST | `/admin/providers/groq` | `admin.providers.groq.update` | `ProviderAdminController@updateGroq` | auth, admin | admin.section:ai_providers | `routes/web_core_part2.php:204` |
+| GET | `/admin/providers/groq/test` | `admin.providers.groq.test` | `ProviderAdminController@testGroq` | auth, admin | admin.section:ai_providers, throttle:5,1 | `routes/web_core_part2.php:205` |
+| GET | `/admin/support-sms` | `admin.support.sms` | `AdminController@supportSms` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:207` |
+| POST | `/admin/support-sms` | `admin.support.sms.update` | `AdminController@updateSupportSms` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:208` |
+| GET | `/admin/support-management` | `admin.support.management` | `SupportController@adminIndex` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:209` |
+| POST | `/admin/tickets/{ticket}/reply` | `admin.tickets.reply` | `SupportController@adminReply` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:210` |
+| POST | `/admin/tickets/{ticket}/status` | `admin.tickets.status` | `SupportController@adminStatus` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:211` |
+| POST | `/admin/tickets/{ticket}/assign` | `admin.tickets.assign` | `SupportController@adminAssign` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:212` |
+| POST | `/admin/tickets/{ticket}/meta` | `admin.tickets.meta` | `SupportController@adminMeta` | auth, admin | admin.section:support_admin | `routes/web_core_part2.php:213` |
+| GET | `/admin/plans` | `admin.plans` | `PlatformCompletionController@adminPlans` | auth, admin | admin.section:plans | `routes/web_core_part2.php:214` |
+| POST | `/admin/plans` | `admin.plans.save` | `PlatformCompletionController@savePlan` | auth, admin | admin.section:plans | `routes/web_core_part2.php:215` |
+| GET | `/admin/cms` | `admin.cms` | `PlatformCompletionController@cms` | auth, admin | admin.section:cms | `routes/web_core_part2.php:216` |
+| GET | `/admin/teams/{team}/members` | `admin.teams.members` | `PlatformCompletionController@teamMembers` | auth, admin | admin.section:access | `routes/web_core_part2.php:217` |
+| POST | `/admin/teams/{team}/members` | `admin.teams.members.add` | `PlatformCompletionController@addTeamMember` | auth, admin | admin.section:access | `routes/web_core_part2.php:218` |
+| DELETE | `/admin/teams/{team}/members/{user}` | `admin.teams.members.remove` | `PlatformCompletionController@removeTeamMember` | auth, admin | admin.section:access | `routes/web_core_part2.php:219` |
+| POST | `/admin/cms` | `admin.cms.save` | `PlatformCompletionController@saveCms` | auth, admin | admin.section:cms | `routes/web_core_part2.php:220` |
 
 ### `routes/store_routes.php`
 
