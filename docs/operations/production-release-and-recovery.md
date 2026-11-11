@@ -94,6 +94,7 @@ Rollback دیتابیس با `migrate:rollback` به‌صورت کورکوران
 - `GET /up` مسیر Liveness فعلی Laravel است.
 - `GET /ready` در این شاخه اضافه شده و فقط اتصال دیتابیس اصلی را با `SELECT 1` بررسی می‌کند؛ پاسخ آن صرفاً `ready` یا `not_ready` است و جزئیات خطا را افشا نمی‌کند.
 - `/ready` هنوز سلامت Redis، Storage خارجی، صف و سرویس‌های جانبی را تضمین نمی‌کند. این بررسی‌ها باید بر اساس وابستگی‌های اجباری محیط واقعی و پس از شناسایی میزبان تکمیل شوند.
+- `php artisan farast:health-check` یک Preflight دستی و عمیق‌تر است: اتصال DB، نوشتن/خواندن/حذف فایل آزمایشی در دیسک private، وجود جدول‌های Queue/Cache/Session در صورت استفاده از درایور database، تنظیم `APP_DEBUG` و `APP_KEY` در Production، کلید بکاپ، ZipArchive، `retry_after` صف بکاپ و وجود مقصد خارجی سالم را بررسی می‌کند. این فرمان فقط یک فایل probe تصادفی می‌سازد و در پایان حذف می‌کند؛ آن را در مرحله Preflight اجرا کنید، نه به‌عنوان endpoint عمومی هر درخواست.
 - در Deploy فعلی فقط `route:clear` اجرا می‌شود؛ `route:cache` تا زمان تبدیل Closure routeهای موجود به Controller action و افزودن آزمون موفق cache در CI غیرفعال است.
 - Health Check سرویس‌های پایتونی باید با مسیر واقعی برنامه و Blueprint همسان باشد.
 - پس از Deploy، حداقل این موارد بررسی شوند: پاسخ HTTP، خطاهای 5xx، ورود، یک مسیر خواندن/نوشتن کنترل‌شده، دیتابیس، Redis/Cache در صورت استفاده، تأخیر صف، failed_jobs، اجرای Scheduler و دسترسی Storage.
