@@ -10,9 +10,11 @@ use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreLibraryItem;
 use App\Models\WalletTransaction;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\AdminConsoleService;
+use App\Services\AuthorizationService;
 use App\Services\AuditLogService;
 use App\Services\StoreCourseProgressService;
 use Illuminate\Http\Request;
@@ -173,6 +175,29 @@ class CrmController extends Controller
                 ];
             });
 
+        $ticketMessages = collect();
+        if (app(AuthorizationService::class)->allows($request->user(), 'support.manage')) {
+            $ticketMessages = TicketMessage::query()
+                ->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))
+                ->where(fn ($query) => $query->where('is_internal', false)->orWhereNull('is_internal'))
+                ->with(['ticket:id,ticket_code,subject', 'user:id,name'])
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn (TicketMessage $message) => [
+                    'type' => 'ticket_message',
+                    'id' => $message->id,
+                    'ticket_id' => $message->ticket_id,
+                    'ticket_code' => $message->ticket?->ticket_code,
+                    'title' => $message->ticket?->subject ?? 'مکاتبه پشتیبانی',
+                    'body' => mb_substr((string) $message->body, 0, 500),
+                    'sender_type' => $message->is_staff ? 'staff' : ($message->user_id ? 'customer' : 'guest'),
+                    'sender_name' => $message->user?->name,
+                    'attachment_count' => count((array) $message->attachments),
+                    'created_at' => $message->created_at,
+                ]);
+        }
+
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
             ? WalletTransaction::query()->where('wallet_id', $wallet->id)->latest()->limit(30)->get()
@@ -189,7 +214,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)->concat($ticketMessages)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
