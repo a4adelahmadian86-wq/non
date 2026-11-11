@@ -51,6 +51,8 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
     Route::post('/store/intakes', [AdminStoreController::class, 'startIntake'])->middleware('throttle:20,10')->name('store.intakes.start');
+    Route::get('/store/intakes/{session}/details', [AdminStoreController::class, 'intakeDetails'])->whereUuid('session')->name('store.intakes.details');
+    Route::post('/store/intakes/{session}/submit', [AdminStoreController::class, 'submitIntake'])->whereUuid('session')->middleware('throttle:10,10')->name('store.intakes.submit');
     Route::get('/store/intakes/{session}', [AdminStoreController::class, 'intakeProgress'])->whereUuid('session')->middleware('throttle:60,10')->name('store.intakes.progress');
     Route::post('/store/intakes/{session}/files/preflight', [AdminStoreController::class, 'preflightIntakeFile'])->whereUuid('session')->middleware('throttle:120,10')->name('store.intakes.files.preflight');
     Route::post('/store/intakes/{session}/files/{ingestionId}/confirm', [AdminStoreController::class, 'confirmIntakeFile'])->whereUuid('session')->middleware('throttle:120,10')->name('store.intakes.files.confirm');
