@@ -356,7 +356,7 @@ class StoreReaderAccessTest extends TestCase
 
         $structure['audio'] = ['status' => 'pending'];
         $document->update(['structure_json' => $structure]);
-        (new \\App\\Jobs\\ProcessProductDocument($document->id))->failed(new \\RuntimeException('browser-e2e-failure'));
+        (new \App\Jobs\ProcessProductDocument($document->id))->failed(new \RuntimeException('browser-e2e-failure'));
         $failedDocument = $document->fresh();
         $this->assertSame('failed', $failedDocument->processing_status);
         $this->assertSame('failed', data_get($failedDocument->structure_json, 'audio.status'));
