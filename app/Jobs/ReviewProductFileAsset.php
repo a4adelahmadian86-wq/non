@@ -6,6 +6,7 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,7 +29,7 @@ class ReviewProductFileAsset implements ShouldQueue
         $this->onQueue('product-supervisor');
     }
 
-    public function handle(ProductSupervisorClient $supervisor): void
+    public function handle(ProductSupervisorClient $supervisor, StorageManager $storage): void
     {
         $product = StoreProduct::query()->find($this->productId);
         $file = StoreProductFile::query()
@@ -73,9 +74,32 @@ class ReviewProductFileAsset implements ShouldQueue
             return;
         }
 
-        $disk = Storage::disk($file->disk ?: 'private');
-        if (! $disk->exists($file->path)) {
-            throw new \RuntimeException('product_asset_missing');
+        $sourceDisk = $file->disk ?: 'private';
+        $sourceTemporaryPath = null;
+        if (str_starts_with($sourceDisk, 'storage_volume:')) {
+            $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-asset');
+            if (! is_string($sourceTemporaryPath) || $sourceTemporaryPath === '') {
+                throw new \RuntimeException('product_asset_temp_unavailable');
+            }
+            try {
+                $storage->downloadTo($sourceDisk, $file->path, $sourceTemporaryPath);
+            } catch (Throwable $exception) {
+                @unlink($sourceTemporaryPath);
+                throw $exception;
+            }
+            $stream = fopen($sourceTemporaryPath, 'rb');
+        } else {
+            $disk = Storage::disk($sourceDisk);
+            if (! $disk->exists($file->path)) {
+                throw new \RuntimeException('product_asset_missing');
+            }
+            $stream = $disk->readStream($file->path);
+        }
+        if (! is_resource($stream)) {
+            if ($sourceTemporaryPath) {
+                @unlink($sourceTemporaryPath);
+            }
+            throw new \RuntimeException('product_asset_stream_unavailable');
         }
 
         $this->storeReview($product, [
@@ -83,11 +107,6 @@ class ReviewProductFileAsset implements ShouldQueue
             'sha256' => (string) $file->sha256,
             'started_at' => now()->toISOString(),
         ]);
-
-        $stream = $disk->readStream($file->path);
-        if (! is_resource($stream)) {
-            throw new \RuntimeException('product_asset_stream_unavailable');
-        }
 
         try {
             $hashContext = hash_init('sha256');
@@ -114,6 +133,9 @@ class ReviewProductFileAsset implements ShouldQueue
             ]);
         } finally {
             fclose($stream);
+            if ($sourceTemporaryPath) {
+                @unlink($sourceTemporaryPath);
+            }
         }
 
         $inspection = (array) ($review['inspection'] ?? []);
