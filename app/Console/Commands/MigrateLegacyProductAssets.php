@@ -30,13 +30,13 @@ class MigrateLegacyProductAssets extends Command
 
         foreach (StoreProductDocumentArtifact::query()->where(fn ($q) => $q->whereNull('disk')->orWhereIn('disk', ['private', 'public']))->orderBy('id')->cursor() as $artifact) {
             if ($remaining < 1) break;
-            if ($this->hasManagedReference(StoreProductDocumentArtifact::class, (int) $artifact->id)) continue;
+            if ($this->hasManagedReference(StoreProductDocumentArtifact::class, (int) $artifact->id) || $this->hasManagedPath((string) $artifact->path)) continue;
             $this->attemptMigration(fn () => $this->migrateArtifact($artifact, $storage, $transfer), 'سند تولیدشده محصول', $artifact->id, $remaining, $migrated, $failed);
         }
 
         foreach (StoreProductFile::query()->where(fn ($q) => $q->whereNull('disk')->orWhereIn('disk', ['private', 'public']))->orderBy('id')->cursor() as $file) {
             if ($remaining < 1) break;
-            if ($this->hasManagedReference(StoreProductFile::class, (int) $file->id)) continue;
+            if ($this->hasManagedReference(StoreProductFile::class, (int) $file->id) || $this->hasManagedPath((string) $file->path)) continue;
             $this->attemptMigration(fn () => $this->migrateProductFile($file, $storage, $transfer), 'فایل محصول', $file->id, $remaining, $migrated, $failed);
         }
 
@@ -46,7 +46,7 @@ class MigrateLegacyProductAssets extends Command
                 if ($remaining < 1) break;
                 $disk = $field === 'audio_path' ? ($preview->audio_disk ?: 'private') : ($preview->disk ?: 'private');
                 $path = $field === 'audio_path' ? $preview->audio_path : $preview->path;
-                if (! $path || ! in_array($disk, ['private', 'public'], true) || $this->hasManagedReference(StoreProductPreview::class, (int) $preview->id, $field)) continue;
+                if (! $path || ! in_array($disk, ['private', 'public'], true) || $this->hasManagedReference(StoreProductPreview::class, (int) $preview->id, $field) || $this->hasManagedPath((string) $path)) continue;
                 $this->attemptMigration(fn () => $this->migratePreviewAsset($preview, $field, $storage, $transfer), 'پیش‌نمایش محصول', $preview->id, $remaining, $migrated, $failed);
             }
         }
@@ -75,6 +75,14 @@ class MigrateLegacyProductAssets extends Command
             report($exception);
             $this->warn($label.' #'.$id.' منتقل نشد: '.$exception->getMessage());
         }
+    }
+
+    private function hasManagedPath(string $path): bool
+    {
+        return $path !== '' && StorageManagedFile::query()
+            ->where('file_key', $path)
+            ->whereNotIn('status', ['deleted'])
+            ->exists();
     }
 
     private function hasManagedReference(string $sourceType, int $sourceId, string $sourceField = 'path'): bool
