@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\AuditLogService;
+use App\Services\FarastTraceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Mockery;
