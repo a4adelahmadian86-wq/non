@@ -16,7 +16,7 @@ class RunStorageBackupJobTest extends TestCase
     public function test_partial_destination_failure_is_not_reported_as_a_clean_backup(): void
     {
         $request = StorageBackupRun::create([
-            'backup_type' => 'weekly',
+            'backup_type' => 'manual',
             'source_name' => 'scheduler_request',
             'status' => 'queued',
             'metadata' => ['request_only' => true],
@@ -25,6 +25,7 @@ class RunStorageBackupJobTest extends TestCase
         $backup = Mockery::mock(StorageBackupService::class);
         $backup->shouldReceive('runWeekly')
             ->once()
+            ->with('manual')
             ->andReturn([
                 ['volume_id' => 1, 'status' => 'completed'],
                 ['volume_id' => 2, 'status' => 'failed'],
