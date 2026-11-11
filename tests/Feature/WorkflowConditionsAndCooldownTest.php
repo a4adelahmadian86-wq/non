@@ -149,6 +149,71 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_only_the_current_worker_lease_can_commit_workflow_side_effects(): void
+    {
+        $owner = $this->owner('09140000221');
+        $workflow = $this->workflow($owner);
+        $engine = app(WorkflowEngine::class);
+        $context = [
+            'user_id' => $owner->id,
+            'customer_id' => $owner->id,
+            'document_id' => 221,
+            'revision' => 1,
+        ];
+        $eventId = $engine->enqueue('document.saved', $context, 'document:lease-fence:revision:1');
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'attempts' => 1,
+            'started_at' => now(),
+            'lease_token' => 'current-worker-token',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $engine->run(
+                $workflow,
+                array_merge($context, ['event_id' => $eventId, 'event_type' => 'document.saved']),
+                $mappingId,
+                false,
+                'stale-worker-token'
+            );
+            $this->fail('A worker with an expired lease must not commit workflow actions.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('Workflow event lease was lost before commit.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $owner->id,
+            'type' => 'workflow',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'running',
+            'lease_token' => 'current-worker-token',
+        ]);
+
+        $engine->run(
+            $workflow,
+            array_merge($context, ['event_id' => $eventId, 'event_type' => 'document.saved']),
+            $mappingId,
+            false,
+            'current-worker-token'
+        );
+
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'completed',
+            'lease_token' => null,
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $owner->id,
+            'type' => 'workflow',
+        ]);
+    }
+
     public function test_event_only_runs_workflow_when_all_conditions_match(): void
     {
         $owner = $this->owner('09140000201');
