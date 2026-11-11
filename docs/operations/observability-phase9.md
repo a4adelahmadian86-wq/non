@@ -55,6 +55,10 @@ php artisan farast:audit-ledger:verify
 
 The command exits non-zero and emits a critical, secret-free log event when the chain is invalid or cannot be verified. It does not repair or rewrite the ledger. Every append is serialized through a stable row in Laravel's existing `migrations` table for the ledger-creation migration; SQLite uses a no-op update to acquire its database writer lock, while MySQL/PostgreSQL use a transaction-held row lock. The chain head is read only after that lock, preventing concurrent first writers and normal concurrent appends from forking the checksum chain without introducing another audit table. New appends use checksum version 2, covering the event UUID and creation/update timestamps as well as the event payload; records without a version marker remain verifiable with the legacy version 1 algorithm. Verification streams in chunks and retains at most 100 error samples while reporting the total failure count.
 
+### Cross-database checksum contract
+
+Checksum version 2 canonicalizes associative metadata keys recursively before hashing and after database decoding; list order is preserved. Exact `created_at` and `updated_at` values are persisted without Eloquent's automatic timestamp rewrite. Legacy version 1 rows retain byte-level verification; failed historical checksums are integrity findings and are never silently rewritten. The Feedback Evidence schema migration is additive and idempotent; its required columns and composite indexes are asserted in `FarastFeedbackEvidenceSchemaTest`, which runs in the MySQL 8.4 audit job. The composite `feedback_id,status` index keeps `feedback_id` as its leftmost key for feedback-only lookups.
+
 Operational daily logs retain the existing 14-day Monolog rotation policy. The audit ledger is not automatically pruned: no destructive retention period is assumed without an approved business/legal schedule. This phase does not claim physical secure erasure on SSDs, snapshots or backups. Any future deletion process must include the database, replicas, backups and encryption-key lifecycle and must be tested before activation.
 
 ## Incident response
