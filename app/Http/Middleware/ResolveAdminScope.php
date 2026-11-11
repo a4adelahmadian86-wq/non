@@ -48,12 +48,7 @@ class ResolveAdminScope
         }
         abort_if($user->is_blocked, 403, 'حساب شما مسدود شده است.');
 
-        $scope = match ($user->role) {
-            User::ROLE_ADMIN => self::SCOPE_GLOBAL,
-            User::ROLE_ORGANIZATION_MANAGER => self::SCOPE_ORGANIZATION,
-            User::ROLE_TEAM_SUPERVISOR => self::SCOPE_TEAM,
-            default => self::SCOPE_OWN,
-        };
+        $scope = self::scopeFor($user);
 
         // اگر کاربر مدیر باشد اما سازمان نداشته باشد، دامنه به own تنزل می‌کند تا دادهٔ نشت نکند.
         if ($scope === self::SCOPE_ORGANIZATION && ! $user->organization_id) {
@@ -93,12 +88,7 @@ class ResolveAdminScope
             return self::SCOPE_OWN;
         }
 
-        return match ($user->role) {
-            User::ROLE_ADMIN => self::SCOPE_GLOBAL,
-            User::ROLE_ORGANIZATION_MANAGER => $user->organization_id ? self::SCOPE_ORGANIZATION : self::SCOPE_OWN,
-            User::ROLE_TEAM_SUPERVISOR => self::SCOPE_TEAM,
-            default => self::SCOPE_OWN,
-        };
+        return app(AuthorizationService::class)->effectiveScope($user);
     }
 
     /**
@@ -119,6 +109,10 @@ class ResolveAdminScope
      */
     private function hasManagedTeams(User $user): bool
     {
+        if (app(AuthorizationService::class)->effectiveTeamIds($user) !== null) {
+            return true;
+        }
+
         $supervised = Team::where('supervisor_id', $user->id)->exists();
         $managerial = $user->teams()
             ->wherePivot('team_role', 'manager')
@@ -163,7 +157,11 @@ class ResolveAdminScope
 
     private static function teamUserIds(User $user): array
     {
-        $teamIds = Team::query()
+        $assignedTeamIds = app(AuthorizationService::class)->effectiveTeamIds($user);
+        if ($assignedTeamIds !== null) {
+            $teamIds = collect($assignedTeamIds);
+        } else {
+            $teamIds = Team::query()
             ->where('supervisor_id', $user->id)
             ->orWhereIn('id', function ($q) use ($user) {
                 $q->select('team_id')->from('team_user')
@@ -171,6 +169,7 @@ class ResolveAdminScope
                     ->where('team_role', 'manager');
             })
             ->pluck('id');
+        }
 
         if ($teamIds->isEmpty()) {
             return [$user->id];
