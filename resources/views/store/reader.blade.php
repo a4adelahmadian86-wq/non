@@ -128,7 +128,6 @@
 
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107reader1">
-<link rel="stylesheet" href="/vendor/pdfjs/web/pdf_viewer.css?v=6.5.438">
 <style>
 html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,sans-serif}*,*::before,*::after{box-sizing:border-box}
 .farast-reader{--reader-bg:#0b1220;--reader-panel:#111d30;--reader-line:rgba(255,255,255,.09);--reader-text:#e8eef8;--reader-muted:#91a4c1;min-height:calc(100vh - 70px);background:var(--reader-bg);color:var(--reader-text);display:flex;flex-direction:column;font-family:inherit}
