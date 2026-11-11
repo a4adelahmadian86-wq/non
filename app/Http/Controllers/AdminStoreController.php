@@ -113,7 +113,7 @@ class AdminStoreController extends Controller
         $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
         $supervisorConfigured = app(\App\Services\ProductSupervisorClient::class)->configured();
         $canReviewIntake = app(\App\Services\AuthorizationService::class)
-            ->allows(auth()->user(), 'store.products.publish');
+            ->allows(auth()->user(), 'store.publish_products');
         $intakeManualReviewQueue = $canReviewIntake
             ? StoreProductIntakeSession::query()
                 ->with([
@@ -1058,7 +1058,7 @@ class AdminStoreController extends Controller
     public function manualReviewIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId)
     {
         abort_unless(
-            app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'),
+            app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.publish_products'),
             403
         );
 
