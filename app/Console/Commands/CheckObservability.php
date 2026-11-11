@@ -101,9 +101,10 @@ class CheckObservability extends Command
 
         $severity = $status === 'critical' ? 'critical' : 'warning';
         $cooldown = max(5, min(1440, (int) config('observability.alerts.cooldown_minutes', 30)));
-        $bucket = (int) floor(now()->timestamp / ($cooldown * 60));
         $fingerprint = hash('sha256', json_encode([$severity, $affected], JSON_UNESCAPED_SLASHES) ?: $severity);
-        $gateKey = 'farast:observability:alert:'.$fingerprint.':'.$bucket;
+        // Keep one stable key for the whole cooldown. Time-bucket keys can
+        // emit duplicate alerts seconds apart when a bucket boundary is crossed.
+        $gateKey = 'farast:observability:alert:'.$fingerprint;
         $shouldNotify = false;
 
         try {
