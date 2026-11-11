@@ -429,9 +429,6 @@ class AdminStoreController extends Controller
         $extension = str_ends_with($originalNameLower, '.tar.gz')
             ? 'tar.gz'
             : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
-        $allowedExtensions = ['pdf','zip','tar','tar.gz','tar.bz2','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
-        abort_unless(in_array($extension, $allowedExtensions, true), 422, 'این پسوند در فهرست فرمت‌های مجاز نیست.');
-
         $path = $upload->storeAs(
             'store/quarantine/intake/'.$session->id,
             (string) Str::uuid().'.'.$extension,
@@ -492,13 +489,13 @@ class AdminStoreController extends Controller
         return response()->json([
             'success' => true,
             'file_id' => $file->id,
-            'file' => ['name' => $file->original_name, 'mime' => $file->mime, 'size_bytes' => $file->size_bytes, 'sha256' => $file->sha256],
+            'file' => ['name' => $file->original_name, 'mime' => $file->mime, 'size_bytes' => $file->size_bytes, 'sha256' => $file->sha256, 'is_primary' => $file->is_primary],
             'inspection' => $inspection,
             'summary' => [
                 'file_count' => $session->files()->whereIn('status', ['inspected', 'uploaded'])->count(),
                 'total_size_bytes' => (int) $session->files()->whereIn('status', ['inspected', 'uploaded'])->sum('size_bytes'),
                 'archive_entry_count' => (int) ($inspection['archive_entry_count'] ?? 0),
-                'folder_count' => $session->files()->whereIn('status', ['inspected', 'uploaded'])->whereNotNull('relative_path')->pluck('relative_path')->map(fn ($path) => trim(dirname($path), '.'))->filter()->unique()->count(),
+                'folder_count' => collect($session->files()->whereIn('status', ['inspected', 'uploaded'])->whereNotNull('relative_path')->pluck('relative_path'))->flatMap(function ($path) { $parts = explode('/', trim(dirname($path), '.')); $paths = []; $current = []; foreach ($parts as $part) { if ($part === '') continue; $current[] = $part; $paths[] = implode('/', $current); } return $paths; })->unique()->count(),
             ],
         ], 201);
     }
