@@ -913,6 +913,18 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 این آمار نشان‌دهنده شش «محل تعریف» تکراری است، نه شش جدول فیزیکی هم‌زمان. بااین‌حال create-if-missing نباید جایگزین schema reconciliation شود: اگر جدول موجود اما ناقص باشد، guard آن را بدون اصلاح ستون‌ها رد می‌کند. تمام این موارد باید در clean install و upgrade از snapshot واقعی تست شوند.
 
+### 18.11 Call-site سرویس‌ها و کنترلرها
+
+دو inventory مکمل برای اتصال Route → Controller → Service → Model/Table اضافه شده‌اند:
+
+- `docs/architecture/CONTROLLER_CALLSITE_INVENTORY.md`: ۵۱ کنترلر؛ importهای Service/Model، جدول‌های literal در `DB::table`، توکن‌های authorization قابل تشخیص، actionهای public و تعداد call مستقیم DB/Storage.
+- `docs/architecture/SERVICE_DEPENDENCY_INVENTORY.md`: ۱۱۲ سرویس؛ dependencyهای import/constructor/app-resolve، مدل‌ها، جدول‌های literal، diskهای Storage، متدهای public و تعداد call مستقیم DB/Storage.
+
+شمارش استاتیک فعلی:
+- در Controllerها: ۲۸ فایل دارای call مستقیم DB با مجموع ۲۴۴ call؛ ۱۱ فایل دارای call مستقیم Storage با مجموع ۵۱ call.
+- در Serviceها: ۲۸ فایل دارای call مستقیم DB با مجموع ۱۱۲ call؛ ۸ فایل دارای call مستقیم Storage با مجموع ۲۱ call.
+
+این اعداد شمار source-level callهای facade هستند؛ queryهای Eloquent، repositoryهای dynamic، `StorageManager` injection، helperهای سفارشی و دسترسی از Job/Command/Listener در این شمارش مستقیم نیستند. وجود call مستقیم نیز به‌تنهایی bypass اثبات نمی‌کند؛ هر مورد باید با مالکیت دامنه و قرارداد امنیتی سنجیده شود. این دو inventory برای اولویت‌بندی call-site audit استفاده می‌شوند، نه برای حذف مکانیکی DB/Storage از Controllerها.
 ### 18.10 محدودیت inventory مدل‌ها
 
 از ۱۰۴ فایل مدل:
