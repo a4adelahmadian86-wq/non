@@ -79,7 +79,9 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('نوع مجوز استفاده')
             ->assertSee('admin-store-product-wizard.js')
             ->assertSee('product-upload-step')
-            ->assertSee('ورود به انتخاب فایل');
+            ->assertSee('ابتدا فایل محصول را انتخاب کنید')
+            ->assertSee('data-product-ingestion', false)
+            ->assertDontSee('name="title"', false);
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
@@ -770,14 +772,21 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
             ->assertOk()
-            ->assertSee('name="download_policy"', false)
-            ->assertSee('فقط مطالعه آنلاین');
+            ->assertSee('ابتدا فایل محصول را انتخاب کنید')
+            ->assertDontSee('name="download_policy"', false);
 
         $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
             'title' => 'محصول سیاست تحویل',
             'sku' => 'DELIVERY-POLICY-001',
             'download_policy' => 'reader_only',
         ]))->assertRedirect();
+
+        $deliveryProduct = StoreProduct::query()->where('sku', 'DELIVERY-POLICY-001')->firstOrFail();
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $deliveryProduct))
+            ->assertOk()
+            ->assertSee('name="download_policy"', false)
+            ->assertSee('فقط مطالعه آنلاین');
 
         $this->assertDatabaseHas('store_products', [
             'sku' => 'DELIVERY-POLICY-001',
@@ -1265,6 +1274,18 @@ class AdminStoreProductWorkflowTest extends TestCase
             'model' => 'test-supervisor',
             'generated_at' => now()->toISOString(),
         ];
+        $metadata = (array) $product->metadata;
+        $supervisorMetadata = (array) ($metadata['ai_supervisor'] ?? []);
+        $assetReviews = (array) ($supervisorMetadata['asset_reviews'] ?? []);
+        $assetReviews['file:'.$file->id] = [
+            'status' => 'completed',
+            'sha256' => str_repeat('b', 64),
+            'security_gate' => 'structural_checks_passed',
+        ];
+        $supervisorMetadata['asset_reviews'] = $assetReviews;
+        $metadata['ai_supervisor'] = $supervisorMetadata;
+        $product->update(['metadata' => $metadata]);
+
         $supervisor = \Mockery::mock(ProductSupervisorClient::class);
         $supervisor->shouldReceive('configured')->once()->andReturn(true);
         $supervisor->shouldReceive('review')->twice()->andReturn($firstReview, $secondReview);
