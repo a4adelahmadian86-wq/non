@@ -267,22 +267,87 @@ class StorageBackupService
         if (! $zip->close()) throw new RuntimeException('بستن آرشیو بکاپ ناموفق بود.');
     }
 
-    private function addDirectory(ZipArchive $zip, string $directory, string $prefix): void
+    private function addDirectory(ZipArchive $zip, string $directory, string $prefix, array &$entries): void
     {
         if (! is_dir($directory)) return;
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
-            if (! $file->isFile()) continue;
+            if ($file->isLink() || ! $file->isFile()) continue;
             $relative = ltrim(str_replace('\\', '/', substr($file->getPathname(), strlen($directory))), '/');
-            $this->addEncryptedFile($zip, $file->getPathname(), $prefix.'/'.$relative);
+            $this->addEncryptedFile($zip, $file->getPathname(), $prefix.'/'.$relative, $entries);
         }
     }
 
-    private function addEncryptedFile(ZipArchive $zip, string $path, string $entry): void
+    private function addEncryptedFile(ZipArchive $zip, string $path, string $entry, array &$entries): void
     {
+        $size = filesize($path);
+        $checksum = hash_file('sha256', $path);
+        if (! is_int($size) || $size < 0 || ! is_string($checksum)) {
+            throw new RuntimeException('محاسبه اندازه یا Checksum فایل بکاپ ناموفق بود: '.$entry);
+        }
         if (! $zip->addFile($path, $entry) || ! $zip->setEncryptionName($entry, ZipArchive::EM_AES_256)) {
             throw new RuntimeException('افزودن فایل رمزنگاری‌شده به بکاپ ناموفق بود: '.$entry);
         }
+
+        $entries[$entry] = ['size_bytes' => $size, 'sha256' => $checksum];
+    }
+
+    private function addDatabaseDump(ZipArchive $zip, string $work, array &$entries): void
+    {
+        $connection = config('database.default');
+        $config = config('database.connections.'.$connection, []);
+        $driver = $config['driver'] ?? $connection;
+        $dump = $work.'/database.sql';
+
+        if ($driver === 'sqlite') {
+            $database = (string) ($config['database'] ?? '');
+            if ($database === '' || $database === ':memory:' || ! is_file($database) || ! copy($database, $dump)) {
+                throw new RuntimeException('فایل پایگاه داده SQLite قابل کپی نیست.');
+            }
+        } elseif ($driver === 'mysql' || $driver === 'mariadb') {
+            $command = [
+                'mysqldump',
+                '--host='.(string) ($config['host'] ?? '127.0.0.1'),
+                '--port='.(string) ($config['port'] ?? '3306'),
+                '--user='.(string) ($config['username'] ?? ''),
+                '--single-transaction', '--quick', '--routines', '--triggers',
+                '--add-drop-table', '--default-character-set=utf8mb4',
+                '--result-file='.$dump,
+                (string) ($config['database'] ?? ''),
+            ];
+            $process = new Process($command, base_path(), ['MYSQL_PWD' => (string) ($config['password'] ?? '')]);
+            $process->setTimeout(3600);
+            $process->run();
+            if (! $process->isSuccessful()) {
+                throw new RuntimeException('تهیه خروجی MySQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
+            }
+            if (! is_file($dump) || filesize($dump) === 0) {
+                throw new RuntimeException('فایل خروجی MySQL خالی یا ایجادنشده است.');
+            }
+        } elseif ($driver === 'pgsql') {
+            $command = [
+                'pg_dump',
+                '--host='.(string) ($config['host'] ?? '127.0.0.1'),
+                '--port='.(string) ($config['port'] ?? '5432'),
+                '--username='.(string) ($config['username'] ?? ''),
+                '--format=plain', '--no-owner', '--no-privileges', '--clean', '--if-exists',
+                '--file='.$dump,
+                (string) ($config['database'] ?? ''),
+            ];
+            $process = new Process($command, base_path(), ['PGPASSWORD' => (string) ($config['password'] ?? '')]);
+            $process->setTimeout(3600);
+            $process->run();
+            if (! $process->isSuccessful()) {
+                throw new RuntimeException('تهیه خروجی PostgreSQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
+            }
+            if (! is_file($dump) || filesize($dump) === 0) {
+                throw new RuntimeException('فایل خروجی PostgreSQL خالی یا ایجادنشده است.');
+            }
+        } else {
+            throw new RuntimeException('درایور پایگاه داده برای بکاپ پشتیبانی نشده است.');
+        }
+
+        $this->addEncryptedFile($zip, $dump, 'database/database.sql', $entries);
     }
 
     private function removeDirectory(string $directory): void
