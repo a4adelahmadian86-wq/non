@@ -948,19 +948,25 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         config(['queue.default' => 'database']);
         $createdAt = now()->subMinutes(10)->getTimestamp();
 
-        DB::table('jobs')->insert([
-            'queue' => 'automation-critical',
-            'payload' => '{}',
-            'attempts' => 0,
-            'reserved_at' => null,
-            'available_at' => $createdAt,
-            'created_at' => $createdAt,
-        ]);
+        foreach (['automation-critical', 'documents-audio', 'backups'] as $queue) {
+            DB::table('jobs')->insert([
+                'queue' => $queue,
+                'payload' => '{}',
+                'attempts' => 0,
+                'reserved_at' => null,
+                'available_at' => $createdAt,
+                'created_at' => $createdAt,
+            ]);
+        }
 
         $this->assertSame(1, Artisan::call('farast:workflows:health'));
         $output = Artisan::output();
         $this->assertStringContainsString('critical_jobs=1', $output);
+        $this->assertStringContainsString('documents_audio_jobs=1', $output);
+        $this->assertStringContainsString('backups_jobs=1', $output);
         $this->assertStringContainsString('critical_queue_delay_seconds=', $output);
+        $this->assertStringContainsString('documents_audio_queue_delay_seconds=', $output);
+        $this->assertStringContainsString('backup_queue_delay_seconds=', $output);
         $this->assertStringContainsString('unhealthy', $output);
     }
 
