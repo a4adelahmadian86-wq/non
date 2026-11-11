@@ -944,6 +944,40 @@ class AdminStoreController extends Controller
         ]);
     }
 
+    public function setPrimaryIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId, StoreProductIntakeService $intake)
+    {
+        $intake->assertOwnedAndActive($session, $request->user());
+        abort_unless($session->product_type === 'digital_file', 422, 'انتخاب فایل اصلی فقط برای محصولات فایل‌محور کاربرد دارد.');
+
+        DB::transaction(function () use ($request, $session, $ingestionId) {
+            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $lockedSession->user_id === (int) $request->user()->id && $lockedSession->product_id === null, 404);
+            abort_unless($lockedSession->expires_at?->isFuture(), 410);
+
+            $target = StoreProductIngestion::query()
+                ->whereKey($ingestionId)
+                ->where('intake_session_id', $lockedSession->id)
+                ->whereNull('product_id')
+                ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['inspected', 'uploaded'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            StoreProductIngestion::query()
+                ->where('intake_session_id', $lockedSession->id)
+                ->whereNull('product_id')
+                ->whereIn('status', ['inspected', 'uploaded'])
+                ->update(['is_primary' => false]);
+
+            $target->update(['is_primary' => true]);
+        }, 3);
+
+        return response()->json([
+            'success' => true,
+            'progress' => $intake->progress($session->fresh()),
+        ]);
+    }
+
     public function cancelIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId, StoreProductIntakeService $intake, StorageManager $storage)
     {
         $intake->assertOwnedAndActive($session, $request->user());
