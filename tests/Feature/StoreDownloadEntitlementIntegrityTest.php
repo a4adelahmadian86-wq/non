@@ -376,6 +376,11 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $this->assertTrue((bool) data_get($paidOrder->pricing_snapshot, 'coupon_redemption_pending'));
         $this->assertSame('required', data_get($paidOrder->pricing_snapshot, 'coupon_redemption_reconciliation.status'));
         $this->assertSame('post_capture_validation_failed', data_get($paidOrder->pricing_snapshot, 'coupon_redemption_reconciliation.reason_code'));
+        $this->assertDatabaseHas('farast_audit_events', [
+            'event_type' => 'store.coupon_redemption_reconciliation_required',
+            'aggregate_type' => 'order',
+            'aggregate_id' => (string) $order->id,
+        ]);
     }
 
     public function test_wallet_payment_uses_the_exact_checkout_price_and_file_snapshot(): void
