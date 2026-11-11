@@ -105,6 +105,56 @@ class S3CompatibleAdapter
         }
     }
 
+    public function size(StorageVolume $volume, string $key): int
+    {
+        $response = $this->request($volume, 'HEAD', $key);
+        $length = filter_var($response->getHeaderLine('Content-Length'), FILTER_VALIDATE_INT);
+        if (! is_int($length) || $length < 0) {
+            throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی دریافت نشد.');
+        }
+        return $length;
+    }
+
+    public function streamRange(StorageVolume $volume, string $key, int $start, int $length, $output): void
+    {
+        if ($start < 0 || $length < 1 || ! is_resource($output)) {
+            throw new RuntimeException('محدوده دریافت فایل نامعتبر است.');
+        }
+        $end = $start + $length - 1;
+        $response = $this->request(
+            $volume,
+            'GET',
+            $key,
+            [],
+            null,
+            'UNSIGNED-PAYLOAD',
+            ['Range' => 'bytes='.$start.'-'.$end],
+            ['stream' => true]
+        );
+        if ($response->getStatusCode() !== 206) {
+            throw new RuntimeException('فضای ذخیره‌سازی درخواست دریافت بخشی از فایل را پشتیبانی نکرد.');
+        }
+        $body = $response->getBody();
+        $remaining = $length;
+        while ($remaining > 0 && ! $body->eof()) {
+            $chunk = $body->read(min(65536, $remaining));
+            if ($chunk === '') break;
+            $written = 0;
+            $chunkLength = strlen($chunk);
+            while ($written < $chunkLength) {
+                $count = fwrite($output, substr($chunk, $written));
+                if ($count === false || $count === 0) {
+                    throw new RuntimeException('ارسال بخشی از فایل PDF ناموفق بود.');
+                }
+                $written += $count;
+            }
+            $remaining -= $chunkLength;
+        }
+        if ($remaining !== 0) {
+            throw new RuntimeException('دریافت بخشی از فایل از فضای ذخیره‌سازی ناقص بود.');
+        }
+    }
+
     public function exists(StorageVolume $volume, string $key): bool
     {
         try {
