@@ -29,7 +29,9 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SupportTicketService::class);
-        $this->app->singleton(FarastTraceContext::class);
+        // Trace state must be isolated per HTTP request / queue-job lifecycle.
+        // A process-wide singleton can leak IDs across concurrent long-lived workers.
+        $this->app->scoped(FarastTraceContext::class);
     }
 
     public function boot(): void
