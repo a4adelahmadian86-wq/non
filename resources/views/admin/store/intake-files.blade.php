@@ -5,7 +5,7 @@
     data-preflight-url="{{ route('admin.store.intake.files.preflight', $session) }}"
     data-confirm-url="{{ route('admin.store.intake.files.confirm', [$session, '__FILE__']) }}"
     data-cancel-url="{{ route('admin.store.intake.files.cancel', [$session, '__FILE__']) }}"
-    data-status-url="{{ route('admin.store.intake.files.status', [$session, '__FILE__']) }}" data-details-url="{{ route('admin.store.intake.details', $session) }}" data-existing-files="{{ e($session->files->map(fn ($file) => ['id' => $file->id, 'name' => $file->original_name, 'relative_path' => $file->relative_path, 'size_bytes' => $file->size_bytes, 'status' => $file->status, 'supervisor_status' => $file->supervisor_status, 'security_gate' => data_get($file->supervisor_review_json, 'security_gate')])->toJson()) }}">
+    data-status-url="{{ route('admin.store.intake.files.status', [$session, '__FILE__']) }}" data-details-url="{{ route('admin.store.intake.details', $session) }}" data-existing-files="{{ e($session->files->map(fn ($file) => ['id' => $file->id, 'name' => $file->original_name, 'relative_path' => $file->relative_path, 'size_bytes' => $file->size_bytes, 'status' => $file->status, 'is_primary' => $file->is_primary, 'supervisor_status' => $file->supervisor_status, 'security_gate' => data_get($file->supervisor_review_json, 'security_gate')])->toJson()) }}">
     <div class="store-section-head">
       <div><span class="eyebrow">مرحله دوم · فایل‌ها</span><h1>انتخاب و بازرسی فایل‌ها</h1>
         <p>نوع انتخاب‌شده: <strong>{{ $session->product_type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</strong>
@@ -24,12 +24,12 @@
       </div>
       <div id="intake-progress" role="status" aria-live="polite" style="margin-top:14px"></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin:18px 0">
-        <strong>تعداد فایل‌ها: <span id="intake-file-count">{{ $session->files->count() }}</span></strong>
+        <strong>تعداد فایل‌ها: <span id="intake-file-count">{{ $session->files->whereIn('status', ['inspected', 'uploaded'])->count() }}</span></strong>
         <strong>حجم کل: <span id="intake-total-size">0</span></strong>
         <strong>تعداد پوشه‌ها: <span id="intake-folder-count">0</span></strong>
       </div>
       <div id="intake-file-list" style="display:grid;gap:12px">
-        @foreach($session->files as $file)
+        @foreach($session->files->whereIn('status', ['inspected', 'uploaded']) as $file)
           <article class="store-panel" style="padding:14px">
             <strong>{{ $file->relative_path ?: $file->original_name }}</strong>
             <div>{{ number_format($file->size_bytes) }} بایت · {{ $file->mime }}</div>
