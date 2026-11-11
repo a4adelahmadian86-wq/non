@@ -1,11 +1,11 @@
 <?php
 
-namespace App\\Console\\Commands;
+namespace App\Console\Commands;
 
-use App\\Models\\StorageBackupRun;
-use App\\Services\\Storage\\StorageBackupService;
-use App\\Services\\Storage\\StorageManager;
-use Illuminate\\Console\\Command;
+use App\Models\StorageBackupRun;
+use App\Services\Storage\StorageBackupService;
+use App\Services\Storage\StorageManager;
+use Illuminate\Console\Command;
 
 class VerifyStorageBackup extends Command
 {
@@ -30,7 +30,7 @@ class VerifyStorageBackup extends Command
             $storage->downloadTo($storage->volumeDisk($run->volume), $run->object_key, $temporary);
             $checksum = hash_file('sha256', $temporary);
             if (! is_string($checksum) || ! hash_equals((string) $run->checksum, $checksum)) {
-                throw new \\RuntimeException('Checksum نسخه پشتیبان با مقدار ثبت‌شده مطابقت ندارد.');
+                throw new \RuntimeException('Checksum نسخه پشتیبان با مقدار ثبت‌شده مطابقت ندارد.');
             }
 
             // Use the same verifier as the upload path so manual verification and
@@ -39,7 +39,7 @@ class VerifyStorageBackup extends Command
 
             $this->info('نسخه پشتیبان سالم است: checksum، manifest و تمام جریان دیتابیس رمزگشایی شدند.');
             return self::SUCCESS;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->error($exception->getMessage());
             report($exception);
             return self::FAILURE;
