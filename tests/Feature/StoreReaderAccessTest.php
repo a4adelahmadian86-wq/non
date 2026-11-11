@@ -722,6 +722,31 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Range', 'bytes 2-5/10')
             ->assertHeader('Content-Length', '4');
         $this->assertSame('2345', $response->streamedContent());
+        $etag = (string) $response->headers->get('ETag');
+        $lastModified = (string) $response->headers->get('Last-Modified');
+        $this->assertNotSame('', $etag);
+        $this->assertNotSame('', $lastModified);
+
+        $this->withHeaders(['Range' => 'bytes=2-5', 'If-Range' => $etag])
+            ->get(route('store.preview.audio', $preview))
+            ->assertStatus(206)
+            ->assertHeader('Content-Range', 'bytes 2-5/10');
+
+        $this->withHeaders(['Range' => 'bytes=2-5', 'If-Range' => '"stale-validator"'])
+            ->get(route('store.preview.audio', $preview))
+            ->assertOk()
+            ->assertHeader('Content-Length', '10');
+
+        $this->withHeaders(['Range' => 'bytes=2-5', 'If-Range' => $lastModified])
+            ->get(route('store.preview.audio', $preview))
+            ->assertStatus(206)
+            ->assertHeader('Content-Range', 'bytes 2-5/10');
+
+        $staleDate = gmdate('D, d M Y H:i:s', strtotime($lastModified) - 60).' GMT';
+        $this->withHeaders(['Range' => 'bytes=2-5', 'If-Range' => $staleDate])
+            ->get(route('store.preview.audio', $preview))
+            ->assertOk()
+            ->assertHeader('Content-Length', '10');
 
         $this->withHeader('Range', 'bytes=20-30')
             ->get(route('store.preview.audio', $preview))
