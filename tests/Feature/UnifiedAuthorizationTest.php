@@ -207,6 +207,31 @@ class UnifiedAuthorizationTest extends TestCase
         self::assertFalse(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
     }
 
+    public function test_direct_permission_grant_and_revocation_are_audited(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $subject = User::factory()->create(['role' => 'employee']);
+        $this->permission('reports.view');
+        $authorization = app(AuthorizationService::class);
+
+        $grant = $authorization->grantDirectPermission(
+            $admin,
+            $subject,
+            'reports.view',
+            'allow',
+            'global',
+        );
+
+        self::assertTrue($authorization->allows($subject, 'reports.view'));
+        $authorization->revokeDirectPermission($admin, (int) $grant->id);
+        self::assertFalse($authorization->allows($subject, 'reports.view'));
+        $this->assertDatabaseHas('access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_id' => $subject->id,
+            'event' => 'permission.direct_revoked',
+        ]);
+    }
+
     public function test_admin_can_create_and_assign_a_custom_role_with_an_audit_record(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
