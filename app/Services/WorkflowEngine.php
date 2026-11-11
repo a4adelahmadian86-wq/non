@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\ProcessWorkflowEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -9,7 +10,7 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
-    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
+    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false, ?string $eventWorkflowLeaseToken = null): int
     {
         $runId = DB::table('farast_workflow_runs')->insertGetId([
             'workflow_id' => $workflowId,
@@ -21,7 +22,7 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual): void {
+            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual, $eventWorkflowLeaseToken): void {
                 // Serialize execution against workflow edits, disabling and deletion.
                 $workflow = DB::table('farast_workflows')
                     ->where('id', $workflowId)
@@ -49,14 +50,19 @@ class WorkflowEngine
 
                 // Commit side effects and the event-workflow completion marker together.
                 if ($eventWorkflowId !== null) {
+                    if (! $eventWorkflowLeaseToken) {
+                        throw new \\RuntimeException('Workflow event lease token is missing.');
+                    }
                     $updated = DB::table('farast_workflow_event_workflows')
                         ->where('id', $eventWorkflowId)
                         ->where('workflow_id', $workflowId)
                         ->where('status', 'running')
+                        ->where('lease_token', $eventWorkflowLeaseToken)
                         ->update([
                             'status' => 'completed',
                             'last_error' => null,
                             'finished_at' => now(),
+                            'lease_token' => null,
                             'updated_at' => now(),
                         ]);
 
@@ -140,7 +146,7 @@ class WorkflowEngine
         }
 
         try {
-            return (int) DB::table('farast_workflow_events')->insertGetId([
+            $eventId = (int) DB::table('farast_workflow_events')->insertGetId([
                 'event_type' => $eventType,
                 'idempotency_key' => $idempotencyKey,
                 'user_id' => (int) $userId,
@@ -152,6 +158,8 @@ class WorkflowEngine
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+            ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+            return $eventId;
         } catch (\Illuminate\Database\QueryException $exception) {
             $existing = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
             if (! $existing) {
@@ -164,7 +172,9 @@ class WorkflowEngine
                 return 0;
             }
 
-            return (int) $existing->id;
+            $existingId = (int) $existing->id;
+            ProcessWorkflowEvent::dispatch($existingId)->onQueue('automation')->afterCommit();
+            return $existingId;
         }
     }
 
@@ -188,6 +198,70 @@ class WorkflowEngine
         }
 
         return $this->processEvent($event, $storedContext);
+    }
+
+    /** Process a committed outbox event from the dedicated automation queue. */
+    public function processQueuedEvent(int $eventId): int
+    {
+        $event = DB::table('farast_workflow_events')->where('id', $eventId)->first();
+        if (! $event || in_array($event->status, ['completed', 'paused'], true)) {
+            return 0;
+        }
+        $context = json_decode((string) $event->context, true);
+        if (! is_array($context)) {
+            throw new \\RuntimeException('Stored workflow event context is invalid.');
+        }
+        return $this->processEvent($event, $context);
+    }
+
+    /** Queue pending and recoverable outbox events in bounded batches. */
+    public function dispatchPendingEvents(int $limit = 50): int
+    {
+        if (! Schema::hasTable('farast_workflow_events')) return 0;
+        $events = DB::table('farast_workflow_events')
+            ->whereIn('status', ['pending', 'failed', 'processing'])
+            ->where('attempts', '<', 5)
+            ->where(function ($query) {
+                $query->whereIn('status', ['pending', 'failed'])
+                    ->orWhere(function ($stale) {
+                        $stale->where('status', 'processing')->where('updated_at', '<=', now()->subMinutes(30));
+                    });
+            })
+            ->orderBy('id')->limit(max(1, min($limit, 200)))->get(['id']);
+        foreach ($events as $event) {
+            ProcessWorkflowEvent::dispatch((int) $event->id)->onQueue('automation');
+        }
+        return $events->count();
+    }
+
+    /** Pause an event at a safe step boundary while preserving its history. */
+    public function pauseEvent(int $eventId): bool
+    {
+        return DB::transaction(function () use ($eventId): bool {
+            $event = DB::table('farast_workflow_events')->where('id', $eventId)->lockForUpdate()->first();
+            if (! $event || $event->status === 'completed') return false;
+            DB::table('farast_workflow_event_workflows')->where('event_id', $eventId)
+                ->whereIn('status', ['pending', 'failed'])->update(['status' => 'paused', 'updated_at' => now()]);
+            DB::table('farast_workflow_events')->where('id', $eventId)->update(['status' => 'paused', 'updated_at' => now()]);
+            return true;
+        });
+    }
+
+    /** Resume paused mappings and enqueue the original immutable event. */
+    public function resumeEvent(int $eventId): bool
+    {
+        $resumed = DB::transaction(function () use ($eventId): bool {
+            $event = DB::table('farast_workflow_events')->where('id', $eventId)->lockForUpdate()->first();
+            if (! $event || $event->status !== 'paused') return false;
+            DB::table('farast_workflow_event_workflows')->where('event_id', $eventId)
+                ->where('status', 'paused')->update(['status' => 'pending', 'updated_at' => now()]);
+            DB::table('farast_workflow_events')->where('id', $eventId)->update([
+                'status' => 'pending', 'failed_at' => null, 'updated_at' => now(),
+            ]);
+            return true;
+        });
+        if ($resumed) ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+        return $resumed;
     }
 
     /**
@@ -244,7 +318,7 @@ class WorkflowEngine
     {
         DB::transaction(function () use ($event, $context): void {
             $lockedEvent = DB::table('farast_workflow_events')->where('id', $event->id)->lockForUpdate()->first();
-            if (! $lockedEvent || $lockedEvent->status === 'completed') {
+            if (! $lockedEvent || in_array($lockedEvent->status, ['completed', 'paused'], true)) {
                 return;
             }
 
@@ -304,6 +378,7 @@ class WorkflowEngine
 
             DB::table('farast_workflow_events')->where('id', $event->id)->update([
                 'status' => 'processing',
+                'started_at' => now(),
                 'matched_at' => $lockedEvent->matched_at ?: now(),
                 'attempts' => DB::raw('attempts + 1'),
                 'matched_workflows' => DB::table('farast_workflow_event_workflows')->where('event_id', $event->id)->count(),
@@ -318,7 +393,11 @@ class WorkflowEngine
 
         $completedNow = 0;
         foreach ($mappings as $mapping) {
-            $claimed = DB::transaction(function () use ($mapping): bool {
+            if (DB::table('farast_workflow_events')->where('id', $event->id)->value('status') === 'paused') break;
+            $leaseToken = bin2hex(random_bytes(24));
+            $claimed = DB::transaction(function () use ($mapping, $leaseToken, $event): bool {
+                $eventState = DB::table('farast_workflow_events')->where('id', $event->id)->lockForUpdate()->value('status');
+                if ($eventState === 'paused') return false;
                 $locked = DB::table('farast_workflow_event_workflows')
                     ->where('id', $mapping->id)
                     ->lockForUpdate()
@@ -339,6 +418,7 @@ class WorkflowEngine
                     'last_error' => null,
                     'started_at' => now(),
                     'finished_at' => null,
+                    'lease_token' => $leaseToken,
                     'updated_at' => now(),
                 ]);
 
@@ -353,13 +433,15 @@ class WorkflowEngine
                 $this->run((int) $mapping->workflow_id, array_merge($context, [
                     'event_type' => $event->event_type,
                     'event_id' => (int) $event->id,
-                ]), (int) $mapping->id);
+                ]), (int) $mapping->id, false, $leaseToken);
                 $completedNow++;
             } catch (\Throwable $exception) {
-                DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
+                DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)
+                    ->where('status', 'running')->where('lease_token', $leaseToken)->update([
                     'status' => 'failed',
                     'last_error' => mb_substr($exception->getMessage(), 0, 4000),
                     'finished_at' => now(),
+                    'lease_token' => null,
                     'updated_at' => now(),
                 ]);
                 report($exception);
@@ -375,8 +457,11 @@ class WorkflowEngine
             ->whereNotNull('last_error')->orderBy('id')->limit(3)->pluck('last_error')->all();
 
         $complete = $done === $total;
+        $currentEventStatus = DB::table('farast_workflow_events')->where('id', $event->id)->value('status');
+        $nextEventStatus = $currentEventStatus === 'paused' ? 'paused' : ($complete ? 'completed' : ($active > 0 ? 'processing' : 'failed'));
         DB::table('farast_workflow_events')->where('id', $event->id)->update([
-            'status' => $complete ? 'completed' : ($active > 0 ? 'processing' : 'failed'),
+            'status' => $nextEventStatus,
+            'failed_at' => $nextEventStatus === 'failed' ? now() : null,
             'matched_workflows' => $total,
             'failed_workflows' => $failed,
             'error_summary' => $errors ? mb_substr(implode("\n", $errors), 0, 4000) : null,
