@@ -189,6 +189,9 @@ class AdminStoreController extends Controller
         abort_unless((int) $session->user_id === (int) auth()->id(), 404);
         abort_unless($session->isUsable(), 410, 'مهلت این نشست ورود محصول پایان یافته است؛ یک نشست تازه بسازید.');
 
+        if ($session->status === 'details') {
+            return redirect()->route('admin.store.intake.details', $session);
+        }
         $session->load(['files' => fn ($query) => $query->orderBy('id')]);
 
         return view('admin.store.intake-files', compact('session'));
@@ -198,6 +201,7 @@ class AdminStoreController extends Controller
     {
         abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
         abort_unless($session->isUsable(), 410);
+        abort_unless(in_array($session->status, [StoreProductIntakeSession::STATUS_SELECTING_FILES, StoreProductIntakeSession::STATUS_FILES_UPLOADED, 'details'], true), 409);
         $files = $session->files()->where('status', 'uploaded')->get();
         abort_if($files->isEmpty(), 409, 'ابتدا حداقل یک فایل را بازرسی و منتقل کنید.');
 
@@ -215,7 +219,9 @@ class AdminStoreController extends Controller
             'preview_pages' => 3,
             'type' => $session->product_type,
         ]);
-        $intakeSession = $session;
+        $session->update(['status' => 'details']);
+        $intakeSession = $session->fresh();
+        $intakeSession->load('files');
 
         return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'intakeSession'));
     }
@@ -245,9 +251,9 @@ class AdminStoreController extends Controller
         $tagIds = $data['tag_ids'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
 
-        $created = DB::transaction(function () use ($data, $tagIds, $session, $files) {
+        $created = DB::transaction(function () use ($data, $tagIds, $session) {
             $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
-            abort_unless($lockedSession->isUsable(), 409, 'نشست ورود قبلاً مصرف شده یا منقضی شده است.');
+            abort_unless($lockedSession->isUsable() && $lockedSession->status === 'details', 409, 'نشست ورود قبلاً مصرف شده یا مرحله مشخصات آن باز نیست.');
             abort_unless($lockedSession->product_id === null, 409, 'این نشست قبلاً به محصول متصل شده است.');
 
             $lockedFiles = StoreProductIntakeFile::query()->where('intake_session_id', $lockedSession->id)->where('status', 'uploaded')->lockForUpdate()->get();
@@ -281,7 +287,7 @@ class AdminStoreController extends Controller
                     'sha256' => $intakeFile->sha256,
                     'is_primary' => $product->type === 'digital_file' && $intakeFile->is_primary,
                     'is_active' => true,
-                    'scan_status' => $antivirusClean ? 'clean' : 'warning',
+                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
                     'scan_engine' => $antivirusClean ? 'clamav' : 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
@@ -308,6 +314,9 @@ class AdminStoreController extends Controller
                 ]);
 
                 $bindings[] = ['managed_file_id' => (int) $intakeFile->managed_file_id, 'file_id' => (int) $record->id];
+                if ((int) $intakeFile->managed_file_id > 0) {
+                    app(StorageManager::class)->bindReference((int) $intakeFile->managed_file_id, StoreProductFile::class, (int) $record->id, (int) $product->id);
+                }
                 $intakeFile->update(['status' => 'attached', 'product_file_id' => $record->id]);
             }
 
@@ -320,18 +329,13 @@ class AdminStoreController extends Controller
                 'intake_session_id' => $session->id,
                 'file_count' => count($bindings),
                 'product_type' => $product->type,
-                'manual_security_review_required' => $files->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean'),
+                'manual_security_review_required' => $lockedFiles->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean' || data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required'),
             ]);
 
             return [$product, $bindings];
         }, 3);
 
         [$product, $bindings] = $created;
-        foreach ($bindings as $binding) {
-            if ($binding['managed_file_id'] > 0) {
-                app(StorageManager::class)->bindReference($binding['managed_file_id'], StoreProductFile::class, $binding['file_id'], (int) $product->id);
-            }
-        }
 
         foreach ($product->files()->where('purpose', $product->type === 'course' ? 'course_asset' : 'product_download')->get() as $productFile) {
             $documentId = (int) DB::table('store_product_documents')->where('product_file_id', $productFile->id)->value('id');
@@ -362,6 +366,7 @@ class AdminStoreController extends Controller
     ) {
         abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
         abort_unless($session->isUsable(), 410, 'مهلت نشست ورود محصول پایان یافته است.');
+        abort_unless(in_array($session->status, [StoreProductIntakeSession::STATUS_SELECTING_FILES, StoreProductIntakeSession::STATUS_FILES_UPLOADED], true), 409, 'مرحله انتخاب فایل این نشست بسته شده است.');
         $maxBytes = $session->product_type === 'course' ? 256 * 1024 * 1024 : 50 * 1024 * 1024;
         $request->validate([
             'file' => ['required', 'file', 'max:'.(int) ceil($maxBytes / 1024)],
@@ -455,6 +460,7 @@ class AdminStoreController extends Controller
         abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
         abort_unless($file->intake_session_id === $session->id && (int) $file->user_id === (int) $request->user()->id, 404);
         abort_unless($session->isUsable(), 410);
+        abort_unless(in_array($session->status, [StoreProductIntakeSession::STATUS_SELECTING_FILES, StoreProductIntakeSession::STATUS_FILES_UPLOADED], true), 409, 'مرحله انتخاب فایل این نشست بسته شده است.');
         abort_unless($file->status === 'inspected' && $file->expires_at?->isFuture(), 409, 'مهلت تأیید فایل پایان یافته است.');
 
         $disk = Storage::disk($file->staging_disk ?: 'private');
