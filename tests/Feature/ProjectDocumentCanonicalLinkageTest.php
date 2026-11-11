@@ -8,6 +8,7 @@ use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\EditorDocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
