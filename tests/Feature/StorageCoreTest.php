@@ -8,12 +8,16 @@ use App\Models\StorageVolume;
 use App\Models\StorageVolumeReservation;
 use App\Models\User;
 use App\Services\Storage\StorageManager;
+use App\Services\Storage\S3CompatibleAdapter;
 use App\Services\Storage\StorageTransferService;
 use App\Services\StorageConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class StorageCoreTest extends TestCase
@@ -572,10 +576,10 @@ class StorageCoreTest extends TestCase
             ],
         ]);
 
-        $adapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
-        $adapter->shouldReceive('putFile')->once()->andThrow(new \\RuntimeException('provider temporarily unavailable'));
+        $adapter = Mockery::mock(S3CompatibleAdapter::class);
+        $adapter->shouldReceive('putFile')->once()->andThrow(new RuntimeException('provider temporarily unavailable'));
         $adapter->shouldReceive('delete')->once();
-        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $adapter);
+        app()->instance(S3CompatibleAdapter::class, $adapter);
         app()->forgetInstance(StorageManager::class);
         app()->forgetInstance(StorageTransferService::class);
 
@@ -585,7 +589,7 @@ class StorageCoreTest extends TestCase
 
         $this->assertSame('transfer_error', $file->status);
         $this->assertGreaterThan(0, (int) data_get($file->metadata, 'transfer_attempts'));
-        $this->assertTrue(\\Illuminate\\Support\\Carbon::parse(data_get($file->metadata, 'next_transfer_at'))->isFuture());
+        $this->assertTrue(Carbon::parse(data_get($file->metadata, 'next_transfer_at'))->isFuture());
         $this->assertSame(0, $transfer->transferPending());
         $this->assertDatabaseCount('storage_volume_reservations', 0);
     }
