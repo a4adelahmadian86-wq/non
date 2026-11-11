@@ -612,7 +612,9 @@
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
-        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'}).promise;
+        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,enableXfa:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
+        loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
+        pdfDoc=await loadingTask.promise;
       }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
@@ -620,8 +622,76 @@
     }catch(error){showPdfError(error);}
   };
 
+  const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
+    const dialog=document.createElement('dialog');
+    dialog.className='farast-pdf-password-dialog';
+    dialog.setAttribute('aria-labelledby','farast-pdf-password-title');
+    const form=document.createElement('form');
+    form.className='farast-pdf-password-form';
+    const title=document.createElement('strong');
+    title.id='farast-pdf-password-title';
+    title.textContent='این فایل PDF رمز عبور دارد';
+    const help=document.createElement('p');
+    help.textContent=reason===2?'رمز واردشده صحیح نبود. دوباره امتحان کنید.':'برای باز کردن سند، رمز عبور آن را وارد کنید.';
+    const input=document.createElement('input');
+    input.type='password';
+    input.autocomplete='current-password';
+    input.required=true;
+    input.setAttribute('aria-label','رمز عبور فایل PDF');
+    const actions=document.createElement('div');
+    actions.className='farast-pdf-password-actions';
+    const cancel=document.createElement('button');
+    cancel.type='button';
+    cancel.textContent='انصراف';
+    const submit=document.createElement('button');
+    submit.type='submit';
+    submit.textContent='باز کردن سند';
+    actions.append(cancel,submit);
+    form.append(title,help,input,actions);
+    dialog.append(form);
+    document.body.append(dialog);
+    let closed=false;
+    const close=cancelled=>{
+      if(closed)return;
+      closed=true;
+      if(dialog.open)dialog.close();
+      dialog.remove();
+      if(cancelled)loadingTask.destroy().catch(()=>{});
+    };
+    cancel.addEventListener('click',()=>close(true));
+    dialog.addEventListener('cancel',event=>{event.preventDefault();close(true);});
+    form.addEventListener('submit',event=>{
+      event.preventDefault();
+      if(!input.value)return;
+      const password=input.value;
+      close(false);
+      updatePassword(password);
+    });
+    dialog.showModal();
+    input.focus();
+  };
+
   const showPdfError=error=>{
-    if(pdfLoading){pdfLoading.hidden=false;pdfLoading.style.display='grid';pdfLoading.textContent='بارگذاری سند انجام نشد. فایل ممکن است خراب یا غیرقابل نمایش باشد.';}
+    const name=String(error?.name||'');
+    let message='بارگذاری سند انجام نشد. اتصال را بررسی کنید یا فایل PDF دیگری را امتحان کنید.';
+    if(name==='InvalidPDFException'||name==='FormatError')message='ساختار این فایل PDF معتبر نیست یا بخشی از آن آسیب دیده است.';
+    else if(name==='MissingPDFException')message='فایل PDF دیگر در دسترس نیست یا نشانی آن معتبر نیست.';
+    else if(name==='PasswordException')message='رمز عبور فایل PDF پذیرفته نشد یا دسترسی به سند ممکن نیست.';
+    else if(name==='UnexpectedResponseException')message='سرور پاسخ قابل‌استفاده‌ای برای فایل PDF ارسال نکرد.';
+    else if(name==='AbortException'||name==='RenderingCancelledException')message='بارگذاری یا نمایش صفحه لغو شد؛ می‌توانید دوباره تلاش کنید.';
+    if(pdfLoading){
+      pdfLoading.hidden=false;
+      pdfLoading.style.display='grid';
+      pdfLoading.replaceChildren();
+      const text=document.createElement('p');
+      text.textContent=message;
+      const retry=document.createElement('button');
+      retry.type='button';
+      retry.className='farast-pdf-retry';
+      retry.textContent='تلاش دوباره';
+      retry.addEventListener('click',()=>{pdfLoading.hidden=true;showItem(itemIndex).catch(showPdfError);});
+      pdfLoading.append(text,retry);
+    }
     console.error('FARAST reader PDF error',error);
   };
 
