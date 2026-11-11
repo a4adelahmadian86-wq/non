@@ -128,10 +128,11 @@ class AppServiceProvider extends ServiceProvider
                     'guard' => $event->guard,
                     'actor_id' => $event->user?->getAuthIdentifier(),
                 ]);
-                $this->recordAuthenticationAnomaly();
             } catch (Throwable $exception) {
                 error_log('FARAST authentication failure logging failed: '.get_class($exception));
             }
+
+            $this->recordAuthenticationAnomaly();
         });
 
         Event::listen(Login::class, function (Login $event): void {
@@ -209,12 +210,16 @@ class AppServiceProvider extends ServiceProvider
                     continue;
                 }
 
-                Log::log($level, 'farast.security.authentication_anomaly', [
-                    'source_fingerprint' => substr($fingerprint, 0, 16),
-                    'failed_attempts' => $count,
-                    'threshold' => $threshold,
-                    'window_minutes' => $window,
-                ]);
+                try {
+                    Log::log($level, 'farast.security.authentication_anomaly', [
+                        'source_fingerprint' => substr($fingerprint, 0, 16),
+                        'failed_attempts' => $count,
+                        'threshold' => $threshold,
+                        'window_minutes' => $window,
+                    ]);
+                } catch (Throwable $loggingException) {
+                    error_log('FARAST authentication anomaly log write failed: '.get_class($loggingException));
+                }
                 try {
                     app(\App\Services\AuditEventService::class)->record(
                         'security.authentication_anomaly',
