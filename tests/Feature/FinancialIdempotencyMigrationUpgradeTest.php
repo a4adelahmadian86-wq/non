@@ -241,7 +241,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             $this->runFinancialMigration();
             $this->fail('Duplicate legacy idempotency keys must stop the migration before schema mutation.');
         } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('Duplicate idempotency_key values exist in orders', $exception->getMessage());
+            $this->assertStringContainsString('Duplicate idempotency_key values already exist in orders', $exception->getMessage());
         }
 
         $this->assertFalse(collect(Schema::getIndexes('orders'))->contains(
