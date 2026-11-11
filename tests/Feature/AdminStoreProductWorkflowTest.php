@@ -54,7 +54,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'id' => (string) Str::uuid(),
             'user_id' => $user->id,
             'product_type' => $type,
-            'status' => StoreProductIntakeSession::STATUS_FILES_UPLOADED,
+            'status' => StoreProductIntakeSession::STATUS_DETAILS,
             'expires_at' => now()->addHours(2),
         ]);
 
