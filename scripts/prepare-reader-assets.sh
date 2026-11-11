@@ -32,6 +32,7 @@ for required in \
   "$PACKAGE_DIR/legacy/build/pdf.worker.mjs" \
   "$PACKAGE_DIR/legacy/web/pdf_viewer.mjs" \
   "$PACKAGE_DIR/legacy/web/pdf_viewer.css" \
+  "$PACKAGE_DIR/web/pdf_viewer.css" \
   "$PACKAGE_DIR/LICENSE"; do
   if [ ! -s "$required" ]; then
     echo "Pinned PDF.js distribution is missing required runtime asset: $required" >&2
@@ -40,7 +41,7 @@ for required in \
 done
 
 # Rebuild the self-hosted payload deterministically; never use a CDN at runtime.
-rm -rf "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web/images"
+rm -rf "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
 rm -rf "$TARGET_DIR/cmaps" "$TARGET_DIR/standard_fonts" "$TARGET_DIR/wasm"
 mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
 
@@ -48,6 +49,7 @@ cp "$PACKAGE_DIR/legacy/build/pdf.mjs" "$TARGET_DIR/legacy/build/pdf.mjs"
 cp "$PACKAGE_DIR/legacy/build/pdf.worker.mjs" "$TARGET_DIR/legacy/build/pdf.worker.mjs"
 cp "$PACKAGE_DIR/legacy/web/pdf_viewer.mjs" "$TARGET_DIR/legacy/web/pdf_viewer.mjs"
 cp "$PACKAGE_DIR/legacy/web/pdf_viewer.css" "$TARGET_DIR/legacy/web/pdf_viewer.css"
+cp "$PACKAGE_DIR/web/pdf_viewer.css" "$TARGET_DIR/web/pdf_viewer.css"
 cp "$PACKAGE_DIR/LICENSE" "$TARGET_DIR/LICENSE"
 
 if [ -d "$PACKAGE_DIR/legacy/web/images" ]; then
@@ -56,7 +58,7 @@ fi
 if [ -d "$PACKAGE_DIR/web/images" ]; then
   cp -a "$PACKAGE_DIR/web/images" "$TARGET_DIR/web/images"
 fi
-for asset_dir in cmaps standard_fonts wasm; do
+for asset_dir in cmaps standard_fonts wasm image_decoders iccs; do
   if [ -d "$PACKAGE_DIR/$asset_dir" ]; then
     cp -a "$PACKAGE_DIR/$asset_dir" "$TARGET_DIR/$asset_dir"
   fi
