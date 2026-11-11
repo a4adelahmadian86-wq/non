@@ -38,7 +38,7 @@ class AuditIntegrityService
                             'aggregate_type' => $row->aggregate_type,
                             'aggregate_id' => $row->aggregate_id,
                             'source' => $row->source,
-                            'payload_meta' => $row->payload_meta,
+                            'payload_meta' => $this->canonicalizeValue(is_array($row->payload_meta) ? $row->payload_meta : []),
                             'created_at' => (string) $row->getRawOriginal('created_at'),
                             'updated_at' => (string) $row->getRawOriginal('updated_at'),
                         ],
@@ -75,5 +75,25 @@ class AuditIntegrityService
             'errors' => $errors,
             'errors_truncated' => $errorCount > count($errors),
         ];
+    }
+
+    /**
+     * Canonicalize JSON objects after database decoding. JSON arrays retain order.
+     */
+    private function canonicalizeValue(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $key => $nested) {
+            $value[$key] = $this->canonicalizeValue($nested);
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value, SORT_STRING);
+        }
+
+        return $value;
     }
 }
