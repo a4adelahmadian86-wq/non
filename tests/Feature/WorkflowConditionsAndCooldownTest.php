@@ -63,6 +63,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertSame(0, $engine->dispatch('document.saved', [
             'user_id' => (string) ($owner->id + 0.5),
             'document_id' => 9,
+            'revision' => 1,
         ], 'document:invalid-user:1'));
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:unsafe-context:1']);
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:invalid-user:1']);
@@ -178,7 +179,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $skipped = $engine->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 9, 'status' => 'ready'],
+            ['user_id' => $owner->id, 'document_id' => 9, 'revision' => 1, 'status' => 'ready'],
             'document:9:revision:1',
         );
         $this->assertSame(0, $skipped);
@@ -186,7 +187,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $completed = $engine->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 11, 'status' => 'ready'],
+            ['user_id' => $owner->id, 'document_id' => 11, 'revision' => 1, 'status' => 'ready'],
             'document:11:revision:1',
         );
         $this->assertSame(1, $completed);
@@ -202,12 +203,12 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $first = $engine->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 31],
+            ['user_id' => $owner->id, 'document_id' => 31, 'revision' => 1],
             'document:31:revision:1',
         );
         $second = $engine->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 32],
+            ['user_id' => $owner->id, 'document_id' => 32, 'revision' => 1],
             'document:32:revision:1',
         );
 
@@ -324,7 +325,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $workflow = $this->workflow($owner);
         app(WorkflowEngine::class)->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 206],
+            ['user_id' => $owner->id, 'document_id' => 206, 'revision' => 1],
             'document:206:revision:1',
         );
 
@@ -357,7 +358,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $first = $engine->dispatch(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 41],
+            ['user_id' => $owner->id, 'document_id' => 41, 'revision' => 1],
             'document:41:revision:1',
         );
         $this->assertSame(0, $first);
@@ -379,7 +380,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $engine = app(WorkflowEngine::class);
         $eventId = $engine->enqueue(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 230],
+            ['user_id' => $owner->id, 'document_id' => 230, 'revision' => 1],
             'document:230:revision:1',
         );
         DB::table('farast_workflow_event_workflows')->insert([
@@ -483,7 +484,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
 
         $eventId = app(WorkflowEngine::class)->enqueue(
             'document.saved',
-            ['user_id' => $owner->id, 'document_id' => 233],
+            ['user_id' => $owner->id, 'document_id' => 233, 'revision' => 1],
             'document:233:revision:1',
         );
 
