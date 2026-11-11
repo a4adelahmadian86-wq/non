@@ -18,7 +18,7 @@ class AuthorizationService
     private array $teamIdsByUser = [];
 
     public const PERMISSIONS = [
-        'dashboard.view', 'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend',
+        'dashboard.view', 'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend', 'users.capabilities.manage',
         'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.export',
         'projects.create', 'ai.use', 'ai.manage', 'ai.view', 'ocr.use', 'voice.use', 'voice.manage',
         'billing.view', 'billing.manage', 'finance.view', 'finance.manage', 'support.manage',
