@@ -119,8 +119,16 @@ class ResolveAdminScope
      */
     private function hasManagedTeams(User $user): bool
     {
-        $supervised = Team::where('supervisor_id', $user->id)->exists();
+        if (! $user->organization_id) {
+            return false;
+        }
+
+        $supervised = Team::query()
+            ->where('organization_id', $user->organization_id)
+            ->where('supervisor_id', $user->id)
+            ->exists();
         $managerial = $user->teams()
+            ->where('teams.organization_id', $user->organization_id)
             ->wherePivot('team_role', 'manager')
             ->exists();
 
@@ -163,12 +171,19 @@ class ResolveAdminScope
 
     private static function teamUserIds(User $user): array
     {
+        if (! $user->organization_id) {
+            return [$user->id];
+        }
+
         $teamIds = Team::query()
-            ->where('supervisor_id', $user->id)
-            ->orWhereIn('id', function ($q) use ($user) {
-                $q->select('team_id')->from('team_user')
-                    ->where('user_id', $user->id)
-                    ->where('team_role', 'manager');
+            ->where('organization_id', $user->organization_id)
+            ->where(function ($query) use ($user) {
+                $query->where('supervisor_id', $user->id)
+                    ->orWhereIn('id', function ($q) use ($user) {
+                        $q->select('team_id')->from('team_user')
+                            ->where('user_id', $user->id)
+                            ->where('team_role', 'manager');
+                    });
             })
             ->pluck('id');
 
