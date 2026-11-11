@@ -322,40 +322,47 @@
   });
 
   const renderPdfAnnotationLayer=async(page,viewport,container)=>{
-    const pdfjs=window.pdfjsLib;
-    if(!pdfjs?.AnnotationLayer||!container||!pdfDoc)return;
-    const annotations=await page.getAnnotations({intent:'display'});
-    const fieldObjects=typeof pdfDoc.getFieldObjects==='function'?await pdfDoc.getFieldObjects():null;
-    const layerDiv=document.createElement('div');
-    layerDiv.className='annotationLayer farast-pdf-annotation-layer';
-    layerDiv.style.width=viewport.width+'px';
-    layerDiv.style.height=viewport.height+'px';
-    container.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
-    container.append(layerDiv);
-    const layerViewport=viewport.clone({dontFlip:true});
-    const annotationLayer=new pdfjs.AnnotationLayer({
-      div:layerDiv,
-      accessibilityManager:null,
-      annotationCanvasMap:null,
-      annotationEditorUIManager:null,
-      page,
-      viewport:layerViewport,
-      structTreeLayer:null
-    });
-    await annotationLayer.render({
-      annotations,
-      div:layerDiv,
-      viewport:layerViewport,
-      page,
-      linkService:createPdfLinkService(),
-      downloadManager:null,
-      annotationStorage:pdfDoc.annotationStorage,
-      imageResourcesPath:'/vendor/pdfjs/web/images/',
-      renderForms:true,
-      enableScripting:false,
-      hasJSActions:false,
-      fieldObjects
-    });
+    if(!container||!pdfDoc)return;
+    try{
+      const pdfjs=window.pdfjsLib;
+      if(!pdfjs?.AnnotationLayer)throw new Error('PDF.js AnnotationLayer API is unavailable');
+      const annotations=await page.getAnnotations({intent:'display'});
+      const fieldObjects=typeof pdfDoc.getFieldObjects==='function'?await pdfDoc.getFieldObjects():null;
+      const layerDiv=document.createElement('div');
+      layerDiv.className='annotationLayer farast-pdf-annotation-layer';
+      layerDiv.style.width=viewport.width+'px';
+      layerDiv.style.height=viewport.height+'px';
+      container.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
+      container.append(layerDiv);
+      const layerViewport=viewport.clone({dontFlip:true});
+      const annotationLayer=new pdfjs.AnnotationLayer({
+        div:layerDiv,
+        accessibilityManager:null,
+        annotationCanvasMap:null,
+        annotationEditorUIManager:null,
+        page,
+        viewport:layerViewport,
+        structTreeLayer:null
+      });
+      await annotationLayer.render({
+        annotations,
+        div:layerDiv,
+        viewport:layerViewport,
+        page,
+        linkService:createPdfLinkService(),
+        downloadManager:null,
+        annotationStorage:pdfDoc.annotationStorage,
+        imageResourcesPath:'/vendor/pdfjs/web/images/',
+        renderForms:true,
+        enableScripting:false,
+        hasJSActions:false,
+        fieldObjects
+      });
+    }catch(error){
+      container.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
+      root.dispatchEvent(new CustomEvent('farast:reader-annotation-layer-error',{detail:{message:String(error?.message||error)}}));
+      console.warn('FARAST PDF annotation layer unavailable:',error);
+    }
   };
 
   const renderPdfPage=async(number)=>{
