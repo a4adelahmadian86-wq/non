@@ -36,6 +36,7 @@ class ReviewProductIntakeFile implements ShouldQueue
             ->whereNull('product_id')
             ->whereNotNull('intake_session_id')
             ->where('status', 'uploaded')
+            ->whereIn('supervisor_status', ['queued', 'reviewing'])
             ->first();
 
         if (! $ingestion || ! $ingestion->intakeSession) {
@@ -175,8 +176,19 @@ class ReviewProductIntakeFile implements ShouldQueue
     private function storeResult(StoreProductIngestion $ingestion, StoreProductIntakeSession $session, string $status, array $review): void
     {
         DB::transaction(function () use ($ingestion, $session, $status, $review) {
+            // All intake writers lock the session before its ingestion rows.
+            // Keep the same order here to avoid worker/cancel/submit deadlocks.
+            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->first();
+            if (! $lockedSession
+                || $lockedSession->expires_at?->isPast()
+                || in_array($lockedSession->status, ['cancelled', 'expired', 'submitted', 'completed'], true)) {
+                return;
+            }
+
             $lockedIngestion = StoreProductIngestion::query()->whereKey($ingestion->id)->lockForUpdate()->first();
             if (! $lockedIngestion
+                || $lockedIngestion->intake_session_id !== $lockedSession->id
+                || (int) $lockedIngestion->user_id !== (int) $lockedSession->user_id
                 || $lockedIngestion->product_id !== null
                 || $lockedIngestion->status !== 'uploaded'
                 || ($lockedIngestion->supervisor_status === 'completed' && $lockedIngestion->supervisor_reviewed_at !== null)) {
@@ -189,11 +201,6 @@ class ReviewProductIntakeFile implements ShouldQueue
                 'supervisor_reviewed_at' => in_array($status, ['completed', 'blocked', 'manual_review_required', 'failed'], true) ? now() : null,
             ]);
 
-            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->first();
-            if (! $lockedSession || in_array($lockedSession->status, ['cancelled', 'expired', 'submitted', 'completed'], true)) {
-                return;
-            }
-
             $statuses = $lockedSession->ingestions()
                 ->where('status', 'uploaded')
                 ->pluck('supervisor_status');
@@ -203,7 +210,7 @@ class ReviewProductIntakeFile implements ShouldQueue
                 $statuses->every(fn ($value) => $value === 'completed') => 'files_reviewed',
                 default => 'review_pending',
             };
+
             $lockedSession->update(['status' => $nextStatus]);
         }, 3);
-    }
-}
+    }}
