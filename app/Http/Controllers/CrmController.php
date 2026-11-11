@@ -3,15 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\FarastProject;
+use App\Models\FarastDocument;
+use App\Models\FarastDocumentVersion;
 use App\Models\Payment;
 use App\Models\StoreDownload;
+use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreLibraryItem;
 use App\Models\WalletTransaction;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\AdminConsoleService;
+use App\Services\AuthorizationService;
 use App\Services\AuditLogService;
+use App\Services\StoreCourseProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +76,7 @@ class CrmController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $customer, AdminConsoleService $console)
+    public function show(Request $request, int $customer, AdminConsoleService $console, StoreCourseProgressService $courseProgress)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
 
@@ -97,7 +105,7 @@ class CrmController extends Controller
                 'created_at' => $ticket->created_at,
             ]);
 
-        $documents = TypingDocument::query()->where('user_id', $user->id)->latest()->limit(30)->get()
+        $documents = TypingDocument::query()->where('user_id', $user->id)->whereNull('farast_document_id')->latest()->limit(30)->get()
             ->map(fn (TypingDocument $document) => [
                 'type' => 'typing_document',
                 'id' => $document->id,
@@ -130,6 +138,50 @@ class CrmController extends Controller
                 'created_at' => $item->created_at,
             ]);
 
+        $projects = FarastProject::query()
+            ->withCount([
+                'documents',
+                'typingDocuments' => fn ($query) => $query->whereNull('farast_document_id'),
+            ])
+            ->where('user_id', $user->id)
+            ->latest('updated_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastProject $project) => [
+                'type' => 'farast_project',
+                'id' => $project->id,
+                'title' => $project->name,
+                'status' => $project->status,
+                'project_type' => $project->project_type,
+                'documents_count' => (int) $project->documents_count,
+                'standalone_typing_documents_count' => (int) $project->typing_documents_count,
+                'estimated_price_rials' => (int) $project->estimated_price_rials,
+                'paid_rials' => (int) $project->paid_rials,
+                'created_at' => $project->created_at,
+                'updated_at' => $project->updated_at,
+            ]);
+
+        $farastDocuments = FarastDocument::query()
+            ->with('project:id,name')
+            ->withCount('versions')
+            ->where('user_id', $user->id)
+            ->latest('updated_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastDocument $document) => [
+                'type' => 'farast_document',
+                'id' => $document->id,
+                'title' => $document->title,
+                'status' => $document->status,
+                'project_id' => $document->project_id,
+                'project_name' => $document->project?->name,
+                'revision' => (int) $document->revision,
+                'versions_count' => (int) $document->versions_count,
+                'last_saved_at' => $document->last_saved_at,
+                'created_at' => $document->created_at,
+                'updated_at' => $document->updated_at,
+            ]);
+
         $downloads = StoreDownload::query()->with(['file', 'libraryItem.product'])
             ->where('user_id', $user->id)->latest()->limit(30)->get()
             ->map(fn (StoreDownload $download) => [
@@ -140,6 +192,75 @@ class CrmController extends Controller
                 'expires_at' => $download->expires_at,
                 'created_at' => $download->created_at,
             ]);
+
+        $documentVersions = FarastDocumentVersion::query()
+            ->whereHas('document', fn ($query) => $query->where('user_id', $user->id))
+            ->with(['document:id,title,project_id', 'user:id,name'])
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map(fn (FarastDocumentVersion $version) => [
+                'type' => 'farast_document_version',
+                'id' => $version->id,
+                'document_id' => $version->document_id,
+                'document_title' => $version->document?->title,
+                'project_id' => $version->document?->project_id,
+                'label' => $version->label,
+                'editor_name' => $version->user?->name,
+                'created_at' => $version->created_at,
+            ]);
+
+        $courseEnrollments = StoreCourseEnrollment::query()
+            ->with(['product:id,title', 'libraryItem:id,revoked_at', 'course.sections.lessons', 'progress'])
+            ->where('user_id', $user->id)
+            ->latest()
+            ->limit(30)
+            ->get()
+            ->map(function (StoreCourseEnrollment $enrollment) use ($courseProgress) {
+                $progress = $courseProgress->summarize($enrollment);
+
+                return [
+                    'type' => 'course_enrollment',
+                    'id' => $enrollment->id,
+                    'title' => $enrollment->product?->title ?? 'دوره آموزشی',
+                    'status' => $enrollment->libraryItem?->revoked_at
+                        ? 'revoked'
+                        : ($enrollment->expires_at && $enrollment->expires_at->lte(now())
+                            ? 'expired'
+                            : ($enrollment->completed_at ? 'completed' : 'active')),
+                    'completed_lessons_count' => $progress['completed'],
+                    'published_lessons_count' => $progress['total'],
+                    'progress_percent' => $progress['progress_percent'],
+                    'last_lesson_id' => $enrollment->last_lesson_id,
+                    'starts_at' => $enrollment->starts_at,
+                    'expires_at' => $enrollment->expires_at,
+                    'completed_at' => $enrollment->completed_at,
+                    'created_at' => $enrollment->created_at,
+                ];
+            });
+
+        $ticketMessages = collect();
+        if (app(AuthorizationService::class)->allows($request->user(), 'support.manage')) {
+            $ticketMessages = TicketMessage::query()
+                ->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))
+                ->where(fn ($query) => $query->where('is_internal', false)->orWhereNull('is_internal'))
+                ->with(['ticket:id,ticket_code,subject', 'user:id,name'])
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn (TicketMessage $message) => [
+                    'type' => 'ticket_message',
+                    'id' => $message->id,
+                    'ticket_id' => $message->ticket_id,
+                    'ticket_code' => $message->ticket?->ticket_code,
+                    'title' => $message->ticket?->subject ?? 'مکاتبه پشتیبانی',
+                    'body' => mb_substr((string) $message->body, 0, 500),
+                    'sender_type' => $message->is_staff ? 'staff' : ($message->user_id ? 'customer' : 'guest'),
+                    'sender_name' => $message->user?->name,
+                    'attachment_count' => count((array) $message->attachments),
+                    'created_at' => $message->created_at,
+                ]);
+        }
 
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
@@ -157,7 +278,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($documentVersions)->concat($courseEnrollments)->concat($ticketMessages)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -190,6 +311,19 @@ class CrmController extends Controller
                 'typing_documents_count' => $user->documents_count,
                 'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
                 'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
+                'projects_count' => FarastProject::query()->where('user_id', $user->id)->count(),
+                'farast_documents_count' => FarastDocument::query()->where('user_id', $user->id)->count(),
+                'farast_document_versions_count' => FarastDocumentVersion::query()
+                    ->whereHas('document', fn ($query) => $query->where('user_id', $user->id))
+                    ->count(),
+                'standalone_typing_documents_count' => TypingDocument::query()
+                    ->where('user_id', $user->id)->whereNull('farast_document_id')->count(),
+                'course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->count(),
+                'completed_course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->whereNotNull('completed_at')->count(),
+                'completed_course_lessons_count' => StoreCourseLessonProgress::query()
+                    ->whereNotNull('completed_at')
+                    ->whereHas('enrollment', fn ($query) => $query->where('user_id', $user->id))
+                    ->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
@@ -203,7 +337,6 @@ class CrmController extends Controller
     public function storeNote(Request $request, int $customer, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
-        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate([
             'note' => 'required|string|min:2|max:5000',
             'visibility' => 'sometimes|in:internal',
@@ -229,7 +362,6 @@ class CrmController extends Controller
     public function storeFollowUp(Request $request, int $customer, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
-        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate([
             'title' => 'required|string|max:180',
             'description' => 'nullable|string|max:4000',
@@ -239,7 +371,7 @@ class CrmController extends Controller
         ]);
 
         if (! empty($data['assigned_to'])) {
-            $console->authorizeAction($request->user(), 'users', (int) $data['assigned_to'], 'users.edit');
+            $console->authorizeAction($request->user(), 'users', (int) $data['assigned_to']);
         }
 
         $id = DB::table('crm_follow_up_tasks')->insertGetId([
@@ -323,7 +455,6 @@ class CrmController extends Controller
     public function updateFollowUp(Request $request, int $customer, int $task, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
-        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         $data = $request->validate(['status' => 'required|in:open,completed,cancelled']);
 
         $followUp = DB::table('crm_follow_up_tasks')
