@@ -134,6 +134,31 @@ class UnifiedAuthorizationTest extends TestCase
         self::assertFalse(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
     }
 
+    public function test_admin_can_create_and_assign_a_custom_role_with_an_audit_record(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $subject = User::factory()->create(['role' => 'user']);
+        $permission = $this->permission('workflows.manage');
+        $authorization = app(AuthorizationService::class);
+
+        $authorization->createRole($admin, 'workflow_operator', 'Workflow operator', ['workflows.manage']);
+        $assignment = $authorization->assignRole(
+            $admin,
+            $subject,
+            'workflow_operator',
+            'own',
+            expiresAt: now()->addDay(),
+        );
+
+        self::assertSame($subject->id, (int) $assignment->user_id);
+        self::assertTrue($authorization->allows($subject, 'workflows.manage'));
+        $this->assertDatabaseHas('access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_id' => $subject->id,
+            'event' => 'role.assignment.created',
+        ]);
+    }
+
     public function test_security_audit_is_persisted_with_actor_and_subject(): void
     {
         $actor = User::factory()->create();
