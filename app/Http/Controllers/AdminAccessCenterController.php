@@ -111,7 +111,7 @@ class AdminAccessCenterController extends Controller
 
         if (! empty($data['starts_at']) && ! empty($data['expires_at'])) {
             abort_unless(
-                \Illuminate\\Support\\Carbon::parse($data['expires_at'])->gt(\Illuminate\\Support\\Carbon::parse($data['starts_at'])),
+                \Illuminate\Support\Carbon::parse($data['expires_at'])->gt(\Illuminate\Support\Carbon::parse($data['starts_at'])),
                 422,
                 'زمان پایان محدودیت باید پس از زمان شروع باشد.'
             );
@@ -384,7 +384,7 @@ class AdminAccessCenterController extends Controller
             $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
             if ($target->isAdmin()) {
                 abort_unless(
-                    \App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target) !== 'global',
+                    \App\Http\Middleware\ResolveAdminScope::scopeFor($target) !== 'global',
                     422,
                     'ابتدا دامنه مدیر را محدود کنید؛ مدیر سراسری از این مسیر نقش دریافت نمی‌کند.'
                 );
@@ -485,7 +485,7 @@ class AdminAccessCenterController extends Controller
             $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
             if ($target->isAdmin()) {
                 abort_unless(
-                    \App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target) !== 'global',
+                    \App\Http\Middleware\ResolveAdminScope::scopeFor($target) !== 'global',
                     422,
                     'برای مدیر سراسری مجوز مستقیم تعریف نمی‌شود.'
                 );
@@ -621,8 +621,8 @@ class AdminAccessCenterController extends Controller
 
     private function assertAdminRoleAssignment(User $target, object $role, string $assignmentScope, ?int $assignmentScopeId): void
     {
-        $adminScope = \App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target);
-        $adminScopeId = \App\\Http\\Middleware\\ResolveAdminScope::scopeIdFor($target);
+        $adminScope = \App\Http\Middleware\ResolveAdminScope::scopeFor($target);
+        $adminScopeId = \App\Http\Middleware\ResolveAdminScope::scopeIdFor($target);
 
         $this->assertAdminScopeContains($target, $assignmentScope, $assignmentScopeId);
         abort_unless(
@@ -663,8 +663,8 @@ class AdminAccessCenterController extends Controller
 
     private function assertAdminScopeContains(User $target, string $scope, ?int $scopeId): void
     {
-        $adminScope = \App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target);
-        $adminScopeId = \App\\Http\\Middleware\\ResolveAdminScope::scopeIdFor($target);
+        $adminScope = \App\Http\Middleware\ResolveAdminScope::scopeFor($target);
+        $adminScopeId = \App\Http\Middleware\ResolveAdminScope::scopeIdFor($target);
         abort_unless($adminScope !== 'global', 422, 'دامنه مدیر سراسری قابل محدودسازی از مسیر مجوزهای مستقیم نیست.');
 
         $rank = self::SCOPE_RANK;
