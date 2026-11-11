@@ -273,7 +273,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   window.__csrfRefreshes = 0;
   window.fetch = async (url, options = {}) => {
     if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway', provider: 'render', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (String(url).startsWith('https://voice.example.test/health')) { window.__wakeOrder.push('health'); return new Response(JSON.stringify({ status: 'ok', asr_configured: true, tts_configured: true, chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/editor/voice/health') { window.__wakeOrder.push('health'); return new Response(JSON.stringify({ status: 'ok', asr_configured: true, tts_configured: true, chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     if (url === '/assistant/csrf-token') { window.__csrfRefreshes++; return new Response(JSON.stringify({ token: 'fresh-csrf' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     if (url === '/assistant/voice/stream-token') { window.__wakeOrder.push('token'); window.__tokenAttempts++; if (options.headers?.['X-CSRF-TOKEN'] !== 'fresh-csrf') return new Response(JSON.stringify({ message: 'CSRF token mismatch.' }), { status: 419, headers: { 'Content-Type': 'application/json' } }); return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -289,7 +289,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
   expect(await page.evaluate(() => window.__wakeOrder)).toEqual(['health', 'token', 'token']);
-  expect(await page.evaluate(() => window.__healthTimeouts)).toContain(60000);
+  expect(await page.evaluate(() => window.__healthTimeouts)).toContain(65000);
   expect(await page.evaluate(() => window.__tokenAttempts)).toBe(2);
   expect(await page.evaluate(() => window.__csrfRefreshes)).toBe(1);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
@@ -947,13 +947,13 @@ test('assistant streams complete TTS chunks while keeping full-duplex capture ac
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__resolveChat());
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
-  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول. بخش دوم.']);
+  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
-  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول. بخش دوم.']);
+  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
