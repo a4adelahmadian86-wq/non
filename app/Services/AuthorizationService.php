@@ -33,6 +33,45 @@ class AuthorizationService
         'system.audit','documents.share','store.manage',
     ];
 
+    /**
+     * Conservative effective scope for the existing admin console.
+     * Multiple assignments are combined using the narrowest active boundary,
+     * so an additional broad role cannot widen an already restricted account.
+     */
+    public function effectiveScope(?User $user): string
+    {
+        if (! $user || $user->is_blocked) {
+            return 'own';
+        }
+
+        $assignments = $this->activeAssignments($user);
+        if ($assignments->isEmpty()) {
+            return $this->legacyScope($user);
+        }
+
+        $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
+        return $assignments->pluck('scope')
+            ->sortByDesc(fn ($scope) => $rank[$scope] ?? 4)
+            ->first() ?: 'own';
+    }
+
+    /**
+     * Explicit team assignments constrain the existing console's team queries.
+     * null means use the legacy supervisor/manager membership resolution.
+     */
+    public function effectiveTeamIds(User $user): ?array
+    {
+        $assignments = $this->activeAssignments($user)
+            ->where('scope', 'team')
+            ->whereNotNull('team_id');
+
+        if ($assignments->isEmpty()) {
+            return null;
+        }
+
+        return $assignments->pluck('team_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+    }
+
     public function allows(?User $user, string $permission): bool
     {
         if (! $this->activeUser($user) || trim($permission) === '') {
@@ -146,6 +185,7 @@ class AuthorizationService
         ?Request $request = null,
     ): object {
         abort_unless(in_array($scope, self::SCOPES, true), 422, 'محدوده دسترسی معتبر نیست.');
+        abort_unless($this->validScopeContext($scope, $organizationId, $teamId), 422, 'پارامترهای محدوده دسترسی کامل یا سازگار نیستند.');
         abort_unless($this->canManageScope($actor, $subject, $scope, $organizationId, $teamId), 403);
         abort_if($expiresAt && $startsAt && $expiresAt <= $startsAt, 422, 'زمان انقضا باید بعد از زمان شروع باشد.');
 
@@ -192,6 +232,7 @@ class AuthorizationService
     ): object {
         abort_unless(in_array($effect, ['allow', 'deny'], true), 422, 'نوع مجوز مستقیم معتبر نیست.');
         abort_unless(in_array($scope, self::SCOPES, true), 422, 'محدوده دسترسی معتبر نیست.');
+        abort_unless($this->validScopeContext($scope, $organizationId, $teamId), 422, 'پارامترهای محدوده دسترسی کامل یا سازگار نیستند.');
         abort_unless($this->canManageScope($actor, $subject, $scope, $organizationId, $teamId), 403);
         abort_if($expiresAt && $startsAt && $expiresAt <= $startsAt, 422, 'زمان انقضا باید بعد از زمان شروع باشد.');
         $permissionId = $this->permissionId($permission);
@@ -238,6 +279,16 @@ class AuthorizationService
                 'role_id' => $assignment->role_id,
             ], $request);
         });
+    }
+
+    private function validScopeContext(string $scope, ?int $organizationId, ?int $teamId): bool
+    {
+        return match ($scope) {
+            'global', 'own' => $organizationId === null && $teamId === null,
+            'organization' => $organizationId !== null && $teamId === null,
+            'team' => $teamId !== null,
+            default => false,
+        };
     }
 
     private function canManageScope(User $actor, User $subject, string $scope, ?int $organizationId, ?int $teamId): bool
@@ -425,6 +476,10 @@ class AuthorizationService
             return collect();
         }
 
+        if (! DB::getSchemaBuilder()->hasTable('user_permission_grants')) {
+            return collect();
+        }
+
         return DB::table('user_permission_grants')
             ->where('user_id', $user->id)
             ->where('permission_id', $id)
@@ -436,6 +491,10 @@ class AuthorizationService
 
     private function activeAssignments(User $user)
     {
+        if (! DB::getSchemaBuilder()->hasTable('role_assignments') || ! DB::getSchemaBuilder()->hasTable('roles')) {
+            return collect();
+        }
+
         return DB::table('role_assignments')
             ->join('roles', 'roles.id', '=', 'role_assignments.role_id')
             ->where('role_assignments.user_id', $user->id)
