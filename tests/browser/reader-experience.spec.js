@@ -120,7 +120,7 @@ function makePdfAnnotationFixture() {
     '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream',
     '<< /Type /Annot /Subtype /Link /Rect [72 700 260 740] /Border [0 0 0] /A << /S /URI /URI (https://example.com/) >> >>',
     '<< /Type /Annot /Subtype /Widget /FT /Tx /T (readerField) /TU (Reader test field) /V (Initial value) /Rect [72 650 300 682] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>',
-    '<< /Type /OCG /Name (Optional test layer) >>'
+    '<< /Type /OCG /Name (Optional test layer) /Intent /View >>'
   ];
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
@@ -1946,7 +1946,9 @@ test('captures a selected reader passage and jumps back to its anchored discussi
 test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ page }) => {
   await page.addInitScript(() => {
     window.__pdfAnnotationErrors = [];
+    window.__pdfLayerDiagnostics = [];
     window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
+    window.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
   });
   await mountPdfReader(page, 1, makePdfAnnotationFixture());
   const root = page.locator('[data-reader-root]');
@@ -1955,6 +1957,11 @@ test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ pa
   expect(annotationErrors).toEqual([]);
   const layer = root.locator('.farast-pdf-annotation-layer');
   await expect(layer).toBeVisible();
+  const layerDiagnostics = await page.evaluate(() => window.__pdfLayerDiagnostics);
+  expect(layerDiagnostics).toHaveLength(1);
+  expect(layerDiagnostics[0].supported).toBe(true);
+  expect(layerDiagnostics[0].count).toBe(1);
+  expect(layerDiagnostics[0].groups[0].name).toBe('Optional test layer');
   const layerPanel = root.locator('#reader-layers');
   await expect(layerPanel).toBeVisible();
   const optionalLayer = layerPanel.locator('input[data-ocg-id]');
