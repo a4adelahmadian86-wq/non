@@ -113,18 +113,27 @@
 
 | بُعد | مالک/دارایی فعلی |
 |---|---|
-| جداول اصلی | `storage_volumes`, `storage_managed_files`, `storage_backup_runs` |
-| مدل‌ها | `StorageVolume`, `StorageManagedFile`, `StorageBackupRun`, `UserFile`, `StoreProductFile` |
+| جداول مرکزی | `storage_volumes`, `storage_managed_files`, `storage_backup_runs` |
+| مدل‌ها | `StorageVolume`, `StorageManagedFile`, `StorageBackupRun`, `UserFile`, `StoreProductFile`, `StoreProductPreview` |
 | هسته عملیات | `Storage\\StorageManager` |
 | سرویس‌های مکمل | `S3CompatibleAdapter`, `StorageTransferService`, `StorageBackupService`, `StorageConnectionService`, `UploadPreflightService`, `UploadSecurityService`, `UserFileRetentionService` |
-| کنترلرها | `AdminStorageController`, `ManagedStoragePublicController`, `UserFileController`, `AdminStoreController`, `SupportController`, `MessengerController` |
-| Routeها | `routes/web_core_part2.php`, `routes/store_routes.php`, `routes/product_operations.php`, `routes/support_extra.php`, `routes/messenger.php` |
-| زمان‌بندی | `routes/console.php`: health-check volume، انتقال pending، cleanup، backup و secure ticket attachments |
+| کنترلرها | `AdminStorageController`, `ManagedStoragePublicController`, `UserFileController`, `AdminStoreController`, `AdminCourseController`, `StoreController`, `SupportController`, `MessengerController` |
+| زمان‌بندی | `routes/console.php`: check-volumes، transfer-pending، cleanup، backup، prune و secure-ticket-attachments |
 | تست‌های شناخته‌شده | `StorageCoreTest`, `StorageManagerRangeTest`, `StorageClassificationTest`, `StorageDrivePolicyTest`, `UploadSecurityServiceTest`, `EnsurePrivateStorageDiskTest` |
 
-**منبع حقیقت پیشنهادی برای فایل‌های مدیریت‌شده:** `storage_managed_files` همراه با `StorageManager`. با این حال فایل‌های قدیمی/ویژه هنوز ممکن است در مدل‌های دامنه‌ای مثل `UserFile` یا مسیرهای مستقیم Filesystem حضور داشته باشند؛ باید تمام call-siteها بررسی شوند تا مرز فایل مرجع و metadata دامنه روشن شود.
+**مرجع مدیریت‌شده:** `storage_managed_files` به همراه `StorageManager`، رجیستری مرکزی فایل و Volume است. `StorageManager` عملیات ذخیره، خواندن، stream/range، حذف، انتقال و bindReference را انجام می‌دهد. `storage_managed_files` برای منبع دامنه از `source_module/source_type/source_id/product_id` استفاده می‌کند؛ این پیوندها در Migration مرکزی به‌صورت FK به جداول دامنه تعریف نشده‌اند و باید با تراکنش/سرویس و reconciliation محافظت شوند.
 
-**نکته Migration:** Migration اولیه `2026_11_10_000001_create_storage_management_tables.php` ستون `storage_volume_id` را غیر nullable می‌سازد، اما `2026_11_10_000009_allow_storage_staging_without_remote_volume.php` آن را nullable می‌کند. این با مسیر pending/staging در `StorageManager` سازگار به نظر می‌رسد، مشروط به اجرای Migration دوم. اجرای واقعی و ترتیب در دیتابیس‌های موجود هنوز بررسی نشده است.
+**شکاف واقعی اتصال دامنه به رجیستری:**
+- `UserFileController::upload` فایل را از `StorageManager::storeUploadedFile` عبور می‌دهد و سپس با `bindReference` به رکورد `UserFile` متصل می‌کند؛ بااین‌حال `user_files` همچنان `disk/path` خود را نگه می‌دارد.
+- فایل اصلی محصول در مسیر تأیید `AdminStoreController::confirmFileUpload` ابتدا در private staging جابه‌جا و سپس با `adoptExistingPrivate` در رجیستری مدیریت‌شده ثبت می‌شود؛ رکورد `StoreProductFile` نیز `disk/path` مستقل دارد و bindReference با نوع/شناسه رکورد انجام می‌شود.
+- منابع دوره در `AdminCourseController::uploadResource` نیز پس از staging به `StorageManager` adopt و reference می‌شوند.
+- کاور محصول از `StorageManager` استفاده می‌کند و مسیر عمومی آن به شکل `storage/managed/{managed_file_id}` تولید می‌شود.
+- در مقابل، `AdminStoreController::uploadPreview` و `uploadPreviewAudio` فایل‌های `StoreProductPreview` را مستقیماً روی private disk می‌نویسند و در مسیر مشاهده‌شده، `StorageManager::adoptExistingPrivate/storeUploadedFile` یا `bindReference` برای آن‌ها اجرا نمی‌شود. `StoreProductPreview` نیز فقط `disk/path/audio_disk/audio_path` دارد. بنابراین preview و audio preview از رجیستری مرکزی مدیریت‌شده خارج‌اند؛ این یک شکاف واقعی در یکپارچگی چرخه فایل است، نه صرفاً تفاوت مدل.
+- فایل‌های quarantine و staging که پیش از تأیید نهایی در private disk نگهداری می‌شوند، لزوماً bypass محسوب نمی‌شوند؛ اما باید TTL، پاک‌سازی و انتقال آن‌ها با مالک مشخص ثبت شود.
+
+**تصمیم منبع حقیقت:** برای بایت‌های فایل‌های مدیریت‌شده، رجیستری `StorageManagedFile + StorageManager` باید مرجع مرکزی باشد؛ جدول‌های دامنه فقط metadata کسب‌وکاری و reference را نگه دارند. تا زمان مهاجرت previewها، آن‌ها را «legacy/unmanaged private objects» علامت‌گذاری می‌کنیم و نباید تصور کنیم backup/volume inventory مرکزی الزاماً آن‌ها را پوشش می‌دهد.
+
+**نکته Migration:** Migration اولیه `2026_11_10_000001_create_storage_management_tables.php` ستون `storage_volume_id` را non-null می‌سازد و `2026_11_10_000009_allow_storage_staging_without_remote_volume.php` آن را nullable می‌کند. اجرای واقعی Migration دوم روی تمام محیط‌ها هنوز runtime-verified نشده است.
 
 ### 4.4 فروشگاه، محصول و انتشار محتوا
 
@@ -466,3 +475,137 @@ UploadPreflightService / UploadSecurityService
 - استخراج همه call-siteهای مستقیم دیتابیس و Storage؛
 - ماتریس endpoint به permission/scope و تست‌های منفی برای تمام دامنه‌های حساس؛
 - اجرای تست‌های کل مخزن و ثبت نتایج است.
+
+
+## 14. ERD سطح اول و قواعد کلید خارجی استخراج‌شده از Migrationها
+
+این ERD از تعریف Migrationها خوانده شده است؛ هنوز با schema واقعی دیتابیس نصب‌شده مقایسه نشده است.
+
+### هویت و سازمان
+
+```text
+users
+  ├── organizations (users.organization_id -> organizations.id, nullable, nullOnDelete)
+  ├── tickets (tickets.user_id -> users.id, cascade)
+  ├── wallets (wallets.user_id -> users.id, unique, cascade)
+  └── crm_customer_notes / crm_follow_up_tasks (customer/author/assignee -> users)
+
+organizations
+  └── teams (teams.organization_id -> organizations.id, cascade)
+       ├── teams.supervisor_id -> users.id (nullable, nullOnDelete)
+       └── team_user (team_id -> teams.id, user_id -> users.id; unique pair)
+```
+
+RBAC پایه:
+- `permissions.key` یکتا است.
+- `role_permissions.permission_id` به `permissions.id` با cascade متصل است.
+- `role_permissions(role, permission_id)` یکتا است.
+- نقش در جدول `users` به‌صورت string ذخیره می‌شود؛ FK مستقیمی به جدول role وجود ندارد.
+- این schema، role assignment چندگانه برای یک user را نشان نمی‌دهد؛ عضویت تیمی از طریق `team_user` جداست.
+
+### کاتالوگ، سفارش و تحویل
+
+```text
+store_categories
+  └── store_products.category_id -> store_categories.id (restrict)
+       ├── store_product_files.product_id -> store_products.id (cascade)
+       ├── store_product_previews.product_id -> store_products.id (cascade)
+       ├── store_product_images.product_id -> store_products.id (cascade)
+       ├── store_product_tag -> store_products + store_tags (cascade, composite PK)
+       └── store_product_related -> store_products (cascade, composite PK)
+
+users
+  └── store_carts.user_id (nullable, unique)
+       └── store_cart_items.cart_id -> store_carts.id (cascade)
+            └── product_id -> store_products.id (restrict)
+
+orders
+  ├── payments.order_id -> orders.id (cascade)
+  ├── store_order_items.order_id -> orders.id (cascade)
+  │    └── product_id -> store_products.id (nullable, nullOnDelete)
+  └── store_library_items.order_id -> orders.id (cascade)
+       ├── user_id -> users.id (cascade)
+       ├── product_id -> store_products.id (restrict)
+       ├── order_item_id -> store_order_items.id (nullable, nullOnDelete)
+       └── product_file_id -> store_product_files.id (nullable, nullOnDelete)
+
+store_downloads
+  ├── library_item_id -> store_library_items.id (cascade)
+  ├── user_id -> users.id (cascade)
+  └── product_file_id -> store_product_files.id (restrict)
+```
+
+نکته: `orders.document_id` در Migration پایه به `typing_documents.id` اشاره می‌کند، درحالی‌که آیتم‌های فروشگاه نیز به همان `orders` متصل می‌شوند. پس جدول orders در عمل aggregate مشترک سفارش است و ستون document_id مسیر legacy/سفارش مبتنی بر سند را نگه می‌دارد. تست و کد Checkout باید ثابت کنند این دو نوع سفارش در وضعیت، مبلغ و تحویل با هم تداخل نمی‌کنند.
+
+### پرداخت و کیف پول فروشگاه
+
+- `wallets.user_id` یکتا و FK به `users` است.
+- `wallet_transactions.wallet_id` FK به `wallets` با cascade دارد؛ `idempotency_key` nullable unique است.
+- `payments.order_id` FK به `orders` با cascade دارد.
+- `wallet_transactions.reference_type/reference_id` یک polymorphic reference بدون FK است؛ integrity آن به سرویس/تراکنش وابسته است.
+
+### پشتیبانی و پیام‌رسان
+
+```text
+tickets
+  └── ticket_messages.ticket_id -> tickets.id (cascade)
+       └── user_id -> users.id (cascade)
+
+conversations
+  ├── conversation_participants.conversation_id -> conversations.id (cascade)
+  │    └── user_id -> users.id (cascade); unique(conversation_id,user_id)
+  └── conversation_messages.conversation_id -> conversations.id (cascade)
+       ├── user_id -> users.id (nullable, nullOnDelete)
+       └── reply_to_id -> conversation_messages.id (nullable, nullOnDelete)
+```
+
+`conversation_participants.last_read_message_id` در Migration پایه به‌صورت unsignedBigInteger nullable آمده و FK به `conversation_messages` برای آن تعریف نشده؛ درحالی‌که `reply_to_id` FK صریح دارد. این تفاوت باید در بررسی integrity/cleanup ثبت شود.
+
+### Storage
+
+```text
+storage_volumes
+  ├── storage_managed_files.storage_volume_id -> storage_volumes.id (restrict)
+  ├── storage_managed_files.replicated_to_volume_id -> storage_volumes.id (nullable, nullOnDelete)
+  └── storage_backup_runs.storage_volume_id -> storage_volumes.id (nullable, nullOnDelete)
+```
+
+- `storage_managed_files.source_type/source_id` polymorphic-like reference است و FK ندارد.
+- در migration اولیه `storage_volume_id` اجباری است؛ Migration شماره 000009 آن را nullable می‌کند تا staging بدون remote volume ممکن شود.
+- جداول دامنه مانند `store_product_files`, `store_product_previews`, `user_files` هنوز ستون‌های مسیر/دیسک مستقل دارند؛ در برخی مسیرها رجیستری مرکزی bind می‌شود و در برخی مسیر preview مستقیم disk write وجود دارد.
+
+### Workflow
+
+```text
+users
+  └── farast_workflow_events.user_id -> users.id (nullable, nullOnDelete)
+
+farast_workflows
+  └── farast_workflow_runs.workflow_id -> farast_workflows.id (cascade)
+
+farast_workflow_events
+  └── farast_workflow_event_workflows.event_id -> farast_workflow_events.id (cascade)
+       └── workflow_id -> farast_workflows.id (cascade)
+            unique(event_id, workflow_id)
+```
+
+`farast_workflow_runs` فقط از طریق `workflow_id` به تعریف workflow وصل است و `user_id` مستقیم ندارد؛ مالک run از workflow قابل استخراج است. این رابطه باید هنگام حذف workflow و نگهداری تاریخچه مدنظر باشد، چون Migration فعلی cascade delete می‌کند.
+
+### FARAST Commerce: ارجاع‌های بدون FK
+
+در `2026_10_02_000001_create_farast_commerce_engine.php` تعدادی شناسه به شکل unsignedBigInteger و index ساخته شده‌اند، نه foreignId/constrained:
+- `farast_usage_events`: actor/organization/project/document/tool/tool_version/entitlement/pricing_policy_version؛
+- `farast_usage_reservations`: actor/organization/project/document/entitlement/pricing_policy_version/usage_event؛
+- `farast_charges`: actor/organization/usage_event/reservation/order/invoice/pricing_policy_version؛
+- `farast_invoice_items`: invoice/charge؛
+- `farast_refunds`: charge/payment/actor؛
+- `farast_wallet_reservations`: wallet/charge.
+
+این ارجاع‌ها به‌خودی‌خود خراب نیستند و ممکن است برای چرخه مالی انعطاف‌پذیر طراحی شده باشند؛ اما DB referential integrity برایشان وجود ندارد. بنابراین تمام write/delete/settlement باید با تراکنش، lock، idempotency، reconciliation و تست رکورد یتیم پوشش داده شوند. به‌ویژه حذف wallet/order/payment نباید بتواند charge/refund/reservation را بدون سیاست روشن orphan کند.
+
+### ERD و runtime verification
+
+- این نمودار روابط تعریف‌شده در Migration را نشان می‌دهد، نه روابط تأییدشده در دیتابیس production.
+- اجرای `migrate:status`، خواندن `information_schema`/SQLite schema، و مقایسه خروجی با این ERD لازم است.
+- برای روابط polymorphic یا unsigned id بدون FK، جدول قراردادهای سرویس‌محور باید جایگزین فرض FK شود.
+- Migrationهای هم‌timestamp باید با ترتیب lexical واقعی Laravel و اجرای clean install + upgrade snapshot آزموده شوند.
