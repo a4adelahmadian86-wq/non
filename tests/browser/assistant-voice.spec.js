@@ -7,6 +7,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__wsInstances = [];
+  window.__healthRequests = 0;
   window.__micRequests = 0;
   window.__micRequestedAfterReady = false;
   window.__trackStopped = false;
@@ -37,7 +38,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   const NativeWebSocket=FakeWebSocket;
   window.fetch=async(url,options={})=>{
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway',provider:'render',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
-    if(url==='/editor/voice/health')return new Response(JSON.stringify({status:'ok',asr_configured:true,tts_configured:true,chat_configured:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/editor/voice/health'){window.__healthRequests++;if(window.__healthRequests===1)return new Response(JSON.stringify({status:'starting',asr_configured:false,tts_configured:false,chat_configured:false}),{status:503,headers:{'Content-Type':'application/json'}});return new Response(JSON.stringify({status:'ok',asr_configured:true,tts_configured:true,chat_configured:true}),{status:200,headers:{'Content-Type':'application/json'}});}
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
@@ -52,6 +53,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   await page.locator('.farast-voice-mic').click();
   await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-connecting/);
   expect(await page.evaluate(() => window.__micRequests)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__healthRequests), { timeout: 8000 }).toBe(2);
   await expect.poll(() => page.evaluate(() => window.__micRequests), { timeout: 8000 }).toBe(1);
   expect(await page.evaluate(() => window.__micRequestedAfterReady)).toBe(true);
   expect(await page.evaluate(() => window.__permissionPending)).toBe(true);
