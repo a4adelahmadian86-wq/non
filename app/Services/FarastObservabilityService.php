@@ -88,10 +88,12 @@ class FarastObservabilityService
                     ];
                 })
                 ->all();
+
+            return ['available' => true, 'items' => $items];
         } catch (Throwable $exception) {
             $this->recordProbeFailure('incident_history', $exception);
 
-            return [];
+            return ['available' => false, 'items' => []];
         }
     }
 
@@ -115,7 +117,7 @@ class FarastObservabilityService
                 ->limit(501)
                 ->get(['event_type', 'payload_meta']);
 
-$trend['available'] = true;
+            $trend['available'] = true;
             $trend['truncated'] = $events->count() > 500;
             foreach ($events->take(500) as $event) {
                 $meta = is_array($event->payload_meta)
