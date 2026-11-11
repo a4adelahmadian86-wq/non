@@ -58,7 +58,7 @@ class StorageCoreTest extends TestCase
                 'critcal',
                 'test'
             );
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertSame('طبقه‌بندی فایل برای تعیین محل نگهداری معتبر نیست.', $exception->getMessage());
             $this->assertDatabaseCount('storage_managed_files', 0);
             $this->assertDatabaseCount('storage_volumes', 0);
