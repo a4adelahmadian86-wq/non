@@ -98,20 +98,22 @@ class SupportTicketService
             $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
             $this->sla->applyTargets($ticket);
 
-            if ($ticket->user_id) {
-                app(WorkflowEngine::class)->enqueue('ticket.created', [
-                    'user_id' => (int) $ticket->user_id,
-                    'customer_id' => (int) $ticket->user_id,
-                    'ticket_id' => (int) $ticket->id,
-                    'ticket_code' => (string) $ticket->ticket_code,
-                    'status' => (string) $ticket->status,
-                ], 'ticket:'.$ticket->id.':created');
-            }
-
             return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
         });
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
+
+        if ($ticket->user_id) {
+            try {
+                app(WorkflowEngine::class)->dispatch(
+                    'ticket.created',
+                    ['user_id' => (int) $ticket->user_id, 'customer_id' => (int) $ticket->user_id, 'ticket_id' => (int) $ticket->id, 'ticket_code' => $ticket->ticket_code],
+                    'ticket:'.$ticket->id.':created',
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
 
         if ($ticket->assignee) {
             $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee));
@@ -244,12 +246,12 @@ class SupportTicketService
         if ($notify && ! $isInternal) {
             $fresh = $ticket->fresh();
             if ($isStaff) {
-                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false));
+                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
                 if (($options['status'] ?? null) === 'closed') {
-                    $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed'));
+                    $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed', 'message:'.$message->id));
                 }
             } else {
-                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body));
+                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body, (int) $message->id));
             }
         }
 
@@ -275,9 +277,10 @@ class SupportTicketService
         }
         $ticket->update($update);
 
+        $transitionMessage = null;
         if ($systemNote && $actor) {
             $label = $ticket->fresh()->statusLabel();
-            $this->addMessage($ticket, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
+            $transitionMessage = $this->addMessage($ticket, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
                 'is_staff' => true,
                 'is_internal' => true,
                 'touch_status' => false,
@@ -286,7 +289,7 @@ class SupportTicketService
         }
 
         $fresh = $ticket->fresh();
-        $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $old, $status));
+        $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $old, $status, $transitionMessage ? 'message:'.$transitionMessage->id : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
 
         return $fresh;
     }
@@ -299,9 +302,10 @@ class SupportTicketService
 
         $ticket->update(['assigned_to' => $agent?->id]);
 
+        $assignmentMessage = null;
         if ($actor) {
             $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
-            $this->addMessage($ticket, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
+            $assignmentMessage = $this->addMessage($ticket, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
                 'is_staff' => true,
                 'is_internal' => true,
                 'touch_status' => false,
@@ -310,7 +314,7 @@ class SupportTicketService
         }
 
         $fresh = $ticket->fresh(['assignee']);
-        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent));
+        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $assignmentMessage ? 'message:'.$assignmentMessage->id : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
 
         return $fresh;
     }
