@@ -168,7 +168,7 @@ class WorkflowEngine
 
         $userId = filter_var($context['user_id'] ?? null, FILTER_VALIDATE_INT);
         if ($userId === false || $userId < 1) {
-            throw new \\InvalidArgumentException('Workflow event requires a valid user_id.');
+            throw new \InvalidArgumentException('Workflow event requires a valid user_id.');
         }
         if (! Schema::hasTable('farast_workflow_events')) {
             throw new \\RuntimeException('Workflow event ledger is not installed; refusing to lose a domain event.');
