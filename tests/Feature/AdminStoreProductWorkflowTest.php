@@ -8,6 +8,7 @@ use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductIntakeSession;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
 use App\Models\StorageManagedFile;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Services\UploadSecurityService;
 use App\Services\ProductKnowledgeService;
 use App\Services\ProductContentGenerationService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Queue;
@@ -60,7 +62,55 @@ class AdminStoreProductWorkflowTest extends TestCase
     }
 
 
-    public function test_product_editor_hides_internal_identifiers_and_generates_them_automatically(): void
+    private function readyIntakeSession(User $admin, string $type = 'digital_file'): StoreProductIntakeSession
+    {
+        Storage::fake('private');
+        $session = StoreProductIntakeSession::create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $admin->id,
+            'product_type' => $type,
+            'status' => 'review_pending',
+            'metadata' => [],
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        $managed = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('intake.txt', 'content inspected before product details'),
+            StorageManager::CRITICAL,
+            'products'
+        );
+
+        StoreProductIngestion::create([
+            'id' => (string) Str::uuid(),
+            'product_id' => null,
+            'intake_session_id' => $session->id,
+            'user_id' => $admin->id,
+            'status' => 'uploaded',
+            'staging_disk' => 'private',
+            'staging_path' => 'uploaded:'.$managed['managed_file_id'],
+            'storage_disk' => $managed['disk'],
+            'storage_path' => $managed['path'],
+            'managed_file_id' => $managed['managed_file_id'],
+            'original_name' => 'intake.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => strlen('content inspected before product details'),
+            'sha256' => hash('sha256', 'content inspected before product details'),
+            'inspection_json' => ['safe' => true, 'detected_type' => 'text'],
+            'is_primary' => $type === 'digital_file',
+            'expires_at' => now()->addMinutes(30),
+            'confirmed_at' => now(),
+            'supervisor_status' => 'completed',
+            'supervisor_review_json' => ['status' => 'completed', 'provider_status' => ['groq' => 'completed']],
+            'supervisor_reviewed_at' => now(),
+            'antivirus_status' => 'not_requested',
+        ]);
+
+        $session->update(['status' => 'files_reviewed']);
+
+        return $session->fresh();
+    }
+
+    public function test_new_product_entry_is_type_first_and_direct_creation_is_blocked(): void
     {
         $admin = $this->admin();
         $category = $this->category();
@@ -68,29 +118,39 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
             ->assertOk()
-            ->assertDontSee('شناسه محصول (SKU)')
-            ->assertDontSee('نشانی اختصاصی (Slug)')
-            ->assertDontSee('نوع مجوز استفاده')
-            ->assertSee('admin-store-product-wizard.js')
-            ->assertSee('product-upload-step')
-            ->assertSee('ورود به انتخاب فایل');
+            ->assertSee('data-product-intake', false)
+            ->assertSee('product-intake-session.js')
+            ->assertSee('نوع محصول را انتخاب کنید')
+            ->assertSee('data-intake-folder-picker', false)
+            ->assertSee('بازبینی ناظر')
+            ->assertDontSee('name="download_policy"', false);
+
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
-        $response = $this->actingAs($admin)->post(route('admin.store.store'), [
+        $this->actingAs($admin)
+            ->post(route('admin.store.store'), [
+                'category_id' => $category->id,
+                'title' => 'محصول بدون فرایند ورودی',
+                'type' => 'digital_file',
+                'price_rials' => 100000,
+                'status' => 'draft',
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseMissing('store_products', ['title' => 'محصول بدون فرایند ورودی']);
+
+        $legacyProduct = StoreProduct::create([
             'category_id' => $category->id,
-            'title' => 'محصول با شناسه خودکار',
+            'title' => 'محصول موجود برای ویرایش',
+            'slug' => 'existing-product-for-edit',
+            'sku' => 'EXISTING-EDIT-001',
             'type' => 'digital_file',
             'price_rials' => 100000,
             'status' => 'draft',
         ]);
-        $product = StoreProduct::query()->where('title', 'محصول با شناسه خودکار')->firstOrFail();
-        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
-        $this->assertNotEmpty($product->sku);
-        $this->assertStringStartsWith('PRD-', $product->sku);
-        $this->assertNotEmpty($product->slug);
 
         $this->actingAs($admin)
-            ->get(route('admin.store.edit', $product))
+            ->get(route('admin.store.edit', $legacyProduct))
             ->assertOk()
             ->assertSee('data-product-ingestion', false)
             ->assertSee('data-ingestion-input', false)
@@ -100,7 +160,6 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('بررسی امن فایل')
             ->assertSee('بررسی ساختار و امنیت');
     }
-
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
     {
         $admin = $this->admin();
@@ -270,83 +329,82 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('private-customer-file-v2.pdf');
     }
 
-    public function test_new_products_are_always_created_as_private_drafts_and_cover_path_is_not_mass_assignable(): void
+    public function test_direct_product_creation_cannot_bypass_intake_even_with_a_forged_cover_path(): void
     {
         $admin = $this->admin();
         $category = $this->category();
 
-        $response = $this->actingAs($admin)->post(
+        $this->actingAs($admin)->post(
             route('admin.store.store'),
             $this->payload($category, [
                 'status' => 'published',
                 'cover_path' => 'https://attacker.invalid/fake-cover.jpg',
             ])
-        );
+        )->assertStatus(409);
 
-        $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
-
-        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
-        $this->assertSame('draft', $product->status);
-        $this->assertNull($product->published_at);
-        $this->assertNull($product->cover_path);
+        $this->assertDatabaseMissing('store_products', ['sku' => 'TEST-PRODUCT-001']);
     }
-
-    public function test_creating_a_course_product_also_creates_its_course_catalog_record(): void
+    public function test_course_intake_starts_without_creating_a_product_or_course_shell(): void
     {
         $admin = $this->admin();
-        $category = $this->category();
 
-        $response = $this->actingAs($admin)->post(
-            route('admin.store.store'),
-            $this->payload($category, [
-                'title' => 'دوره آزمایشی',
-                'sku' => 'TEST-COURSE-001',
-                'type' => 'course',
-            ])
-        );
+        $response = $this->actingAs($admin)->postJson(route('admin.store.intakes.start'), [
+            'product_type' => 'course',
+        ])->assertCreated();
 
-        $product = StoreProduct::query()->where('sku', 'TEST-COURSE-001')->firstOrFail();
-
-        $response->assertRedirect(route('admin.store.course.edit', $product));
-        $this->assertDatabaseHas('store_courses', ['product_id' => $product->id]);
-        $this->assertSame('draft', $product->status);
+        $sessionId = $response->json('intake_session_id');
+        $this->assertDatabaseHas('store_product_intake_sessions', [
+            'id' => $sessionId,
+            'user_id' => $admin->id,
+            'product_type' => 'course',
+            'status' => 'selecting_files',
+            'product_id' => null,
+        ]);
+        $this->assertDatabaseCount('store_products', 0);
+        $this->assertDatabaseCount('store_courses', 0);
     }
-
-    public function test_product_creation_synchronizes_tags_and_related_products(): void
+    public function test_product_submission_after_file_review_synchronizes_tags_and_keeps_product_private(): void
     {
+        Queue::fake();
         $admin = $this->admin();
         $category = $this->category();
         $tag = StoreTag::create(['name' => 'طراحی', 'slug' => 'design']);
-        $related = StoreProduct::create([
-            'category_id' => $category->id,
-            'title' => 'محصول مکمل',
-            'slug' => 'related-product',
-            'sku' => 'RELATED-PRODUCT-001',
-            'type' => 'digital_file',
-            'price_rials' => 50000,
-            'status' => 'draft',
-        ]);
+        $session = $this->readyIntakeSession($admin);
 
         $response = $this->actingAs($admin)->post(
-            route('admin.store.store'),
+            route('admin.store.intakes.submit', $session),
             $this->payload($category, [
+                'title' => 'محصول ثبت‌شده پس از بررسی',
+                'sku' => 'TEST-PRODUCT-001',
                 'tag_ids' => [$tag->id],
-                'related_product_ids' => [$related->id],
             ])
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
         $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
+        $this->assertSame('draft', $product->status);
+        $this->assertNull($product->published_at);
         $this->assertDatabaseHas('store_product_tag', [
             'product_id' => $product->id,
             'tag_id' => $tag->id,
         ]);
-        $this->assertDatabaseHas('store_product_related', [
+        $this->assertDatabaseHas('store_product_files', [
             'product_id' => $product->id,
-            'related_product_id' => $related->id,
+            'purpose' => 'product_download',
+            'scan_status' => 'structural',
+            'is_primary' => true,
+        ]);
+        $this->assertDatabaseHas('store_product_ingestions', [
+            'intake_session_id' => $session->id,
+            'product_id' => $product->id,
+            'status' => 'attached',
+        ]);
+        $this->assertDatabaseHas('store_product_intake_sessions', [
+            'id' => $session->id,
+            'product_id' => $product->id,
+            'status' => 'submitted',
         ]);
     }
-
     public function test_admin_can_create_a_tag_from_the_product_editor(): void
     {
         $this->actingAs($this->admin())
@@ -451,18 +509,24 @@ class AdminStoreProductWorkflowTest extends TestCase
     {
         $admin = $this->admin();
         $category = $this->category();
+        $session = StoreProductIntakeSession::create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $admin->id,
+            'product_type' => 'digital_file',
+            'status' => 'files_reviewed',
+            'expires_at' => now()->addHours(2),
+        ]);
 
         $this->actingAs($admin)
-            ->from(route('admin.store.create'))
-            ->post(route('admin.store.store'), $this->payload($category, [
+            ->from(route('admin.store.intakes.details', $session))
+            ->post(route('admin.store.intakes.submit', $session), $this->payload($category, [
                 'compare_at_price_rials' => 125000,
             ]))
-            ->assertRedirect(route('admin.store.create'))
+            ->assertRedirect(route('admin.store.intakes.details', $session))
             ->assertSessionHasErrors('compare_at_price_rials');
 
         $this->assertDatabaseMissing('store_products', ['sku' => 'TEST-PRODUCT-001']);
     }
-
     public function test_last_primary_file_cannot_be_deleted_while_product_is_published(): void
     {
         Storage::fake('private');
@@ -755,7 +819,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('reader_only', $snapshot['download_policy']);
     }
 
-    public function test_delivery_policy_is_exposed_and_reader_only_publication_requires_a_ready_reader(): void
+    public function test_delivery_policy_is_exposed_after_intake_and_reader_only_publication_requires_a_ready_reader(): void
     {
         Storage::fake('private');
         $admin = $this->admin();
@@ -764,20 +828,8 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
             ->assertOk()
-            ->assertSee('name="download_policy"', false)
-            ->assertSee('فقط مطالعه آنلاین');
-
-        $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
-            'title' => 'محصول سیاست تحویل',
-            'sku' => 'DELIVERY-POLICY-001',
-            'download_policy' => 'reader_only',
-        ]))->assertRedirect();
-
-        $this->assertDatabaseHas('store_products', [
-            'sku' => 'DELIVERY-POLICY-001',
-            'download_policy' => 'reader_only',
-            'status' => 'draft',
-        ]);
+            ->assertDontSee('name="download_policy"', false)
+            ->assertSee('data-product-intake', false);
 
         $product = StoreProduct::create([
             'category_id' => $category->id,
@@ -789,6 +841,12 @@ class AdminStoreProductWorkflowTest extends TestCase
             'download_policy' => 'reader_only',
             'status' => 'draft',
         ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('name="download_policy"', false)
+            ->assertSee('فقط مطالعه آنلاین');
 
         $path = 'store/products/'.$product->id.'/reader-only.pdf';
         $bytes = 'private-reader-source';
@@ -806,7 +864,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'sha256' => $hash,
             'is_primary' => true,
             'is_active' => true,
-            'scan_status' => 'clean',
+            'scan_status' => 'structural',
             'scan_engine' => 'farast_static_v1',
             'scanned_at' => now(),
         ]);
@@ -856,7 +914,6 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('published', $product->fresh()->status);
         $this->assertSame('reader_only', $product->fresh()->download_policy);
     }
-
     public function test_replacing_primary_file_unpublishes_reader_only_product_until_reprocessing_finishes(): void
     {
         Storage::fake('private');
@@ -936,7 +993,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'sha256' => $newHash,
             'is_primary' => true,
             'is_active' => true,
-            'scan_status' => 'clean',
+            'scan_status' => 'structural',
         ]);
         $this->assertDatabaseHas('store_product_ingestions', [
             'id' => $ingestion->id,
