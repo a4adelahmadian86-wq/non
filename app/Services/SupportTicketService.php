@@ -246,12 +246,12 @@ class SupportTicketService
         if ($notify && ! $isInternal) {
             $fresh = $ticket->fresh();
             if ($isStaff) {
-                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false));
+                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
                 if (($options['status'] ?? null) === 'closed') {
                     $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed'));
                 }
             } else {
-                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body));
+                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body, (int) $message->id));
             }
         }
 
