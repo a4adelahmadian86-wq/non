@@ -32,10 +32,10 @@ async function signInAsSeededEmployee(page) {
   const phoneResponse = await phoneResponsePromise;
   expect(phoneResponse.ok()).toBeTruthy();
 
-  await expect(page).toHaveURL(/\\/login\\/password/);
+  await expect(page).toHaveURL(/\/login\/password/);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'ورود به حساب' }).click();
-  await expect(page).toHaveURL(/\\/dashboard(?:[?#].*)?$/);
+  await expect(page).toHaveURL(/\/dashboard(?:[?#].*)?$/);
 }
 
 async function advanceProductWizardToReview(page) {
@@ -189,7 +189,7 @@ test.describe('Real admin product workflow', () => {
 
   test('employee can use the dashboard but cannot open the role permission console', async ({ page }) => {
     await signInAsSeededEmployee(page);
-    await expect(page).toHaveURL(/\\/dashboard/);
+    await expect(page).toHaveURL(/\/dashboard/);
     const response = await page.goto('/admin/access');
     expect(response?.status()).toBe(403);
   });
@@ -221,7 +221,7 @@ test.describe('Real admin product workflow', () => {
     await checkoutForm.getByRole('button', { name: 'دریافت رایگان' }).click();
     const checkoutResponse = await checkoutResponsePromise;
     expect(checkoutResponse.status()).toBe(302);
-    await expect(page).toHaveURL(/\\/library(?:[?#].*)?$/);
+    await expect(page).toHaveURL(/\/library(?:[?#].*)?$/);
     await expect(page.locator('.store-alert.success[role="status"]')).toContainText('سفارش رایگان ثبت شد');
 
     const downloadButton = page.locator('.library-download');
