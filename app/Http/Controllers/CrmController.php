@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreDownload;
+use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreLibraryItem;
 use App\Models\WalletTransaction;
 use App\Models\Ticket;
@@ -12,6 +14,7 @@ use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
+use App\Services\StoreCourseProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +71,7 @@ class CrmController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $customer, AdminConsoleService $console)
+    public function show(Request $request, int $customer, AdminConsoleService $console, StoreCourseProgressService $courseProgress)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
 
@@ -141,6 +144,35 @@ class CrmController extends Controller
                 'created_at' => $download->created_at,
             ]);
 
+        $courseEnrollments = StoreCourseEnrollment::query()
+            ->with(['product:id,title', 'libraryItem:id,revoked_at', 'course.sections.lessons', 'progress'])
+            ->where('user_id', $user->id)
+            ->latest()
+            ->limit(30)
+            ->get()
+            ->map(function (StoreCourseEnrollment $enrollment) use ($courseProgress) {
+                $progress = $courseProgress->summarize($enrollment);
+
+                return [
+                    'type' => 'course_enrollment',
+                    'id' => $enrollment->id,
+                    'title' => $enrollment->product?->title ?? 'دوره آموزشی',
+                    'status' => $enrollment->libraryItem?->revoked_at
+                        ? 'revoked'
+                        : ($enrollment->expires_at && $enrollment->expires_at->lte(now())
+                            ? 'expired'
+                            : ($enrollment->completed_at ? 'completed' : 'active')),
+                    'completed_lessons_count' => $progress['completed'],
+                    'published_lessons_count' => $progress['total'],
+                    'progress_percent' => $progress['progress_percent'],
+                    'last_lesson_id' => $enrollment->last_lesson_id,
+                    'starts_at' => $enrollment->starts_at,
+                    'expires_at' => $enrollment->expires_at,
+                    'completed_at' => $enrollment->completed_at,
+                    'created_at' => $enrollment->created_at,
+                ];
+            });
+
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
             ? WalletTransaction::query()->where('wallet_id', $wallet->id)->latest()->limit(30)->get()
@@ -157,7 +189,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -190,6 +222,12 @@ class CrmController extends Controller
                 'typing_documents_count' => $user->documents_count,
                 'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
                 'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
+                'course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->count(),
+                'completed_course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->whereNotNull('completed_at')->count(),
+                'completed_course_lessons_count' => StoreCourseLessonProgress::query()
+                    ->whereNotNull('completed_at')
+                    ->whereHas('enrollment', fn ($query) => $query->where('user_id', $user->id))
+                    ->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
