@@ -9,7 +9,7 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
-    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
+    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false, ?string $eventWorkflowLeaseToken = null): int
     {
         $runId = DB::table('farast_workflow_runs')->insertGetId([
             'workflow_id' => $workflowId,
@@ -21,7 +21,7 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual): void {
+            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual, $eventWorkflowLeaseToken): void {
                 // Serialize execution against workflow edits, disabling and deletion.
                 $workflow = DB::table('farast_workflows')
                     ->where('id', $workflowId)
@@ -49,14 +49,20 @@ class WorkflowEngine
 
                 // Commit side effects and the event-workflow completion marker together.
                 if ($eventWorkflowId !== null) {
+                    if (! $eventWorkflowLeaseToken) {
+                        throw new \RuntimeException('Workflow event lease token is missing.');
+                    }
+
                     $updated = DB::table('farast_workflow_event_workflows')
                         ->where('id', $eventWorkflowId)
                         ->where('workflow_id', $workflowId)
                         ->where('status', 'running')
+                        ->where('lease_token', $eventWorkflowLeaseToken)
                         ->update([
                             'status' => 'completed',
                             'last_error' => null,
                             'finished_at' => now(),
+                            'lease_token' => null,
                             'updated_at' => now(),
                         ]);
 
@@ -318,7 +324,8 @@ class WorkflowEngine
 
         $completedNow = 0;
         foreach ($mappings as $mapping) {
-            $claimed = DB::transaction(function () use ($mapping): bool {
+            $leaseToken = bin2hex(random_bytes(24));
+            $claimed = DB::transaction(function () use ($mapping, $leaseToken): bool {
                 $locked = DB::table('farast_workflow_event_workflows')
                     ->where('id', $mapping->id)
                     ->lockForUpdate()
@@ -339,6 +346,7 @@ class WorkflowEngine
                     'last_error' => null,
                     'started_at' => now(),
                     'finished_at' => null,
+                    'lease_token' => $leaseToken,
                     'updated_at' => now(),
                 ]);
 
@@ -353,15 +361,20 @@ class WorkflowEngine
                 $this->run((int) $mapping->workflow_id, array_merge($context, [
                     'event_type' => $event->event_type,
                     'event_id' => (int) $event->id,
-                ]), (int) $mapping->id);
+                ]), (int) $mapping->id, false, $leaseToken);
                 $completedNow++;
             } catch (\Throwable $exception) {
-                DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
-                    'status' => 'failed',
-                    'last_error' => mb_substr($exception->getMessage(), 0, 4000),
-                    'finished_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                DB::table('farast_workflow_event_workflows')
+                    ->where('id', $mapping->id)
+                    ->where('status', 'running')
+                    ->where('lease_token', $leaseToken)
+                    ->update([
+                        'status' => 'failed',
+                        'last_error' => mb_substr($exception->getMessage(), 0, 4000),
+                        'finished_at' => now(),
+                        'lease_token' => null,
+                        'updated_at' => now(),
+                    ]);
                 report($exception);
             }
         }
