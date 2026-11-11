@@ -3,7 +3,7 @@
 use App\Http\Controllers\AdminAccessController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'permission:access.manage'])
+Route::middleware(['auth', 'throttle:30,1', 'permission:access.manage'])
     ->prefix('admin/access-control')
     ->name('admin.access-control.')
     ->group(function (): void {
