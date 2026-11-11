@@ -334,7 +334,7 @@ class AdvancedAccessControlTest extends TestCase
 
         $this->assertSame(
             [$manager->id],
-            \App\Http\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team')
+            \App\Http\Middleware\ResolveAdminScope::visibleUserIds($manager, 'team')
         );
 
         $this->actingAs($manager);
@@ -380,7 +380,7 @@ class AdvancedAccessControlTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $visibleIds = \App\Http\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team');
+        $visibleIds = \App\Http\Middleware\ResolveAdminScope::visibleUserIds($manager, 'team');
         $this->assertNotContains($foreignMember->id, $visibleIds);
 
         $authorization = app(AuthorizationService::class);
@@ -420,7 +420,7 @@ class AdvancedAccessControlTest extends TestCase
         $request->setUserResolver(fn () => $employee);
 
         $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
-        app(\App\Http\Middleware\\EnsureResourcePermission::class)->handle(
+        app(\App\Http\Middleware\EnsureResourcePermission::class)->handle(
             $request,
             fn () => response('team supervisor is not the owner'),
             'access.audit'
@@ -449,7 +449,7 @@ class AdvancedAccessControlTest extends TestCase
         $request->setUserResolver(fn () => $employee);
 
         $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
-        app(\App\Http\Middleware\\EnsureResourcePermission::class)->handle(
+        app(\App\Http\Middleware\EnsureResourcePermission::class)->handle(
             $request,
             fn () => response('creator must not receive owner access'),
             'documents.view'
@@ -497,7 +497,7 @@ class AdvancedAccessControlTest extends TestCase
             'team_id' => $teamOwner->id,
         ]));
 
-        $visibleUsers = \App\Http\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team');
+        $visibleUsers = \App\Http\Middleware\ResolveAdminScope::visibleUserIds($manager, 'team');
         $this->assertContains($memberA->id, $visibleUsers);
         $this->assertContains($memberB->id, $visibleUsers);
 
