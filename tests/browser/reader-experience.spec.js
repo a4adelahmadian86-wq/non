@@ -152,7 +152,7 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
         '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section></aside>' +
         '<main class="farast-reader-canvas"><article class="farast-reader-page-item is-active is-pdf" data-index="0">' +
           '<div class="farast-reader-page-content"><div class="farast-pdf-document" data-pdf-url="/reader-fixture.pdf">' +
-            '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div>' +
+            '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div><div class="farast-pdf-annotation-layer annotationLayer"></div>' +
             '<div class="farast-pdf-continuous-pages" hidden></div><div class="farast-pdf-loading" role="status">در حال آماده‌سازی PDF…</div>' +
           '</div></div></article></main></div></section>'
   );
