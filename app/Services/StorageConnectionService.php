@@ -29,7 +29,10 @@ class StorageConnectionService
             }
         } elseif ($volume->driver === 'local') {
             $root = storage_path('app/storage-volumes/'.$volume->id);
-            if (! is_dir($root) && ! mkdir($root, 0775, true) && ! is_dir($root)) {
+            if (is_link($root)) {
+                throw new RuntimeException('مسیر ریشه فضای ذخیره‌سازی محلی پیوند نمادین است و ایمن نیست.');
+            }
+            if (! is_dir($root) && ! mkdir($root, 0750, true) && ! is_dir($root)) {
                 throw new RuntimeException('ایجاد مسیر فضای ذخیره‌سازی محلی ممکن نشد.');
             }
             $probe = $root.'/.farast-health-'.bin2hex(random_bytes(12)).'.txt';
