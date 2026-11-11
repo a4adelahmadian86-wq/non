@@ -15,12 +15,18 @@ class BrowserE2ESeeder extends Seeder
             throw new RuntimeException('E2E_EMPLOYEE_PASSWORD must be set for browser role tests.');
         }
 
+        $organization = Organization::updateOrCreate(
+            ['slug' => 'farast-browser-e2e'],
+            ['name' => 'سازمان آزمون رابط فراست', 'status' => 'active']
+        );
+
         User::updateOrCreate(
             ['mobile' => '09150000001'],
             [
                 'name' => 'کارمند آزمون رابط',
                 'password' => $password,
                 'role' => User::ROLE_EMPLOYEE,
+                'organization_id' => $organization->id,
                 'is_verified' => true,
                 'is_blocked' => false,
             ]
