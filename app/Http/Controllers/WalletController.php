@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Wallet;
+use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
@@ -185,7 +186,7 @@ class WalletController extends Controller
                 abort_unless($lockedOrder->status === 'pending' && $lockedPayment->status === 'pending', 409, 'این تراکنش قبلاً تعیین تکلیف شده است.');
 
                 // Serialize first-wallet creation for concurrent top-ups belonging to this user.
-                \\App\\Models\\User::query()->whereKey($lockedOrder->user_id)->lockForUpdate()->firstOrFail();
+                User::query()->whereKey($lockedOrder->user_id)->lockForUpdate()->firstOrFail();
                 $wallet = Wallet::query()->firstOrCreate(
                     ['user_id' => $lockedOrder->user_id],
                     ['balance_rials' => 0]
