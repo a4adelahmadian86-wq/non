@@ -672,14 +672,14 @@
           voiceCaption.textContent='سلامت سرویس چند دقیقه پیش تأیید شده است؛ بدون بیدارسازی دوباره وصل می‌شوم.';
           status.textContent='سرویس آماده است؛ در حال برقراری اتصال گفت‌وگوی زنده.';
         }else{
-          var wakeDeadline=Date.now()+90000,wakeReady=false,wakeFailure='سرویس هنوز پاسخ آماده نداده است.';
+          var wakeDeadline=Date.now()+180000,wakeReady=false,wakeFailure='سرویس هنوز پاسخ آماده نداده است.';
           voiceTitle.textContent='در حال بیدارکردن سرویس رایگان';
           voiceCaption.textContent='سرویس رایگان ممکن است پس از بی‌کاری بخوابد؛ فقط در صورت نیاز آن را بیدار می‌کنم. میکروفون تا آماده‌شدن سرویس ضبطی ارسال نمی‌کند.';
           status.textContent='در حال بررسی سلامت درگاه صوتی رایگان؛ لطفاً صفحه را باز نگه دار.';
           while(!wakeReady&&Date.now()<wakeDeadline){
             if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
             var wakeController=new AbortController();
-            var wakeTimer=window.setTimeout(function(){wakeController.abort();},Math.min(60000,Math.max(1000,wakeDeadline-Date.now())));
+            var wakeTimer=window.setTimeout(function(){wakeController.abort();},Math.min(65000,Math.max(1000,wakeDeadline-Date.now())));
             try{
               var wakeResponse=await fetch(healthUrl,{method:'GET',mode:'same-origin',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:wakeController.signal});
               var wakeData=await wakeResponse.json().catch(function(){return {};});
@@ -689,7 +689,7 @@
             finally{window.clearTimeout(wakeTimer);}
             if(!wakeReady){
               voiceCaption.textContent='سرویس رایگان هنوز در حال راه‌اندازی است؛ بررسی سلامت را خودکار تکرار می‌کنم.';
-              await new Promise(function(resolve){window.setTimeout(resolve,1500);});
+              await new Promise(function(resolve){window.setTimeout(resolve,2000);});
             }
           }
           if(!wakeReady)throw new Error('سرویس صوتی رایگان Render پس از تلاش برای بیدارشدن آماده نشد؛ اتصال اینترنت را بررسی کن و دوباره تلاش کن. '+wakeFailure);
