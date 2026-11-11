@@ -673,7 +673,8 @@ class AdminStoreController extends Controller
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
         $canPublishProduct = app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.products.publish');
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublishProduct'));
+        $canManagePublication = $canPublishProduct && in_array(auth()->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true);
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublishProduct', 'canManagePublication'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
