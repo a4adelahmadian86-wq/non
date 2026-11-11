@@ -118,6 +118,47 @@ class UnifiedAuthorizationTest extends TestCase
         ));
     }
 
+    public function test_team_assignment_limits_console_scope_and_record_access(): void
+    {
+        $organization = Organization::create(['name' => 'Scoped', 'slug' => 'scoped', 'status' => 'active']);
+        $team = Team::create(['organization_id' => $organization->id, 'name' => 'Ops', 'slug' => 'ops']);
+        $user = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $user->teams()->attach($team->id, ['team_role' => 'employee']);
+        $permission = $this->permission('reports.team');
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => 'team_reporter',
+            'name' => 'Team reporter',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::create(['role' => 'team_reporter', 'permission_id' => $permission->id]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        self::assertSame('team', app(AuthorizationService::class)->effectiveScope($user));
+        self::assertSame([$team->id], app(AuthorizationService::class)->effectiveTeamIds($user));
+        self::assertSame('team', \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($user));
+        self::assertTrue(app(AuthorizationService::class)->allowsRecord(
+            $user,
+            'reports.team',
+            $this->record(['team_id' => $team->id]),
+        ));
+        self::assertFalse(app(AuthorizationService::class)->allowsRecord(
+            $user,
+            'reports.team',
+            $this->record(['team_id' => $team->id + 100]),
+        ));
+    }
+
     public function test_expired_direct_allow_does_not_grant_access(): void
     {
         $user = User::factory()->create(['role' => 'employee']);
