@@ -108,8 +108,7 @@ class FarastObservabilityService
 
         try {
             if ($privateRoot !== '') {
-                $directory = is_dir($privateRoot) ? $privateRoot : dirname($privateRoot);
-                $result['private_root_writable'] = is_dir($directory) && is_writable($directory);
+                $result['private_root_writable'] = is_dir($privateRoot) && is_writable($privateRoot);
                 $result['status'] = $result['private_root_writable'] ? 'healthy' : 'critical';
             }
 
