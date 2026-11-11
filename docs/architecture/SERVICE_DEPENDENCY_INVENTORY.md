@@ -67,3 +67,18 @@
 | `ProductContentGenerationService` | `app/Services/ProductContentGenerationService.php` | `ProductKnowledgeService`, `EditorAiAssistService`, `ProductContentPrivacyFilter` | `StoreCategory`, `StoreProduct`, `User` | — | — | `__construct()`, `readiness()`, `generate()`, `currentSourceFingerprints()`, `signature()`, `assertFreshProvenance()`, `validateFieldEvidence()` | 0 | 0 |
 | `ProductContentPrivacyFilter` | `app/Services/ProductContentPrivacyFilter.php` | — | — | — | — | `sanitize()`, `sanitizeText()` | 0 | 0 |
 | `ProductDocumentAudioService` | `app/Services/ProductDocumentAudioService.php` | — | — | — | — | `configured()`, `generate()` | 0 | 0 |
+
+| `ProductDocumentProcessingState` | `app/Services/ProductDocumentProcessingState.php` | — | — | — | — | `derive()` | 0 | 0 |
+| `ProductDocumentRetryService` | `app/Services/ProductDocumentRetryService.php` | `AuditEventService`, `ProductSupervisorClient` | `StoreProductDocument`, `StoreProductFile` | — | private | `__construct()`, `retry()` | 1 | 1 |
+| `ProductKnowledgeService` | `app/Services/ProductKnowledgeService.php` | — | `StoreProduct` | — | — | `contextForProduct()`, `contentGenerationContext()` | 0 | 0 |
+| `ProductLifecycleHealthService` | `app/Services/ProductLifecycleHealthService.php` | `ProductPublicationReadiness` | `StoreProduct`, `StoreProductDocument`, `StoreProductIngestion` | `store_products`, `store_product_ingestions`, `store_product_documents` | — | `__construct()`, `snapshot()` | 1 | 0 |
+| `ProductPublicationReadiness` | `app/Services/ProductPublicationReadiness.php` | — | `StoreProduct` | — | — | `hasReadyPrimaryReader()` | 0 | 0 |
+| `ProductRelatedProductsService` | `app/Services/ProductRelatedProductsService.php` | — | `StoreProduct` | — | — | `recommend()` | 0 | 0 |
+| `ProductSupervisorClient` | `app/Services/ProductSupervisorClient.php` | — | — | — | — | `configured()`, `review()`, `reviewFile()` | 0 | 0 |
+| `ProductSupervisorSnapshotBuilder` | `app/Services/ProductSupervisorSnapshotBuilder.php` | — | `StoreCourseLesson`, `StoreProduct` | — | — | `build()`, `fingerprint()` | 0 | 0 |
+| `ProfessionalCommerceService` | `app/Services/ProfessionalCommerceService.php` | `CommerceAuthorizationService`, `SubscriptionEntitlementService` | `FarastCommercialPlan`, `FarastCommercialProduct`, `FarastEntitlement`, `FarastPriceQuote`, `FarastSubscription`, `FarastUsageCounter`, `User` | — | — | `__construct()`, `quote()`, `createProduct()`, `createPlan()`, `subscribe()`, `grantTemporaryPurchase()`, `recordUsageCounter()` | 1 | 0 |
+| `ProjectBillingService` | `app/Services/ProjectBillingService.php` | `PricingService` | `FarastProject`, `TypingDocument`, `Order`, `User` | `farast_subscriptions`, `farast_usage_counters` | — | `__construct()`, `quote()`, `entitlement()`, `includedAllowance()`, `applyQuote()`, `markPaid()` | 2 | 0 |
+| `ProjectInterviewService` | `app/Services/ProjectInterviewService.php` | `ApplicationRegistry` | — | — | — | `__construct()`, `nextQuestion()`, `suggestTemplate()`, `buildContext()` | 0 | 0 |
+| `PromotionService` | `app/Services/PromotionService.php` | — | `FarastCoupon`, `FarastCouponRedemption`, `FarastPromotion`, `User` | — | — | `trustedAdjustments()` | 0 | 0 |
+| `ProviderConnectionHealth` | `app/Services/ProviderConnectionHealth.php` | — | `SiteSetting` | — | — | `recordSuccess()`, `recordFailure()`, `state()` | 0 | 0 |
+| `ProviderRegistry` | `app/Services/ProviderRegistry.php` | `AiProviderRegistry`, `VoiceProviderRouter`, `ProviderConnectionHealth` | `SiteSetting`, `VoiceProviderAccount` | — | — | `__construct()`, `catalog()`, `forCapability()` | 0 | 0 |
