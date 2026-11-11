@@ -50,6 +50,7 @@
 
   let pdfjsPromise=null;
   const getPdfjs=()=>{
+    if(root.dataset.readerPdfEngine==='missing')return Promise.reject(new Error('PDF_ENGINE_MISSING'));
     if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
     if(!pdfjsPromise){
       pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
@@ -674,7 +675,8 @@
   const showPdfError=error=>{
     const name=String(error?.name||'');
     let message='بارگذاری سند انجام نشد. اتصال را بررسی کنید یا فایل PDF دیگری را امتحان کنید.';
-    if(name==='InvalidPDFException'||name==='FormatError')message='ساختار این فایل PDF معتبر نیست یا بخشی از آن آسیب دیده است.';
+    if(error?.message==='PDF_ENGINE_MISSING')message='موتور PDF محلی روی این سرور کامل نصب نشده است؛ فایل‌های PDF.js، Worker، نقشه‌های CMap و فونت‌های استاندارد باید در مسیر محلی برنامه قرار داشته باشند.';
+    else if(name==='InvalidPDFException'||name==='FormatError')message='ساختار این فایل PDF معتبر نیست یا بخشی از آن آسیب دیده است.';
     else if(name==='MissingPDFException')message='فایل PDF دیگر در دسترس نیست یا نشانی آن معتبر نیست.';
     else if(name==='PasswordException')message='رمز عبور فایل PDF پذیرفته نشد یا دسترسی به سند ممکن نیست.';
     else if(name==='UnexpectedResponseException')message='سرور پاسخ قابل‌استفاده‌ای برای فایل PDF ارسال نکرد.';
