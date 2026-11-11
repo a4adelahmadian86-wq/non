@@ -90,6 +90,8 @@ class FarastObservabilityService
                 ->all();
 
             return ['available' => true, 'items' => $items];
+
+            return ['available' => true, 'items' => $items];
         } catch (Throwable $exception) {
             $this->recordProbeFailure('incident_history', $exception);
 
