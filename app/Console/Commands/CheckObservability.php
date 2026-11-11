@@ -10,6 +10,7 @@ use App\Services\NotificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -129,6 +130,71 @@ class CheckObservability extends Command
         return $severity === 'critical' ? self::FAILURE : self::SUCCESS;
     }
 
+
+    private function deliverWebhook(
+        string $severity,
+        string $title,
+        string $body,
+        array $snapshot,
+        array $affected,
+        ?string $incidentId
+    ): void {
+        $url = trim((string) config('observability.webhook.url', ''));
+        if ($url === '') {
+            return;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || empty($parts['host'])) {
+            Log::error('farast.observability.webhook_misconfigured', [
+                'reason' => 'https_required',
+            ]);
+            return;
+        }
+
+        try {
+            $request = Http::acceptJson()
+                ->asJson()
+                ->connectTimeout(2)
+                ->timeout(4)
+                ->withOptions(['allow_redirects' => false]);
+
+            $token = trim((string) config('observability.webhook.token', ''));
+            if ($token !== '') {
+                $request = $request->withToken($token);
+            }
+
+            $response = $request->post($url, [
+                'source' => 'FARAST',
+                'incident_id' => $incidentId,
+                'severity' => $severity,
+                'title' => $title,
+                'message' => $body,
+                'status' => $snapshot['status'] ?? 'unknown',
+                'affected_components' => $affected,
+                'correlation_id' => app(FarastTraceContext::class)->current()['correlation_id'],
+                'occurred_at' => now()->toIso8601String(),
+            ]);
+
+            if (! $response->successful()) {
+                Log::warning('farast.observability.webhook_delivery_failed', [
+                    'http_status' => $response->status(),
+                ]);
+                return;
+            }
+
+            Log::info('farast.observability.webhook_delivered', [
+                'incident_id' => $incidentId,
+                'severity' => $severity,
+            ]);
+        } catch (Throwable $exception) {
+            // Never log the destination URL or response body; webhook URLs commonly contain secrets.
+            Log::warning('farast.observability.webhook_delivery_failed', [
+                'exception_class' => get_class($exception),
+            ]);
+        }
+    }
+
     private function emitAlert(
         string $severity,
         string $title,
@@ -145,8 +211,9 @@ class CheckObservability extends Command
             }
         }
 
+        $incidentEvent = null;
         try {
-            $auditEvents->record(
+            $incidentEvent = $auditEvents->record(
                 'observability.incident.'.$severity,
                 null,
                 null,
@@ -166,6 +233,8 @@ class CheckObservability extends Command
                 'exception_class' => get_class($exception),
             ]);
         }
+
+        $this->deliverWebhook($severity, $title, $body, $snapshot, $affected, $incidentEvent?->event_id);
 
         $userIds = (array) config('observability.alerts.user_ids', []);
         if ($userIds === []) {
