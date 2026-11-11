@@ -121,6 +121,12 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
         $share = DB::table('farast_document_shares')->where('token', $token)->first();
         $this->assertNotNull($share);
 
+        $originalExpiry = now()->addHour()->startOfSecond();
+        DB::table('farast_document_shares')
+            ->where('id', $share->id)
+            ->update(['expires_at' => $originalExpiry]);
+        $share = DB::table('farast_document_shares')->where('id', $share->id)->first();
+
         $this->get('/shared/documents/'.$token)
             ->assertOk()
             ->assertSee('نسخه نخست برای بازیابی');
@@ -131,6 +137,8 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
             'status' => 'trashed',
         ]);
         $this->get('/shared/documents/'.$token)->assertNotFound();
+        $trashedShare = DB::table('farast_document_shares')->where('id', $share->id)->first();
+        $this->assertSame($originalExpiry->toDateTimeString(), $trashedShare->expires_at);
 
         $this->post(route('platform.documents.restore', $document->id))->assertRedirect();
         $this->assertDatabaseHas('farast_documents', [
