@@ -31,6 +31,7 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         $course->load(['sections.lessons.resources']);
+        $product->load('files');
 
         return view('admin.store.course', compact('product', 'course'));
     }
@@ -134,6 +135,41 @@ class AdminCourseController extends Controller
         $lesson->delete();
 
         return back()->with('status', 'جلسه و منابع آن حذف شدند.');
+    }
+
+    public function attachIntakeAsset(Request $request, StoreProduct $product, StoreProductFile $file)
+    {
+        $course = $this->assertCourse($product);
+        abort_unless((int) $file->product_id === (int) $product->id
+            && $file->purpose === 'course_asset'
+            && $file->is_active
+            && $file->course_lesson_id === null, 404);
+
+        $data = $request->validate([
+            'lesson_id' => 'required|integer|exists:store_course_lessons,id',
+        ]);
+        $lesson = StoreCourseLesson::query()->whereKey($data['lesson_id'])
+            ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
+            ->firstOrFail();
+
+        DB::transaction(function () use ($product, $file, $lesson) {
+            $lockedFile = StoreProductFile::query()->whereKey($file->id)
+                ->where('product_id', $product->id)
+                ->where('purpose', 'course_asset')
+                ->whereNull('course_lesson_id')
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedFile->update([
+                'course_lesson_id' => $lesson->id,
+                'purpose' => 'lesson_resource',
+            ]);
+            $this->audit('store.course.intake_asset_attached', $product, [
+                'file_id' => $lockedFile->id,
+                'lesson_id' => $lesson->id,
+            ]);
+        });
+
+        return back()->with('status', 'منبع اولیه به جلسه انتخاب‌شده متصل شد.');
     }
 
     public function uploadResource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, UploadSecurityService $security, StorageManager $storage)
