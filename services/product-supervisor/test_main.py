@@ -38,6 +38,17 @@ def test_review_requires_dedicated_bearer_token(monkeypatch):
     assert response.status_code == 401
 
 
+def test_file_review_contract_allows_intake_before_product_title_exists():
+    schema = client.get("/openapi.json").json()
+    request_schema = schema["paths"]["/v1/reviews/files"]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]
+    schema_name = request_schema["$ref"].rsplit("/", 1)[-1]
+    form_schema = schema["components"]["schemas"][schema_name]
+
+    assert "product_title" not in form_schema.get("required", [])
+    assert "product_id" in form_schema.get("required", [])
+    assert "product_type" in form_schema.get("required", [])
+
+
 def test_review_requires_provider_configuration(monkeypatch):
     monkeypatch.setenv("SUPERVISOR_API_TOKEN", "dedicated-secret")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
