@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-class StorageProductReferenceTest extends TestCase
+class StorageProductReferenceSyncTest extends TestCase
 {
     use RefreshDatabase;
 
