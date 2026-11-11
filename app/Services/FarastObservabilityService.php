@@ -23,7 +23,7 @@ class FarastObservabilityService
         $productServiceStatuses = array_column($productServices, 'status');
         $productServiceStatus = array_intersect($productServiceStatuses, ['unavailable', 'misconfigured']) !== []
             ? 'critical'
-            : (array_intersect($productServiceStatuses, ['degraded', 'not_configured']) !== [] ? 'warning' : 'healthy');
+            : (array_intersect($productServiceStatuses, ['degraded', 'not_configured', 'unknown']) !== [] ? 'warning' : 'healthy');
 
         $components = [
             'database' => $this->database(),
