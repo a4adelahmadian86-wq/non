@@ -125,15 +125,12 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
             ->assertOk()
             ->assertSee('نسخه نخست برای بازیابی');
 
-        $this->delete(route('platform.documents.shares.destroy', $share->id))
-            ->assertRedirect();
-        $this->get('/shared/documents/'.$token)->assertNotFound();
-
         $this->post(route('platform.documents.trash', $document->id))->assertRedirect();
         $this->assertDatabaseHas('farast_documents', [
             'id' => $document->id,
             'status' => 'trashed',
         ]);
+        $this->get('/shared/documents/'.$token)->assertNotFound();
 
         $this->post(route('platform.documents.restore', $document->id))->assertRedirect();
         $this->assertDatabaseHas('farast_documents', [
@@ -142,6 +139,13 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
             'trashed_at' => null,
             'project_id' => $project->id,
         ]);
+        $this->get('/shared/documents/'.$token)
+            ->assertOk()
+            ->assertSee('نسخه نخست برای بازیابی');
+
+        $this->delete(route('platform.documents.shares.destroy', $share->id))
+            ->assertRedirect();
+        $this->get('/shared/documents/'.$token)->assertNotFound();
     }
 
     public function test_editor_refuses_to_relink_a_canonical_document_to_a_different_project(): void
