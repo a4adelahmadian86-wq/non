@@ -70,6 +70,10 @@ class AdminController extends Controller
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
         $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor) : [];
+        if ($canViewUsers && $userVisibleIds !== null) {
+            $usersQuery->whereIn('id', $userVisibleIds);
+        }
         $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
         // Do not hydrate personal user data unless users.view is granted in this scope.
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
@@ -475,6 +479,7 @@ class AdminController extends Controller
 
         $old = $user->role;
         $user->update(['role' => $d['role']]);
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         if (Schema::hasTable('audit_logs')) {
             $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
