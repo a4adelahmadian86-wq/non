@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\RunStorageBackupJob;
 use App\Models\StorageBackupRun;
+use App\Services\Storage\StorageBackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
