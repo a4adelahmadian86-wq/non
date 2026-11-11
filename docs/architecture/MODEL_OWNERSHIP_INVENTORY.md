@@ -54,3 +54,19 @@
 | `FarastReviewCase` | `farast_review_cases` | explicit | `id` | `default` | — | `app/Models/FarastReviewCase.php` |
 | `FarastStorageObject` | `farast_storage_objects` | explicit | `id` | `default` | — | `app/Models/FarastStorageObject.php` |
 | `FarastSubscription` | `farast_subscriptions` | explicit | `id` | `default` | — | `app/Models/FarastSubscription.php` |
+
+| `FarastTool` | `farast_tools` | explicit | `id` | `default` | `capability:belongsTo(FarastCapability; 'capability_id')`<br>`provider:belongsTo(FarastProvider; 'provider_id')`<br>`versions:hasMany(FarastToolVersion; 'tool_id')`<br>`applications:belongsToMany(FarastApplication; 'farast_tool_applications','tool_id','application_id')` | `app/Models/FarastTool.php` |
+| `FarastToolExecution` | `farast_tool_executions` | explicit | `id` | `default` | — | `app/Models/FarastToolExecution.php` |
+| `FarastToolVersion` | `farast_tool_versions` | explicit | `id` | `default` | `tool:belongsTo(FarastTool; 'tool_id')` | `app/Models/FarastToolVersion.php` |
+| `FarastUsageCounter` | `farast_usage_counters` | explicit | `id` | `default` | — | `app/Models/FarastUsageCounter.php` |
+| `FarastUsageEvent` | `farast_usage_events` | explicit | `id` | `default` | — | `app/Models/FarastUsageEvent.php` |
+| `FarastUsageReservation` | `farast_usage_reservations` | explicit | `id` | `default` | — | `app/Models/FarastUsageReservation.php` |
+| `FarastWalletReservation` | `farast_wallet_reservations` | explicit | `id` | `default` | — | `app/Models/FarastWalletReservation.php` |
+| `FreeCredit` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)` | `app/Models/FreeCredit.php` |
+| `Order` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`document:belongsTo(TypingDocument; 'document_id')`<br>`payments:hasMany(Payment)`<br>`storeItems:hasMany(StoreOrderItem; 'order_id')` | `app/Models/Order.php` |
+| `Organization` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `users:hasMany(User)`<br>`teams:hasMany(Team)` | `app/Models/Organization.php` |
+| `OtpChallenge` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/OtpChallenge.php` |
+| `Payment` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `order:belongsTo(Order)` | `app/Models/Payment.php` |
+| `Permission` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/Permission.php` |
+| `PricingRule` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/PricingRule.php` |
+| `RolePermission` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `permission:belongsTo(Permission)` | `app/Models/RolePermission.php` |
