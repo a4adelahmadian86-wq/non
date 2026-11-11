@@ -171,7 +171,19 @@ class ResolveAdminScope
             return null;
         }
 
-        return $restriction->scope_id !== null ? (int) $restriction->scope_id : null;
+        if (! in_array($restriction->scope_type, [self::SCOPE_ORGANIZATION, self::SCOPE_TEAM], true)
+            || $restriction->scope_id === null) {
+            return null;
+        }
+
+        $scopeId = (int) $restriction->scope_id;
+        if ($restriction->scope_type === self::SCOPE_ORGANIZATION) {
+            return Schema::hasTable('organizations') && DB::table('organizations')->where('id', $scopeId)->exists()
+                ? $scopeId
+                : null;
+        }
+
+        return Team::query()->whereKey($scopeId)->exists() ? $scopeId : null;
     }
 
     public static function organizationIdForScope(?User $user): ?int
