@@ -958,7 +958,7 @@ class AdminStoreController extends Controller
         return back()->with('status', $message);
     }
 
-    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security)
+    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless((int) $preview->product_id === (int) $product->id, 404);
         $data = $request->validate([
@@ -991,11 +991,11 @@ class AdminStoreController extends Controller
         }
 
         $audio = $data['audio'];
-        $extension = strtolower($audio->getClientOriginalExtension());
         $mime = $audio->getMimeType() ?: 'application/octet-stream';
         $quarantinePath = $audio->store('store/quarantine/reader-audio/'.$product->id, 'private');
-        $path = 'store/reader-audio/'.$product->id.'/'.Str::random(40).'.'.$extension;
+        $managed = null;
         $databaseCommitted = false;
+
         try {
             $inspection = $security->inspect($quarantinePath, $mime, 100 * 1024 * 1024, [
                 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
@@ -1007,9 +1007,20 @@ class AdminStoreController extends Controller
                 409,
                 'محتوای صوت هنگام انتقال تغییر کرده است.'
             );
-            abort_unless(Storage::disk('private')->copy($quarantinePath, $path), 503, 'ذخیره فایل صوتی ممکن نشد.');
 
-            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $path, $mime, $timings) {
+            $managed = $storage->adoptExistingPrivate(
+                $quarantinePath,
+                $audio->getClientOriginalName(),
+                $mime,
+                (int) $audio->getSize(),
+                'store-preview-audio',
+                StoreProductPreview::class,
+                null,
+                (int) $product->id,
+                StorageManager::CRITICAL
+            );
+
+            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $managed, $mime, $timings, $storage) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $lockedPreview = StoreProductPreview::query()
                     ->whereKey($preview->id)
@@ -1018,11 +1029,12 @@ class AdminStoreController extends Controller
                     ->firstOrFail();
                 $old = [$lockedPreview->audio_disk ?: 'private', $lockedPreview->audio_path];
                 $lockedPreview->forceFill([
-                    'audio_disk' => 'private',
-                    'audio_path' => $path,
+                    'audio_disk' => $managed['disk'],
+                    'audio_path' => $managed['path'],
                     'audio_mime' => $mime,
                     'audio_timing' => $timings,
                 ])->save();
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $lockedPreview->id, (int) $lockedProduct->id, 'audio_path');
                 $this->audit('store.product.preview_audio_uploaded', $lockedProduct, [
                     'preview_id' => $lockedPreview->id,
                     'timing_segments' => count($timings),
@@ -1032,16 +1044,19 @@ class AdminStoreController extends Controller
                 return $old;
             });
             $databaseCommitted = true;
+
             if ($oldPath) {
-                Storage::disk($oldDisk)->delete($oldPath);
+                try {
+                    $this->deleteProductAssetIfUnreferenced($storage, $oldDisk, $oldPath);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
             }
         } catch (Throwable $exception) {
-            if (! $databaseCommitted) {
-                Storage::disk('private')->delete($path);
+            if (! $databaseCommitted && $managed) {
+                try { $storage->delete($managed['disk'], $managed['path']); } catch (Throwable $cleanupException) { report($cleanupException); }
             }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
             throw $exception;
         } finally {
             Storage::disk('private')->delete($quarantinePath);
