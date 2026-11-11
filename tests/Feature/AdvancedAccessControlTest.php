@@ -295,6 +295,35 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_view_permission_cannot_be_used_as_a_record_write_permission(): void
+    {
+        $organization = Organization::create(['name' => 'Scoped Action Org', 'slug' => 'scoped-action-org', 'status' => 'active']);
+        $manager = $this->user('09140000141', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $customer = $this->user('09140000142', User::ROLE_EMPLOYEE, $organization->id);
+
+        $viewRole = $this->role('organization-customer-view', 'organization', $organization->id);
+        $this->grant($viewRole, 'users.view', 'organization');
+        $this->assign($manager, $viewRole, 'organization', $organization->id);
+
+        $selfEditRole = $this->role('self-only-user-edit', 'own');
+        $this->grant($selfEditRole, 'users.edit', 'own');
+        $this->assign($manager, $selfEditRole, 'own');
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'organization');
+        $console = app(\\App\\Services\\AdminConsoleService::class);
+
+        // Read access to a customer remains available inside the organization.
+        $console->authorizeAction($manager, 'users', $customer->id);
+
+        // The same manager can edit their own record, but not another customer:
+        // the action permission is checked against the target record's scope.
+        $console->authorizeAction($manager, 'users', $manager->id, 'users.edit');
+
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $console->authorizeAction($manager, 'users', $customer->id, 'users.edit');
+    }
+
     public function test_team_authority_and_role_assignment_cannot_cross_organization_boundaries(): void
     {
         $organizationA = Organization::create(['name' => 'Team Owner Org', 'slug' => 'team-owner-org', 'status' => 'active']);
