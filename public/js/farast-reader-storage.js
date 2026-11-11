@@ -22,10 +22,10 @@ const transaction=(mode,work)=>open().then(db=>new Promise((resolve,reject)=>{
  tx.onerror=()=>reject(tx.error||new Error('IndexedDB transaction failed'));
  tx.onabort=()=>reject(tx.error||new Error('IndexedDB transaction aborted'));
 }));
-const get=key=>transaction('readonly',store=>{const request=store.get(String(key));return request;});
+const get=key=>transaction('readonly',store=>{const request=store.get(String(key));return request;}).catch(error=>{window.dispatchEvent(new CustomEvent('farast:storage-read-error',{detail:{key:String(key),message:error?.message||'IndexedDB read failed'}}));throw error;});
 const set=(key,value)=>transaction('readwrite',store=>store.put({key:String(key),value,updatedAt:Date.now()})).then(()=>true).catch(error=>{window.dispatchEvent(new CustomEvent('farast:storage-write-error',{detail:{key:String(key),message:error?.message||'IndexedDB write failed'}}));throw error;});
 const remove=key=>transaction('readwrite',store=>store.delete(String(key))).then(()=>true);
-const entries=()=>transaction('readonly',store=>store.getAll());
+const entries=()=>transaction('readonly',store=>store.getAll()).catch(error=>{window.dispatchEvent(new CustomEvent('farast:storage-read-error',{detail:{key:null,message:error?.message||'IndexedDB listing failed'}}));throw error;});
 const prefixes=['farast-reader:annotations:v1:','farast-reader:pressure-ink:v1:','farast-reader:pressure-settings:v1:','farast-reader:studio-favorites:v1:','farast-reader:studio-recent:v1:','farast-reader:two-page:v1:','farast-reader:v1:','farast.reader.personal-tools.v1:'];
 const productKey=(key,product)=>typeof key==='string'&&prefixes.some(prefix=>key===prefix+String(product));
 const productRecords=async product=>(await entries()).filter(record=>productKey(record.key,product));
