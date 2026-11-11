@@ -158,7 +158,7 @@ class AdminStoreController extends Controller
 
     public function createIntake()
     {
-        $canRequestAntivirus = app(\\App\\Services\\AuthorizationService::class)
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.security_scan');
 
         return view('admin.store.intake-start', compact('canRequestAntivirus'));
@@ -173,7 +173,7 @@ class AdminStoreController extends Controller
 
         $antivirusRequested = $request->boolean('antivirus_requested');
         if ($antivirusRequested) {
-            abort_unless(app(\\App\\Services\\AuthorizationService::class)
+            abort_unless(app(\App\Services\AuthorizationService::class)
                 ->allows($request->user(), 'store.security_scan'), 403, 'اجازه درخواست اسکن آنتی‌ویروس برای حساب شما ثبت نشده است.');
         }
 
@@ -389,7 +389,7 @@ class AdminStoreController extends Controller
         ]);
 
         $upload = $request->file('file');
-        $safeName = mb_substr(basename(str_replace('\\\\', '/', $upload->getClientOriginalName())), 0, 255);
+        $safeName = mb_substr(basename(str_replace('\\', '/', $upload->getClientOriginalName())), 0, 255);
         $originalNameLower = strtolower($safeName);
         $extension = str_ends_with($originalNameLower, '.tar.gz')
             ? 'tar.gz'
@@ -411,11 +411,11 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ساختاری و امنیتی عبور نکرده است.');
 
             if ($session->antivirus_requested) {
-                abort_unless(app(\\App\\Services\\AuthorizationService::class)
+                abort_unless(app(\App\Services\AuthorizationService::class)
                     ->allows($request->user(), 'store.security_scan'), 403);
                 $avResult = $antivirus->scan(Storage::disk('private')->path($path));
                 if (($avResult['status'] ?? null) === 'infected') {
-                    throw new \\RuntimeException('antivirus_infected');
+                    throw new \RuntimeException('antivirus_infected');
                 }
                 $inspection['antivirus'] = $avResult;
             } else {
@@ -486,7 +486,7 @@ class AdminStoreController extends Controller
         abort_unless(hash_equals((string) $file->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بازرسی تغییر کرده است.');
 
         if ($session->antivirus_requested) {
-            abort_unless(app(\\App\\Services\\AuthorizationService::class)
+            abort_unless(app(\App\Services\AuthorizationService::class)
                 ->allows($request->user(), 'store.security_scan'), 403);
             $avResult = $antivirus->scan($disk->path($stagingPath));
             if (($avResult['status'] ?? null) === 'infected') {
@@ -574,7 +574,7 @@ class AdminStoreController extends Controller
 
     private function safeIntakeRelativePath(string $path): string
     {
-        $path = str_replace('\\\\', '/', trim($path));
+        $path = str_replace('\\', '/', trim($path));
         $segments = array_values(array_filter(explode('/', $path), static fn ($segment) => $segment !== '' && $segment !== '.'));
         abort_if(in_array('..', $segments, true), 422, 'مسیر نسبی فایل نامعتبر است.');
 
@@ -655,7 +655,7 @@ class AdminStoreController extends Controller
         }
         $data = $this->validated($request, $product);
         if (($data['status'] ?? null) === 'published') {
-            abort_unless(app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
+            abort_unless(app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
         }
         $tagIds = $data['tag_ids'] ?? [];
         $aiTagNames = $request->validate([
