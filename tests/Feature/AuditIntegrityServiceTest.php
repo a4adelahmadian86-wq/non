@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FarastAuditEvent;
 use App\Services\AuditIntegrityService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -46,4 +47,37 @@ class AuditIntegrityServiceTest extends TestCase
 
         $this->assertSame(1, Artisan::call('farast:audit-ledger:verify'));
     }
+    public function test_canonical_payload_checksum_survives_json_object_key_reordering(): void
+    {
+        $meta = [
+            'zeta' => 1,
+            'alpha' => ['y' => 2, 'beta' => 3],
+        ];
+
+        $event = app(\App\Services\AuditEventService::class)->record(
+            'test.canonical_json',
+            null,
+            null,
+            'test',
+            null,
+            $meta,
+            'test'
+        );
+
+        $this->assertNotEmpty($event->payload_canonical);
+
+        // Simulate a JSON database returning object keys in a different order.
+        DB::table('farast_audit_events')
+            ->where('id', $event->id)
+            ->update([
+                'payload_meta' => json_encode([
+                    'alpha' => ['beta' => 3, 'y' => 2],
+                    'zeta' => 1,
+                ]),
+            ]);
+
+        $this->assertTrue(app(AuditIntegrityService::class)->verify()['ok']);
+    }
+
+
 }
