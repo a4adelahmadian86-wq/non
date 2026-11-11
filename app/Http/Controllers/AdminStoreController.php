@@ -9,6 +9,8 @@ use App\Models\StoreProductFile;
 use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Jobs\ProcessProductDocument;
+use App\Jobs\ReviewProductForPublication;
+use App\Jobs\ReviewProductFileAsset;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
@@ -156,12 +158,15 @@ class AdminStoreController extends Controller
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = collect();
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
             'categories' => $categories,
             'tags' => $tags,
             'relatedProducts' => $relatedProducts,
+            'canRequestAntivirus' => $canRequestAntivirus,
         ]);
     }
 
@@ -258,6 +263,17 @@ class AdminStoreController extends Controller
         }
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
+        $reviewFieldsForSubmission = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
+        $reviewInputsChangedForSubmission = collect($reviewFieldsForSubmission)->contains(
+            fn ($field) => array_key_exists($field, $data)
+                && (string) ($data[$field] ?? '') !== (string) ($product->getAttribute($field) ?? '')
+        );
+        $currentTagIdsForSubmission = $product->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $submittedTagIdsForSubmission = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $submitForPublication = ($data['status'] ?? '') === 'published'
+            && ($product->status !== 'published'
+                || $reviewInputsChangedForSubmission
+                || $currentTagIdsForSubmission !== $submittedTagIdsForSubmission);
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
             'ai_content_tag_names.*' => 'required|string|max:80',
@@ -278,7 +294,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $submitForPublication) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -333,37 +349,16 @@ class AdminStoreController extends Controller
                 ]);
             }
 
-            if (($data['status'] ?? '') === 'published') {
-                $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', []);
-                if ((bool) data_get($supervisorSettings, 'enabled', false)
-                    && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
-                    $lastReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
-                    $snapshot = $snapshotBuilder->build($lockedProduct, $supervisorSettings);
-                    $snapshotMatches = is_array($lastReview)
-                        && filled($lastReview['snapshot_hash'] ?? null)
-                        && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
-                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
-                    $reviewInputsChanged = collect($reviewFields)->contains(
-                        fn ($field) => array_key_exists($field, $data)
-                            && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
-                    );
-                    $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
-                    $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
-                    if (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved') {
-                        throw ValidationException::withMessages([
-                            'status' => 'برای انتشار در حالت تأییدمحور، ابتدا اطلاعات و رسانه‌ها را ذخیره کنید و پس از اجرای یک بررسی تازه با نتیجه تأیید، دوباره انتشار را انجام دهید.',
-                        ]);
-                    }
-                }
+            if ($submitForPublication) {
                 if (! $lockedProduct->category()->where('is_active', true)->exists()) {
-                    throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
+                    throw ValidationException::withMessages(['category_id' => 'برای ارسال محصول به صف انتشار، دسته‌بندی آن باید فعال باشد.']);
                 }
                 if ($data['type'] === 'course') {
                     $hasPublishableLesson = $lockedProduct->course()
                         ->whereHas('sections.lessons', fn ($query) => $query->publishable())
                         ->exists();
                     if (! $hasPublishableLesson) {
-                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده با محتوای معتبر یا منبع سالم لازم است.']);
+                        throw ValidationException::withMessages(['status' => 'برای ارسال دوره به صف انتشار، دست‌کم یک جلسه معتبر لازم است.']);
                     }
                 } else {
                     $hasSafePrimaryFile = $lockedProduct->files()
@@ -373,19 +368,16 @@ class AdminStoreController extends Controller
                         ->where('scan_status', 'clean')
                         ->exists();
                     if (! $hasSafePrimaryFile) {
-                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
+                        throw ValidationException::withMessages(['status' => 'برای ارسال محصول به صف انتشار، یک فایل اصلی فعال با اعتبارسنجی موفق لازم است.']);
                     }
                     $downloadPolicy = $data['download_policy'] ?? $lockedProduct->download_policy;
                     if ($downloadPolicy === 'reader_only' && ! $publicationReadiness->hasReadyPrimaryReader($lockedProduct)) {
                         throw ValidationException::withMessages([
-                            'status' => 'برای انتشار محصول فقط‌خواندنی، فایل اصلی باید استخراج کامل شده و صفحات کامل خوانشگر آن آماده باشند.',
+                            'status' => 'برای محصول فقط‌خواندنی، نسخه کامل خوانشگر باید آماده باشد.',
                         ]);
                     }
                 }
-                if (! $lockedProduct->published_at && empty($data['published_at'])) {
-                    $data['published_at'] = now();
-                }
-            } else {
+            } elseif (($data['status'] ?? '') !== 'published') {
                 $data['published_at'] = null;
             }
 
@@ -425,6 +417,20 @@ class AdminStoreController extends Controller
                 }
                 $data['metadata'] = $metadata;
             }
+            if ($submitForPublication) {
+                $data['status'] = 'draft';
+                $data['published_at'] = null;
+                $metadata = (array) ($data['metadata'] ?? $lockedProduct->metadata ?? []);
+                $metadata['publication_workflow'] = [
+                    'status' => 'queued',
+                    'submitted_by' => (int) auth()->id(),
+                    'submitted_at' => now()->toISOString(),
+                    'attempts' => 0,
+                    'last_error_code' => null,
+                ];
+                $data['metadata'] = $metadata;
+            }
+
             $lockedProduct->update($data);
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
@@ -443,7 +449,84 @@ class AdminStoreController extends Controller
             ]);
         });
 
+        if ($submitForPublication) {
+            ReviewProductForPublication::dispatch((int) $product->id);
+            return back()->with('status', 'محصول ثبت شد و تا پایان بررسی ناظر هوشمند در صف انتشار باقی می‌ماند؛ هنوز در سایت منتشر نشده است.');
+        }
+
         return back()->with('status', 'محصول به‌روزرسانی شد.');
+    }
+
+    public function approvePublication(
+        StoreProduct $product,
+        \App\Services\ProductPublicationReadiness $readiness,
+        ProductSupervisorSnapshotBuilder $snapshotBuilder
+    ) {
+        abort_unless(in_array(data_get($product->metadata, 'publication_workflow.status'), [
+            'awaiting_admin_approval',
+            'awaiting_manual_approval',
+        ], true), 409, 'این محصول در صف تأیید دستی قرار ندارد.');
+
+        DB::transaction(function () use ($product, $readiness, $snapshotBuilder) {
+            $locked = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $workflow = (array) data_get($locked->metadata, 'publication_workflow', []);
+            abort_unless(in_array($workflow['status'] ?? null, [
+                'awaiting_admin_approval',
+                'awaiting_manual_approval',
+            ], true), 409, 'وضعیت صف انتشار تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+
+            $review = data_get($locked->metadata, 'ai_supervisor.last_review');
+            abort_unless(is_array($review) && filled($review['snapshot_hash'] ?? null), 409, 'گزارش ناظر معتبر برای این محصول ثبت نشده است.');
+            if (($workflow['status'] ?? null) === 'awaiting_admin_approval') {
+                abort_unless(($review['verdict'] ?? null) === 'approved', 409, 'ناظر هوشمند هنوز محصول را تأیید نکرده است.');
+            } else {
+                abort_unless((bool) ($workflow['correction_applied'] ?? false), 409, 'اصلاح خودکار ناظر ثبت نشده است؛ محصول باید ابتدا اصلاح شود.');
+            }
+
+            $blockers = $readiness->publicationBlockers($locked);
+            abort_if($blockers !== [], 422, implode(' ', $blockers));
+
+            $settings = (array) data_get($locked->metadata, 'ai_supervisor', []);
+            $settings['enabled'] = true;
+            $settings['mode'] = 'review_gate';
+            $settings['checks'] = array_replace([
+                'content' => true,
+                'pricing' => true,
+                'seo' => true,
+                'media' => true,
+                'policy' => true,
+                'course' => true,
+            ], (array) ($settings['checks'] ?? []));
+            $snapshot = $snapshotBuilder->build($locked, $settings);
+            $snapshot['document_knowledge'] = app(\App\Services\ProductKnowledgeService::class)
+                ->contextForProduct($locked, 12000);
+            abort_unless(
+                hash_equals((string) $review['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot)),
+                409,
+                'اطلاعات محصول پس از بررسی ناظر تغییر کرده است؛ بررسی تازه لازم است.'
+            );
+
+            $locked->status = 'published';
+            $locked->published_at = now();
+            $workflow['status'] = 'published';
+            $workflow['approved_by'] = (int) auth()->id();
+            $workflow['approved_at'] = now()->toISOString();
+            $workflow['published_by'] = (int) auth()->id();
+            $workflow['published_at'] = now()->toISOString();
+            $metadata = (array) ($locked->metadata ?? []);
+            $metadata['publication_workflow'] = $workflow;
+            $locked->metadata = $metadata;
+            $locked->save();
+
+            $this->audit('store.product.publication_manually_approved', $locked, [
+                'review_id' => $workflow['review_id'] ?? null,
+                'ai_verdict' => $workflow['ai_verdict'] ?? null,
+                'correction_applied' => (bool) ($workflow['correction_applied'] ?? false),
+                'approved_by' => (int) auth()->id(),
+            ]);
+        }, 3);
+
+        return back()->with('status', 'محصول پس از تأیید نهایی شما منتشر شد.');
     }
 
     public function destroy(StoreProduct $product)
@@ -461,10 +544,116 @@ class AdminStoreController extends Controller
         return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
     }
 
+    public function preflightNewProductFile(Request $request, UploadSecurityService $security)
+    {
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'security_scan' => 'nullable|boolean',
+        ]);
+        $category = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->first();
+        abort_if(! $category, 422, 'برای شروع ورود فایل، ابتدا دست‌کم یک دسته‌بندی فعال ایجاد کنید.');
+
+        $originalName = basename(str_replace('\\', '/', $request->file('file')->getClientOriginalName()));
+        $title = trim((string) preg_replace('/\.[^.]+$/u', '', $originalName));
+        $title = mb_substr($title !== '' ? $title : 'محصول جدید', 0, 220);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => $title,
+            'slug' => $this->uniqueSlug($title, Str::slug($title) ?: null),
+            'sku' => $this->uniqueSku(),
+            'type' => 'digital_file',
+            'price_rials' => 0,
+            'status' => 'draft',
+            'published_at' => null,
+            'metadata' => [
+                'file_first_intake' => [
+                    'enabled' => true,
+                    'owner_id' => (int) auth()->id(),
+                    'created_at' => now()->toISOString(),
+                ],
+            ],
+        ]);
+
+        try {
+            $response = $this->preflightFile($request, $product, $security);
+            if ($response->getStatusCode() >= 400) {
+                $product->delete();
+                return $response;
+            }
+            $payload = $response->getData(true);
+            $payload['product_id'] = (int) $product->id;
+            $payload['next_url'] = route('admin.store.edit', $product);
+            return response()->json($payload, $response->getStatusCode());
+        } catch (Throwable $exception) {
+            $product->delete();
+            throw $exception;
+        }
+    }
+
+    public function confirmNewProductFile(
+        Request $request,
+        StoreProduct $product,
+        string $ingestionId,
+        UploadSecurityService $security,
+        StorageManager $storage
+    ) {
+        abort_unless(
+            (bool) data_get($product->metadata, 'file_first_intake.enabled', false)
+                && (int) data_get($product->metadata, 'file_first_intake.owner_id') === (int) auth()->id(),
+            404
+        );
+        abort_unless($product->status === 'draft', 409, 'پیش‌نویس ورود فایل دیگر قابل تغییر نیست.');
+
+        $response = $this->confirmFileUpload($request, $product, $ingestionId, $security, $storage);
+        $payload = $response->getData(true);
+        $payload['next_url'] = route('admin.store.edit', $product);
+
+        return response()->json($payload, $response->getStatusCode());
+    }
+
+    public function cancelNewProductIntake(Request $request, StoreProduct $product, string $ingestionId)
+    {
+        abort_unless(
+            (bool) data_get($product->metadata, 'file_first_intake.enabled', false)
+                && (int) data_get($product->metadata, 'file_first_intake.owner_id') === (int) auth()->id(),
+            404
+        );
+
+        $ingestion = StoreProductIngestion::query()
+            ->whereKey($ingestionId)
+            ->where('product_id', $product->id)
+            ->where('user_id', auth()->id())
+            ->where('status', 'inspected')
+            ->firstOrFail();
+        Storage::disk($ingestion->staging_disk ?: 'private')->delete($ingestion->staging_path);
+        $ingestion->delete();
+
+        if (! $product->files()->exists()
+            && ! StoreProductIngestion::query()->where('product_id', $product->id)->where('status', 'inspected')->exists()) {
+            $metadata = (array) ($product->metadata ?? []);
+            $intake = (array) ($metadata['file_first_intake'] ?? []);
+            $intake['status'] = 'awaiting_file';
+            $intake['last_cancelled_at'] = now()->toISOString();
+            $metadata['file_first_intake'] = $intake;
+            $product->update(['metadata' => $metadata]);
+            $this->audit('store.product.file_first_intake_cancelled', $product, ['reason' => 'no_file_confirmed']);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
-        $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'is_primary' => 'nullable|boolean',
+            'security_scan' => 'nullable|boolean',
+        ]);
+        $antivirusRequested = $request->boolean('security_scan');
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
+        abort_if($antivirusRequested && ! $canRequestAntivirus, 403, 'مجوز درخواست اسکن آنتی‌ویروس برای این حساب فعال نیست.');
 
         $upload = $request->file('file');
         $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
@@ -499,6 +688,12 @@ class AdminStoreController extends Controller
         try {
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ایستای داخلی عبور نکرده است.');
+            $antivirusResult = null;
+            if ($antivirusRequested) {
+                $antivirusResult = app(\App\Services\OptionalAntivirusScanner::class)
+                    ->scan(Storage::disk('private')->path($path));
+                $inspection['antivirus'] = $antivirusResult;
+            }
             $ingestion = StoreProductIngestion::create([
                 'id' => (string) Str::uuid(),
                 'product_id' => $product->id,
@@ -512,6 +707,11 @@ class AdminStoreController extends Controller
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
                 'is_primary' => $request->boolean('is_primary', true),
+                'antivirus_requested' => $antivirusRequested,
+                'antivirus_status' => $antivirusResult['status'] ?? null,
+                'antivirus_engine' => $antivirusResult['engine'] ?? null,
+                'antivirus_version' => $antivirusResult['version'] ?? null,
+                'antivirus_scanned_at' => isset($antivirusResult['scanned_at']) ? now() : null,
                 'expires_at' => now()->addMinutes(30),
             ]);
         } catch (Throwable $exception) {
@@ -519,10 +719,17 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
+            $code = $exception instanceof \RuntimeException ? $exception->getMessage() : 'inspection_failed';
+            $message = match ($code) {
+                'antivirus_scanner_unavailable' => 'اسکن آنتی‌ویروس انتخاب شده است، اما موتور ClamAV روی سرور متصل یا آماده نیست؛ فایل ذخیره نشد.',
+                'antivirus_malware_detected' => 'موتور آنتی‌ویروس تهدیدی در فایل شناسایی کرد؛ فایل ذخیره نشد.',
+                'antivirus_scan_failed' => 'اسکن آنتی‌ویروس کامل نشد؛ فایل ذخیره نشد.',
+                default => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
+            };
             return response()->json([
-                'message' => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
-                'code' => class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed',
-            ], 422);
+                'message' => $message,
+                'code' => $code,
+            ], $code === 'antivirus_scanner_unavailable' ? 503 : 422);
         }
 
         return response()->json([
@@ -536,6 +743,9 @@ class AdminStoreController extends Controller
                 'sha256' => $ingestion->sha256,
             ],
             'inspection' => $inspection,
+            'antivirus' => $antivirusRequested
+                ? ['requested' => true, 'status' => $antivirusResult['status'] ?? 'unknown', 'engine' => $antivirusResult['engine'] ?? null, 'version' => $antivirusResult['version'] ?? null]
+                : ['requested' => false, 'status' => 'not_requested'],
         ], 201);
     }
 
@@ -555,6 +765,11 @@ class AdminStoreController extends Controller
 
         $inspection = $security->inspect($ingestion->staging_path, $ingestion->mime, 50 * 1024 * 1024);
         abort_unless(hash_equals((string) $ingestion->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بررسی اولیه تغییر کرده است؛ دوباره آن را بارگذاری کنید.');
+        abort_unless(
+            ! $ingestion->antivirus_requested || $ingestion->antivirus_status === 'clean',
+            409,
+            'اسکن آنتی‌ویروس انتخاب‌شده کامل یا تأیید نشده است؛ فایل قابل ذخیره‌سازی نیست.'
+        );
 
         $originalNameLower = strtolower($ingestion->original_name);
         $finalExtension = str_ends_with($originalNameLower, '.tar.gz')
@@ -634,7 +849,7 @@ class AdminStoreController extends Controller
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
                     'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
-                    'scan_engine' => 'farast_static_v1',
+                    'scan_engine' => $lockedIngestion->antivirus_requested ? 'farast_static_v1+clamav' : 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
 
@@ -658,7 +873,7 @@ class AdminStoreController extends Controller
                     'mime' => $record->mime,
                     'size_bytes' => $record->size_bytes,
                     'sha256' => $record->sha256,
-                    'security_engine' => 'farast_static_v1',
+                    'security_engine' => $lockedIngestion->antivirus_requested ? 'farast_static_v1+clamav' : 'farast_static_v1',
                 ]);
                 if ($productRequiresRepublish) {
                     $this->audit('store.product.unpublished_for_primary_file_replacement', $lockedProduct, [
@@ -705,6 +920,16 @@ class AdminStoreController extends Controller
             ]);
         }
 
+        try {
+            ReviewProductFileAsset::dispatch((int) $product->id, (int) $fileRecord->id);
+        } catch (Throwable $exception) {
+            Log::warning('Product asset supervisor review could not be dispatched', [
+                'product_id' => $product->id,
+                'file_id' => $fileRecord->id,
+                'exception' => class_basename($exception),
+            ]);
+        }
+
         $processingStatus = $documentId > 0
             ? (DB::table('store_product_documents')->where('id', $documentId)->value('processing_status') ?: 'pending')
             : 'pending';
@@ -713,7 +938,7 @@ class AdminStoreController extends Controller
             'success' => true,
             'message' => $productRequiresRepublish
                 ? 'فایل ذخیره شد؛ محصول برای آماده‌سازی دوباره خوانشگر یا بررسی ناظر به پیش‌نویس برگشت.'
-                : 'فایل پس از تأیید شما در فضای خصوصی فروشگاه ذخیره شد.',
+                : 'فایل در فضای خصوصی ذخیره شد؛ بررسی محتوایی ناظر هوشمند نیز در پس‌زمینه آغاز شده است.',
             'product' => [
                 'status' => $product->fresh()->status,
                 'requires_republish' => $productRequiresRepublish,
@@ -724,6 +949,7 @@ class AdminStoreController extends Controller
                 'size_bytes' => $fileRecord->size_bytes,
                 'scan_status' => $fileRecord->scan_status,
                 'processing_status' => $processingStatus,
+                'supervisor_review_status' => 'queued',
             ],
         ]);
     }
