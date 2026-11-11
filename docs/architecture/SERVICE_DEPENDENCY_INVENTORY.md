@@ -19,3 +19,19 @@
 | `AgentContextBuilder` | `app/Services/Agent/AgentContextBuilder.php` | — | `FarastDocument`, `FarastProject`, `TypingDocument`, `User` | — | — | `build()` | 0 | 0 |
 | `AgentIntentInterpreter` | `app/Services/Agent/AgentIntentInterpreter.php` | — | — | — | — | `interpret()` | 0 | 0 |
 | `AgentToolSelector` | `app/Services/Agent/AgentToolSelector.php` | `ToolRegistry` | — | — | — | `__construct()`, `select()` | 0 | 0 |
+
+| `AgentValidationService` | `app/Services/Agent/AgentValidationService.php` | — | — | — | — | `validatePlan()`, `validateResult()` | 0 | 0 |
+| `FarastEditorAgent` | `app/Services/Agent/FarastEditorAgent.php` | `AuditEventService`, `AuthorizationService`, `CommerceAuthorizationService`, `EditorAiAssistService`, `ToolExecutionService`, `EditorDocumentService`, `AgentContextBuilder`, `AgentIntentInterpreter`, `AgentToolSelector`, `AgentValidationService` | `FarastAgentTask`, `FarastDocument`, `TypingDocument`, `User` | — | — | `__construct()`, `plan()`, `approve()`, `commit()`, `undo()` | 2 | 0 |
+| `AiEditorToolHandler` | `app/Services/AiEditorToolHandler.php` | `EditorAiAssistService` | `User` | — | — | `__construct()`, `handle()` | 0 | 0 |
+| `AnnouncementService` | `app/Services/AnnouncementService.php` | `NotificationService`, `EmailService` | `Announcement`, `User` | `farast_notifications`, `announcements` | — | `__construct()`, `create()`, `update()`, `toggle()`, `broadcast()` | 0 | 0 |
+| `ApplicationRegistry` | `app/Services/ApplicationRegistry.php` | — | `FarastApplication` | — | — | `definition()`, `classify()`, `canStart()`, `applicationFor()` | 0 | 0 |
+| `AuditEventService` | `app/Services/AuditEventService.php` | — | `FarastAuditEvent` | — | — | `record()` | 1 | 0 |
+| `AuditIntegrityService` | `app/Services/AuditIntegrityService.php` | — | `FarastAuditEvent` | — | — | `verify()` | 0 | 0 |
+| `AuditLogService` | `app/Services/AuditLogService.php` | — | — | `audit_logs` | — | `record()` | 1 | 0 |
+| `AuthorizationService` | `app/Services/AuthorizationService.php` | — | `Permission`, `RolePermission`, `User` | — | — | `allows()`, `syncDefaults()` | 0 | 0 |
+| `CanvaService` | `app/Services/CanvaService.php` | — | `CanvaConnection`, `SiteSetting`, `User` | — | — | `configured()`, `authorizeUrl()`, `callback()`, `token()`, `request()`, `designs()`, `design()`, `createDoc()`, `export()`, `import()`, `importStatus()`, `exportStatus()` | 1 | 0 |
+| `CapabilityService` | `app/Services/CapabilityService.php` | — | `SiteSetting`, `User`, `UserCapability` | — | — | `forUser()`, `allowed()` | 0 | 0 |
+| `CommerceAuthorizationService` | `app/Services/CommerceAuthorizationService.php` | `PricingEngine`, `CapabilityService`, `PromotionService` | `FarastCharge`, `FarastCouponRedemption`, `FarastEntitlement`, `FarastInvoice`, `FarastInvoiceItem`, `FarastRefund`, `FarastUsageEvent`, `FarastUsageReservation`, `FarastWalletReservation`, `User`, `Wallet`, `WalletTransaction` | — | — | `__construct()`, `authorize()`, `reserve()`, `commit()`, `release()`, `settlePostpaid()`, `refund()` | 5 | 0 |
+| `CommunicationSearchService` | `app/Services/CommunicationSearchService.php` | — | `Conversation`, `ConversationMessage`, `FarastNotification`, `Ticket`, `TicketMessage`, `User` | — | — | `search()` | 0 | 0 |
+| `CostEventService` | `app/Services/CostEventService.php` | — | `FarastCostEvent` | — | — | `record()` | 0 | 0 |
+| `CrmAudienceService` | `app/Services/CrmAudienceService.php` | — | `User` | — | — | `query()` | 0 | 0 |
