@@ -171,6 +171,8 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-reader .farast-studio-action[aria-label]::after,.farast-reader .farast-audio-play[aria-label]::after,.farast-reader .farast-audio-collapse[aria-label]::after{content:attr(aria-label);font-size:.62rem;white-space:nowrap}
 .farast-reader .farast-audio-play,.farast-reader .farast-audio-collapse{width:auto;min-width:38px;padding-inline:8px;border-radius:9px}
 .farast-reader .farast-reader-heading span{font-family:Tahoma,Arial,sans-serif}
+.farast-reader-preferences-panel [data-reader-legacy-annotation],.farast-reader-preferences-panel [data-reader-highlight],.farast-reader-preferences-panel [data-reader-note],.farast-reader-preferences-panel [data-reader-notes],.farast-reader-preferences-panel [data-reader-export],.farast-reader-preferences-panel [data-reader-import],.farast-reader-preferences-panel [data-reader-import-file],.farast-reader-preferences-panel .farast-reader-ink-tools{display:none!important}
+
 
 </style>
 @endpush
@@ -178,7 +180,7 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
 <script src="/js/farast-reader.js?v=20261111pdfcompat2"></script>
-<script src="/js/farast-reader-personal-tools.js?v=20261111compact1" defer></script>
+<script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
 <script src="/js/farast-reader-document-audio.js?v=20261108readiness1" defer></script>
