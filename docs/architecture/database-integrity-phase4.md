@@ -46,19 +46,11 @@ The commercial-engine migrations define a number of indexed integer references w
 
 Before adding a relationship, it checks for orphan references. If any are found, the migration throws an explicit exception and does not delete or rewrite those rows. SQLite receives insert/update/delete triggers; other supported database engines receive restrictive foreign keys.
 
-## Historical migration requiring special handling
+## Legacy subscription schema intentionally not rebuilt
 
-`2026_10_03_000004_canonicalize_farast_subscriptions.php` originally dropped the legacy subscription table before verifying the canonical copy and silently skipped rows whose commercial plan could not be resolved. This was a confirmed data-loss risk.
+The current `main` migration `2026_10_03_000001_professional_commercial_engine.php` already defines the canonical `farast_subscriptions` structure: primary ID, subscription ID, user/organization/plan references, status, lifecycle timestamps, metadata, and timestamps.
 
-The migration has now been hardened for fresh installations and environments where it is still pending:
-- It copies into a staging table while leaving the source table intact.
-- It resolves legacy plan references by ID and then by plan code.
-- It aborts with the source table preserved if a plan cannot be resolved.
-- It verifies the copied row count and parent references before replacing the source table.
-- It retains legacy identifiers and unknown legacy columns in metadata rather than silently discarding them.
-- It can resume if a prior attempt left only the verified staging table.
-
-Important: editing an already-applied migration does not rerun it in an existing environment. Existing databases that recorded this migration as applied still require a backup-based reconciliation if historical rows were skipped by the old implementation. The migration ledger alone cannot establish whether any rows were lost.
+A proposed historical table-rebuild migration was excluded from this PR. The actual target database schema and migration ledger are unavailable, so rebuilding this table without a sanitized schema/reference map could change primary IDs or break external references. No subscription-table rewrite is included until the target schema and all dependent references are verified.
 
 ## Additional consistency fixes
 
@@ -72,7 +64,6 @@ Important: editing an already-applied migration does not rerun it in an existing
 - Wallet ledger records reject Eloquent updates and deletes, and database triggers also reject query-builder/raw SQL mutation.
 - The financial migration backfills legacy rows, is repeatable, and rejects duplicate legacy keys without merging them.
 - The commercial ledger migration rejects orphan references and preserves the orphaned row for manual reconciliation.
-- Subscription canonicalization preserves all source rows and unknown legacy fields, and refuses to discard a subscription whose plan cannot be resolved.
 - Representative subscription, invoice-item, and wallet-reservation references are rejected when their parent row does not exist.
 - Deleting a commercial plan referenced by a subscription is rejected.
 
