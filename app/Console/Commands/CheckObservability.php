@@ -269,7 +269,16 @@ class CheckObservability extends Command
         }
 
         $url = route('admin.observability.index');
-        foreach (User::query()->whereIn('id', $userIds)->get() as $user) {
+        try {
+            $recipients = User::query()->whereIn('id', $userIds)->get();
+        } catch (Throwable $exception) {
+            $this->safeLog('warning', 'farast.observability.notification_recipient_lookup_failed', [
+                'exception_class' => get_class($exception),
+            ]);
+            return;
+        }
+
+        foreach ($recipients as $user) {
             try {
                 $notifications->push(
                     (int) $user->id,
