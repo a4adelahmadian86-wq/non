@@ -287,6 +287,26 @@ class WorkflowEngine
         return $this->processEvent($event, $storedContext);
     }
 
+    /** Mark abandoned manual or worker runs as failed after their execution lease expires. */
+    public function recoverStaleRuns(int $staleMinutes = 30): int
+    {
+        if (! Schema::hasTable('farast_workflow_runs')) {
+            return 0;
+        }
+
+        $staleMinutes = max(5, min(120, $staleMinutes));
+
+        return DB::table('farast_workflow_runs')
+            ->where('status', 'running')
+            ->where('started_at', '<=', now()->subMinutes($staleMinutes))
+            ->update([
+                'status' => 'failed',
+                'error' => 'Execution lease expired before workflow completion.',
+                'finished_at' => now(),
+                'updated_at' => now(),
+            ]);
+    }
+
     /** Whether a failed event should consume another queue attempt. */
     public function shouldRetryEvent(int $eventId, int $eventAttempts): bool
     {
