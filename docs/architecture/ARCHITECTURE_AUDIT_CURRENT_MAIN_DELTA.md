@@ -1,19 +1,19 @@
 # ممیزی تکمیلی معماری بر مبنای main جاری
 
 > این سند مکمل inventoryهای معماری ادغام‌شده در PR #371 است؛ آن inventoryها snapshot تاریخی `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf` را ثبت می‌کنند.  
-> خط مبنای به‌روزشده این تکمیل: `main` در commit `29d643cca59af85a15071c94423e43ef8f22cc69`، تاریخ 2026-11-11 ساعت 16:48 UTC.  
+> خط مبنای به‌روزشده این تکمیل: `main` در commit `638bf5fc6ed2709ad7f0cd072aff6ad826499f6c`، تاریخ 2026-11-11.  
 > این سند تغییرات بعد از snapshot، یافته‌های تازه و PRهای فعال مرتبط را جدا می‌کند؛ هیچ تغییری در دارایی‌های شاخه‌های همکاران اعمال نمی‌کند.
 
 ## 1. وضعیت فعلی مخزن
 
 | شاخص | مقدار در خط مبنای جاری |
 |---|---:|
-| Git tree entries | 1,188 |
-| Migration PHP | 116 |
+| Git tree entries | 1,212 |
+| Migration PHP | 119 |
 | Model PHP | 105 |
-| Service PHP | 113 |
-| Controller PHP | 52 |
-| Test PHP | 123 |
+| Service PHP | 115 |
+| Controller PHP | 53 |
+| Test PHP | 133 |
 
 این شمارش‌ها تعداد فایل‌اند و نباید به‌عنوان تعداد قابلیت یا معیار کیفیت تعبیر شوند.
 
@@ -575,3 +575,65 @@ Migration می‌خواهد ستون `frequency` را با `after('confidence')`
 6. inventory Storage و مالی فقط وقتی بسته شود که مسیرهای bypass و منبع داده موازی با تست‌های منفی/مثبت و آزمون reconciliation تعیین تکلیف شده باشند.
 
 **وضعیت مرحله دوم در خط مبنای `29d643c`:** inventoryهای ایستا و traceability ثبت شده‌اند و مالکیت Route اعلان با تست runtime تثبیت شده است؛ اما ناسازگاری Schema در clean install MySQL و چند شکاف اجرایی در RBAC، Storage، مالی و Audit هنوز باز هستند. این مرحله برای پذیرش نهایی بسته نیست.
+
+
+## 17. جمع‌بندی نهایی ممیزی مرحله دوم روی main در commit `638bf5fc6ed2709ad7f0cd072aff6ad826499f6c`
+
+این بخش نتیجه بخش 16 را با وضعیت واقعی main پس از ادغام PRهای #412 و #442 جایگزین می‌کند. شمارش ماشینی Git tree برای همین main انجام شده است: 1,212 ورودی، 119 Migration، 105 Model، 115 Service، 53 Controller و 133 فایل تست PHP.
+
+### 17.1 رفع یافته‌های Schema که در CI واقعی آشکار شدند
+
+**Feedback Evidence و Audit Ledger — PR #412، ادغام‌شده**
+
+- Migration `2026_09_30_000004_add_feedback_trust_and_audit_ledger.php` دیگر به ترتیب فیزیکی ستون‌های ناموجود وابسته نیست و قرارداد Feedback Evidence را با ستون‌های لازم هم‌راستا می‌کند.
+- Migration `2026_11_11_230000_reconcile_farast_feedback_evidence_schema.php` برای ارتقای دیتابیس‌های قبلی و ایجاد indexهای ترکیبی افزایشی است.
+- آزمون `FarastFeedbackEvidenceSchemaTest` وجود ستون‌ها و indexهای لازم را assert می‌کند و در job مستقل MySQL اجرا می‌شود.
+- هسته Audit Ledger در PR #412 با checksum نسخه ۲، canonicalization سازگار با JSON دیتابیس، حفظ مسیر legacy v1، append serialization و verification جریانی تکمیل شد.
+
+**Review / Approved Knowledge / Evaluation — PR #442، ادغام‌شده**
+
+- Migration `2026_11_11_230200_reconcile_feedback_review_evaluation_schema.php` ستون‌ها و indexهای مصرف‌شده توسط `FeedbackPipelineService` را در جدول‌های موجود تکمیل می‌کند؛ جدول یا موتور موازی ایجاد نشده است.
+- Migration افزایشی است و rollback آن داده‌های review و knowledge را حذف نمی‌کند.
+- `FeedbackPipelineSchemaTest` از مسیر واقعی سرویس، ثبت feedback، queue review، approve/reject، ذخیره دانش تأییدشده، ساخت evaluation case و promotion نسخه ابزار را اجرا می‌کند.
+- همین تست در job MySQL 8.4 قرار گرفته است؛ پس قرارداد فقط با SQLite سنجیده نمی‌شود.
+
+### 17.2 شواهد Runtime و CI
+
+روی head نهایی PR #442 برابر `cba8311e62a42a477dbf74412666f06970b788dc` همه checkهای لازم موفق شدند:
+
+| Check | نتیجه |
+|---|---|
+| Laravel کامل، شامل تست‌ها و Playwright | موفق |
+| MySQL 8.4 migration و audit/schema tests | موفق |
+| Phase 3 Commerce | موفق |
+| Phase 4 Agent | موفق |
+| Voice service contract | موفق |
+| Document audio smoke | موفق |
+| Agent workflow | موفق |
+| Reader browser regression | skipped، چون Laravel موفق بود |
+| Voice model smoke | skipped، چون شرط شاخه مخصوص آن برقرار نبود |
+
+سه فایل اجرایی PR #442 در main جاری با همان blobهای تأییدشده ادغام‌شده‌اند: workflow، Migration جدید و تست سرتاسری. بنابراین شواهد CI مربوط به همان محتوای اجرایی است که اکنون در main قرار دارد. PR #412 نیز پیش‌تر با FARAST CI، MySQL 8.4، Phase 3 و Phase 4 سبز ادغام شده است.
+
+### 17.3 وضعیت فعلی PRهای هم‌پوشان
+
+| PR | وضعیت | مسیر بعدی |
+|---:|---|---|
+| #371 | merged | مالکیت Route اعلان و یکتایی نام Routeها در main تثبیت شده است. |
+| #412 | merged | مرحله ۹ مشاهده‌پذیری و Audit Ledger در main است. |
+| #442 | merged | قرارداد Schema و اجرای Feedback/Review/Evaluation در main است. |
+| #347 | open، `mergeable=false` | کار مرحله ۳ RBAC؛ نیازمند rebase و حل تعارض روی main جدید. |
+| #335 | open، `mergeable=false` | کار مرحله ۵ Storage؛ نیازمند rebase و آزمون یکپارچه با چرخه فایل. |
+| #340 | open، `mergeable=false` | کار مالی؛ نیازمند rebase و آزمون idempotency/reconciliation. |
+| #438 | closed، not merged | superseded؛ اصلاح Feedback Evidence در #412 و بخش Review/Evaluation در #442 جایگزین شده است. |
+| #353 و #426 | closed، not merged | superseded by #412؛ شاخه‌های قدیمی observability نباید جداگانه ادغام شوند. |
+
+### 17.4 نتیجه و مرز اعتبار ممیزی
+
+**خروجی ممیزی مرحله دوم برای مخزن و main تکمیل شد.** دفتر منابع حقیقت قابلیت‌ها، ماتریس traceability، Route ownership، inventory مدل/سرویس/کنترلر/Migration، call-siteها، ERD سطح اول، جریان‌های بین‌ماژولی و دفتر هم‌پوشانی شاخه‌ها در مستندات معماری ثبت شده‌اند. دو شکاف Schema که از اجرای MySQL آشکار شدند نیز با Migration و تست روی main تعیین تکلیف شدند.
+
+این نتیجه به معنی «رفع تمام ریسک‌های معماری» یا «تأیید Production» نیست. یافته‌های RBAC، Storage، مالی، pricing/entitlement، product intake و workflow همچنان به‌عنوان کارهای اجرایی مراحل بعدی باز هستند و نباید با قابلیت‌های ادغام‌نشده اشتباه گرفته شوند.
+
+**محدودیت شواهد:** دسترسی مستقیم به دیتابیس Production یا snapshot قابل‌بازیابی آن در این ممیزی وجود نداشت. بنابراین clean install و قراردادهای Schema در CI روی SQLite و MySQL 8.4 اثبات شده‌اند؛ اما upgrade روی clone واقعی Production، تطبیق داده‌های موجود، و آزمون restore عملیاتی باید در مرحله استقرار انجام شوند.
+
+**تصمیم نهایی مرحله دوم:** ممیزی منبع حقیقت در سطح کد و CI بسته شد؛ موارد باقی‌مانده به مراحل اجرایی مربوط خود منتقل شدند. هیچ قابلیت جدید یا زیرسیستم موازی برای بستن این مرحله ساخته نشد.
