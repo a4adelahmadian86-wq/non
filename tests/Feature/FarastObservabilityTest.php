@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Http\Middleware\FarastObservability;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -117,5 +119,34 @@ class FarastObservabilityTest extends TestCase
                     && ($context['exception_class'] ?? null) === \RuntimeException::class;
             })
         );
+    }
+
+    public function test_queue_job_lifecycle_restores_and_clears_the_originating_trace(): void
+    {
+        $job = \Mockery::mock(Job::class);
+        $job->shouldReceive('payload')->andReturn([
+            'farast_trace' => [
+                'request_id' => 'origin-request-123',
+                'correlation_id' => 'origin-correlation-456',
+            ],
+        ]);
+        $job->shouldReceive('getJobId')->andReturn('job-123');
+        $job->shouldReceive('getQueue')->andReturn('default');
+        $job->shouldReceive('resolveName')->andReturn('App\Jobs\TraceableJob');
+        $job->shouldReceive('attempts')->andReturn(1);
+
+        Event::dispatch(new JobProcessing('database', $job));
+
+        $this->assertSame([
+            'request_id' => 'origin-request-123',
+            'correlation_id' => 'origin-correlation-456',
+        ], app(\App\Services\FarastTraceContext::class)->current());
+
+        Event::dispatch(new JobProcessed('database', $job));
+
+        $this->assertSame([
+            'request_id' => null,
+            'correlation_id' => null,
+        ], app(\App\Services\FarastTraceContext::class)->current());
     }
 }
