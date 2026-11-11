@@ -23,6 +23,11 @@ Schedule::command('storage:cleanup-deferred-deletes --limit=100')
     ->everyFiveMinutes()
     ->withoutOverlapping(10);
 
+// Recover abandoned backup jobs and snapshot locks before they block storage operations.
+Schedule::command('storage:recover-stale-backup-runs')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(20);
+
 // Encrypted weekly application backup to configured foreign backup volumes.
 Schedule::command('storage:backup-weekly')
     ->weeklyOn(0, '02:00')
