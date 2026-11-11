@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Conversation;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,7 @@ class InternalMessengerTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        app(AuthorizationService::class)->forgetUser($user->id);
     }
 
     public function test_user_can_create_a_private_conversation_and_send_a_message(): void
