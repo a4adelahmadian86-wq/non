@@ -18,7 +18,6 @@ class VerifyAuditLedger extends Command
         try {
             $result = $integrity->verify();
         } catch (Throwable $exception) {
-            report($exception);
             Log::critical('farast.audit.integrity_check_failed', [
                 'exception_class' => get_class($exception),
             ]);
