@@ -71,7 +71,7 @@ test('storage persistence denial is reported to the reader UI',async({page})=>{
  await page.goto('/');
  await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
  const result=await page.evaluate(()=>window.FarastReaderDurableStore.requestPersistence());
- expect(result).toEqual({supported:true,persisted:false,granted:false});
+ expect(result).toMatchObject({supported:true,persisted:false,granted:false,reason:null,usage:1,quota:100});
  await expect.poll(()=>page.evaluate(()=>window.__persistenceStatuses.length)).toBe(1);
 });
 
