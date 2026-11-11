@@ -367,7 +367,15 @@ class PlatformCompletionController extends Controller {
    422,
    'عضویت تیم فقط برای کاربر همان سازمان مجاز است.'
   );
-  DB::transaction(function()use($teamRecord,$member,$x):void{
+  $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$member->id)->first();
+  $beforeState=[
+   'team_id'=>(int)$teamRecord->id,
+   'organization_id'=>(int)$teamRecord->organization_id,
+   'user_id'=>(int)$member->id,
+   'team_role'=>$beforeMembership?->team_role,
+   'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
+  ];
+  DB::transaction(function()use($r,$teamRecord,$member,$x,$beforeState):void{
    DB::table('team_user')->updateOrInsert(
     ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
     ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
@@ -377,6 +385,14 @@ class PlatformCompletionController extends Controller {
    } elseif($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
     $teamRecord->update(['supervisor_id'=>null]);
    }
+   $teamRecord->refresh();
+   $this->auditAccessChange($r,'team.member.added',(int)$member->id,$beforeState,[
+    'team_id'=>(int)$teamRecord->id,
+    'organization_id'=>(int)$teamRecord->organization_id,
+    'user_id'=>(int)$member->id,
+    'team_role'=>$x['team_role'],
+    'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
+   ]);
   });
   app(AuthorizationService::class)->forgetUser((int)$member->id);
   return back()->with('status','عضو تیم به‌روزرسانی شد.');
@@ -385,14 +401,49 @@ class PlatformCompletionController extends Controller {
   abort_unless($r->user()?->isAdmin(),403);
   $teamRecord=\App\Models\Team::query()->findOrFail((int)$team);
   $memberId=(int)$user;
-  DB::transaction(function()use($teamRecord,$memberId):void{
+  $member=\App\Models\User::query()->findOrFail($memberId);
+  $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->first();
+  $beforeSupervisorId=$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null;
+  if(! $beforeMembership && $beforeSupervisorId!==$memberId){return back();}
+  $beforeState=[
+   'team_id'=>(int)$teamRecord->id,
+   'organization_id'=>(int)$teamRecord->organization_id,
+   'user_id'=>$memberId,
+   'team_role'=>$beforeMembership?->team_role,
+   'supervisor_id'=>$beforeSupervisorId,
+  ];
+  DB::transaction(function()use($r,$teamRecord,$member,$memberId,$beforeState):void{
    DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->delete();
    if((int)$teamRecord->supervisor_id===$memberId){
     $teamRecord->update(['supervisor_id'=>null]);
    }
+   $teamRecord->refresh();
+   $this->auditAccessChange($r,'team.member.removed',$memberId,$beforeState,[
+    'team_id'=>(int)$teamRecord->id,
+    'organization_id'=>(int)$teamRecord->organization_id,
+    'user_id'=>$memberId,
+    'team_role'=>null,
+    'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
+   ]);
   });
   app(AuthorizationService::class)->forgetUser($memberId);
   return back();
+ }
+ private function auditAccessChange(Request $request,string $action,int $subjectUserId,array $before,array $after):void
+ {
+  abort_unless(\\Illuminate\\Support\\Facades\\Schema::hasTable('farast_access_audit_logs'),503,'زیرساخت ممیزی دسترسی در دسترس نیست.');
+  DB::table('farast_access_audit_logs')->insert([
+   'actor_id'=>$request->user()?->id,
+   'subject_user_id'=>$subjectUserId,
+   'role_id'=>null,
+   'permission_id'=>null,
+   'action'=>$action,
+   'before_state'=>json_encode($before,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+   'after_state'=>json_encode($after,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+   'ip_address'=>$request->ip(),
+   'user_agent'=>mb_substr((string)$request->userAgent(),0,4000),
+   'created_at'=>now(),
+  ]);
  }
  private function auditWorkflow(Request $request,int $ownerId,?int $workflowId,string $action,?array $before,?array $after):void
  {
