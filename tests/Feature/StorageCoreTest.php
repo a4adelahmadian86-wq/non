@@ -104,6 +104,7 @@ class StorageCoreTest extends TestCase
             'object_key' => 'reservations/first.bin',
         ]);
         $this->assertNotNull($reservation);
+        $this->assertSame(3, $volume->fresh()->free_bytes);
         $this->assertNull($storage->reserveVolumeCapacity($volume, 4, 'concurrent-upload', [
             'object_key' => 'reservations/second.bin',
         ]));
@@ -128,6 +129,7 @@ class StorageCoreTest extends TestCase
         $volume->refresh();
         $this->assertSame(strlen($stagedContents), $volume->used_bytes);
         $this->assertSame(1, $volume->object_count);
+        $this->assertSame(6, $volume->free_bytes);
         $this->assertDatabaseCount('storage_volume_reservations', 0);
     }
 
