@@ -235,6 +235,15 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 
 این خوشه در کنار PR #335 قرار می‌گیرد که همان `AdminStoreController` و `StoreController` را برای centralize کردن artifact storage تغییر می‌دهد. بنابراین انتخاب intake و publication state machine باید قبل از rebase نهایی storage انجام شود؛ در غیر این صورت یک کنترلر بزرگ با چند مسیر موازی upload/review/publish ساخته خواهد شد.
 
+**تعارض درون خود PR #333:** این PR علاوه بر `StoreProductIntakeSession/StoreProductIntakeFile`، متدهای قدیمی مبتنی بر `StoreProductIngestion` را نیز در همان `AdminStoreController` نگه می‌دارد. مدل جدید فایل، فیلدهایی مانند `staging_disk/path`, `managed_file_id`, `original_name`, `mime`, `size_bytes`, `sha256`, `inspection_json`, `is_primary` و `expires_at` دارد که بخش زیادی از آن‌ها در `StoreProductIngestion` فعلی هم وجود دارند؛ اما رابطه مستقیم `ingestion_id` بین دو مدل تعریف نشده است. پس در head این PR دو مسیر فعال staging/upload وجود دارد، نه یک مسیر جایگزین‌شده.
+
+**تعدد jobهای publication/review در شاخه‌های باز:**
+- #262: `RunProductPublicationReview`
+- #318/#279: `ReviewProductForPublication` و `ReviewProductFileAsset`
+- #333: `ReviewProductPublicationRequest` و `ReviewProductIntakeFile`
+
+این jobها به یک supervisor و یک محصول اشاره می‌کنند، اما ورودی، رکورد state و قرارداد خروجی یکسانی ندارند. `ProcessProductDocument` باید همان job پردازش سند باقی بماند؛ AI review فایل و publication نباید آن را با pipeline مستقل دیگری جایگزین کنند.
+
 ### 8.4 تصمیم معماری لازم
 
 **منبع حقیقت فعلی در main:**
