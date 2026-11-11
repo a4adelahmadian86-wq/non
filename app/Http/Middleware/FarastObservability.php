@@ -66,6 +66,9 @@ class FarastObservability
                     } else {
                         Log::info('farast.request.completed', $context);
                     }
+                    if ($response?->getStatusCode() === 403) {
+                        $this->recordAuthorizationAnomaly($request);
+                    }
                 } catch (Throwable $exception) {
                     error_log('FARAST request completion logging failed: '.get_class($exception));
                 }
@@ -88,6 +91,61 @@ class FarastObservability
                     }
                 }
             }
+        }
+    }
+
+
+    private function recordAuthorizationAnomaly(Request $request): void
+    {
+        try {
+            $actorId = $request->user()?->getAuthIdentifier();
+            $source = $actorId !== null ? 'user:'.$actorId : (string) $request->ip();
+            if ($source === '') {
+                return;
+            }
+
+            $window = max(1, (int) config('observability.security.authorization_denied_window_minutes', 10));
+            $fingerprint = hash_hmac('sha256', $source, (string) config('app.key'));
+            $key = 'farast:security:authorization-denied:'.$fingerprint;
+            \Illuminate\Support\Facades\Cache::add($key, 0, now()->addMinutes($window));
+            $count = (int) \Illuminate\Support\Facades\Cache::increment($key);
+
+            $warningThreshold = max(2, (int) config('observability.security.authorization_denied_warning_threshold', 10));
+            $criticalThreshold = max($warningThreshold + 1, (int) config('observability.security.authorization_denied_critical_threshold', 25));
+
+            foreach ([$warningThreshold => 'warning', $criticalThreshold => 'critical'] as $threshold => $level) {
+                if ($count < $threshold || ! \Illuminate\Support\Facades\Cache::add($key.':alert:'.$threshold, true, now()->addMinutes($window))) {
+                    continue;
+                }
+
+                $metadata = [
+                    'source_fingerprint' => substr($fingerprint, 0, 16),
+                    'denied_requests' => $count,
+                    'threshold' => $threshold,
+                    'window_minutes' => $window,
+                    'route' => $request->route()?->getName(),
+                ];
+                Log::log($level, 'farast.security.authorization_anomaly', $metadata);
+
+                try {
+                    app(\App\Services\AuditEventService::class)->record(
+                        'security.authorization_anomaly',
+                        null,
+                        null,
+                        'authorization',
+                        null,
+                        $metadata + ['severity' => $level],
+                        'security'
+                    );
+                } catch (Throwable $auditException) {
+                    Log::critical('farast.security.authorization_anomaly_audit_failed', [
+                        'exception_class' => get_class($auditException),
+                    ]);
+                }
+            }
+        } catch (Throwable $exception) {
+            // An unavailable cache or audit store must never alter the authorization response.
+            error_log('FARAST authorization anomaly detection failed: '.get_class($exception));
         }
     }
 
