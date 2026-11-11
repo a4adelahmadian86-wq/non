@@ -39,6 +39,33 @@
                     </select>
                 </label>
                 <label>بازه تحلیل (روز)<input name="signal_window_days" type="number" min="1" max="90" value="14"></label>
+                <label>نقش مشتری
+                    <select name="role">
+                        <option value="">همه نقش‌ها</option>
+                        <option value="organization_manager">مدیر سازمان</option>
+                        <option value="team_supervisor">سرپرست تیم</option>
+                        <option value="employee">کارمند</option>
+                        <option value="observer">ناظر</option>
+                        <option value="guest">مهمان</option>
+                        <option value="admin">مدیر</option>
+                    </select>
+                </label>
+                <label>وضعیت احراز هویت
+                    <select name="verification">
+                        <option value="any">همه وضعیت‌ها</option>
+                        <option value="verified">تأییدشده</option>
+                        <option value="unverified">تأییدنشده</option>
+                    </select>
+                </label>
+                <label>ثبت‌نام از<input name="registered_after" type="date"></label>
+                <label>ثبت‌نام تا<input name="registered_before" type="date"></label>
+                <label>حداقل تعداد سفارش<input name="min_orders" type="number" min="1" max="1000" placeholder="مثلاً ۲"></label>
+                <label>سابقه خرید
+                    <select name="paid_customer">
+                        <option value="">بدون شرط خرید</option>
+                        <option value="yes">حداقل یک سفارش پرداخت‌شده</option>
+                    </select>
+                </label>
                 <label class="crm-marketing__wide">توضیح (اختیاری)<input name="description" maxlength="1000" placeholder="هدف و کاربرد این گروه"></label>
                 <div class="crm-marketing__actions crm-marketing__wide">
                     <button type="button" class="is-secondary" id="previewAudience">محاسبه مخاطبان</button>
@@ -187,6 +214,19 @@
             filters.signal_product_id = Number(productId);
         }
         filters.signal_window_days = Number(form.elements.signal_window_days.value || 14);
+
+        const role = form.elements.role.value;
+        const verification = form.elements.verification.value;
+        const registeredAfter = form.elements.registered_after.value;
+        const registeredBefore = form.elements.registered_before.value;
+        const minimumOrders = form.elements.min_orders.value;
+        if (role) filters.role = role;
+        if (verification && verification !== 'any') filters.verification = verification;
+        if (registeredAfter) filters.registered_after = registeredAfter;
+        if (registeredBefore) filters.registered_before = registeredBefore;
+        if (minimumOrders) filters.min_orders = Number(minimumOrders);
+        if (form.elements.paid_customer.value === 'yes') filters.paid_customer = true;
+
         return filters;
     }
 
