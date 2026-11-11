@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\FarastTraceContext;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -20,7 +21,7 @@ class FarastObservability
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
-        $trace = app(\\App\\Services\\FarastTraceContext::class);
+        $trace = app(FarastTraceContext::class);
         $trace->set($requestId, $correlationId);
         $request->attributes->set('farast.request_id', $requestId);
         $request->attributes->set('farast.correlation_id', $correlationId);
