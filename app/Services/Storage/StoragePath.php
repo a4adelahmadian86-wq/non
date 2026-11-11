@@ -2,6 +2,7 @@
 
 namespace App\Services\Storage;
 
+use App\Models\StorageVolume;
 use InvalidArgumentException;
 
 final class StoragePath
@@ -19,5 +20,24 @@ final class StoragePath
         }
 
         return $key;
+    }
+
+    public static function localVolumePath(StorageVolume $volume, string $key): string
+    {
+        $key = self::normalizeObjectKey($key);
+        $root = storage_path('app/storage-volumes/'.$volume->id);
+        if (is_link($root)) {
+            throw new InvalidArgumentException('مسیر ریشه فضای محلی نباید پیوند نمادین باشد.');
+        }
+
+        $cursor = $root;
+        foreach (explode('/', $key) as $segment) {
+            $cursor .= '/'.$segment;
+            if (is_link($cursor)) {
+                throw new InvalidArgumentException('مسیر فایل از پیوند نمادین عبور می‌کند و مجاز نیست.');
+            }
+        }
+
+        return $cursor;
     }
 }
