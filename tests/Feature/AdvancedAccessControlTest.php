@@ -422,6 +422,58 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_existing_owner_and_supervisor_team_roles_grant_only_managed_team_scope(): void
+    {
+        $organization = Organization::create(['name' => 'Managed Roles Org', 'slug' => 'managed-roles-org', 'status' => 'active']);
+        $manager = $this->user('09140000137', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $memberA = $this->user('09140000138', User::ROLE_EMPLOYEE, $organization->id);
+        $memberB = $this->user('09140000139', User::ROLE_EMPLOYEE, $organization->id);
+        $teamSupervisor = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Supervisor Pivot Team',
+            'slug' => 'supervisor-pivot-team',
+        ]);
+        $teamOwner = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Owner Pivot Team',
+            'slug' => 'owner-pivot-team',
+        ]);
+
+        DB::table('team_user')->insert([
+            ['team_id' => $teamSupervisor->id, 'user_id' => $manager->id, 'team_role' => 'supervisor', 'created_at' => now(), 'updated_at' => now()],
+            ['team_id' => $teamSupervisor->id, 'user_id' => $memberA->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+            ['team_id' => $teamOwner->id, 'user_id' => $manager->id, 'team_role' => 'owner', 'created_at' => now(), 'updated_at' => now()],
+            ['team_id' => $teamOwner->id, 'user_id' => $memberB->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $supervisorRole = $this->role('supervisor-pivot-access', 'team', $teamSupervisor->id);
+        $this->grant($supervisorRole, 'access.audit', 'team');
+        $this->assign($manager, $supervisorRole, 'team', $teamSupervisor->id);
+        $ownerRole = $this->role('owner-pivot-access', 'team', $teamOwner->id);
+        $this->grant($ownerRole, 'access.audit', 'team');
+        $this->assign($manager, $ownerRole, 'team', $teamOwner->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allowsFor($manager, 'access.audit', [
+            'organization_id' => $organization->id,
+            'team_id' => $teamSupervisor->id,
+        ]));
+        $this->assertTrue($authorization->allowsFor($manager, 'access.audit', [
+            'organization_id' => $organization->id,
+            'team_id' => $teamOwner->id,
+        ]));
+
+        $visibleUsers = \\App\\Http\\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team');
+        $this->assertContains($memberA->id, $visibleUsers);
+        $this->assertContains($memberB->id, $visibleUsers);
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'team');
+        $visibleTeams = app(AdminConsoleService::class)->visibleTeamIds($manager);
+        $this->assertContains($teamSupervisor->id, $visibleTeams);
+        $this->assertContains($teamOwner->id, $visibleTeams);
+    }
+
     public function test_regular_team_membership_does_not_create_team_management_scope(): void
     {
         $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
