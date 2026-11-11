@@ -131,10 +131,27 @@ class S3CompatibleAdapter
             ['Range' => 'bytes='.$start.'-'.$end],
             ['stream' => true]
         );
-        if ($response->getStatusCode() !== 206) {
-            throw new RuntimeException('فضای ذخیره‌سازی درخواست دریافت بخشی از فایل را پشتیبانی نکرد.');
+        $status = $response->getStatusCode();
+        if (! in_array($status, [200, 206], true)) {
+            throw new RuntimeException('پاسخ دریافت بخشی از فایل از فضای ذخیره‌سازی نامعتبر بود.');
         }
         $body = $response->getBody();
+        if ($status === 206) {
+            $contentRange = $response->getHeaderLine('Content-Range');
+            if (! preg_match('/^bytes '.preg_quote((string) $start, '/').'-'.preg_quote((string) $end, '/').'\\/\\d+$/', $contentRange)) {
+                throw new RuntimeException('محدوده پاسخ فضای ذخیره‌سازی با درخواست یکسان نیست.');
+            }
+        } else {
+            // Some S3-compatible providers ignore Range. Fall back to a bounded
+            // stream skip rather than buffering the entire object in memory.
+            $skip = $start;
+            while ($skip > 0 && ! $body->eof()) {
+                $chunk = $body->read(min(65536, $skip));
+                if ($chunk === '') break;
+                $skip -= strlen($chunk);
+            }
+            if ($skip !== 0) throw new RuntimeException('پرش به محدوده درخواستی در فضای ذخیره‌سازی ناموفق بود.');
+        }
         $remaining = $length;
         while ($remaining > 0 && ! $body->eof()) {
             $chunk = $body->read(min(65536, $remaining));
