@@ -257,4 +257,25 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertSame(0, $count);
         $this->assertSame(0, DB::table('farast_workflow_runs')->count());
     }
+    public function test_financial_domain_events_use_the_isolated_critical_queue(): void
+    {
+        $user = $this->user('09152223350');
+
+        $eventId = app(WorkflowEngine::class)->enqueue('order.paid', [
+            'user_id' => $user->id,
+            'order_id' => 550,
+            'amount_rials' => 750000,
+            'order_kind' => 'store',
+            'status' => 'paid',
+        ], 'order:550:paid');
+
+        $this->assertGreaterThan(0, $eventId);
+        $this->assertDatabaseHas('jobs', [
+            'queue' => 'automation-critical',
+        ]);
+        $this->assertDatabaseMissing('jobs', [
+            'queue' => 'automation',
+        ]);
+    }
+
 }
