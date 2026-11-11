@@ -441,9 +441,18 @@ class AdminAccessCenterController extends Controller
 
         if ($role->scope_type === 'team') {
             $teamId = (int) $role->scope_id;
-            $belongs = $target->teams()->where('teams.id', $teamId)->wherePivot('team_role', 'manager')->exists()
-                || Team::query()->whereKey($teamId)->where('supervisor_id', $target->id)->exists();
-            abort_unless($belongs, 422, 'کاربر عضو تیم محدوده نقش نیست.');
+            $team = $target->organization_id
+                ? Team::query()->whereKey($teamId)->where('organization_id', $target->organization_id)->first()
+                : null;
+            $belongs = $team !== null && (
+                $target->teams()
+                    ->where('teams.id', $teamId)
+                    ->where('teams.organization_id', $target->organization_id)
+                    ->wherePivot('team_role', 'manager')
+                    ->exists()
+                || (int) $team->supervisor_id === (int) $target->id
+            );
+            abort_unless($belongs, 422, 'کاربر عضو مدیریتی تیمی در سازمان خودش نیست.');
 
             if ($assignmentScope === 'team') {
                 abort_unless($assignmentScopeId === $teamId, 422, 'محدوده انتساب باید با تیم تعریف‌شده برای نقش یکسان باشد.');
@@ -478,9 +487,18 @@ class AdminAccessCenterController extends Controller
         if ($scope === 'organization') {
             abort_unless($user->organization_id && (int) $user->organization_id === $scopeId, 422, 'کاربر عضو سازمان انتخاب‌شده نیست.');
         } elseif ($scope === 'team') {
-            $belongs = $user->teams()->where('teams.id', $scopeId)->wherePivot('team_role', 'manager')->exists()
-                || Team::query()->where('id', $scopeId)->where('supervisor_id', $user->id)->exists();
-            abort_unless($belongs, 422, 'کاربر عضو یا سرپرست تیم انتخاب‌شده نیست.');
+            $team = $user->organization_id
+                ? Team::query()->whereKey($scopeId)->where('organization_id', $user->organization_id)->first()
+                : null;
+            $belongs = $team !== null && (
+                $user->teams()
+                    ->where('teams.id', $scopeId)
+                    ->where('teams.organization_id', $user->organization_id)
+                    ->wherePivot('team_role', 'manager')
+                    ->exists()
+                || (int) $team->supervisor_id === (int) $user->id
+            );
+            abort_unless($belongs, 422, 'کاربر عضو مدیریتی تیمی در سازمان خودش نیست.');
         }
     }
 
