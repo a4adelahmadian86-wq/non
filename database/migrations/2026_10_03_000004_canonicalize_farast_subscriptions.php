@@ -92,7 +92,7 @@ return new class extends Migration
                 'starts_at' => $row->starts_at ?? now(),
                 'ends_at' => $row->ends_at ?? null,
                 'cancelled_at' => $row->cancelled_at ?? null,
-                'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
                 'created_at' => $row->created_at ?? now(),
                 'updated_at' => $row->updated_at ?? now(),
             ];
@@ -114,7 +114,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        foreach (array_chunk($normalized, 500) as $chunk) {
+        foreach (array_chunk($normalized, 50) as $chunk) {
             if ($chunk !== []) {
                 DB::table($staging)->insert($chunk);
             }
