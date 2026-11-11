@@ -20,10 +20,10 @@ class AuditLogService
             ?? $request?->attributes->get('farast.correlation_id');
 
         if (is_string($requestId) && $requestId !== '') {
-            $meta['request_id'] ??= $requestId;
+            $meta['request_id'] = $requestId;
         }
         if (is_string($correlationId) && $correlationId !== '') {
-            $meta['correlation_id'] ??= $correlationId;
+            $meta['correlation_id'] = $correlationId;
         }
 
         $safeMeta = $this->sanitize($meta);
