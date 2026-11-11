@@ -88,6 +88,7 @@ class EditorDocumentService
                 'customer_id' => (int) $legacy->user_id,
                 'document_id' => (int) $document->id,
                 'revision' => $nextRevision,
+                'status' => (string) $document->status,
             ], 'document:'.$document->id.':revision:'.$nextRevision);
 
             return [
@@ -153,6 +154,7 @@ class EditorDocumentService
                 'customer_id' => (int) $legacy->user_id,
                 'document_id' => (int) $locked->id,
                 'revision' => $nextRevision,
+                'status' => (string) $locked->status,
             ], 'document:'.$locked->id.':revision:'.$nextRevision);
 
             return [
