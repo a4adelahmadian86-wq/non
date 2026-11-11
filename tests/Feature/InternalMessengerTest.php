@@ -291,4 +291,25 @@ class InternalMessengerTest extends TestCase
     }
 
 
+    public function test_blocking_one_participant_does_not_lock_other_members_out_of_a_conversation(): void
+    {
+        $organization = $this->makeOrganization();
+        $owner = $this->makeEmployee($organization);
+        $member = $this->makeEmployee($organization);
+        $conversation = Conversation::create([
+            'type' => 'direct',
+            'created_by' => $owner->id,
+            'direct_key' => hash('sha256', collect([$owner->id, $member->id])->sort()->implode(':')),
+        ]);
+        $conversation->participants()->attach([
+            $owner->id => ['role' => 'owner'],
+            $member->id => ['role' => 'member'],
+        ]);
+        $member->forceFill(['is_blocked' => true])->save();
+
+        $this->actingAs($owner)->get(route('messenger.show', $conversation))->assertOk();
+        $this->actingAs($member)->get(route('messenger.show', $conversation))->assertForbidden();
+    }
+
+
 }
