@@ -329,7 +329,9 @@ class WorkflowEngine
                     $withoutMappings->whereNotExists(function ($empty) {
                         $empty->select(DB::raw(1))->from('farast_workflow_event_workflows')
                             ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id');
-                    })->where('attempts', '<', 5);
+                    })->where(function ($attempts) {
+                        $attempts->where('attempts', '<', 5)->orWhereNotNull('matched_at');
+                    });
                 })->orWhereExists(function ($retryable) {
                     $retryable->select(DB::raw(1))->from('farast_workflow_event_workflows')
                         ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
