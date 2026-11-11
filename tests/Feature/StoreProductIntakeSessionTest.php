@@ -1,22 +1,22 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Jobs\\ReviewProductIntakeFile;
-use App\\Models\\Permission;
-use App\\Models\\RolePermission;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductIntakeFile;
-use App\\Models\\StoreProductIntakeSession;
-use App\\Models\\User;
-use App\\Services\\Storage\\StorageManager;
-use App\\Services\\UploadSecurityService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Http\\UploadedFile;
-use Illuminate\\Support\\Facades\\Queue;
-use Illuminate\\Support\\Facades\\Storage;
-use Illuminate\\Support\\Str;
-use Tests\\TestCase;
+use App\Jobs\ReviewProductIntakeFile;
+use App\Models\Permission;
+use App\Models\RolePermission;
+use App\Models\StoreProduct;
+use App\Models\StoreProductIntakeFile;
+use App\Models\StoreProductIntakeSession;
+use App\Models\User;
+use App\Services\Storage\StorageManager;
+use App\Services\UploadSecurityService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Tests\TestCase;
 
 class StoreProductIntakeSessionTest extends TestCase
 {
