@@ -1,7 +1,7 @@
 <?php
 
-use App\\Http\\Controllers\\ReadinessController;
-use Illuminate\\Support\\Facades\\Route;
+use App\Http\Controllers\ReadinessController;
+use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/web_core.php';
 require __DIR__.'/store_routes.php';
