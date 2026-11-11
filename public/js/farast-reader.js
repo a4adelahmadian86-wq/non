@@ -687,12 +687,15 @@
       pdfLoading.replaceChildren();
       const text=document.createElement('p');
       text.textContent=message;
-      const retry=document.createElement('button');
-      retry.type='button';
-      retry.className='farast-pdf-retry';
-      retry.textContent='تلاش دوباره';
-      retry.addEventListener('click',()=>{pdfLoading.hidden=true;showItem(itemIndex).catch(showPdfError);});
-      pdfLoading.append(text,retry);
+      pdfLoading.append(text);
+      if(error?.message!=='PDF_ENGINE_MISSING'){
+        const retry=document.createElement('button');
+        retry.type='button';
+        retry.className='farast-pdf-retry';
+        retry.textContent='تلاش دوباره';
+        retry.addEventListener('click',()=>{pdfLoading.hidden=true;showItem(itemIndex).catch(showPdfError);});
+        pdfLoading.append(retry);
+      }
     }
     console.error('FARAST reader PDF error',error);
   };
