@@ -53,6 +53,7 @@ Commit مبنا: `90ee46c90bf1879f8281095769baf88803cce24a`
 - `APP_ENV=production`
 - `APP_DEBUG=false`
 - `APP_KEY` پایدار و مختص همان محیط
+- کلید `APP_KEY` و کلید رمزنگاری هر نسل بکاپ باید تا پایان Retention همان نسل حفظ شوند. چرخش `FARAST_BACKUP_ENCRYPTION_KEY` بدون نگهداری کلید قبلی، آرشیوهای قبلی را غیرقابل بازیابی می‌کند؛ برای Restore قدیمی، کلید متناظر همان آرشیو را موقتاً از Secret Manager بارگذاری کنید. تغییر `APP_KEY` نیز بدون مهاجرت/رمزگشایی داده‌های رمز‌شده، اتصال‌های Storage را از کار می‌اندازد.
 - `APP_URL` با HTTPS
 - اطلاعات اتصال دیتابیس و Redis در صورت استفاده
 - `FARAST_BACKUP_ENCRYPTION_KEY`
