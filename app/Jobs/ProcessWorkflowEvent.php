@@ -38,7 +38,8 @@ class ProcessWorkflowEvent implements ShouldQueue, ShouldBeUnique
         $engine->processQueuedEvent($this->eventId);
 
         $event = DB::table('farast_workflow_events')->where('id', $this->eventId)->first();
-        if ($event && $event->status === 'failed' && (int) $event->attempts < 5) {
+        if ($event && $event->status === 'failed'
+            && ((int) $event->attempts < 5 || $engine->hasRetryableWorkflowSteps($this->eventId))) {
             throw new \RuntimeException('Workflow event has retryable failed steps.');
         }
     }
