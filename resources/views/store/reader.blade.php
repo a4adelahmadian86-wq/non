@@ -188,9 +188,15 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 
 <style>
 .farast-pdf-document,.farast-pdf-cont-page{position:relative}
-.farast-pdf-annotation-layer{position:absolute;top:0;left:0;z-index:2;pointer-events:none;transform-origin:0 0}
-.farast-pdf-annotation-layer .linkAnnotation,.farast-pdf-annotation-layer .widgetAnnotation,.farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select,.farast-pdf-annotation-layer button{pointer-events:auto}
-.farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select{max-width:100%;font:inherit}
+.farast-pdf-annotation-layer.annotationLayer{position:absolute;top:0;left:0;z-index:2;overflow:hidden;pointer-events:none;transform-origin:0 0}
+.farast-pdf-annotation-layer section{position:absolute;text-align:initial}
+.farast-pdf-annotation-layer .linkAnnotation{pointer-events:auto}
+.farast-pdf-annotation-layer .linkAnnotation>a{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:pointer}
+.farast-pdf-annotation-layer .linkAnnotation>a:hover{background:rgba(59,130,246,.12);outline:1px solid rgba(59,130,246,.55)}
+.farast-pdf-annotation-layer .widgetAnnotation{pointer-events:auto}
+.farast-pdf-annotation-layer .widgetAnnotation input,.farast-pdf-annotation-layer .widgetAnnotation textarea,.farast-pdf-annotation-layer .widgetAnnotation select{box-sizing:border-box;width:100%;height:100%;max-width:100%;font:inherit;color:#111827;background:rgba(255,255,255,.88);border:1px solid rgba(75,85,99,.55);border-radius:2px}
+.farast-pdf-annotation-layer .widgetAnnotation input[type=checkbox],.farast-pdf-annotation-layer .widgetAnnotation input[type=radio]{width:auto;height:auto;max-width:none}
+.farast-pdf-annotation-layer .widgetAnnotation input:focus,.farast-pdf-annotation-layer .widgetAnnotation textarea:focus,.farast-pdf-annotation-layer .widgetAnnotation select:focus{outline:2px solid #2563eb;outline-offset:1px}
 .farast-pdf-annotation-layer :focus-visible{outline:2px solid #2563eb;outline-offset:1px}
 
 .farast-reader-layers{margin-top:14px;padding-top:12px;border-top:1px solid var(--reader-line);font-size:.72rem}
