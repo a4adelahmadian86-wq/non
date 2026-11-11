@@ -106,13 +106,8 @@ class MessengerAccessService
         }
 
         $foreignMemberExists = $conversation->participants()
-            ->where(function (Builder $query) use ($actor) {
-                $query->where('users.is_blocked', true)
-                    ->orWhereNotIn('users.role', self::STAFF_ROLES)
-                    ->orWhereNull('users.organization_id')
-                    ->orWhere('users.organization_id', '!=', $actor->organization_id);
-            })
-            ->exists();
+            ->get()
+            ->contains(fn (User $participant) => ! $this->canShareConversationWith($actor, $participant));
 
         abort_if($foreignMemberExists, 404);
     }
