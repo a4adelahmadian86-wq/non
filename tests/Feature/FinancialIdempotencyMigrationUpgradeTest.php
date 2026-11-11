@@ -174,6 +174,28 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         $this->assertDatabaseHas('payments', ['id' => 31, 'authority' => 'duplicate-authority']);
     }
 
+    public function test_upgrade_rejects_duplicate_empty_gateway_authorities_before_mutation(): void
+    {
+        DB::table('payments')->where('id', 30)->update(['authority' => '']);
+        DB::table('payments')->insert([
+            'id' => 31,
+            'order_id' => 20,
+            'gateway' => 'zarinpal',
+            'authority' => '',
+        ]);
+
+        try {
+            $this->runFinancialMigration();
+            $this->fail('Duplicate empty gateway authorities must be normalized before adding the unique index.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Duplicate payment authority', $exception->getMessage());
+        }
+
+        $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
+        $this->assertDatabaseHas('payments', ['id' => 30, 'authority' => '']);
+        $this->assertDatabaseHas('payments', ['id' => 31, 'authority' => '']);
+    }
+
     public function test_upgrade_stops_without_merging_duplicate_legacy_keys(): void
     {
         Schema::table('orders', function (Blueprint $table): void {
