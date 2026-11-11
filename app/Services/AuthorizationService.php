@@ -494,6 +494,7 @@ class AuthorizationService
             }
         }
         $this->permissionIds = [];
+        $this->decisionCache = [];
     }
 
     private function activeUser(?User $user): bool
