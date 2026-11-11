@@ -12,11 +12,13 @@ return new class extends Migration
         $this->preflightIdempotencyKeys('orders');
         $this->preflightIdempotencyKeys('payments');
         $this->preflightGatewayAuthorities();
+        $this->preflightGatewayTransactionIds();
         $this->preflightCoreReferences();
 
         $this->ensureIdempotencyColumn('orders', 'legacy-order-');
         $this->ensureIdempotencyColumn('payments', 'legacy-payment-');
         $this->ensureGatewayAuthorityIndex();
+        $this->ensureGatewayTransactionIndex();
 
         // Financial history must survive account, wallet, and order deletion.
         $this->restrictDelete('wallets', 'user_id', 'users');
@@ -67,6 +69,29 @@ return new class extends Migration
         }
     }
 
+    private function preflightGatewayTransactionIds(): void
+    {
+        if (! Schema::hasTable('payments')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('payments', 'gateway') || ! Schema::hasColumn('payments', 'transaction_id')) {
+            throw new RuntimeException('Cannot enforce payment transaction uniqueness: payments.gateway or payments.transaction_id is missing.');
+        }
+
+        $duplicate = DB::table('payments')
+            ->select('gateway', 'transaction_id')
+            ->whereNotNull('transaction_id')
+            ->where('transaction_id', '<>', '')
+            ->groupBy('gateway', 'transaction_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->first();
+
+        if ($duplicate) {
+            throw new RuntimeException('Duplicate payment transaction ID exists for gateway '.$duplicate->gateway.'; no schema or data was changed.');
+        }
+    }
+
     private function preflightCoreReferences(): void
     {
         foreach ([
@@ -105,6 +130,24 @@ return new class extends Migration
         if (! $hasUniqueIndex) {
             Schema::table('payments', function (Blueprint $table): void {
                 $table->unique(['gateway', 'authority'], 'payments_gateway_authority_unique');
+            });
+        }
+    }
+
+    private function ensureGatewayTransactionIndex(): void
+    {
+        if (! Schema::hasTable('payments')) {
+            return;
+        }
+
+        $hasUniqueIndex = collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false)
+                && ($index['columns'] ?? []) === ['gateway', 'transaction_id']
+        );
+
+        if (! $hasUniqueIndex) {
+            Schema::table('payments', function (Blueprint $table): void {
+                $table->unique(['gateway', 'transaction_id'], 'payments_gateway_transaction_id_unique');
             });
         }
     }
