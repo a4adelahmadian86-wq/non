@@ -63,6 +63,27 @@ class AdminAccessController extends Controller
         return response()->json(['role' => $role], 201);
     }
 
+    public function updateRole(Request $request, string $roleKey): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'],
+            'permissions' => ['sometimes', 'array'],
+            'permissions.*' => ['string', 'exists:permissions,key'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]);
+
+        $role = $this->authorization->updateRole(
+            $request->user(),
+            $roleKey,
+            $data['name'],
+            $data['permissions'] ?? [],
+            array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true,
+            $request,
+        );
+
+        return response()->json(['role' => $role]);
+    }
+
     public function assignRole(Request $request, int $user): JsonResponse
     {
         $data = $request->validate([
