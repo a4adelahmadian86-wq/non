@@ -10,7 +10,7 @@ class StoreProductIntakeFile extends Model
     protected $fillable = [
         'intake_session_id', 'user_id', 'status', 'staging_disk', 'staging_path',
         'managed_disk', 'managed_path', 'managed_file_id', 'product_file_id',
-        'original_name', 'mime', 'size_bytes', 'sha256', 'inspection_json',
+        'original_name', 'relative_path', 'mime', 'size_bytes', 'sha256', 'inspection_json',
         'is_primary', 'expires_at', 'uploaded_at', 'supervisor_status', 'supervisor_review_json', 'supervisor_reviewed_at',
     ];
 
