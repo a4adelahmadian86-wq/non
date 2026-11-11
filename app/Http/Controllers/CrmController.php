@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
 use App\Models\WalletTransaction;
@@ -141,6 +143,42 @@ class CrmController extends Controller
                 'created_at' => $download->created_at,
             ]);
 
+        $courseEnrollments = StoreCourseEnrollment::query()
+            ->with(['product:id,title', 'libraryItem:id,revoked_at'])
+            ->withCount(['progress as completed_lessons_count' => fn ($query) => $query->whereNotNull('completed_at')])
+            ->selectSub(
+                DB::table('store_course_sections')
+                    ->join('store_course_lessons', 'store_course_lessons.section_id', '=', 'store_course_sections.id')
+                    ->whereColumn('store_course_sections.course_id', 'store_course_enrollments.course_id')
+                    ->where('store_course_lessons.is_published', true)
+                    ->selectRaw('COUNT(*)'),
+                'published_lessons_count'
+            )
+            ->where('user_id', $user->id)
+            ->latest()
+            ->limit(30)
+            ->get()
+            ->map(fn (StoreCourseEnrollment $enrollment) => [
+                'type' => 'course_enrollment',
+                'id' => $enrollment->id,
+                'title' => $enrollment->product?->title ?? 'دوره آموزشی',
+                'status' => $enrollment->libraryItem?->revoked_at
+                    ? 'revoked'
+                    : ($enrollment->expires_at && $enrollment->expires_at->lte(now())
+                        ? 'expired'
+                        : ($enrollment->completed_at ? 'completed' : 'active')),
+                'completed_lessons_count' => (int) $enrollment->completed_lessons_count,
+                'published_lessons_count' => (int) $enrollment->published_lessons_count,
+                'progress_percent' => (int) $enrollment->published_lessons_count > 0
+                    ? (int) round(((int) $enrollment->completed_lessons_count / (int) $enrollment->published_lessons_count) * 100)
+                    : 0,
+                'last_lesson_id' => $enrollment->last_lesson_id,
+                'starts_at' => $enrollment->starts_at,
+                'expires_at' => $enrollment->expires_at,
+                'completed_at' => $enrollment->completed_at,
+                'created_at' => $enrollment->created_at,
+            ]);
+
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
             ? WalletTransaction::query()->where('wallet_id', $wallet->id)->latest()->limit(30)->get()
@@ -157,7 +195,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -190,6 +228,12 @@ class CrmController extends Controller
                 'typing_documents_count' => $user->documents_count,
                 'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
                 'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
+                'course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->count(),
+                'completed_course_enrollments_count' => StoreCourseEnrollment::query()->where('user_id', $user->id)->whereNotNull('completed_at')->count(),
+                'completed_course_lessons_count' => StoreCourseLessonProgress::query()
+                    ->whereNotNull('completed_at')
+                    ->whereHas('enrollment', fn ($query) => $query->where('user_id', $user->id))
+                    ->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
