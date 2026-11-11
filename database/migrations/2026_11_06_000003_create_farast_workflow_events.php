@@ -26,6 +26,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('farast_workflow_events');
+        // Event and workflow execution history is an operational ledger; never drop it during rollback.
+        // Schema retirement requires an explicit, separately reviewed data migration.
     }
 };
