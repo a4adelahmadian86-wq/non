@@ -37,6 +37,11 @@ class StorageVolume extends Model
         return $this->hasMany(StorageManagedFile::class)->where('status', '!=', 'deleted');
     }
 
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(StorageVolumeReservation::class, 'storage_volume_id');
+    }
+
     public function allFiles(): HasMany
     {
         return $this->hasMany(StorageManagedFile::class);
