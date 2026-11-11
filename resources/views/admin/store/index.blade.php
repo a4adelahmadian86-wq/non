@@ -33,8 +33,12 @@
                 <span><b>{{ $ingestion->original_name }}</b><small>{{ number_format($ingestion->size_bytes) }} بایت · {{ $ingestion->supervisor_status }}</small></span>
                 <form method="post" action="{{ route('admin.store.intakes.files.manual-review', [$session, $ingestion->id]) }}" style="display:grid;gap:8px;min-width:min(420px,100%)">
                   @csrf
+                  <label style="display:flex;gap:8px;align-items:flex-start">
+                    <input type="checkbox" name="antivirus_confirmed" value="1" required>
+                    <span>تأیید می‌کنم فایل را با آنتی‌ویروس معتبر اسکن کرده‌ام و نتیجه پاک بوده است.</span>
+                  </label>
                   <label>یادداشت مستند بازبینی (حداقل ۲۰ نویسه)
-                    <textarea name="manager_notes" minlength="20" maxlength="2000" required placeholder="نتیجه بررسی فایل، کنترل‌های انجام‌شده و دلیل تأیید دستی را ثبت کنید"></textarea>
+                    <textarea name="manager_notes" minlength="20" maxlength="2000" required placeholder="نتیجه اسکن بدافزار، کنترل‌های انجام‌شده و دلیل تأیید دستی را ثبت کنید"></textarea>
                   </label>
                   <button type="submit" class="store-outline-btn">ثبت بازبینی دستی و ادامه بررسی</button>
                 </form>
