@@ -2,26 +2,41 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Storage\StorageBackupService;
+use App\Jobs\RunStorageBackupJob;
+use App\Models\StorageBackupRun;
 use Illuminate\Console\Command;
 
 class RunStorageBackup extends Command
 {
     protected $signature = 'storage:backup-weekly';
-    protected $description = 'Create and deliver an encrypted weekly application backup';
+    protected $description = 'Queue an encrypted weekly application backup';
 
-    public function handle(StorageBackupService $backup): int
+    public function handle(): int
     {
+        $request = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'scheduled_request',
+            'status' => 'queued',
+            'started_at' => now(),
+            'metadata' => ['request_only' => true, 'trigger' => 'scheduler'],
+        ]);
+
         try {
-            $results = $backup->runWeekly();
-            $completed = collect($results)->where('status', 'completed')->count();
-            $failed = collect($results)->where('status', 'failed')->count();
-            $this->info("Backup destinations completed: {$completed}; failed: {$failed}");
-            return $completed > 0 && $failed === 0 ? self::SUCCESS : self::FAILURE;
+            // Keep archive creation and remote uploads off the scheduler process.
+            // The existing job pins execution to the dedicated "backups" queue.
+            RunStorageBackupJob::dispatch($request->id);
         } catch (\Throwable $exception) {
+            $request->update([
+                'status' => 'failed',
+                'completed_at' => now(),
+                'error_message' => mb_substr($exception->getMessage(), 0, 1000),
+            ]);
             report($exception);
-            $this->error($exception->getMessage());
+            $this->error('ثبت درخواست بکاپ در صف ناموفق بود.');
             return self::FAILURE;
         }
+
+        $this->info('درخواست بکاپ هفتگی در صف اختصاصی بکاپ ثبت شد.');
+        return self::SUCCESS;
     }
 }
