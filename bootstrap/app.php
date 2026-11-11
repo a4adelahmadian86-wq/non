@@ -28,6 +28,20 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
         $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
+        $exceptions->respond(function (\\Symfony\\Component\\HttpFoundation\\Response $response) {
+            $request = request();
+            $requestId = $request?->attributes->get('farast.request_id');
+            $correlationId = $request?->attributes->get('farast.correlation_id');
+
+            if (is_string($requestId) && $requestId !== '') {
+                $response->headers->set('X-Request-Id', $requestId);
+            }
+            if (is_string($correlationId) && $correlationId !== '') {
+                $response->headers->set('X-Correlation-Id', $correlationId);
+            }
+
+            return $response;
+        });
         $exceptions->render(function (\Throwable $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return null;
