@@ -20,6 +20,10 @@
       storageWarning.hidden=false;
     }
   });
+  window.addEventListener('farast:storage-blocked',()=>{
+    storageWarning.textContent='حافظهٔ خوانشگر در تب دیگری در حال به‌روزرسانی است؛ پس از بسته‌شدن تب قدیمی، ذخیره‌سازی دوباره متصل می‌شود.';
+    storageWarning.hidden=false;
+  });
   window.addEventListener('farast:storage-read-error',()=>{
     storageWriteFailed=true;
     storageWarning.textContent='خواندن اطلاعات از حافظه پایدار دستگاه ناموفق شد؛ ممکن است وضعیت قبلی مطالعه یا یادداشت‌ها در دسترس نباشد. فضای دستگاه و مجوزهای مرورگر را بررسی کنید.';
