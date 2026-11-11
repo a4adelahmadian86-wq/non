@@ -31,8 +31,14 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         $course->load(['sections.lessons.resources']);
+        $courseLevelResources = $product->files()
+            ->where('purpose', 'course_resource')
+            ->whereNull('course_lesson_id')
+            ->where('is_active', true)
+            ->orderBy('created_at')
+            ->get();
 
-        return view('admin.store.course', compact('product', 'course'));
+        return view('admin.store.course', compact('product', 'course', 'courseLevelResources'));
     }
 
     public function update(Request $request, StoreProduct $product)
