@@ -43,6 +43,11 @@ class ReviewProductFileAsset implements ShouldQueue
             return;
         }
 
+        $sourceDisk = $file->disk ?: 'private';
+        if (! $storage->exists($sourceDisk, $file->path)) {
+            throw new \RuntimeException('product_asset_missing');
+        }
+
         $existingReview = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews.file:'.$file->id, []);
         if (($existingReview['status'] ?? null) === 'completed'
             && hash_equals((string) $file->sha256, (string) ($existingReview['sha256'] ?? ''))) {
@@ -74,7 +79,6 @@ class ReviewProductFileAsset implements ShouldQueue
             return;
         }
 
-        $sourceDisk = $file->disk ?: 'private';
         $sourceTemporaryPath = null;
         if (str_starts_with($sourceDisk, 'storage_volume:')) {
             $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-asset');
@@ -90,9 +94,6 @@ class ReviewProductFileAsset implements ShouldQueue
             $stream = fopen($sourceTemporaryPath, 'rb');
         } else {
             $disk = Storage::disk($sourceDisk);
-            if (! $disk->exists($file->path)) {
-                throw new \RuntimeException('product_asset_missing');
-            }
             $stream = $disk->readStream($file->path);
         }
         if (! is_resource($stream)) {
