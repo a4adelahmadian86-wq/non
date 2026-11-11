@@ -420,6 +420,8 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه می‌کند که مسیر catalog → cart → order → wallet payment → entitlement → course enrollment → notification و replay idempotency را end-to-end بررسی می‌کند. PR #365 بسته شد اما merged نبود؛ آزمون در main با commit مستقیم ثبت شده است.
 
+**حفاظت شاخه:** پاسخ GitHub برای branch جاری `main` هنوز `protected=false` و `required_status_checks.enforcement_level=off` گزارش می‌کند. بنابراین حتی با CI سبز، هیچ الزام فنی مانع push مستقیم یا merge بدون check اجباری نیست. این یک مانع اعتمادپذیری تحویل است و باید با Ruleset/Branch Protection شامل Required Status Checks و جلوگیری از force-push برطرف شود؛ وضعیت فعلی را نباید «CI اجباری» توصیف کرد.
+
 ## 13. ترتیب ادامه ممیزی/تثبیت
 
 1. دریافت نتیجه نهایی CI روی `7d68c678...`؛ در صورت شکست، تشخیص بر اساس job و log.
