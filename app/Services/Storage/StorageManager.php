@@ -74,6 +74,34 @@ class StorageManager
         ]);
     }
 
+
+    public function storeContents(
+        string $contents,
+        string $originalName,
+        string $mime,
+        string $classification,
+        string $sourceModule,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $productId = null,
+        string $visibility = 'private'
+    ): array {
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-generated-');
+        if (! is_string($temporary)) {
+            throw new RuntimeException('ساخت فایل موقت برای ثبت محتوای تولیدشده ناموفق بود.');
+        }
+
+        try {
+            if (file_put_contents($temporary, $contents, LOCK_EX) === false) {
+                throw new RuntimeException('نوشتن محتوای تولیدشده در فایل موقت ناموفق بود.');
+            }
+            $upload = new UploadedFile($temporary, $originalName, $mime ?: 'application/octet-stream', UPLOAD_ERR_OK, true);
+            return $this->storeUploadedFile($upload, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility);
+        } finally {
+            @unlink($temporary);
+        }
+    }
+
     public function adoptExistingPrivate(
         string $path,
         string $originalName,
@@ -93,11 +121,20 @@ class StorageManager
         return $stored;
     }
 
-    public function bindReference(int $managedFileId, string $sourceType, int $sourceId, ?int $productId = null): void
-    {
+    public function bindReference(
+        int $managedFileId,
+        string $sourceType,
+        int $sourceId,
+        ?int $productId = null,
+        string $sourceField = 'path'
+    ): void {
+        if (! in_array($sourceField, ['path', 'audio_path'], true)) {
+            throw new RuntimeException('فیلد مرجع فایل در ماژول مبدأ پشتیبانی نمی‌شود.');
+        }
         $file = StorageManagedFile::findOrFail($managedFileId);
         $metadata = (array) $file->metadata;
         $metadata['reference_pending'] = false;
+        $metadata['source_field'] = $sourceField;
         $file->update([
             'source_type' => $sourceType,
             'source_id' => $sourceId,
@@ -132,6 +169,23 @@ class StorageManager
             return $this->s3->getContents($volume, $path);
         }
         return Storage::disk($disk ?: 'private')->get($path);
+    }
+
+
+    public function size(string $disk, string $path): int
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver === 'local') {
+                $size = @filesize($this->localVolumePath($volume, $path));
+                if ($size === false) throw new RuntimeException('اندازه فایل در فضای محلی قابل خواندن نیست.');
+                return (int) $size;
+            }
+            return $this->s3->size($volume, $path);
+        }
+
+        return (int) Storage::disk($disk ?: 'private')->size($path);
     }
 
     public function delete(string $disk, string $path): void
