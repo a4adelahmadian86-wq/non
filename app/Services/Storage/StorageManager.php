@@ -229,6 +229,42 @@ class StorageManager
         return $files->count();
     }
 
+    public function size(string $disk, string $path): int
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+
+            if ($volume->driver === 'local') {
+                $localPath = $this->localVolumePath($volume, $path);
+                if (! is_file($localPath)) {
+                    throw new RuntimeException('فایل در فضای ذخیره‌سازی موجود نیست.');
+                }
+
+                $size = filesize($localPath);
+                if (! is_int($size)) {
+                    throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی محلی قابل خواندن نیست.');
+                }
+
+                return $size;
+            }
+
+            return $this->s3->size($volume, $path);
+        }
+
+        $sourceDisk = Storage::disk($disk ?: 'private');
+        if (! $sourceDisk->exists($path)) {
+            throw new RuntimeException('فایل در فضای ذخیره‌سازی موجود نیست.');
+        }
+
+        $size = $sourceDisk->size($path);
+        if (! is_int($size) || $size < 0) {
+            throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی قابل خواندن نیست.');
+        }
+
+        return $size;
+    }
+
     public function downloadTo(string $disk, string $path, string $target): void
     {
         if (str_starts_with($disk, 'storage_volume:')) {
