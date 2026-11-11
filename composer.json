@@ -42,6 +42,14 @@
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi"
+        ],
+        "test:preflight": "@php scripts/verify-test-environment.php",
+        "test:unit": "@php artisan test --testsuite=Unit",
+        "test:feature": "@php artisan test --testsuite=Feature",
+        "test": [
+            "@composer test:preflight",
+            "@composer test:unit",
+            "@composer test:feature"
         ]
     },
     "extra": {
