@@ -466,7 +466,7 @@ class AdminStoreController extends Controller
                 'size_bytes' => $inspection['size'],
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
-                'is_primary' => $request->boolean('is_primary') && ! $session->files()->where('is_primary', true)->exists(),
+                'is_primary' => $request->boolean('is_primary') && ! $session->files()->where('is_primary', true)->whereIn('status', ['inspected', 'uploaded'])->exists(),
                 'expires_at' => now()->addMinutes(30),
             ]);
         } catch (Throwable $exception) {
@@ -531,7 +531,7 @@ class AdminStoreController extends Controller
             }
             if (($avResult['status'] ?? null) === 'infected') {
                 $disk->delete((string) $file->staging_path);
-                $file->update(['status' => 'rejected', 'staging_path' => null]);
+                $file->update(['status' => 'rejected', 'staging_path' => null, 'is_primary' => false]);
                 abort(422, 'آنتی‌ویروس فایل آلوده را شناسایی کرد.');
             }
             $inspection['antivirus'] = $avResult;
