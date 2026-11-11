@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -276,6 +277,52 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertDatabaseMissing('jobs', [
             'queue' => 'automation',
         ]);
+    }
+
+    public function test_financial_event_is_processed_by_its_isolated_critical_worker(): void
+    {
+        $user = $this->user('09152223351');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Critical paid order workflow',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'پرداخت تأیید شد']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $eventId = app(WorkflowEngine::class)->enqueue('order.paid', [
+            'user_id' => $user->id,
+            'order_id' => 551,
+            'amount_rials' => 900000,
+            'order_kind' => 'store',
+            'status' => 'paid',
+        ], 'order:551:paid');
+
+        $this->assertDatabaseHas('jobs', ['queue' => 'automation-critical']);
+
+        Artisan::call('queue:work', [
+            'connection' => 'database',
+            '--queue' => 'automation-critical',
+            '--once' => true,
+            '--tries' => 5,
+            '--timeout' => 300,
+        ]);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'title' => 'پرداخت تأیید شد',
+        ]);
+        $this->assertDatabaseMissing('jobs', ['queue' => 'automation-critical']);
     }
 
 }
