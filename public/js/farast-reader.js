@@ -12,7 +12,7 @@
   storageWarning.style.cssText='flex-basis:100%;padding:8px 12px;border:1px solid rgba(234,88,12,.28);border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.75rem;line-height:1.7';
   const storageToolbar=root.querySelector('.farast-reader-toolbar');
   (storageToolbar||root).prepend(storageWarning);
-  let storageWriteFailed=false;
+  let storageWriteFailed=false,storagePersistenceUnavailable=false;
   window.addEventListener('farast:storage-persistence-status',event=>{
     if(event.detail?.persisted===true&&!storageWriteFailed){storageWarning.hidden=true;return;}
     if(event.detail?.persisted!==true){
@@ -20,7 +20,7 @@
       storageWarning.hidden=false;
     }
   });
-  window.addEventListener('farast:storage-blocked',()=>{
+  window.addEventListener('farast:storage-database-ready',()=>{if(!storageWriteFailed&&!storagePersistenceUnavailable)storageWarning.hidden=true;});\n  window.addEventListener('farast:storage-blocked',()=>{
     storageWarning.textContent='حافظهٔ خوانشگر در تب دیگری در حال به‌روزرسانی است؛ پس از بسته‌شدن تب قدیمی، ذخیره‌سازی دوباره متصل می‌شود.';
     storageWarning.hidden=false;
   });
