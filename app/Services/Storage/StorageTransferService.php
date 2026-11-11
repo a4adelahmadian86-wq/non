@@ -305,7 +305,7 @@ class StorageTransferService
     private function cleanupOrphanedSources(int $limit): void
     {
         StorageManagedFile::query()
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'deleted'])
             ->whereNotNull('metadata->orphaned_source->volume_id')
             ->orderBy('id')
             ->limit($limit)
