@@ -6,6 +6,7 @@ use App\Services\AuditEventService;
 use App\Services\AuditIntegrityService;
 use App\Services\FarastTraceContext;
 use App\Services\FarastObservabilityService;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
@@ -21,9 +22,10 @@ class AuditEventObservabilityTest extends TestCase
         $request->attributes->set('farast.correlation_id', 'correlation-ledger-456');
         app()->instance('request', $request);
 
+        $user = User::factory()->create();
         $event = app(AuditEventService::class)->record(
             'settings.updated',
-            7,
+            $user->id,
             null,
             'settings',
             1,
@@ -51,7 +53,8 @@ class AuditEventObservabilityTest extends TestCase
         app()->instance('request', $request);
         app(FarastTraceContext::class)->set('job-request-123', 'job-correlation-456');
 
-        $event = app(AuditEventService::class)->record('job.completed', 7);
+        $user = User::factory()->create();
+        $event = app(AuditEventService::class)->record('job.completed', $user->id);
 
         $this->assertSame('job-request-123', $event->payload_meta['request_id']);
         $this->assertSame('job-correlation-456', $event->payload_meta['correlation_id']);
