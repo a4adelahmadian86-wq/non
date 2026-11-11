@@ -250,6 +250,13 @@ class AdminStoreController extends Controller
             abort_unless($lockedSession->isUsable(), 409, 'نشست ورود قبلاً مصرف شده یا منقضی شده است.');
             abort_unless($lockedSession->product_id === null, 409, 'این نشست قبلاً به محصول متصل شده است.');
 
+            $lockedFiles = StoreProductIntakeFile::query()->where('intake_session_id', $lockedSession->id)->where('status', 'uploaded')->lockForUpdate()->get();
+            abort_if($lockedFiles->isEmpty(), 409, 'فایل تأییدشده‌ای برای ثبت محصول باقی نمانده است.');
+            foreach ($lockedFiles as $lockedFile) {
+                abort_unless($lockedFile->supervisor_status === 'completed', 409, 'بررسی ناظر هوشمند هنوز تکمیل نشده است.');
+                abort_unless(data_get($lockedFile->supervisor_review_json, 'security_gate') !== 'blocked', 409, 'فایل مسدودشده قابل اتصال نیست.');
+            }
+
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
                 StoreCourse::firstOrCreate(['product_id' => $product->id]);
@@ -258,7 +265,7 @@ class AdminStoreController extends Controller
             $product->related()->sync(app(ProductRelatedProductsService::class)->recommend($product)->pluck('id')->all());
 
             $bindings = [];
-            foreach ($files as $index => $intakeFile) {
+            foreach ($lockedFiles as $index => $intakeFile) {
                 $inspection = (array) $intakeFile->inspection_json;
                 $antivirusClean = data_get($inspection, 'antivirus.status') === 'clean';
                 $record = StoreProductFile::create([
@@ -556,46 +563,11 @@ class AdminStoreController extends Controller
     public function create()
     {
         return redirect()->route('admin.store.intake.create');
-
-        $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
-        $tags = StoreTag::query()->orderBy('name')->get();
-        $relatedProducts = collect();
-
-        return view('admin.store.form', [
-            'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
-            'categories' => $categories,
-            'tags' => $tags,
-            'relatedProducts' => $relatedProducts,
-        ]);
     }
 
     public function store(Request $request)
     {
-        $data = $this->validated($request);
-        $data['sku'] = filled($data['sku'] ?? null) ? $data['sku'] : $this->uniqueSku();
-        $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'] ?? null);
-        // A new catalog item must not become public before its protected payload/curriculum exists.
-        $data['status'] = 'draft';
-        $data['published_at'] = null;
-        $tagIds = $data['tag_ids'] ?? [];
-        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
-        $product = DB::transaction(function () use ($data, $tagIds) {
-            $product = StoreProduct::create($data);
-            if ($product->type === 'course') {
-                StoreCourse::firstOrCreate(['product_id' => $product->id]);
-            }
-            $product->tags()->sync($tagIds);
-            $product->related()->sync(app(ProductRelatedProductsService::class)->recommend($product)->pluck('id')->all());
-            $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
-
-            return $product;
-        });
-
-        if ($product->type === 'course') {
-            return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
-        }
-
-        return redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'پیش‌نویس ایجاد شد؛ اکنون فایل اصلی را در بخش بارگذاری امن انتخاب کنید.');
+        return $this->finalizeIntake($request);
     }
 
     public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
