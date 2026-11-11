@@ -166,7 +166,7 @@ class CrmCourseProgressTimelineTest extends TestCase
             'revision' => 3,
             'last_saved_at' => now(),
         ]);
-        FarastDocumentVersion::create([
+        $version = FarastDocumentVersion::create([
             'document_id' => $document->id,
             'user_id' => $customer->id,
             'content' => 'محتوای نسخه قبلی',
@@ -195,6 +195,14 @@ class CrmCourseProgressTimelineTest extends TestCase
                 'project_id' => $project->id,
                 'revision' => 3,
                 'versions_count' => 1,
+            ])
+            ->assertJsonFragment([
+                'type' => 'farast_document_version',
+                'id' => $version->id,
+                'document_id' => $document->id,
+                'document_title' => 'سند مرجع پروژه CRM',
+                'project_id' => $project->id,
+                'label' => 'نسخه اول',
             ])
             ->assertJsonFragment([
                 'type' => 'ticket_message',
