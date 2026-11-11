@@ -8,6 +8,8 @@ use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductIntakeSession;
+use App\Models\StoreProductIntakeFile;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
 use App\Models\StorageManagedFile;
