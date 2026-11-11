@@ -60,11 +60,16 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             $this->assertStringContainsString('unsupported fields', $exception->getMessage());
         }
 
-        $this->assertSame(0, $engine->dispatch('document.saved', [
-            'user_id' => (string) ($owner->id + 0.5),
-            'document_id' => 9,
-            'revision' => 1,
-        ], 'document:invalid-user:1'));
+        try {
+            $engine->dispatch('document.saved', [
+                'user_id' => (string) ($owner->id + 0.5),
+                'document_id' => 9,
+                'revision' => 1,
+            ], 'document:invalid-user:1');
+            $this->fail('Invalid user identifiers must not be silently discarded.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('valid user_id', $exception->getMessage());
+        }
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:unsafe-context:1']);
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:invalid-user:1']);
     }
