@@ -1085,3 +1085,47 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 در نتیجه inventoryهای Route، Model، Migration، Service و Controller در این انتقال از نظر فایل‌های منبع با HEAD جدید تطبیق دارند؛ بااین‌حال Route inventory عمداً canonical candidate پس از حذف دو declaration متعارض اعلان را نشان می‌دهد، نه وضعیت خام main پیش از این PR. تغییر Route هنوز باید در این شاخه merge و سپس در runtime با `route:list` تأیید شود.
 
 توجه: commit جدید main همچنان شامل دو Route متعارض اعلان است؛ این شاخه فقط دو تعریف متعلق به `PlatformCompletionController` را حذف می‌کند و سایر مسیرها را دست‌نخورده نگه می‌دارد.
+
+
+## 22. دفتر هم‌پوشانی زنده PRها و ترتیب امن ادغام
+
+این بخش، وضعیت snapshot ساعت 12:59 UTC در 2026-11-11 را جایگزین فهرست‌های قدیمی‌تر بخش‌های 15 و 19 می‌کند. وضعیت PRها و فایل‌های آن‌ها از GitHub خوانده شده است؛ باز بودن یا mergeable بودن به معنی قبولی CI یا صحت طراحی نیست.
+
+| PR | وضعیت | فایل‌های حساس مشترک/مرز اثر | تصمیم معماری و ترتیب |
+|---:|---|---|---|
+| #330 | باز، غیر Draft؛ base قدیمی‌تر | هسته RBAC/Workflow: `AuthorizationService`, `AdminConsoleService`, `ResolveAdminScope`, `SupportTicketService`, `WorkflowEngine`, `PlatformCompletionController`, `bootstrap/app.php`, migrationها و Routeهای مدیریت | با #347 هم‌پوشانی گسترده دارد. هر دو را با هم ادغام نکنید؛ ابتدا یک خط مبنای واحد و انتخاب یک implementation مرجع لازم است. |
+| #347 | باز، غیر Draft؛ base روی main فعلی | همان هسته RBAC/Workflow به‌علاوه Messenger permissions، admin scope و Workflow lease migration | از نظر base به‌روزتر از #330 است، اما هنوز به بررسی sync queue، scope تیم/سازمان و تست منفی همه Routeهای Store نیاز دارد. مرجع candidate برای مقایسه است، نه تأیید merge. |
+| #340 | باز، Draft | `PaymentController`, `PaysWithZarinpal`, `StoreCartController`, `WalletController`, مدل‌های مالی و Migrationهای subscription/ledger | قبل از هر تغییر در checkout، callback، wallet یا commerce ledger باید با main و #330/#347 تطبیق شود؛ وضعیت قبلی آن شامل شکست migration-upgrade بوده است. |
+| #318 | باز، Draft | `AdminStoreController`, `StoreProductIngestion`, `AuthorizationService`, `routes/store_routes.php`, intake JS و migration antivirus | مسیر file-first که محصول draft را زودتر ایجاد می‌کند؛ با #333 در state machine محصول جدید رقیب است. فقط اجزای scanner قابل انتقال پس از انتخاب مالک pipeline هستند. |
+| #333 | باز، غیر Draft | `AdminStoreController`, `AdminCourseController`, `StoreProduct`, `AuthorizationService`, `routes/store_routes.php`, intake session/file models و migrationها | مسیر type-first با session قبل از ایجاد محصول. در طراحی پیشنهادی، pre-product intake مرجع واحد باشد و StoreProductIngestion فقط فایل محصول موجود را مدیریت کند. reviewer باید resource scope داشته باشد. |
+| #335 | باز، Draft؛ mergeable=false در snapshot | `StorageManager`, `StorageBackupService`, `StorageTransferService`, `AdminStoreController`, `StoreController`, migration reservation و restore tests | بزرگ‌ترین تغییر چرخه عمر فایل محصول است؛ با #357 در StoreController overlap دارد. merge order باید با #369 و #357 هماهنگ شود. |
+| #357 | باز، غیر Draft | فقط `StoreController.php` | تغییر محدود stream صوت preview؛ با #335 روی همان controller تداخل مستقیم دارد. ابتدا قرارداد StorageManager و مالک نهایی readerAudio/previewAudio مشخص شود؛ cherry-pick کور ممنوع. |
+| #358 | باز، غیر Draft | `SupportNotificationService`, `SupportTicketService`, `EmailService`, `SmsService`, log models و migration idempotency | هویت هر reply باید مستقل بماند و dedupe فقط retry همان رخداد را یکی کند. با Workflow/Notification مرکزی #347 و observability #353 باید از نظر transaction boundary و correlation تطبیق شود. |
+| #361 | باز، غیر Draft | `CrmController`, `StoreCourseLearningController`, `StoreCourseProgressService` | با #368 در همان سه فایل overlap دارد؛ هر دو یک مسیر progress timeline پیشنهاد می‌کنند. فقط یک پیاده‌سازی سرویس و یک مالک CRM باقی بماند. |
+| #368 | باز، غیر Draft؛ base جدیدتر از #361 | همان سه فایل به‌علاوه تست timeline | candidate rebased برای مقایسه با #361؛ منبع پیشرفت باید همان enrollment/progress فعلی باشد و جدول timeline مستقل ساخته نشود. |
+| #365 | باز، غیر Draft | تست `BusinessCommerceLifecycleTest` | تست سرتاسری ارزشمند؛ باید پس از تثبیت قرارداد Order/Payment/Library/Enrollment با تغییرهای #340 و #333 همگام شود. |
+| #352 | باز، غیر Draft | `StoreController`, `ProcessProductDocument`, Reader Blade/JS، seeder و browser E2E | تست پذیرش UI واقعی؛ با #335/#357 و #333 روی product/reader/file flow تداخل دارد. بعد از تثبیت implementation اجرا و rebased شود. |
+| #353 | باز، غیر Draft | `AuditEventService`, `AuditLogService`, `AppServiceProvider`, `bootstrap/app.php`, `routes/console.php`, middleware و tests | با قرارداد سه دفتر audit و مرحله دسترسی overlap دارد. writerهای موجود را بدون طرح migration/dual-write و تست integrity جایگزین نکند. |
+| #354 | باز، Draft | `SupportReportController`, `SupportSlaService`, `routes/notifications.php`, `routes/store_routes.php`, `routes/support_extra.php` | با route ownership این ممیزی و #358 هم‌پوشانی دارد. قبل از ادغام، inventory route و permission باید مجدداً تولید شود. |
+| #367 | باز، غیر Draft | `.github/workflows/farast-ci.yml`, workflowهای تست، `StoreReaderAccessTest`, test environment verifier | گیت پایه برای اعتماد به تست‌هاست؛ باید قبل از پذیرش runtime مرحله دوم بررسی شود. تغییرهای workflow آن با هر PR که همین فایل‌ها را لمس می‌کند نیازمند merge order است. |
+| #369 | باز، غیر Draft | backup/restore commands، `StorageBackupService`, `AdminStorageController`, `routes/console.php`, readiness و workflow release | با #335 روی backup/storage overlap دارد. ابتدا lock/recovery contract و restore strictness را با #335 تطبیق دهید، سپس E2E backup/restore اجرا شود. |
+
+### ترتیب ادغام پیشنهادی از روی هم‌پوشانی فایل‌ها
+
+1. **گیت ابزار تست:** #367؛ تا baseline محیط PHP/SQLite و workflow قابل اعتماد نشود، نتیجه تست‌های سایر PRها قابل قیاس نیست.
+2. **هسته دسترسی و Workflow:** انتخاب یک شاخه مرجع میان #330 و #347؛ ابتدا route section gate، team/org resource scope، permission separation و sync-driver contract بسته شود.
+3. **Storage و backup:** هم‌ترازسازی #335 و #369، سپس cherry-pick/port محدود #357 روی همان implementation نهایی StorageManager؛ نه merge موازی سه نسخه StoreController.
+4. **Intake محصول:** انتخاب #333 به‌عنوان pre-product session state machine و انتقال اجزای لازم از #318؛ StoreProductIngestion برای فایل محصول موجود حفظ شود.
+5. **مالی:** #340 پس از بررسی migration upgrade و تطبیق Wallet holds با debit path؛ بدون دست‌کاری تاریخچه ledger.
+6. **پشتیبانی و اعلان:** #358 با NotificationService/Workflow و #353 از نظر idempotency، transaction و audit correlation هماهنگ شود.
+7. **CRM و یادگیری:** #361 و #368 به یک candidate تبدیل شوند؛ سپس #365 و #352 به‌عنوان پذیرش سرتاسری اجرا شوند.
+8. **گزارش و عملکرد:** #354 پس از تثبیت route ownership و query contract ادغام شود.
+9. **Release:** #369 پس از سبز بودن گیت‌های بالا و اثبات backup/restore واقعی.
+
+### قاعده حفاظت از شاخه همکاران
+
+این ممیزی فقط PRها و فایل‌هایشان را مشاهده کرده است. هیچ branch یا PR همکار rebase، force-push، merge یا ویرایش نشده است. اگر یک PR به‌روزتر باشد، فقط آن را candidate ترجیحی برای بررسی معرفی می‌کنیم؛ تصمیم ادغام منوط به CI و بازبینی محتوای نهایی است.
+
+### وضعیت اجرای تست این PR
+
+در commit قبلی ممیزی، Phase 3 Commerce Tests با موفقیت پایان یافت؛ job اصلی `test` نتیجه `success` داشت. پس از گسترش `NotificationRouteOwnershipTest` برای assert کردن هر ۸ endpoint اعلان، commit جدید ایجاد شد و CI باید روی HEAD جدید دوباره اجرا شود. وضعیت queued/pending را قبولی تلقی نکنید.
