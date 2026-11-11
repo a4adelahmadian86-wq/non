@@ -249,6 +249,7 @@ class AdminStoreController extends Controller
                 'staging_disk' => 'private',
                 'staging_path' => $path,
                 'original_name' => $safeName,
+                'relative_path' => $this->safeIntakeRelativePath((string) $request->input('relative_path', $safeName)),
                 'mime' => $inspection['mime'],
                 'size_bytes' => $inspection['size'],
                 'sha256' => $inspection['checksum'],
@@ -278,6 +279,7 @@ class AdminStoreController extends Controller
                 'file_count' => $session->files()->whereIn('status', ['inspected', 'uploaded'])->count(),
                 'total_size_bytes' => (int) $session->files()->whereIn('status', ['inspected', 'uploaded'])->sum('size_bytes'),
                 'archive_entry_count' => (int) ($inspection['archive_entry_count'] ?? 0),
+                'folder_count' => $session->files()->whereIn('status', ['inspected', 'uploaded'])->whereNotNull('relative_path')->pluck('relative_path')->map(fn ($path) => trim(dirname($path), '.'))->filter()->unique()->count(),
             ],
         ], 201);
     }
@@ -296,15 +298,16 @@ class AdminStoreController extends Controller
         abort_unless($file->status === 'inspected' && $file->expires_at?->isFuture(), 409, 'مهلت تأیید فایل پایان یافته است.');
 
         $disk = Storage::disk($file->staging_disk ?: 'private');
-        abort_unless($disk->exists((string) $file->staging_path), 410, 'فایل موقت دیگر در دسترس نیست.');
+        $stagingPath = (string) $file->staging_path;
+        abort_unless($disk->exists($stagingPath), 410, 'فایل موقت دیگر در دسترس نیست.');
         $maxBytes = $session->product_type === 'course' ? 256 * 1024 * 1024 : 50 * 1024 * 1024;
-        $inspection = $security->inspect((string) $file->staging_path, $file->mime, $maxBytes);
+        $inspection = $security->inspect($stagingPath, $file->mime, $maxBytes);
         abort_unless(hash_equals((string) $file->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بازرسی تغییر کرده است.');
 
         if ($session->antivirus_requested) {
             abort_unless(app(\\App\\Services\\AuthorizationService::class)
                 ->allows($request->user(), 'store.security_scan'), 403);
-            $avResult = $antivirus->scan($disk->path((string) $file->staging_path));
+            $avResult = $antivirus->scan($disk->path($stagingPath));
             if (($avResult['status'] ?? null) === 'infected') {
                 $disk->delete((string) $file->staging_path);
                 $file->update(['status' => 'rejected', 'staging_path' => null]);
@@ -316,7 +319,7 @@ class AdminStoreController extends Controller
         }
 
         $managed = $storage->adoptExistingPrivate(
-            (string) $file->staging_path,
+            $stagingPath,
             $file->original_name,
             (string) $inspection['mime'],
             (int) $inspection['size'],
@@ -339,7 +342,7 @@ class AdminStoreController extends Controller
                 'uploaded_at' => now(),
                 'supervisor_status' => 'pending',
             ]);
-            $disk->delete((string) $file->getOriginal('staging_path'));
+            $disk->delete($stagingPath);
         } catch (Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
@@ -371,6 +374,15 @@ class AdminStoreController extends Controller
         $file->update(['status' => 'rejected', 'staging_path' => null]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function safeIntakeRelativePath(string $path): string
+    {
+        $path = str_replace('\\\\', '/', trim($path));
+        $segments = array_values(array_filter(explode('/', $path), static fn ($segment) => $segment !== '' && $segment !== '.'));
+        abort_if(in_array('..', $segments, true), 422, 'مسیر نسبی فایل نامعتبر است.');
+
+        return mb_substr(implode('/', array_map(static fn ($segment) => mb_substr($segment, 0, 180), $segments)), 0, 1024);
     }
 
     public function create()
