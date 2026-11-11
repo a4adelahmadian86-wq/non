@@ -681,7 +681,7 @@
             var wakeController=new AbortController();
             var wakeTimer=window.setTimeout(function(){wakeController.abort();},Math.min(60000,Math.max(1000,wakeDeadline-Date.now())));
             try{
-              var wakeResponse=await fetch(healthUrl,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'},signal:wakeController.signal});
+              var wakeResponse=await fetch(healthUrl,{method:'GET',mode:'same-origin',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:wakeController.signal});
               var wakeData=await wakeResponse.json().catch(function(){return {};});
               wakeReady=wakeResponse.ok&&wakeData.status==='ok'&&wakeData.asr_configured===true&&wakeData.tts_configured===true&&wakeData.chat_configured===true;
               if(!wakeReady)wakeFailure='پاسخ سلامت سرویس کامل نیست (HTTP '+wakeResponse.status+').';
