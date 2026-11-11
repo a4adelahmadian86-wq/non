@@ -327,7 +327,7 @@ class StorageTransferService
             $orphan = data_get($locked?->metadata, 'orphaned_source');
             if (! $locked || ! data_get($orphan, 'pending_cleanup', false)) return false;
             $startedAt = data_get($orphan, 'cleanup_started_at');
-            if ($startedAt && \\Illuminate\\Support\\Carbon::parse($startedAt)->gt(now()->subHours(4))) return false;
+            if ($startedAt && Carbon::parse($startedAt)->gt(now()->subHours(4))) return false;
             $metadata = (array) $locked->metadata;
             $metadata['orphaned_source']['cleanup_started_at'] = now()->toIso8601String();
             $locked->update(['metadata' => $metadata]);
