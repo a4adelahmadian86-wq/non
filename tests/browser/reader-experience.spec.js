@@ -175,15 +175,15 @@ test('PDF annotations expose safe external links and interactive AcroForm text f
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', /noopener/);
 
-  const internalLink = root.locator('.farast-pdf-annotation-layer .linkAnnotation a[href^="#"]').first();
-  await expect(internalLink).toBeVisible();
-  await internalLink.click();
-  await expect(root.locator('#reader-page-number')).toHaveValue('2');
-
   const field = root.locator('.farast-pdf-annotation-layer input').first();
   await expect(field).toHaveValue('Initial');
   await field.fill('FARAST form value');
   await expect(field).toHaveValue('FARAST form value');
+
+  const internalLink = root.locator('.farast-pdf-annotation-layer .linkAnnotation a[href^="#"]').first();
+  await expect(internalLink).toBeVisible();
+  await internalLink.click();
+  await expect(root.locator('#reader-page-number')).toHaveValue('2');
 });
 
 test.describe('FARAST sample reader interactions', () => {
