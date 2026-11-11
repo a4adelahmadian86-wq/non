@@ -104,6 +104,182 @@ class AuthorizationService
         return $this->scopeContains($user, $this->legacyScope($user), null, $record);
     }
 
+    public function createRole(User $actor, string $key, string $name, array $permissionKeys): object
+    {
+        abort_unless($this->allows($actor, 'access.manage'), 403);
+        $key = trim($key);
+        $name = trim($name);
+        abort_unless((bool) preg_match('/^[a-z][a-z0-9_.-]{2,99}$/', $key), 422, 'کلید نقش معتبر نیست.');
+        abort_unless($name !== '' && mb_strlen($name) <= 160, 422, 'نام نقش معتبر نیست.');
+        abort_if(in_array($key, ['admin', 'user', 'employee', 'organization_manager', 'team_supervisor', 'observer', 'guest'], true), 422, 'این کلید برای نقش سیستمی رزرو شده است.');
+
+        return DB::transaction(function () use ($actor, $key, $name, $permissionKeys): object {
+            $roleId = DB::table('roles')->insertGetId([
+                'key' => $key,
+                'name' => $name,
+                'is_system' => false,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach (array_values(array_unique($permissionKeys)) as $permissionKey) {
+                $permissionId = $this->permissionId((string) $permissionKey);
+                abort_unless($permissionId !== null, 422, 'مجوز تعریف‌نشده: '.(string) $permissionKey);
+                RolePermission::firstOrCreate(['role' => $key, 'permission_id' => $permissionId]);
+            }
+
+            $this->audit('role.created', $actor, null, null, ['role_key' => $key]);
+            return DB::table('roles')->where('id', $roleId)->first();
+        });
+    }
+
+    public function assignRole(
+        User $actor,
+        User $subject,
+        string $roleKey,
+        string $scope,
+        ?int $organizationId = null,
+        ?int $teamId = null,
+        ?\\DateTimeInterface $startsAt = null,
+        ?\\DateTimeInterface $expiresAt = null,
+        ?Request $request = null,
+    ): object {
+        abort_unless(in_array($scope, self::SCOPES, true), 422, 'محدوده دسترسی معتبر نیست.');
+        abort_unless($this->canManageScope($actor, $subject, $scope, $organizationId, $teamId), 403);
+        abort_if($expiresAt && $startsAt && $expiresAt <= $startsAt, 422, 'زمان انقضا باید بعد از زمان شروع باشد.');
+
+        return DB::transaction(function () use ($actor, $subject, $roleKey, $scope, $organizationId, $teamId, $startsAt, $expiresAt, $request): object {
+            $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
+            abort_unless($role, 404, 'نقش فعال پیدا نشد.');
+
+            $id = DB::table('role_assignments')->insertGetId([
+                'user_id' => $subject->id,
+                'role_id' => $role->id,
+                'scope' => $scope,
+                'organization_id' => $organizationId,
+                'team_id' => $teamId,
+                'assigned_by' => $actor->id,
+                'starts_at' => $startsAt,
+                'expires_at' => $expiresAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->audit('role.assignment.created', $actor, $subject, null, [
+                'role_key' => $roleKey,
+                'scope' => $scope,
+                'organization_id' => $organizationId,
+                'team_id' => $teamId,
+                'expires_at' => $expiresAt,
+            ], $request);
+
+            return DB::table('role_assignments')->where('id', $id)->first();
+        });
+    }
+
+    public function grantDirectPermission(
+        User $actor,
+        User $subject,
+        string $permission,
+        string $effect,
+        string $scope,
+        ?int $organizationId = null,
+        ?int $teamId = null,
+        ?\\DateTimeInterface $startsAt = null,
+        ?\\DateTimeInterface $expiresAt = null,
+        ?Request $request = null,
+    ): object {
+        abort_unless(in_array($effect, ['allow', 'deny'], true), 422, 'نوع مجوز مستقیم معتبر نیست.');
+        abort_unless(in_array($scope, self::SCOPES, true), 422, 'محدوده دسترسی معتبر نیست.');
+        abort_unless($this->canManageScope($actor, $subject, $scope, $organizationId, $teamId), 403);
+        abort_if($expiresAt && $startsAt && $expiresAt <= $startsAt, 422, 'زمان انقضا باید بعد از زمان شروع باشد.');
+        $permissionId = $this->permissionId($permission);
+        abort_unless($permissionId !== null, 404, 'مجوز پیدا نشد.');
+
+        return DB::transaction(function () use ($actor, $subject, $permission, $permissionId, $effect, $scope, $organizationId, $teamId, $startsAt, $expiresAt, $request): object {
+            $id = DB::table('user_permission_grants')->insertGetId([
+                'user_id' => $subject->id,
+                'permission_id' => $permissionId,
+                'effect' => $effect,
+                'scope' => $scope,
+                'organization_id' => $organizationId,
+                'team_id' => $teamId,
+                'granted_by' => $actor->id,
+                'starts_at' => $startsAt,
+                'expires_at' => $expiresAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->audit('permission.direct_'.$effect, $actor, $subject, null, [
+                'permission' => $permission,
+                'scope' => $scope,
+                'organization_id' => $organizationId,
+                'team_id' => $teamId,
+                'expires_at' => $expiresAt,
+            ], $request);
+
+            return DB::table('user_permission_grants')->where('id', $id)->first();
+        });
+    }
+
+    public function revokeRoleAssignment(User $actor, int $assignmentId, ?Request $request = null): void
+    {
+        $assignment = DB::table('role_assignments')->where('id', $assignmentId)->first();
+        abort_unless($assignment, 404);
+        $subject = User::query()->findOrFail($assignment->user_id);
+        abort_unless($this->canManageScope($actor, $subject, $assignment->scope, $assignment->organization_id, $assignment->team_id), 403);
+
+        DB::transaction(function () use ($actor, $subject, $assignment, $request): void {
+            DB::table('role_assignments')->where('id', $assignment->id)->update(['expires_at' => now(), 'updated_at' => now()]);
+            $this->audit('role.assignment.revoked', $actor, $subject, null, [
+                'assignment_id' => $assignment->id,
+                'role_id' => $assignment->role_id,
+            ], $request);
+        });
+    }
+
+    private function canManageScope(User $actor, User $subject, string $scope, ?int $organizationId, ?int $teamId): bool
+    {
+        if (! $this->allows($actor, 'access.manage')) {
+            return false;
+        }
+
+        $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
+        $assignments = $this->activeAssignments($actor);
+        $actorScope = $assignments->isNotEmpty()
+            ? $assignments->pluck('scope')->sortBy(fn ($value) => $rank[$value] ?? 4)->first()
+            : $this->legacyScope($actor);
+
+        if (! isset($rank[$actorScope]) || $rank[$scope] < $rank[$actorScope]) {
+            return false;
+        }
+
+        if ($scope === 'global') {
+            return $actorScope === 'global' && $actor->isAdmin();
+        }
+
+        if ($scope === 'organization') {
+            return $organizationId !== null
+                && (int) $subject->organization_id === $organizationId
+                && ($actorScope === 'global' || (int) $actor->organization_id === $organizationId);
+        }
+
+        if ($scope === 'team') {
+            if ($teamId === null || ! $subject->teams()->whereKey($teamId)->exists()) {
+                return false;
+            }
+            $teamOrganizationId = \\App\\Models\\Team::query()->whereKey($teamId)->value('organization_id');
+
+            return $teamOrganizationId !== null
+                && ($organizationId === null || $organizationId === (int) $teamOrganizationId)
+                && ($actorScope === 'global' || (int) $actor->organization_id === (int) $teamOrganizationId);
+        }
+
+        return (int) $actor->id === (int) $subject->id;
+    }
+
     public function audit(
         string $event,
         ?User $actor = null,
