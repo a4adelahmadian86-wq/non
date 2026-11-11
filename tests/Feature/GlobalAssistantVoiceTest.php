@@ -234,6 +234,8 @@ class GlobalAssistantVoiceTest extends TestCase
             && ($request->data()['stream'] ?? false) === true
             && ($request->data()['max_tokens'] ?? null) === 500
             && str_contains((string) data_get($request->data(), 'messages.0.content', ''), 'حداکثر حدود ۷۰ کلمه')
+            && str_contains((string) data_get($request->data(), 'messages.0.content', ''), 'مردی ۳۷ ساله')
+            && str_contains((string) data_get($request->data(), 'messages.0.content', ''), 'فن بیان حرفه‌ای')
         );
     }
 
