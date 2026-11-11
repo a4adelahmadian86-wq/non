@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductDocumentArtifact;
 use App\Models\StoreProductPreview;
+use App\Models\StoreProductFile;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
 use App\Services\Storage\StorageManager;
@@ -219,6 +220,7 @@ class ProcessProductDocument implements ShouldQueue
         try {
         DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            $file = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
             $locked->facts()->delete();
 
@@ -315,7 +317,7 @@ class ProcessProductDocument implements ShouldQueue
             ];
 
             if ($file->is_primary && ($sampleManaged || $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->exists())) {
-                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->lockForUpdate()->first();
                 $samplePathForReader = null;
                 $sampleDiskForReader = 'private';
                 if ($existingSample && $storage->exists($existingSample->disk ?: 'private', $existingSample->path)) {
@@ -380,7 +382,7 @@ class ProcessProductDocument implements ShouldQueue
                     $fullReaderPath = $file->path;
                     $fullReaderDisk = $file->disk ?: 'private';
                 } elseif ($sourceExtension === 'docx') {
-                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->lockForUpdate()->first();
                     if ($readerPdf) {
                         $fullReaderPath = $readerPdf->path;
                         $fullReaderDisk = $readerPdf->disk ?: 'private';
