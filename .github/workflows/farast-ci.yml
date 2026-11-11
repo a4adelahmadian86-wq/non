@@ -209,7 +209,7 @@ jobs:
           cache-dependency-path: voice-service/requirements-test.txt
       - run: python -m pip install --upgrade pip
       - run: pip install --no-cache-dir -r voice-service/requirements-test.txt
-      - run: pytest -q tests
+      - run: python -m pytest -q tests
         working-directory: voice-service
         env:
           FARAST_TTS_AUTO_DOWNLOAD: 'false'
