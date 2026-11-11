@@ -113,7 +113,7 @@ class AuditEventService
         $normalized = json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
 
         if (! is_array($normalized)) {
-            throw new \\UnexpectedValueException('Audit payload must serialize to an object.');
+            throw new \UnexpectedValueException('Audit payload must serialize to an object.');
         }
 
         return $normalized;
