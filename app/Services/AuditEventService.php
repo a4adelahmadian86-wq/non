@@ -19,10 +19,10 @@ class AuditEventService
         $correlationId = $trace['correlation_id'] ?? $request?->attributes->get('farast.correlation_id');
 
         if (is_string($requestId) && $requestId !== '') {
-            $payloadMeta['request_id'] ??= $requestId;
+            $payloadMeta['request_id'] = $requestId;
         }
         if (is_string($correlationId) && $correlationId !== '') {
-            $payloadMeta['correlation_id'] ??= $correlationId;
+            $payloadMeta['correlation_id'] = $correlationId;
         }
 
         $payloadMeta = $this->sanitize($payloadMeta);
