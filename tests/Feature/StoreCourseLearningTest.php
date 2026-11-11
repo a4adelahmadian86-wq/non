@@ -226,6 +226,45 @@ class StoreCourseLearningTest extends TestCase
             ->assertSee('فصل اول');
     }
 
+    public function test_invalid_newer_entitlement_does_not_hide_an_older_valid_paid_entitlement(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('invalid-newer-entitlement', 10000);
+
+        $olderValidItem = $this->grantCourse($user, $product);
+        $olderValidItem->update(['granted_at' => now()->subDays(10)]);
+
+        $invalidOrder = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 10000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 10000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now(),
+        ]);
+        $invalidNewerItem = StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $invalidOrder->id,
+            'product_file_id' => null,
+            'granted_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('store.course.learn', $product))
+            ->assertOk()
+            ->assertSee('فصل اول');
+
+        $this->assertDatabaseHas('store_course_enrollments', [
+            'library_item_id' => $olderValidItem->id,
+        ]);
+        $this->assertDatabaseMissing('store_course_enrollments', [
+            'library_item_id' => $invalidNewerItem->id,
+        ]);
+    }
+
     public function test_course_completion_counts_only_lessons_released_by_the_drip_schedule(): void
     {
         $user = $this->makeUser();
