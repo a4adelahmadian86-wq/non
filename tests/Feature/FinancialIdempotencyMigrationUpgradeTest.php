@@ -214,7 +214,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         try {
             $this->runFinancialMigration();
             $this->fail('Duplicate gateway transaction IDs must stop the migration before schema mutation.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('Duplicate payment transaction ID', $exception->getMessage());
         }
 
