@@ -23,7 +23,7 @@ The central workflow outbox accepts only these server-originated event contracts
 
 Unknown context fields, malformed identifiers, mismatched payment status, and missing event-ledger schema fail closed. A valid domain operation must not silently commit after its required outbox write has been discarded.
 
-Run `php artisan farast:workflows:health` from the application environment. The command exits non-zero and logs a warning when sync mode leaves pending events, terminal failures exist, processing leases are stale, failed queue jobs exist, or queue/outbox latency reaches five minutes. A healthy queue exits zero.
+Run `php artisan farast:workflows:health` from the application environment. The command exits non-zero and logs a warning when sync mode leaves pending events, terminal failures exist, processing leases are stale, failed queue jobs exist, or queue/outbox latency reaches five minutes. It reports job counts and oldest-job delay separately for `default`, `documents`, `documents-audio`, `automation`, `automation-critical`, and `backups`. A healthy queue exits zero.
 
 ## Queue isolation and deployment
 
