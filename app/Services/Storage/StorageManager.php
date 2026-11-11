@@ -496,6 +496,15 @@ class StorageManager
             ->delete();
     }
 
+    public function releaseBackupCapacityReservation(int $backupRunId): void
+    {
+        StorageVolumeReservation::query()
+            ->where('purpose', 'backup')
+            ->where('metadata->backup_run_id', $backupRunId)
+            ->where('status', 'active')
+            ->delete();
+    }
+
     public function cleanupExpiredVolumeReservations(int $limit = 100): int
     {
         // A process may die after claiming a reservation but before finishing provider cleanup.
