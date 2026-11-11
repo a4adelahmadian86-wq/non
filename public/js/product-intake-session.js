@@ -17,6 +17,24 @@
   const rows = new Map();
   let totalBytes = 0;
   let folderNames = new Set();
+  try {
+    const existing = JSON.parse(root.dataset.existingFiles || '[]');
+    existing.forEach(file => {
+      rows.set(file.id, { uploaded: file.status === 'uploaded' || file.status === 'attached', supervisorStatus: file.supervisor_status, securityGate: file.security_gate });
+      totalBytes += Number(file.size_bytes || 0);
+      const directory = (file.relative_path || '').split('/').slice(0, -1).join('/');
+      if (directory) folderNames.add(directory);
+      if (file.status === 'uploaded' && ['pending', 'processing'].includes(file.supervisor_status)) {
+        const card = Array.from(list.children).find(node => node.textContent.includes(file.relative_path || file.name));
+        if (card) {
+          const status = document.createElement('div');
+          status.textContent = 'ناظر هوشمند در حال بررسی فایل است…';
+          card.append(status);
+          pollStatus(file.id, status, rows.get(file.id));
+        }
+      }
+    });
+  } catch (_) {}
 
   const formatBytes = value => {
     if (value < 1024) return value + ' بایت';
@@ -189,5 +207,6 @@
       await addFiles(Array.from(event.dataTransfer?.files || []).map(file => ({ file, relativePath: file.name })));
     }
   });
+  continueButton.addEventListener('click', () => { if (!continueButton.disabled) window.location.assign(root.dataset.detailsUrl); });
   refreshSummary();
 })();
