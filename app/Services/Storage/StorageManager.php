@@ -575,6 +575,7 @@ class StorageManager
                         if ($backupRun && $backupRun->status === 'running') {
                             $backupRun->update([
                                 'status' => 'failed',
+                                'object_key' => data_get($lockedReservation->metadata, 'object_key'),
                                 'completed_at' => now(),
                                 'error_message' => 'رزرو ظرفیت بکاپ منقضی شد و فایل ناقص پاک‌سازی شد.',
                             ]);
