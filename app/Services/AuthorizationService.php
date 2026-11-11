@@ -312,6 +312,7 @@ class AuthorizationService
                 'access_control_managed' => true,
                 'updated_at' => now(),
             ]);
+            $subject->setAttribute('access_control_managed', true);
 
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id,
@@ -363,6 +364,7 @@ class AuthorizationService
                 'access_control_managed' => true,
                 'updated_at' => now(),
             ]);
+            $subject->setAttribute('access_control_managed', true);
 
             $id = DB::table('user_permission_grants')->insertGetId([
                 'user_id' => $subject->id,
