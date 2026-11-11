@@ -49,6 +49,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
             $table->string('gateway', 40)->nullable();
             $table->string('authority', 160)->nullable();
+            $table->string('transaction_id', 160)->nullable();
             $table->string('transaction_id', 190)->nullable();
         });
 
@@ -56,7 +57,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         DB::table('wallets')->insert(['id' => 10, 'user_id' => 1]);
         DB::table('wallet_transactions')->insert(['id' => 100, 'wallet_id' => 10]);
         DB::table('orders')->insert(['id' => 20, 'user_id' => 1]);
-        DB::table('payments')->insert(['id' => 30, 'order_id' => 20, 'gateway' => 'zarinpal', 'authority' => 'legacy-authority-30']);
+        DB::table('payments')->insert(['id' => 30, 'order_id' => 20, 'gateway' => 'zarinpal', 'authority' => 'legacy-authority-30', 'transaction_id' => 'legacy-transaction-30']);
     }
 
     protected function tearDown(): void
@@ -82,6 +83,9 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         $this->assertSame('legacy-payment-30', DB::table('payments')->where('id', 30)->value('idempotency_key'));
         $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
+        ));
+        $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'transaction_id']
         ));
         $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'transaction_id']
