@@ -442,11 +442,20 @@ class StoreController extends Controller
         $version = (string) ($preview->updated_at?->getTimestamp() ?? 0);
         $etag = '"'.hash('sha256', $preview->id.'|'.$preview->audio_path.'|'.$version.'|'.$size).'"';
         $ifRange = request()->header('If-Range');
-        if ($status === 206 && is_string($ifRange) && $ifRange !== '' && ! hash_equals($etag, trim($ifRange))) {
-            $start = 0;
-            $end = $size - 1;
-            $length = $size;
-            $status = 200;
+        if ($status === 206 && is_string($ifRange) && $ifRange !== '') {
+            $ifRangeValue = trim($ifRange);
+            $ifRangeMatches = hash_equals($etag, $ifRangeValue);
+            if (! $ifRangeMatches && $preview->updated_at) {
+                $ifRangeDate = strtotime($ifRangeValue);
+                $lastModifiedTimestamp = $preview->updated_at->copy()->utc()->getTimestamp();
+                $ifRangeMatches = $ifRangeDate !== false && $lastModifiedTimestamp <= $ifRangeDate;
+            }
+            if (! $ifRangeMatches) {
+                $start = 0;
+                $end = $size - 1;
+                $length = $size;
+                $status = 200;
+            }
         }
 
         $headers = [
