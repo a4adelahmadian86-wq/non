@@ -37,7 +37,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   const NativeWebSocket=FakeWebSocket;
   window.fetch=async(url,options={})=>{
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway',provider:'render',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
-    if(String(url).startsWith('https://voice.example.test/health'))return new Response(JSON.stringify({status:'ok',asr_configured:true,tts_configured:true,chat_configured:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/editor/voice/health')return new Response(JSON.stringify({status:'ok',asr_configured:true,tts_configured:true,chat_configured:true}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
