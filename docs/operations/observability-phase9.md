@@ -1,63 +1,79 @@
 # FARAST — Phase 9: Observability, Operational Security and Incident Management
 
-## Current implementation
+## Architecture and source of truth
 
-This phase extends existing first-party assets; it does not introduce a parallel audit or storage subsystem.
+This phase extends existing first-party assets; it does not introduce a parallel audit, notification, queue or storage subsystem.
 
-- Global HTTP middleware: `App\\Http\\Middleware\\FarastObservability`.
+- Global HTTP middleware: `App\\Http\\Middleware\\FarastObservability`, prepended before other global middleware so early failures receive trace IDs.
 - Request and correlation headers: `X-Request-Id` and `X-Correlation-Id`.
-- Runtime configuration: `config/observability.php`.
-- Existing audit writer: `App\\Services\\AuditLogService` and existing `audit_logs` table.
+- Runtime configuration: `config/observability.php`; environment access is kept inside config for Config Cache compatibility.
+- Canonical append-only audit source: `AuditEventService` + `farast_audit_events` + `AuditIntegrityService`.
+- Existing compatibility audit writer/table: `AuditLogService` + `audit_logs`; it is not promoted as a replacement for the append-only ledger.
+- Existing notification source: `NotificationService` + `farast_notifications`.
 - Existing queue tables: `jobs` and `failed_jobs` when the configured queue driver uses the database.
 - Existing storage inventory: `storage_volumes` and `storage_managed_files`.
-- Existing admin authorization: `admin.section:audit` (global scope).
+- Existing provider readiness: `ProductInfrastructureHealthService`; the dashboard reuses its cached, bounded probes.
+- Existing admin authorization: `admin.section:audit` under the existing admin scope.
+
+## Request and background-job tracing
+
+The global middleware validates inbound trace headers (maximum 64 safe characters), generates UUIDs for invalid/missing values, returns both headers, logs structured JSON request completion/failure, and clears context after each request. Query strings and request bodies are intentionally excluded.
+
+Queue payload metadata carries the originating request and correlation IDs. Worker lifecycle listeners restore the trace on job start, log success/attempt failure/terminal failure, and clear context after each job. Child jobs inherit the current correlation context through the existing queue payload hook.
+
+The canonical `AuditEventService` enriches append-only ledger events with the active trace identifiers before calculating the payload checksum. Sensitive metadata keys and credential-like query parameters are redacted before persistence. This makes the trace metadata part of the verifiable audit chain.
 
 ## Dashboard probes
 
-The admin observability page reports bounded, read-only probes for database connectivity, queue backlog/failures, private storage directory writability, storage volume inventory, pending transfers, log directory writability/retention configuration, and the existing cached Product Supervisor/document-audio readiness probes. It reuses `ProductInfrastructureHealthService`; it does not introduce another provider-health client.
+The admin page is available at `/admin/observability` and uses the existing global `audit` section permission. It is read-only and reports:
 
-A missing optional table is reported as an incomplete capability, not silently treated as a healthy external service. Probe exceptions are reported to Laravel's existing exception handler and are not exposed to the dashboard.
+- Database connectivity.
+- Queue driver, pending jobs, oldest pending age and failed jobs; `sync` is explicitly marked as non-measurable for backlog.
+- Private storage directory writability, volume inventory and pending/failed transfers.
+- Log directory writability, configured daily retention, and a bounded count of recent JSON error records from today's daily log file (last 15 minutes, at most 1 MiB read). The count is null when the configured daily channel cannot be read; a partial tail is explicitly marked incomplete.
+- Existing Product Supervisor and document-audio readiness, through the existing cached readiness service.
 
-## Existing audit-ledger integrity
+Missing optional tables and unconfigured external services are reported as warning/incomplete, not healthy. Provider probe failures do not break the admin page and do not expose exception messages, credentials or filesystem paths.
 
-The append-only `farast_audit_events` ledger and its existing `AuditIntegrityService` remain the integrity source; this phase does not create another audit store. The verification command is:
+## Alerting and anomaly detection
+
+The scheduled command `farast:observability:check` runs every minute with overlap protection. It evaluates the dashboard snapshot, emits severity-aware application logs, deduplicates alerts through the shared cache, writes incident-open/reminder/recovery events to the canonical append-only audit ledger, and sends in-app notifications through the existing `NotificationService`.
+
+Configure explicit recipients with `FARAST_OBSERVABILITY_ALERT_USER_IDS=12,34`; no notification is broadcast to all administrators by default. Configure the repeat interval with `FARAST_OBSERVABILITY_ALERT_COOLDOWN_MINUTES` (5–1440, default 30). Without recipient IDs, durable application logs and audit events are still emitted when the database is available; no in-app notification is sent.
+
+Repeated failed authentications are counted by a keyed HMAC fingerprint of the source IP in the shared cache. The default thresholds are 5 failures (warning) and 10 (critical) within 10 minutes. Raw IP addresses, attempted usernames, emails and credentials are not stored in anomaly records. Threshold crossings are written to structured logs and the canonical audit ledger.
+
+This implementation does not claim external paging: an out-of-band destination (for example, an operator-owned monitoring/alerting service) still needs explicit deployment configuration and a production delivery test. Internal notifications cannot alert operators when the application database/cache itself is unavailable.
+
+## Audit integrity and retention
+
+Verify the existing append-only ledger with:
 
 ```bash
 php artisan farast:audit-ledger:verify
 ```
 
-It exits non-zero and emits a critical, secret-free application log event when verification fails. Scheduling this command should be enabled only after the production scheduler cadence and database load are validated.
+The command exits non-zero and emits a critical, secret-free log event when the chain is invalid or cannot be verified. It does not repair or rewrite the ledger.
 
-## Operational security rules
+Operational daily logs retain the existing 14-day Monolog rotation policy. The audit ledger is not automatically pruned: no destructive retention period is assumed without an approved business/legal schedule. This phase does not claim physical secure erasure on SSDs, snapshots or backups. Any future deletion process must include the database, replicas, backups and encryption-key lifecycle and must be tested before activation.
 
-- Never put passwords, bearer tokens, cookies, session identifiers, API keys, recovery codes, raw request bodies or uploaded file contents in logs.
-- Do not log query strings by default; URLs can contain reset tokens and other credentials.
-- Treat inbound trace headers as untrusted input. Accept only bounded, single-line identifiers; generate replacements for invalid values.
-- Keep admin health and audit views behind existing authorization and scope enforcement.
-- Do not expose exception messages, database DSNs, filesystem paths or provider credentials to browser responses.
-- Keep logs outside the public web root and use the configured daily log retention.
-- Audit retention is not automatically pruned in this change: a retention schedule must be approved against business, legal and incident-response requirements before destructive deletion is enabled.
-
-## Alerting and incident response — remaining operational integration
-
-The application dashboard is not an external alerting system. Production still needs an operator-owned alert destination and thresholds for:
-- sustained HTTP 5xx rate and latency;
-- queue backlog age and failed-job growth;
-- database connection failures;
-- storage provider errors and transfer backlog;
-- repeated authentication/authorization failures.
+## Incident response
 
 For each incident, use [the incident report template](incident-report-template.md) and record: incident ID, first-seen time, severity, affected service/tenant scope, request/correlation IDs, impact, mitigation, root cause, recovery verification and follow-up actions. Do not include secrets or unnecessary personal data.
 
-## Acceptance tests still required
+## Verification status and remaining production acceptance
 
-1. Trace one HTTP request through a queued job and verify the same correlation ID is present in request and worker logs.
-2. Verify invalid and oversized trace headers are replaced.
-3. Verify log context is cleared between consecutive requests and jobs in a long-running worker.
-4. Verify logging failure does not fail the user request.
-5. Verify database, queue, storage and log probes report degraded states when their dependencies are unavailable.
-6. Verify only an actor with the existing global audit permission can access the dashboard.
-7. Verify configured log retention and an approved audit retention/deletion process in a production-like environment.
-8. Trigger a controlled 5xx and queue failure and verify an external alert is delivered.
+Automated tests cover bounded trace headers, logging-failure isolation, queue trace restoration/cleanup, terminal job failure context, canonical audit enrichment/redaction/integrity, health readiness reuse, bounded recent-error counting, alert deduplication/recovery, and authentication anomaly thresholds.
 
-No production service, secret, external monitoring account or deployment configuration is modified by this code change.
+The following still require production-like verification or operator configuration:
+
+1. Run one real HTTP request that dispatches a real database-backed job; correlate its request, worker, child-job and audit-ledger records.
+2. Verify long-running worker cleanup over multiple real jobs and a retry/terminal-failure sequence.
+3. Verify database, queue, storage and log probes under controlled dependency failures.
+4. Verify the dashboard is denied to non-global actors and scoped admin accounts without the existing audit permission.
+5. Configure explicit alert recipients and prove in-app delivery; configure an external paging destination and prove out-of-band delivery.
+6. Confirm the legal/business retention schedule for the append-only audit ledger and test the eventual deletion process against backups and replicas.
+7. Run the audit-ledger verifier against a production-like dataset and confirm runtime/load bounds.
+8. Trigger controlled HTTP 5xx, queue failure, storage transfer failure and authentication anomaly scenarios; verify incident records and recovery.
+
+No production secret, external monitoring account or deployment setting is changed by this code. The branch must not be merged until CI and the remaining authorization/trace integration checks pass.
