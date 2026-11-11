@@ -492,6 +492,104 @@ class StorageCoreTest extends TestCase
     }
 
 
+    public function test_volume_cannot_be_deleted_while_capacity_is_reserved(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_blocked' => false,
+        ]);
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Reserved volume',
+            'driver' => 'local',
+            'capacity_bytes' => 1024,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'last_checked_at' => now(),
+            'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $reservation = $storage->reserveVolumeCapacity($volume, 12, 'delete-guard-test', [
+            'object_key' => 'reservations/protected.bin',
+        ]);
+        $this->assertNotNull($reservation);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.storage.destroy', $volume))
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('storage_volumes', ['id' => $volume->id]);
+        $storage->releaseVolumeCapacityReservation($reservation);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.storage.destroy', $volume))
+            ->assertRedirect(route('admin.storage.index'));
+
+        $this->assertDatabaseMissing('storage_volumes', ['id' => $volume->id]);
+    }
+
+    public function test_transfer_failures_use_exponential_backoff_instead_of_hot_looping(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'foreign_primary',
+            'name' => 'Temporarily unavailable transfer target',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.invalid',
+            'bucket' => 'farast',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        $key = 'transfer-tests/retry-backoff.txt';
+        $contents = 'retry-with-backoff';
+        Storage::disk('private')->put($key, $contents);
+        $file = StorageManagedFile::create([
+            'storage_volume_id' => null,
+            'drive_key' => 'foreign_primary',
+            'file_key' => $key,
+            'file_key_hash' => hash('sha256', $key),
+            'original_name' => 'retry-backoff.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => strlen($contents),
+            'checksum' => hash('sha256', $contents),
+            'classification' => 'non_critical',
+            'source_module' => 'transfer-test',
+            'visibility' => 'private',
+            'status' => 'pending_transfer',
+            'metadata' => [
+                'disk' => 'private',
+                'staging_disk' => 'private',
+                'target_drive' => 'foreign_primary',
+                'reference_pending' => false,
+            ],
+        ]);
+
+        $adapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
+        $adapter->shouldReceive('putFile')->once()->andThrow(new \\RuntimeException('provider temporarily unavailable'));
+        $adapter->shouldReceive('delete')->once();
+        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $adapter);
+        app()->forgetInstance(StorageManager::class);
+        app()->forgetInstance(StorageTransferService::class);
+
+        $transfer = app(StorageTransferService::class);
+        $this->assertSame(0, $transfer->transferPending());
+        $file->refresh();
+
+        $this->assertSame('transfer_error', $file->status);
+        $this->assertGreaterThan(0, (int) data_get($file->metadata, 'transfer_attempts'));
+        $this->assertTrue(\\Illuminate\\Support\\Carbon::parse(data_get($file->metadata, 'next_transfer_at'))->isFuture());
+        $this->assertSame(0, $transfer->transferPending());
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+    }
+
     public function test_local_inventory_ignores_and_reclaims_abandoned_write_artifacts(): void
     {
         $volume = StorageVolume::create([
