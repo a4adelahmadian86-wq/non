@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
+use App\Services\AdminConsoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -62,9 +63,12 @@ class RestrictedAdministratorScopeTest extends TestCase
 
         $restrictedAdmin->refresh();
         $this->actingAs($restrictedAdmin);
+        $this->get('/dashboard')->assertOk();
         app(AuthorizationService::class)->forgetUser();
 
         $this->assertSame(ResolveAdminScope::SCOPE_ORGANIZATION, ResolveAdminScope::scopeFor($restrictedAdmin));
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($restrictedAdmin, 'users'));
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($restrictedAdmin, 'access'));
         $this->assertTrue(app(AuthorizationService::class)->allowsFor($restrictedAdmin, 'users.view', [
             'owner_id' => $memberA->id,
             'organization_id' => $organizationA->id,
@@ -120,6 +124,7 @@ class RestrictedAdministratorScopeTest extends TestCase
 
         $restrictedAdmin->refresh();
         $this->actingAs($restrictedAdmin);
+        $this->get('/dashboard')->assertOk();
         app(AuthorizationService::class)->forgetUser();
 
         $this->assertTrue(app(AuthorizationService::class)->allowsFor($restrictedAdmin, 'users.view', [
@@ -158,6 +163,7 @@ class RestrictedAdministratorScopeTest extends TestCase
         ]);
 
         $this->actingAs($restrictedAdmin);
+        $this->get('/dashboard')->assertOk();
         app(AuthorizationService::class)->forgetUser();
 
         $this->assertSame(ResolveAdminScope::SCOPE_OWN, ResolveAdminScope::scopeFor($restrictedAdmin));
