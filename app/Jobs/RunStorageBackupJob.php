@@ -25,6 +25,9 @@ class RunStorageBackupJob implements ShouldQueue
     public function handle(StorageBackupService $backup): void
     {
         $request = StorageBackupRun::findOrFail($this->requestRunId);
+        if ($request->status !== 'queued') {
+            return;
+        }
         $request->update(['status' => 'running', 'started_at' => now(), 'error_message' => null]);
 
         try {
