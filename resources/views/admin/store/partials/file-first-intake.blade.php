@@ -1,6 +1,7 @@
 <section class="store-panel product-file-first-step" aria-labelledby="file-first-title">
+  <div class="product-type-change-row"><a href="{{ route('admin.store.create') }}">تغییر نوع محصول</a></div>
   <div class="product-editor-heading">
-    <div><span>گام اول · ورود فایل</span><h2 id="file-first-title">ابتدا فایل محصول را انتخاب کنید</h2></div>
+    <div><span>گام دوم · انتخاب و بازرسی فایل</span><h2 id="file-first-title">ابتدا فایل محصول را انتخاب کنید</h2></div>
     <span class="product-editor-step">پیش از تکمیل مشخصات</span>
   </div>
   <p>در این مرحله هنوز نیازی به وارد کردن عنوان، قیمت یا توضیحات نیست. ابتدا فایل یا پوشه را انتخاب کنید؛ گزارش تعداد فایل‌ها، حجم و بررسی ساختاری نمایش داده می‌شود. پس از تأیید و ذخیره خصوصی، بررسی محتوایی ناظر هوشمند در پس‌زمینه آغاز می‌شود و شما به فرم تکمیل مشخصات محصول منتقل خواهید شد.</p>
