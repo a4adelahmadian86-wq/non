@@ -457,7 +457,7 @@ class AuthorizationService
             );
         $actorScope = $manageableAssignments->isNotEmpty()
             ? $manageableAssignments->pluck('scope')->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
-            : ($this->activeAssignments($actor)->isEmpty() ? $this->legacyScope($actor) : 'own');
+            : ($this->activeAssignments($actor)->isEmpty() && ! $actor->access_control_managed ? $this->legacyScope($actor) : 'own');
         $manageableTeamIds = $manageableAssignments
             ->where('scope', 'team')
             ->pluck('team_id')
