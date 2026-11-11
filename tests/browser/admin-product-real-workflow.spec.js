@@ -46,19 +46,6 @@ async function advanceProductWizardToReview(page) {
 }
 
 test.describe('Real admin product workflow', () => {
-  test.afterEach(async ({ page }) => {
-    try {
-      const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
-      if (csrf) {
-        await page.evaluate(async token => fetch('/logout', {
-          method: 'POST',
-          headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
-          credentials: 'same-origin',
-        }), csrf);
-      }
-    } catch (_) {}
-  });
-
   test('creates a product through the real UI, exposes validation errors, and persists a private draft', async ({ page }) => {
     test.setTimeout(120_000);
     const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
@@ -124,7 +111,7 @@ test.describe('Real admin product workflow', () => {
 
     await form.locator('select[name="department"]').selectOption('support');
     await form.locator('select[name="priority"]').selectOption('normal');
-    await form.locator('label.tk-chip').filter({ hasText: 'خدمات' }).click();
+    await form.locator('#topicAreaChips label.tk-chip').filter({ hasText: /^خدمات$/ }).click();
     await expect(form.locator('#servicesBlock')).toBeVisible();
     await form.locator('#servicesBlock label.tk-chip').filter({ hasText: 'تایپ آنلاین' }).click();
     await expect(form.locator('input[name="related_service"][value="typing"]')).toBeChecked();
@@ -185,9 +172,9 @@ test.describe('Real admin product workflow', () => {
     const response = await page.goto('/admin/access');
     expect(response?.status()).toBe(200);
     await expect(page.getByText('مدیریت نقش‌ها و مجوزها')).toBeVisible();
-    await expect(page.getByText('مدیر سازمان')).toBeVisible();
-    await expect(page.getByText('سرپرست تیم')).toBeVisible();
-    await expect(page.getByText('کارمند')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'مدیر سازمان', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'سرپرست تیم', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'کارمند', exact: true })).toBeVisible();
 
     const employeeRole = page.locator('.role-access-role').filter({
       has: page.getByRole('heading', { name: 'کارمند', exact: true }),
@@ -284,7 +271,7 @@ test.describe('Real admin product workflow', () => {
     await expect(addButton).toContainText('در سبد خرید قرار گرفت');
 
     await page.goto('/cart');
-    await expect(page.getByText('فایل آزمایشی رایگان', { exact: true })).toBeVisible();
+    await expect(page.locator('.store-cart-row').filter({ hasText: 'فایل آزمایشی رایگان' })).toHaveCount(1);
     const checkoutForm = page.locator('form.store-checkout-form');
     await checkoutForm.locator('input[name="accept_terms"]').check();
 
