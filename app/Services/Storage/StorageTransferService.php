@@ -70,17 +70,16 @@ class StorageTransferService
     {
         DB::transaction(function () use ($file, $stagingPath) {
             $stagingPath = StoragePath::normalizeObjectKey($stagingPath);
-            $sourceVolumeId = $file->storage_volume_id;
-            if ($sourceVolumeId !== null) {
-                $sourceVolume = StorageVolume::query()->lockForUpdate()->find($sourceVolumeId);
-                if ($sourceVolume) {
-                    DB::table('storage_volumes')->where('id', $sourceVolumeId)->update([
-                        'used_bytes' => DB::raw('CASE WHEN used_bytes >= '.(int) $file->size_bytes.' THEN used_bytes - '.(int) $file->size_bytes.' ELSE 0 END'),
-                        'object_count' => DB::raw('CASE WHEN object_count > 0 THEN object_count - 1 ELSE 0 END'),
-                    ]);
-                }
-            }
             $metadata = (array) $file->metadata;
+            if ($file->storage_volume_id !== null) {
+                // Keep the old object accounted for until its deletion is confirmed.
+                // It is removed only after the restored staging copy reaches its target.
+                $metadata['orphaned_source'] = [
+                    'volume_id' => (int) $file->storage_volume_id,
+                    'file_key' => (string) $file->file_key,
+                    'pending_cleanup' => true,
+                ];
+            }
             $metadata['disk'] = 'private';
             $metadata['staging_disk'] = 'private';
             $metadata['target_drive'] = $file->drive_key;
@@ -101,6 +100,8 @@ class StorageTransferService
         if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(8))->exists()) {
             return 0;
         }
+
+        $this->cleanupOrphanedSources(max(1, $limit));
 
         // Recover abandoned claims. A transfer request has a bounded HTTP timeout,
         // so a four-hour lease is deliberately longer than any valid single attempt.
@@ -299,4 +300,77 @@ class StorageTransferService
 
         return $moved;
     }
+
+    private function cleanupOrphanedSources(int $limit): void
+    {
+        StorageManagedFile::query()
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->limit($limit)
+            ->get()
+            ->each(function (StorageManagedFile $file): void {
+                if (data_get($file->metadata, 'orphaned_source.pending_cleanup')) {
+                    $this->cleanupOrphanedSource($file);
+                }
+            });
+    }
+
+    private function cleanupOrphanedSource(StorageManagedFile $file): void
+    {
+        $orphan = data_get($file->metadata, 'orphaned_source');
+        $volumeId = (int) data_get($orphan, 'volume_id', 0);
+        $key = (string) data_get($orphan, 'file_key', '');
+        if ($volumeId < 1 || $key === '') return;
+
+        $claimed = DB::transaction(function () use ($file): bool {
+            $locked = StorageManagedFile::query()->lockForUpdate()->find($file->id);
+            $orphan = data_get($locked?->metadata, 'orphaned_source');
+            if (! $locked || ! data_get($orphan, 'pending_cleanup', false)) return false;
+            $startedAt = data_get($orphan, 'cleanup_started_at');
+            if ($startedAt && \\Illuminate\\Support\\Carbon::parse($startedAt)->gt(now()->subHours(4))) return false;
+            $metadata = (array) $locked->metadata;
+            $metadata['orphaned_source']['cleanup_started_at'] = now()->toIso8601String();
+            $locked->update(['metadata' => $metadata]);
+            return true;
+        });
+        if (! $claimed) return;
+
+        try {
+            $volume = StorageVolume::findOrFail($volumeId);
+            $key = StoragePath::normalizeObjectKey($key);
+            if ($volume->driver === 'local') {
+                $path = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
+                if (is_file($path) && ! @unlink($path)) {
+                    throw new RuntimeException('حذف نسخه قدیمی فایل بازیابی‌شده از فضای محلی ناموفق بود.');
+                }
+            } elseif ($volume->driver === 's3') {
+                $this->s3->delete($volume, $key);
+            } else {
+                throw new RuntimeException('درایور فضای مبدأ برای پاک‌سازی نسخه قدیمی پشتیبانی نمی‌شود.');
+            }
+
+            DB::transaction(function () use ($file, $volumeId, $key): void {
+                $locked = StorageManagedFile::query()->lockForUpdate()->find($file->id);
+                $current = data_get($locked?->metadata, 'orphaned_source');
+                if (! $locked || (int) data_get($current, 'volume_id') !== $volumeId || (string) data_get($current, 'file_key') !== $key) return;
+                DB::table('storage_volumes')->where('id', $volumeId)->update([
+                    'used_bytes' => DB::raw('CASE WHEN used_bytes >= '.(int) $locked->size_bytes.' THEN used_bytes - '.(int) $locked->size_bytes.' ELSE 0 END'),
+                    'object_count' => DB::raw('CASE WHEN object_count > 0 THEN object_count - 1 ELSE 0 END'),
+                ]);
+                $metadata = (array) $locked->metadata;
+                unset($metadata['orphaned_source']);
+                $locked->update(['metadata' => $metadata]);
+            });
+        } catch (\\Throwable $exception) {
+            $locked = StorageManagedFile::find($file->id);
+            if ($locked) {
+                $metadata = (array) $locked->metadata;
+                $metadata['orphaned_source']['last_error'] = mb_substr($exception->getMessage(), 0, 300);
+                $metadata['orphaned_source']['last_attempt_at'] = now()->toIso8601String();
+                $locked->update(['metadata' => $metadata]);
+            }
+            report($exception);
+        }
+    }
+
 }
