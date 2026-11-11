@@ -176,7 +176,7 @@ Commit مبنای مشاهده‌شده: `11a0427bf0a3beff9856d5790d6f97c3b1984b
 
 ### 8.7 هویت رخداد در اعلان پاسخ تیکت
 
-در PR #358، شناسه `TicketMessage` به کلید dedupe اعلان درون‌برنامه‌ای و ایمیل پاسخ مشتری/کارشناس، شناسه transition به اعلان بستن تیکت و شناسه پیام/transition به اعلان assignment اضافه شده است. `EmailLog` موجود با کلید یکتای idempotency توسعه یافته و وضعیت queued/accepted/logged/failed تحویل ایمیل را نگه می‌دارد؛ retry رخداد قبلاً ثبت‌شده job دوم نمی‌سازد و رخداد جدید همان تیکت مستقل می‌ماند. تست‌های Feature مسیر notifier، اتصال SupportTicketService و صف ایمیل را پوشش می‌دهند. SMS هنوز ledger/idempotency مستقل ندارد و نباید idempotency چندکاناله کامل ادعا شود.
+در PR #358، شناسه `TicketMessage` به کلید dedupe اعلان درون‌برنامه‌ای و ایمیل پاسخ مشتری/کارشناس، شناسه transition به اعلان بستن/ارجاع و هویت threshold/cycle به اعلان‌های SLA اضافه شده است. `EmailLog` موجود با کلید یکتای idempotency توسعه یافته و وضعیت queued/accepted/logged/failed تحویل ایمیل را نگه می‌دارد. `SmsLog` نیز بدون ذخیره شماره خام، hash شماره، وضعیت sending/accepted/failed و retry اتمیک را ثبت می‌کند. retry رخداد ثبت‌شده کانال دوم نمی‌سازد و رخداد جدید همان تیکت مستقل می‌ماند. تست‌های Feature مسیر notifier، اتصال SupportTicketService و تحویل/Retry ایمیل و پیامک را پوشش می‌دهند. پذیرش نهایی همچنان منوط به CI است.
 
 
 ### 8.8 اتصال CRM به پیشرفت دوره
