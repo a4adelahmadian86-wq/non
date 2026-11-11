@@ -46,6 +46,12 @@ class AuthorizationService
      */
     public function allowsFor(?User $user, string $permission, array $context): bool
     {
+        // Resource-level authorization must never silently degrade into a
+        // navigation check when a caller forgets to supply resource attributes.
+        if ($context === []) {
+            return false;
+        }
+
         return $this->decide($user, $permission, $context);
     }
 
