@@ -56,6 +56,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/intake/{session}/files/preflight', [AdminStoreController::class, 'preflightIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.preflight');
     Route::post('/store/intake/{session}/files/{file}/confirm', [AdminStoreController::class, 'confirmIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.confirm');
     Route::delete('/store/intake/{session}/files/{file}', [AdminStoreController::class, 'cancelIntakeFile'])->middleware('permission:store.products.create')->name('store.intake.files.cancel');
+    Route::get('/store/intake/{session}/files/{file}/status', [AdminStoreController::class, 'intakeFileStatus'])->middleware('permission:store.products.create')->name('store.intake.files.status');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
