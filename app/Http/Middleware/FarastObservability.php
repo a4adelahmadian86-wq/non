@@ -23,6 +23,9 @@ class FarastObservability
 
         $request->attributes->set('farast.request_id', $requestId);
         $request->attributes->set('farast.correlation_id', $correlationId);
+        // Exception handlers also need generated IDs when the client sent no trace headers.
+        $request->headers->set('X-Request-Id', $requestId);
+        $request->headers->set('X-Correlation-Id', $correlationId);
 
         try {
             app(FarastTraceContext::class)->set($requestId, $correlationId);
@@ -37,22 +40,32 @@ class FarastObservability
 
         $started = hrtime(true);
         $response = null;
+        $failure = null;
 
         try {
             $response = $next($request);
 
             return $response;
+        } catch (Throwable $exception) {
+            $failure = $exception;
+            throw $exception;
         } finally {
             try {
                 try {
-                    Log::info('farast.request.completed', [
+                    $context = [
                         'method' => $request->method(),
                         'path' => $request->path(),
                         'route' => $request->route()?->getName(),
                         'actor_id' => $request->user()?->getAuthIdentifier(),
                         'status' => $response?->getStatusCode(),
                         'duration_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
-                    ]);
+                    ];
+                    if ($failure) {
+                        $context['exception_class'] = get_class($failure);
+                        Log::error('farast.request.failed', $context);
+                    } else {
+                        Log::info('farast.request.completed', $context);
+                    }
                 } catch (Throwable $exception) {
                     error_log('FARAST request completion logging failed: '.get_class($exception));
                 }
