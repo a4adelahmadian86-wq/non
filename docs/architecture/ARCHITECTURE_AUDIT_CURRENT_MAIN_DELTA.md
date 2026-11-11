@@ -176,7 +176,14 @@ Scope نیز دو لایه دارد: محدودیت per-admin از `farast_user_
 - `MigrateLegacyProductAssets` برای فایل محصول، artifact، preview، cover و image مسیر مهاجرت legacy به رجیستری دارد.
 - `StorageProductReferenceSyncTest` همگام‌سازی reference دامنه و رجیستری را می‌آزماید.
 
-**وضعیت:** PR #335 در آخرین snapshot بررسی‌شده چند check ناموفق داشت؛ بنابراین این اصلاح هنوز پذیرفته‌شده تلقی نمی‌شود. تا رفع شکست‌ها و rebase، هیچ مهاجرت دستی فایل یا حذف مسیر legacy انجام نشود.
+**شکست‌های دقیق CI مشاهده‌شده برای head `cf1e6e78...` در PR #335:**
+- `StorageBackupRestoreIntegrationTest` شکست خورد؛ خروجی restore: «فایل پایگاه داده در آرشیو موجود نیست.»؛ assertion در خط 160 با exit code برابر 1 متوقف شد.
+- Browser regression تعداد 16 شکست داشت؛ بخش عمده خطاها timeout در تعامل Reader/toolbar و یک مورد hidden بودن `.farast-reader-studio-rail` بود. این‌ها صرفاً خطای تصادفی CI فرض نمی‌شوند؛ باید با trace و fixture مربوط بررسی شوند.
+- در همان اجرا 620 تست دیگر موفق بودند؛ این عدد جایگزین حل دو دسته شکست نیست.
+
+PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر می‌دهد و مسیر verify/manifest/database dump و recovery مستقل از metadata را توسعه می‌دهد. بنابراین PR #335 و #379 روی فایل‌های بکاپ هم‌پوشانی واقعی دارند. ادغام هر دو بدون rebase و انتخاب یک پیاده‌سازی نهایی، خطر از دست رفتن اصلاحات بکاپ یا باقی‌ماندن دو قرارداد آرشیو را دارد.
+
+**وضعیت:** PR #335 هنوز پذیرفته‌شده تلقی نمی‌شود. ابتدا PR #379 باید روی خط مبنای جاری و تست‌های backup/recovery تثبیت شود؛ سپس تغییرهای product artifact در PR #335 به همان خط مبنا منتقل و آزمون‌های Storage و Reader دوباره اجرا شوند. تا آن زمان هیچ مهاجرت دستی فایل یا حذف مسیر legacy انجام نشود.
 
 ## 7. مرزهای تجارت که باید حفظ شوند
 
