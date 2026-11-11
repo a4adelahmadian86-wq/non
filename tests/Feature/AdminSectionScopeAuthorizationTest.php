@@ -297,6 +297,9 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         // Even an explicit role grant cannot widen a section configured as global-only.
         $this->actingAs($manager)->get('/admin/store')->assertForbidden();
         $this->get('/admin/store/operations')->assertForbidden();
+        $operationsRoute = Route::getRoutes()->getByName('admin.store.operations');
+        $this->assertNotNull($operationsRoute);
+        $this->assertContains('admin.section:store', $operationsRoute->gatherMiddleware());
         $this->post('/admin/store', ['name' => 'Must Not Be Created'])->assertForbidden();
 
         $employee = $this->makeUser('09123456786', User::ROLE_EMPLOYEE);
