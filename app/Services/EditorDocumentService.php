@@ -83,6 +83,13 @@ class EditorDocumentService
                 'word_count' => $this->wordCount($plain),
             ]);
 
+            app(WorkflowEngine::class)->enqueue('document.saved', [
+                'user_id' => (int) $legacy->user_id,
+                'customer_id' => (int) $legacy->user_id,
+                'document_id' => (int) $document->id,
+                'revision' => $nextRevision,
+            ], 'document:'.$document->id.':revision:'.$nextRevision);
+
             return [
                 'ok' => true,
                 'conflict' => false,
@@ -140,6 +147,13 @@ class EditorDocumentService
                 'content' => $html,
                 'word_count' => $this->wordCount($normalized['plain_text'] ?? ''),
             ]);
+
+            app(WorkflowEngine::class)->enqueue('document.saved', [
+                'user_id' => (int) $legacy->user_id,
+                'customer_id' => (int) $legacy->user_id,
+                'document_id' => (int) $locked->id,
+                'revision' => $nextRevision,
+            ], 'document:'.$locked->id.':revision:'.$nextRevision);
 
             return [
                 'ok' => true,
