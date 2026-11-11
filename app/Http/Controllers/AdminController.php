@@ -477,6 +477,15 @@ class AdminController extends Controller
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
 
+        if ((int) $user->id === (int) $request->user()->id && $d['role'] !== User::ROLE_ADMIN) {
+            $anotherActiveAdminExists = User::query()
+                ->where('role', User::ROLE_ADMIN)
+                ->where('is_blocked', false)
+                ->where('id', '!=', $user->id)
+                ->exists();
+            abort_unless($anotherActiveAdminExists, 409, 'حداقل یک مدیر اصلی فعال باید در سامانه باقی بماند.');
+        }
+
         $old = $user->role;
         DB::transaction(function () use ($request, $user, $d, $old, $audit): void {
             $user->update(['role' => $d['role']]);
