@@ -15,6 +15,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SupportTicketService::class);
+        $this->app->singleton(\\App\\Services\\FarastTraceContext::class);
     }
 
     public function boot(): void
