@@ -219,7 +219,38 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 این دو سطح را نباید بدون تطبیق idempotency، callback، refund و ledger با هم ادغام کرد. PR #340 مسیر تقویت idempotency و retention مالی را دنبال می‌کند و باید به‌عنوان تغییر موازی بررسی شود؛ وضعیت آن هنوز ادغام‌شده نیست.
 
 
-## 8. تعارض معماری قطعی در خوشه توسعه محصول
+
+## 8. قیمت‌گذاری: سه منبع داده با precedence متفاوت
+
+بازبینی کد main نشان می‌دهد «قیمت» در یک محل واحد نگهداری نمی‌شود. این‌ها دامنه‌های قابل تفکیک‌اند، اما قرارداد precedence فعلی باید به‌عنوان ریسک ثبت شود.
+
+| منبع | مدل/جدول | مصرف‌کننده و نقش |
+|---|---|---|
+| قواعد قدیمی | `PricingRule` / `pricing_rules` | تنظیمات ساده تایپ؛ `AdminController::updatePricing` فقط این جدول را می‌نویسد |
+| سیاست قدیمی تجاری | `FarastPricingPolicy` / `farast_pricing_policies` | `PricingService::calculate` مستقیم از آن می‌خواند؛ Migration موتور تجاری، نسخه‌های فعال آن را به نسخه 1 منتقل می‌کند |
+| سیاست نسخه‌دار | `FarastPricingPolicyVersion` / `farast_pricing_policy_versions` | `PricingEngine::resolve/quote`؛ immutable به‌جز پنجره اعتبار؛ `CommerceAuthorizationService` از آن استفاده می‌کند |
+
+### مسیرهای واقعی
+
+- `PricingService::ruleValue(key)` ابتدا `PricingEngine::resolve(key)` را می‌خواند؛ در نبود نسخه، به `FarastPricingPolicy` و سپس `PricingRule` fallback می‌کند.
+- `PricingService::projectQuote`, `quote` و `estimateByPages` از همین precedence استفاده می‌کنند.
+- `PricingService::calculate` مستقیماً `FarastPricingPolicy` را می‌خواند و از نسخه‌دار بودن `PricingEngine` عبور می‌کند.
+- `ProjectBillingService` برای quote پروژه از `PricingService::projectQuote` استفاده می‌کند.
+- `CommerceAuthorizationService` مستقیماً `PricingEngine` را برای quote/reservation/charge مصرف می‌کند.
+- Migration `2026_10_02_000001_create_farast_commerce_engine.php` در صورت وجود `farast_pricing_policies`، سیاست‌های active را به `farast_pricing_policy_versions` با version=1 منتقل می‌کند.
+- `PricingPolicyAdminService` قابلیت create/schedule/retire/activate نسخه‌ها را دارد، اما در Controller/Route inventory مصرف‌کننده HTTP برای آن ثبت نشده است.
+- `AdminController::updatePricing` فقط `PricingRule::updateOrCreate` را اجرا می‌کند؛ پس اگر کلید در `FarastPricingPolicyVersion` یا `FarastPricingPolicy` موجود باشد، تغییر `pricing_rules` در مسیرهای دارای precedence بالاتر اثر نمی‌کند.
+
+### شکاف تست و مالکیت
+
+- `tests/Unit/PricingPolicyTest.php` مسیر legacy `PricingService::calculate` را با `FarastPricingPolicy` آزمایش می‌کند.
+- `CommercePhase3Test` موتور تجاری نسخه‌دار را پوشش می‌دهد.
+- در inventory فعلی، تستی که ثابت کند تغییر قیمت از UI ادمین همان quote نهایی مصرف‌شده در checkout/typing را تغییر می‌دهد، شناسایی نشد.
+- وجود دو موتور لزوماً تکرار یک دامنه نیست: قیمت تایپ پروژه و قیمت مصرف capability می‌توانند policyهای متفاوت داشته باشند؛ اما نباید برای یک `policy_code` چند منبع فعال با precedence پنهان وجود داشته باشد.
+
+**تصمیم لازم:** `FarastPricingPolicyVersion + PricingEngine` باید منبع canonical برای policyهای versioned باشد. `PricingPolicyAdminService` باید write API رسمی و audit‌شده آن باشد. قواعد `PricingRule` و `FarastPricingPolicy` باید برای هر key طبقه‌بندی شوند: یا به‌عنوان migration source فقط خواندنی باقی بمانند، یا برای کلیدهای مشخص به‌صورت صریح owner باشند. Admin UI نباید صرفاً `PricingRule` را به‌روزرسانی کند درحالی‌که runtime نسخه بالاتری را می‌خواند. پیش از حذف legacy، کلیدهای typing و policyهای فعلی باید migrate و quoteهای قبل/بعد regression-tested شوند.
+
+## 9. تعارض معماری قطعی در خوشه توسعه محصول
 
 بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
 
@@ -297,7 +328,7 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 **وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
 
 
-## 9. وضعیت CI خط مبنای جدید
+## 10. وضعیت CI خط مبنای جدید
 
 پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` دوباره بررسی شدند و همگی به پایان رسیدند:
 - `laravel`: success
@@ -310,7 +341,7 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 
 بنابراین merge commit ممیزی Routeها سبز است؛ دو check skipped به معنی اجرای موفق آن تست‌ها نیستند. این نتیجه به PRهای دیگر یا commitهای بعدی تعمیم داده نمی‌شود.
 
-## 10. ترتیب ادامه ممیزی/تثبیت
+## 11. ترتیب ادامه ممیزی/تثبیت
 
 1. دریافت نتیجه نهایی CI روی `c3067f69...`؛ در صورت شکست، تشخیص بر اساس job و log.
 2. بررسی و ادغام امن PR #347 پس از rebase و CI؛ این مسیر شکاف authorization سطح Route را می‌بندد.
@@ -319,7 +350,7 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 5. اجرای runtime inventory روی main پس از ادغام این تغییرها: `route:list`, migration fresh install/upgrade، تست‌های منفی Scope و مالکیت فایل.
 6. تکمیل call graph برای هر سرویس با مصرف‌کننده‌ها و تست‌های واقعی؛ سپس تعیین موارد retain/consolidate/deprecate.
 
-## 11. معیار تکمیل
+## 12. معیار تکمیل
 
 این addendum وضعیت snapshot را ثبت می‌کند، نه پایان کل مرحله دوم را. مرحله دوم تنها وقتی بسته می‌شود که:
 - Routeها و نام‌ها در runtime یکتا باشند؛
