@@ -34,21 +34,26 @@ return new class extends Migration
             ['farast_output_authorizations', 'charge_id', 'farast_charges'],
         ];
 
+        // Validate the entire relationship set before applying any DDL.
+        foreach ($relations as [$child, $column, $parent]) {
+            $this->assertRelationReady($child, $column, $parent);
+        }
+
         foreach ($relations as [$child, $column, $parent]) {
             $this->enforceRelation($child, $column, $parent);
         }
     }
 
-    private function enforceRelation(string $child, string $column, string $parent): void
+    private function assertRelationReady(string $child, string $column, string $parent): void
     {
         foreach ([$child, $parent] as $table) {
             if (! Schema::hasTable($table)) {
-                throw new RuntimeException("Cannot enforce {$child}.{$column}: required table {$table} does not exist.");
+                throw new RuntimeException("Cannot enforce {$child}.{$column}: required table {$table} does not exist. No constraints were changed.");
             }
         }
 
         if (! Schema::hasColumn($child, $column) || ! Schema::hasColumn($parent, 'id')) {
-            throw new RuntimeException("Cannot enforce {$child}.{$column} -> {$parent}.id: required column is missing.");
+            throw new RuntimeException("Cannot enforce {$child}.{$column} -> {$parent}.id: required column is missing. No constraints were changed.");
         }
 
         $orphans = DB::table($child.' as child')
@@ -59,10 +64,13 @@ return new class extends Migration
 
         if ($orphans > 0) {
             throw new RuntimeException(
-                "Database integrity preflight failed: {$child}.{$column} has {$orphans} orphan reference(s) to {$parent}.id. No rows were changed; repair or reconcile these references before retrying."
+                "Database integrity preflight failed: {$child}.{$column} has {$orphans} orphan reference(s) to {$parent}.id. No constraints or rows were changed; reconcile before retrying."
             );
         }
+    }
 
+    private function enforceRelation(string $child, string $column, string $parent): void
+    {
         if (DB::getDriverName() === 'sqlite') {
             $this->enforceSqliteRelation($child, $column, $parent);
 
