@@ -61,9 +61,9 @@ class RunStorageBackupCommandTest extends TestCase
             'backup_type' => 'weekly',
             'source_name' => 'scheduler_request',
             'status' => 'queued',
-            'created_at' => now()->subDays(2),
             'metadata' => ['request_only' => true],
         ]);
+        $queuedTooLong->forceFill(['created_at' => now()->subDays(2)])->save();
         Queue::fake();
 
         $this->artisan('storage:backup-weekly')->assertExitCode(0);
