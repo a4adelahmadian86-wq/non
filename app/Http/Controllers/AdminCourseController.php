@@ -187,7 +187,7 @@ class AdminCourseController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => false,
                     'is_active' => true,
-                    'scan_status' => 'clean',
+                    'scan_status' => 'structural',
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
