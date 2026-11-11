@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
 use RuntimeException;
-use Symfony\\Component\\Process\\ExecutableFinder;
-use Symfony\\Component\\Process\\Process;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
 
 class LocalClamAvScanner
 {
@@ -24,7 +24,7 @@ class LocalClamAvScanner
             $process = new Process([$binary, '--no-summary', '--infected', $absolutePath]);
             $process->setTimeout(180);
             $process->run();
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             throw new RuntimeException('antivirus_engine_unavailable', 0, $exception);
         }
 
@@ -57,7 +57,7 @@ class LocalClamAvScanner
             $process->setTimeout(5);
             $process->run();
             return $process->isSuccessful() ? mb_substr(trim($process->getOutput()), 0, 120) : null;
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return null;
         }
     }
