@@ -158,7 +158,7 @@ Route::get('/editor/voice/health',function(){
     $gateway=rtrim(trim((string)config('services.ai_gateway.url','')),'/');
     if($gateway==='')return response()->json(['status'=>'unavailable'],503,['Cache-Control'=>'no-store']);
     try{
-        $upstream=\\Illuminate\\Support\\Facades\\Http::acceptJson()->connectTimeout(4)->timeout(12)->get($gateway.'/health');
+        $upstream=\Illuminate\Support\Facades\Http::acceptJson()->connectTimeout(4)->timeout(12)->get($gateway.'/health');
         $data=$upstream->json();
         $ready=$upstream->successful()&&is_array($data)&&($data['status']??null)==='ok'
             &&($data['asr_configured']??false)===true&&($data['tts_configured']??false)===true&&($data['chat_configured']??false)===true;
@@ -168,8 +168,8 @@ Route::get('/editor/voice/health',function(){
             'tts_configured'=>(bool)($data['tts_configured']??false),
             'chat_configured'=>(bool)($data['chat_configured']??false),
         ],$ready?200:503,['Cache-Control'=>'no-store']);
-    }catch(\\Throwable $e){
-        \\Illuminate\\Support\\Facades\\Log::warning('Voice gateway health proxy failed',['exception'=>get_class($e)]);
+    }catch(\Throwable $e){
+        \Illuminate\Support\Facades\Log::warning('Voice gateway health proxy failed',['exception'=>get_class($e)]);
         return response()->json(['status'=>'unavailable'],503,['Cache-Control'=>'no-store']);
     }
 })->middleware(['auth','throttle:60,1','web'])->name('editor.voice.health');
