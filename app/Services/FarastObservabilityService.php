@@ -195,12 +195,79 @@ class FarastObservabilityService
         $path = config('logging.channels.daily.path');
         $directory = is_string($path) && $path !== '' ? dirname($path) : null;
         $writable = $directory !== null && is_dir($directory) && is_writable($directory);
+        $usesDaily = $channel === 'daily'
+            || ($channel === 'stack' && in_array('daily', (array) config('logging.channels.stack.channels', []), true));
+        $errorCount = null;
+        $errorCountComplete = false;
+
+        if ($usesDaily && is_string($path) && $path !== '') {
+            $filename = pathinfo($path, PATHINFO_FILENAME);
+            $extension = pathinfo($path, PATHINFO_EXTENSION);
+            $dailyFile = dirname($path).DIRECTORY_SEPARATOR.$filename.'-'.now()->format('Y-m-d').($extension !== '' ? '.'.$extension : '');
+            $errorCount = $this->countRecentErrors($dailyFile, 1024 * 1024, 15);
+            $errorCountComplete = $errorCount !== null;
+        }
 
         return [
-            'status' => $writable ? 'healthy' : 'warning',
+            'status' => $writable && $usesDaily ? 'healthy' : 'warning',
             'default_channel' => $channel,
             'daily_retention_days' => is_numeric($days) ? (int) $days : null,
             'log_directory_writable' => $writable,
+            'daily_error_count_last_15_minutes' => $errorCount,
+            'error_count_complete' => $errorCountComplete,
+            'error_count_window_minutes' => 15,
         ];
+    }
+
+    /**
+     * Read at most the final megabyte of today's JSON log file. A null result
+     * means the configured daily file could not be read; it is never reported
+     * as zero errors in that case.
+     */
+    private function countRecentErrors(string $file, int $maxBytes, int $windowMinutes): ?int
+    {
+        if (! is_file($file)) {
+            return 0;
+        }
+
+        $handle = @fopen($file, 'rb');
+        if (! is_resource($handle)) {
+            return null;
+        }
+
+        try {
+            $size = filesize($file);
+            if (! is_int($size)) {
+                return null;
+            }
+
+            $offset = max(0, $size - $maxBytes);
+            if ($offset > 0) {
+                fseek($handle, $offset);
+                fgets($handle); // Discard a potentially partial first JSON line.
+            }
+
+            $cutoff = now()->subMinutes($windowMinutes)->toDateTimeImmutable();
+            $count = 0;
+            while (($line = fgets($handle)) !== false) {
+                $record = json_decode($line, true);
+                if (! is_array($record) || (int) ($record['level'] ?? 0) < 400 || ! is_string($record['datetime'] ?? null)) {
+                    continue;
+                }
+
+                try {
+                    $timestamp = new DateTimeImmutable($record['datetime']);
+                    if ($timestamp >= $cutoff) {
+                        $count++;
+                    }
+                } catch (Throwable) {
+                    continue;
+                }
+            }
+
+            return $count;
+        } finally {
+            fclose($handle);
+        }
     }
 }
