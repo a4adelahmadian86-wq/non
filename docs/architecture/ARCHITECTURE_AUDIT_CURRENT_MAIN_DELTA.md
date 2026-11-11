@@ -183,7 +183,14 @@ Scope نیز دو لایه دارد: محدودیت per-admin از `farast_user_
 
 PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر می‌دهد و مسیر verify/manifest/database dump و recovery مستقل از metadata را توسعه می‌دهد. بنابراین PR #335 و #379 روی فایل‌های بکاپ هم‌پوشانی واقعی دارند. ادغام هر دو بدون rebase و انتخاب یک پیاده‌سازی نهایی، خطر از دست رفتن اصلاحات بکاپ یا باقی‌ماندن دو قرارداد آرشیو را دارد.
 
-**وضعیت:** PR #335 هنوز پذیرفته‌شده تلقی نمی‌شود. ابتدا PR #379 باید روی خط مبنای جاری و تست‌های backup/recovery تثبیت شود؛ سپس تغییرهای product artifact در PR #335 به همان خط مبنا منتقل و آزمون‌های Storage و Reader دوباره اجرا شوند. تا آن زمان هیچ مهاجرت دستی فایل یا حذف مسیر legacy انجام نشود.
+**وضعیت checkها در آخرین snapshot:**
+- PR #335: `laravel`, `test` و `reader-browser-regression` ناموفق.
+- PR #357: همان سه check ناموفق.
+- PR #379: `laravel` و `test` در حال اجرا؛ بقیه checkهای اصلی مشاهده‌شده موفق یا skipped بودند.
+
+PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌دهند و پیاده‌سازی‌های متفاوتی دارند؛ پیشنهاد StorageManager::streamRange به هر دو گزارش شده است.
+
+**وضعیت:** PR #335 هنوز پذیرفته‌شده تلقی نمی‌شود. ابتدا PR #379 باید روی خط مبنای جاری و تست‌های backup/recovery تثبیت شود؛ سپس تغییرهای product artifact در PR #335 به همان خط مبنا منتقل و آزمون‌های Storage و Reader دوباره اجرا شوند. تغییر streaming صوتی #357 نیز باید در همین integration حل شود. تا آن زمان هیچ مهاجرت دستی فایل یا حذف مسیر legacy انجام نشود.
 
 
 ### Reader audio: StorageManager دارد streaming مرکزی، اما PR #357 آن را دور می‌زند
@@ -280,20 +287,28 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 6. Migrationها از روی دیتابیس خالی و دیتابیس upgradeشده اجرا شوند؛ تست باید اثبات کند هر table/column فقط یک‌بار ساخته می‌شود.
 7. `AdminStoreProductWorkflowTest` نباید به‌تنهایی پوشش چند PR را تضمین کند؛ تست قرارداد end-to-end باید یک مسیر واحد را از type selection تا secure upload، review، publish، entitlement و download طی کند.
 
+**وضعیت checkها در آخرین snapshot:**
+- PR #333: `mergeable=false / dirty` و check-run ندارد.
+- PR #318: `laravel` ناموفق؛ تست عمومی و Reader در checkهای مشاهده‌شده موفق بودند.
+- PR #262: `laravel`, `test` و `agent` ناموفق.
+- PR #279: `laravel` ناموفق؛ `test` و Reader در checkهای مشاهده‌شده موفق بودند.
+- PR #265: check-run قابل مشاهده ندارد.
+
 **وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
 
 
 ## 9. وضعیت CI خط مبنای جدید
 
-پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` در لحظه ثبت این سند هنوز در حال اجرا بودند:
-- `laravel`: in progress
-- `voice-service-contract-tests`: in progress
-- `document-audio-smoke`: in progress
-- `test`: in progress
-- `agent`: queued
+پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` دوباره بررسی شدند و همگی به پایان رسیدند:
+- `laravel`: success
+- `voice-service-contract-tests`: success
+- `document-audio-smoke`: success
+- `test`: success
+- `agent`: success
+- `reader-browser-regression`: skipped
 - `voice-model-smoke`: skipped
 
-بنابراین نتیجه این commit هنوز pass اعلام نمی‌شود. checkهای سبز PR #371 روی head آن PR، جایگزین checkهای merge commit نیستند.
+بنابراین merge commit ممیزی Routeها سبز است؛ دو check skipped به معنی اجرای موفق آن تست‌ها نیستند. این نتیجه به PRهای دیگر یا commitهای بعدی تعمیم داده نمی‌شود.
 
 ## 10. ترتیب ادامه ممیزی/تثبیت
 
