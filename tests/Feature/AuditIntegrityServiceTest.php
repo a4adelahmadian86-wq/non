@@ -50,8 +50,8 @@ class AuditIntegrityServiceTest extends TestCase
     public function test_canonical_payload_checksum_survives_json_object_key_reordering(): void
     {
         $meta = [
-            'zeta' => 1,
-            'alpha' => ['y' => 2, 'beta' => 3],
+            'aa' => ['y' => 2, 'x' => 1],
+            'z' => 1,
         ];
 
         $event = app(\App\Services\AuditEventService::class)->record(
@@ -71,8 +71,8 @@ class AuditIntegrityServiceTest extends TestCase
             ->where('id', $event->id)
             ->update([
                 'payload_meta' => json_encode([
-                    'alpha' => ['beta' => 3, 'y' => 2],
-                    'zeta' => 1,
+                    'z' => 1,
+                    'aa' => ['y' => 2, 'x' => 1],
                 ]),
             ]);
 
