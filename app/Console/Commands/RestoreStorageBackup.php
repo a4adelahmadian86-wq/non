@@ -132,6 +132,25 @@ class RestoreStorageBackup extends Command
                 ->where('status', 'running')
                 ->update(['status' => 'completed', 'completed_at' => now(), 'error_message' => null]);
 
+            // The scheduler request is marked running before its backup job starts.
+            // Because the snapshot is taken inside that job, it captures this in-flight
+            // request. Complete it after restore so it cannot block all future backups.
+            StorageBackupRun::query()
+                ->where('source_name', 'scheduler_request')
+                ->whereIn('status', ['queued', 'running'])
+                ->get()
+                ->each(function (StorageBackupRun $request) use ($run): void {
+                    $metadata = (array) ($request->metadata ?? []);
+                    $metadata['restored_at'] = now()->toIso8601String();
+                    $metadata['restored_from_backup_run_id'] = (int) $run->id;
+                    $request->forceFill([
+                        'status' => 'completed',
+                        'completed_at' => now(),
+                        'error_message' => null,
+                        'metadata' => $metadata,
+                    ])->save();
+                });
+
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
 
