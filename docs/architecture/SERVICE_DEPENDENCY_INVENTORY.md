@@ -98,3 +98,19 @@
 | `StoreCouponBudgetPolicy` | `app/Services/StoreCouponBudgetPolicy.php` | — | `Order`, `SiteSetting` | `store_coupon_assignments as assignments` | — | `allows()`, `reservedAmount()` | 1 | 0 |
 | `StoreCouponMarginPolicy` | `app/Services/StoreCouponMarginPolicy.php` | — | `StoreProduct` | — | — | `minimumMargin()`, `maximumDiscount()` | 0 | 0 |
 | `StoreCouponRedemptionService` | `app/Services/StoreCouponRedemptionService.php` | `StoreCouponMarginPolicy`, `StoreCouponBudgetPolicy` | `Order`, `StoreCoupon`, `StoreCouponAssignment`, `StoreProduct`, `User` | `crm_marketing_campaigns`, `store_coupon_assignments as assignments` | — | `redeemForPaidOrder()` | 2 | 0 |
+
+| `StoreCourseEnrollmentService` | `app/Services/StoreCourseEnrollmentService.php` | — | `StoreCourseEnrollment`, `StoreLibraryItem`, `StoreProduct` | — | — | `grant()` | 0 | 0 |
+| `StorePdfPreviewPreparer` | `app/Services/StorePdfPreviewPreparer.php` | — | — | — | — | `prepareSample()` | 0 | 0 |
+| `StoreProductDocumentPageBuilder` | `app/Services/StoreProductDocumentPageBuilder.php` | — | — | — | — | `build()` | 0 | 0 |
+| `StoreXlsxPreviewRenderer` | `app/Services/StoreXlsxPreviewRenderer.php` | — | — | — | — | `render()` | 0 | 0 |
+| `SubscriptionEntitlementService` | `app/Services/SubscriptionEntitlementService.php` | — | `FarastCommercialPlan`, `FarastEntitlement`, `User` | — | — | `sync()` | 0 | 0 |
+| `SupportNotificationService` | `app/Services/SupportNotificationService.php` | `EmailService`, `SmsService`, `NotificationService` | `SiteSetting`, `Ticket`, `User` | — | — | `__construct()`, `ticketCreated()`, `customerReplied()`, `staffReplied()`, `statusChanged()`, `assigned()`, `slaWarning()`, `slaBreached()` | 0 | 0 |
+| `SupportSlaService` | `app/Services/SupportSlaService.php` | — | `Ticket` | `tickets` | — | `applyTargets()`, `addSlaMinutes()`, `addBusinessMinutes()`, `firstResponseStatus()`, `resolutionStatus()`, `markResolved()`, `agentReport()` | 0 | 0 |
+| `SupportTicketService` | `app/Services/SupportTicketService.php` | `WorkflowEngine`, `UploadSecurityService`, `StorageManager`, `SupportNotificationService`, `SupportSlaService` | `Ticket`, `TicketMessage`, `User` | `tickets`, `ticket_messages` | private | `__construct()`, `generateCode()`, `createTicket()`, `pickLeastLoadedAgent()`, `addMessage()`, `changeStatus()`, `assign()`, `updateMeta()`, `submitCsat()`, `markCustomerSeen()`, `claimGuestTickets()`, `findOpenGuestTicket()`, `waitingMinutes()`, `needsAgentReply()` | 1 | 2 |
+| `TemplateRegistry` | `app/Services/TemplateRegistry.php` | — | — | `farast_templates` | — | `all()`, `get()` | 1 | 0 |
+| `ToolExecutionService` | `app/Services/ToolExecutionService.php` | `ToolRegistry`, `ToolSchemaValidator`, `CommerceAuthorizationService`, `AuditEventService`, `HumanTaskService`, `FarastToolHandlerRegistry` | `User` | `farast_tool_executions` | — | `__construct()`, `execute()` | 4 | 0 |
+| `ToolRegistry` | `app/Services/ToolRegistry.php` | — | `FarastApplication`, `FarastCapability`, `FarastTool` | — | — | `application()`, `capability()`, `tool()`, `definition()`, `toolsForApplication()`, `isAvailable()` | 0 | 0 |
+| `ToolSchemaValidator` | `app/Services/ToolSchemaValidator.php` | — | — | — | — | `validate()` | 0 | 0 |
+| `UploadPreflightService` | `app/Services/UploadPreflightService.php` | — | — | — | private | `estimatePages()`, `depositPercent()`, `fileHash()` | 0 | 5 |
+| `UploadSecurityService` | `app/Services/UploadSecurityService.php` | — | — | — | private | `inspect()` | 0 | 1 |
+| `UserFileRetentionService` | `app/Services/UserFileRetentionService.php` | `StorageManager` | `UserFile` | — | private | `__construct()`, `archiveExpiredLocalFiles()`, `deleteExpiredRemoteFiles()` | 0 | 1 |
