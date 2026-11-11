@@ -579,7 +579,10 @@ class AdminStoreController extends Controller
         try {
             ReviewProductIntakeFile::dispatch((int) $file->id);
         } catch (Throwable $exception) {
-            $file->update(['supervisor_status' => 'failed']);
+            $file->update([
+                'supervisor_status' => 'manual_review_required',
+                'supervisor_review_json' => ['security_gate' => 'manual_scan_required', 'reason' => 'review_dispatch_failed', 'automated_publication' => false],
+            ]);
             report($exception);
         }
 
@@ -605,7 +608,8 @@ class AdminStoreController extends Controller
             'supervisor_status' => $file->supervisor_status,
             'supervisor_verdict' => data_get($file->supervisor_review_json, 'inspection.verdict'),
             'security_gate' => data_get($file->supervisor_review_json, 'security_gate'),
-            'supervisor_reviewed_at' => $file->supervisor_reviewed_at?->toISOString(),
+            'manual_reviewed' => (bool) data_get($file->supervisor_review_json, 'manual_review.approved', false),
+            'supervisor_reviewed_at => $file->supervisor_reviewed_at?->toISOString(),
         ])->header('Cache-Control', 'private, no-store');
     }
 
@@ -613,6 +617,7 @@ class AdminStoreController extends Controller
     {
         abort_unless(in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403);
         abort_unless($file->intake_session_id === $session->id, 404);
+        abort_unless($session->isUsable() && $session->product_id === null, 410);
         abort_unless($file->status === 'uploaded' && $file->supervisor_status === 'manual_review_required', 409);
 
         $data = $request->validate([
