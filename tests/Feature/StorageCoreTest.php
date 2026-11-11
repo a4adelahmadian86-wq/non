@@ -424,15 +424,15 @@ class StorageCoreTest extends TestCase
             'metadata' => ['disk' => 'storage_volume:'.$volume->id],
         ]);
 
-        $failedAdapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
-        $failedAdapter->shouldReceive('delete')->once()->andThrow(new \\RuntimeException('provider temporarily unavailable'));
-        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $failedAdapter);
+        $failedAdapter = \Mockery::mock(\App\\Services\\Storage\\S3CompatibleAdapter::class);
+        $failedAdapter->shouldReceive('delete')->once()->andThrow(new \RuntimeException('provider temporarily unavailable'));
+        app()->instance(\App\\Services\\Storage\\S3CompatibleAdapter::class, $failedAdapter);
         app()->forgetInstance(StorageManager::class);
 
         try {
             app(StorageManager::class)->delete('storage_volume:'.$volume->id, $file->file_key);
             $this->fail('The provider failure should be surfaced to the caller.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('provider temporarily unavailable', $exception->getMessage());
         }
 
@@ -443,9 +443,9 @@ class StorageCoreTest extends TestCase
         $this->assertSame(12, $volume->used_bytes);
         $this->assertSame(1, $volume->object_count);
 
-        $retryAdapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
+        $retryAdapter = \Mockery::mock(\App\\Services\\Storage\\S3CompatibleAdapter::class);
         $retryAdapter->shouldReceive('delete')->once();
-        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $retryAdapter);
+        app()->instance(\App\\Services\\Storage\\S3CompatibleAdapter::class, $retryAdapter);
         app()->forgetInstance(StorageManager::class);
 
         $this->assertSame(1, app(StorageManager::class)->cleanupDeferredDeletes());
