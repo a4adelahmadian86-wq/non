@@ -167,7 +167,8 @@ async function mountPdfReader(page, pageCount = 1, pdfBytes = null) {
         '<button id="reader-theme" type="button">پوسته</button><button id="reader-fs" type="button">تمام‌صفحه</button></nav>' +
       '<div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>' +
       '<div id="reader-stage"><aside id="reader-sidebar"><div class="farast-reader-thumbs"></div>' +
-        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section></aside>' +
+        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section>' +
+        '<section class="farast-reader-layers" id="reader-layers" hidden><strong>لایه‌های سند</strong><div id="reader-layers-list"></div></section></aside>' +
         '<main class="farast-reader-canvas"><article class="farast-reader-page-item is-active is-pdf" data-index="0">' +
           '<div class="farast-reader-page-content"><div class="farast-pdf-document" data-pdf-url="/reader-fixture.pdf">' +
             '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div>' +
@@ -175,6 +176,12 @@ async function mountPdfReader(page, pageCount = 1, pdfBytes = null) {
           '</div></div></article></main></div></section>'
   );
   await page.addStyleTag({ content: '#reader-stage{height:600px;max-height:600px;overflow-y:scroll!important;overflow-x:hidden;display:block}.farast-reader-canvas{height:auto;overflow:visible}.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-document.is-continuous .farast-pdf-continuous-pages{display:grid;grid-template-columns:1fr;gap:20px}.farast-pdf-cont-page{display:block;position:relative;min-height:792px;margin:0 auto 20px}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  await page.evaluate(() => {
+    window.__pdfAnnotationErrors = [];
+    window.__pdfLayerDiagnostics = [];
+    window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
+    window.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
+  });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -1944,12 +1951,6 @@ test('captures a selected reader passage and jumps back to its anchored discussi
 
 
 test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__pdfAnnotationErrors = [];
-    window.__pdfLayerDiagnostics = [];
-    window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
-    window.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
-  });
   await mountPdfReader(page, 1, makePdfAnnotationFixture());
   const root = page.locator('[data-reader-root]');
   await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
