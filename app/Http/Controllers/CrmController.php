@@ -14,6 +14,7 @@ use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
+use App\Services\StoreCourseProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +71,7 @@ class CrmController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $customer, AdminConsoleService $console)
+    public function show(Request $request, int $customer, AdminConsoleService $console, StoreCourseProgressService $courseProgress)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
 
@@ -144,40 +145,33 @@ class CrmController extends Controller
             ]);
 
         $courseEnrollments = StoreCourseEnrollment::query()
-            ->with(['product:id,title', 'libraryItem:id,revoked_at'])
-            ->withCount(['progress as completed_lessons_count' => fn ($query) => $query->whereNotNull('completed_at')])
-            ->selectSub(
-                DB::table('store_course_sections')
-                    ->join('store_course_lessons', 'store_course_lessons.section_id', '=', 'store_course_sections.id')
-                    ->whereColumn('store_course_sections.course_id', 'store_course_enrollments.course_id')
-                    ->where('store_course_lessons.is_published', true)
-                    ->selectRaw('COUNT(*)'),
-                'published_lessons_count'
-            )
+            ->with(['product:id,title', 'libraryItem:id,revoked_at', 'course.sections.lessons', 'progress'])
             ->where('user_id', $user->id)
             ->latest()
             ->limit(30)
             ->get()
-            ->map(fn (StoreCourseEnrollment $enrollment) => [
-                'type' => 'course_enrollment',
-                'id' => $enrollment->id,
-                'title' => $enrollment->product?->title ?? 'دوره آموزشی',
-                'status' => $enrollment->libraryItem?->revoked_at
-                    ? 'revoked'
-                    : ($enrollment->expires_at && $enrollment->expires_at->lte(now())
-                        ? 'expired'
-                        : ($enrollment->completed_at ? 'completed' : 'active')),
-                'completed_lessons_count' => (int) $enrollment->completed_lessons_count,
-                'published_lessons_count' => (int) $enrollment->published_lessons_count,
-                'progress_percent' => (int) $enrollment->published_lessons_count > 0
-                    ? (int) round(((int) $enrollment->completed_lessons_count / (int) $enrollment->published_lessons_count) * 100)
-                    : 0,
-                'last_lesson_id' => $enrollment->last_lesson_id,
-                'starts_at' => $enrollment->starts_at,
-                'expires_at' => $enrollment->expires_at,
-                'completed_at' => $enrollment->completed_at,
-                'created_at' => $enrollment->created_at,
-            ]);
+            ->map(function (StoreCourseEnrollment $enrollment) use ($courseProgress) {
+                $progress = $courseProgress->summarize($enrollment);
+
+                return [
+                    'type' => 'course_enrollment',
+                    'id' => $enrollment->id,
+                    'title' => $enrollment->product?->title ?? 'دوره آموزشی',
+                    'status' => $enrollment->libraryItem?->revoked_at
+                        ? 'revoked'
+                        : ($enrollment->expires_at && $enrollment->expires_at->lte(now())
+                            ? 'expired'
+                            : ($enrollment->completed_at ? 'completed' : 'active')),
+                    'completed_lessons_count' => $progress['completed'],
+                    'published_lessons_count' => $progress['total'],
+                    'progress_percent' => $progress['progress_percent'],
+                    'last_lesson_id' => $enrollment->last_lesson_id,
+                    'starts_at' => $enrollment->starts_at,
+                    'expires_at' => $enrollment->expires_at,
+                    'completed_at' => $enrollment->completed_at,
+                    'created_at' => $enrollment->created_at,
+                ];
+            });
 
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
