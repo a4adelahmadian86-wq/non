@@ -45,6 +45,11 @@ PR #371 در main ادغام شده است.
 
 آزمون `tests/Feature/NotificationRouteOwnershipTest.php` مالکیت هشت Route اعلان را به `NotificationController` مقید می‌کند و یکتایی تمام نام‌های Route runtime را assert می‌کند. این آزمون در PR ممیزی موفق بود؛ اجرای مجدد CI روی merge commit جاری هنوز در حال اجراست و باید نتیجه نهایی همان commit بررسی شود.
 
+### Route file بدون مالک اجرایی
+
+`routes/legal.php` در مخزن وجود دارد، اما از `routes/web.php` یا فایل‌های requireشده آن بارگذاری نمی‌شود. در عین حال Routeهای `/terms`، `/refund-policy` و `/privacy` در `routes/web_core_part1.php` تعریف شده‌اند. بنابراین `routes/legal.php` در این snapshot یک فایل Route غیرفعال با تعریف‌های تکراری است، نه منبع فعال درخواست. فعلاً حذف نشده تا مصرف‌کننده احتمالی خارج از Route composition و تاریخچه انتشار بررسی شود؛ مالک اجرایی این سه مسیر همان تعریف‌های `web_core_part1.php` است.
+
+
 ## 3. پیشرفت دوره: یک سرویس محاسبه مشترک
 
 ### منبع داده
