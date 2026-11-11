@@ -5,7 +5,7 @@
     data-preflight-url="{{ route('admin.store.intake.files.preflight', $session) }}"
     data-confirm-url="{{ route('admin.store.intake.files.confirm', [$session, '__FILE__']) }}"
     data-cancel-url="{{ route('admin.store.intake.files.cancel', [$session, '__FILE__']) }}"
-    data-status-url="{{ route('admin.store.intake.files.status', [$session, '__FILE__']) }}">
+    data-status-url="{{ route('admin.store.intake.files.status', [$session, '__FILE__']) }}" data-details-url="{{ route('admin.store.intake.details', $session) }}" data-existing-files="{{ e($session->files->map(fn ($file) => ['id' => $file->id, 'name' => $file->original_name, 'relative_path' => $file->relative_path, 'size_bytes' => $file->size_bytes, 'status' => $file->status, 'supervisor_status' => $file->supervisor_status, 'security_gate' => data_get($file->supervisor_review_json, 'security_gate')])->toJson()) }}">
     <div class="store-section-head">
       <div><span class="eyebrow">مرحله دوم · فایل‌ها</span><h1>انتخاب و بازرسی فایل‌ها</h1>
         <p>نوع انتخاب‌شده: <strong>{{ $session->product_type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</strong>
