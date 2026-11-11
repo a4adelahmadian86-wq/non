@@ -1409,7 +1409,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'security_gate' => 'structural_checks_passed',
         ]);
 
-        (new ReviewProductFileAsset($product->id, $file->id))->handle($supervisor);
+        (new ReviewProductFileAsset($product->id, $file->id))->handle($supervisor, app(StorageManager::class));
 
         $review = data_get($product->fresh()->metadata, 'ai_supervisor.asset_reviews.file:'.$file->id);
         $this->assertSame('completed', $review['status']);
@@ -1453,6 +1453,10 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $temporaryPath = null;
         $storage = \Mockery::mock(StorageManager::class);
+        $storage->shouldReceive('exists')
+            ->once()
+            ->with('storage_volume:17', $file->path)
+            ->andReturn(true);
         $storage->shouldReceive('downloadTo')
             ->once()
             ->with('storage_volume:17', $file->path, \Mockery::type('string'))
