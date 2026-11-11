@@ -67,3 +67,19 @@
 | `2026_10_18_000001_enhance_tickets_for_messenger.php` | — | `tickets`, `ticket_messages`, `tickets`, `ticket_messages`, `tickets`, `ticket_messages` | — | `user_id → users`<br>`user_id → users` | — | — | — |
 | `2026_10_18_000002_add_ticket_topic_fields.php` | — | `tickets`, `tickets` | — | — | — | — | — |
 | `2026_10_19_000001_professional_support_fields.php` | — | `tickets`, `ticket_messages`, `ticket_messages`, `tickets` | — | — | `current column` | — | — |
+
+| `2026_10_19_000002_add_support_sla_fields.php` | — | `tickets`, `tickets` | — | — | — | — | — |
+| `2026_10_19_000002_enhance_announcements_table.php` | — | `announcements`, `announcements` | — | — | — | — | — |
+| `2026_10_19_000003_add_sla_warning_flags.php` | — | `tickets`, `tickets` | — | — | — | — | — |
+| `2026_10_19_000004_add_csat_to_tickets.php` | — | `tickets`, `tickets` | — | — | — | — | — |
+| `2026_10_20_000001_add_archived_at_to_announcements.php` | — | `announcements`, `announcements` | — | — | — | — | — |
+| `2026_10_20_120000_ensure_all_support_ticket_columns.php` | — | `tickets`, `ticket_messages` | — | — | — | — | — |
+| `2026_11_06_000001_create_crm_customer_workspace.php` | `crm_customer_notes`, `crm_follow_up_tasks` | — | — | `user_id → Laravel convention`<br>`author_id → users`<br>`customer_id → users`<br>`assigned_to → users`<br>`created_by → users` | — | `['user_id', 'created_at']`<br>`['customer_id', 'status', 'due_at']`<br>`['assigned_to', 'status', 'due_at']` | guarded: crm_customer_notes, crm_follow_up_tasks |
+| `2026_11_06_000002_create_crm_marketing_campaigns.php` | `crm_customer_segments`, `crm_marketing_campaigns`, `crm_campaign_recipients` | — | — | `created_by → users`<br>`segment_id → crm_customer_segments`<br>`created_by → users`<br>`campaign_id → crm_marketing_campaigns`<br>`user_id → Laravel convention`<br>`notification_id → farast_notifications` | `['campaign_id', 'user_id']` | `'created_at'`<br>`['status', 'created_at']`<br>`['campaign_id', 'notified_at']` | guarded: crm_customer_segments, crm_marketing_campaigns, crm_campaign_recipients |
+| `2026_11_06_000003_create_farast_workflow_events.php` | `farast_workflow_events` | — | — | `user_id → Laravel convention` | `current column` | `['event_type', 'created_at']`<br>`['user_id', 'event_type']` | guarded: farast_workflow_events |
+| `2026_11_07_000001_add_workflow_event_retry_ledger.php` | `farast_workflow_event_workflows` | `farast_workflow_events`, `farast_workflow_events` | — | `event_id → farast_workflow_events`<br>`workflow_id → farast_workflows` | `['event_id', 'workflow_id']` | `['status', 'updated_at']` | guarded: farast_workflow_event_workflows |
+| `2026_11_07_000001_sync_workspace_document_permissions.php` | — | — | — | — | — | — | — |
+| `2026_11_07_000002_sync_workspace_module_permissions.php` | — | — | — | — | — | — | — |
+| `2026_11_07_000004_make_support_actor_columns_nullable.php` | — | `tickets`, `ticket_messages` | — | — | — | — | — |
+| `2026_11_07_000010_create_store_course_catalog.php` | `store_courses`, `store_course_sections`, `store_course_lessons` | `store_product_files`, `store_product_files` | — | `product_id → store_products`<br>`course_id → store_courses`<br>`section_id → store_course_sections`<br>`course_lesson_id → store_course_lessons` | `current column`<br>`current column` | `['course_id', 'sort_order']`<br>`['section_id', 'is_published', 'sort_order']`<br>`['course_lesson_id', 'purpose', 'is_active']` | — |
+| `2026_11_07_000011_create_store_course_enrollments.php` | `store_course_enrollments`, `store_course_lesson_progress` | — | — | `course_id → store_courses`<br>`product_id → store_products`<br>`user_id → users`<br>`library_item_id → store_library_items`<br>`last_lesson_id → store_course_lessons`<br>`enrollment_id → store_course_enrollments`<br>`lesson_id → store_course_lessons` | `current column`<br>`['enrollment_id', 'lesson_id']` | `['user_id', 'course_id', 'expires_at']` | — |
