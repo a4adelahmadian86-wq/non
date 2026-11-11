@@ -56,17 +56,7 @@
     if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
     if(!pdfjsPromise){
       pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
-        .then(module=>{
-        window.pdfjsLib=module;
-        if(!document.querySelector('link[data-farast-pdfjs-viewer-css]')){
-          const style=document.createElement('link');
-          style.rel='stylesheet';
-          style.href='/vendor/pdfjs/web/pdf_viewer.css?v=6.5.438';
-          style.dataset.farastPdfjsViewerCss='1';
-          document.head.append(style);
-        }
-        return module;
-      })
+        .then(module=>{window.pdfjsLib=module;return module;})
         .catch(error=>{pdfjsPromise=null;if(error&&typeof error==='object')error.farastPdfEngineUnavailable=true;throw error;});
     }
     return pdfjsPromise;
