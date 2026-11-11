@@ -11,12 +11,28 @@ return new class extends Migration {
                 if (!Schema::hasColumn('farast_feedback_evidence', 'user_id')) $table->foreignId('user_id')->nullable()->after('feedback_id')->constrained()->nullOnDelete();
                 if (!Schema::hasColumn('farast_feedback_evidence', 'project_id')) $table->foreignId('project_id')->nullable()->after('user_id')->constrained('farast_projects')->nullOnDelete();
                 if (!Schema::hasColumn('farast_feedback_evidence', 'source')) $table->string('source', 40)->default('user')->after('project_id');
-                if (!Schema::hasColumn('farast_feedback_evidence', 'frequency')) $table->unsignedInteger('frequency')->default(1)->after('confidence');
+                if (!Schema::hasColumn('farast_feedback_evidence', 'frequency')) // confidence is introduced by the later phase-5 migration; do not depend on it here.
+                $table->unsignedInteger('frequency')->default(1);
                 if (!Schema::hasColumn('farast_feedback_evidence', 'independent_confirmations')) $table->unsignedInteger('independent_confirmations')->default(0)->after('frequency');
-                if (!Schema::hasColumn('farast_feedback_evidence', 'reviewer_notes')) $table->text('reviewer_notes')->nullable()->after('status');
-                $table->index(['project_id','status']);
-                $table->index(['tool_id','tool_version_id','status']);
+                if (!Schema::hasColumn('farast_feedback_evidence', 'reviewer_notes')) // status is also introduced by the later phase-5 migration.
+                $table->text('reviewer_notes')->nullable();
+
             });
+
+            // These composite indexes can only be created after the later migration
+            // adds status/tool_id/tool_version_id. Avoid referencing future columns.
+            $hasProjectStatus = Schema::hasColumn('farast_feedback_evidence', 'project_id')
+                && Schema::hasColumn('farast_feedback_evidence', 'status');
+            $hasToolVersionStatus = Schema::hasColumn('farast_feedback_evidence', 'tool_id')
+                && Schema::hasColumn('farast_feedback_evidence', 'tool_version_id')
+                && Schema::hasColumn('farast_feedback_evidence', 'status');
+
+            if ($hasProjectStatus) {
+                Schema::table('farast_feedback_evidence', fn (Blueprint $table) => $table->index(['project_id', 'status']));
+            }
+            if ($hasToolVersionStatus) {
+                Schema::table('farast_feedback_evidence', fn (Blueprint $table) => $table->index(['tool_id', 'tool_version_id', 'status']));
+            }
         }
 
         if (!Schema::hasTable('farast_audit_events')) {
