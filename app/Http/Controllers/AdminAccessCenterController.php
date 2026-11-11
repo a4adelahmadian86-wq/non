@@ -382,7 +382,13 @@ class AdminAccessCenterController extends Controller
         $assignmentId = DB::transaction(function () use ($request, $targetId, $data): int {
             // Lock the subject row to serialize concurrent assignments for this account.
             $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
-            abort_if($target->isAdmin(), 422, 'نقش مدیر اصلی از این مسیر قابل انتساب نیست.');
+            if ($target->isAdmin()) {
+                abort_unless(
+                    \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target) !== 'global',
+                    422,
+                    'ابتدا دامنه مدیر را محدود کنید؛ مدیر سراسری از این مسیر نقش دریافت نمی‌کند.'
+                );
+            }
             abort_if($target->is_blocked, 422, 'به حساب مسدود نمی‌توان نقش اختصاص داد.');
 
             $role = DB::table('farast_roles')->where('id', $data['role_id'])->lockForUpdate()->first();
@@ -394,8 +400,12 @@ class AdminAccessCenterController extends Controller
             );
 
             $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-            $this->assertRoleAssignmentWithinRoleScope($target, $role, $data['scope_type'], $scopeId);
-            $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+            if ($target->isAdmin()) {
+                $this->assertAdminRoleAssignment($target, $role, $data['scope_type'], $scopeId);
+            } else {
+                $this->assertRoleAssignmentWithinRoleScope($target, $role, $data['scope_type'], $scopeId);
+                $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+            }
 
             $existing = DB::table('farast_user_roles')->where('user_id', $target->id)
                 ->where('role_id', $role->id)->where('scope_type', $data['scope_type'])
@@ -473,11 +483,21 @@ class AdminAccessCenterController extends Controller
         $permissionId = (int) Permission::query()->where('key', $data['permission'])->value('id');
         $overrideId = DB::transaction(function () use ($request, $targetId, $data, $permissionId): int {
             $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
-            abort_if($target->isAdmin(), 422, 'برای مدیر اصلی مجوز مستقیم تعریف نمی‌شود.');
+            if ($target->isAdmin()) {
+                abort_unless(
+                    \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target) !== 'global',
+                    422,
+                    'برای مدیر سراسری مجوز مستقیم تعریف نمی‌شود.'
+                );
+            }
             abort_if($target->is_blocked, 422, 'برای حساب مسدود مجوز مستقیم تعریف نمی‌شود.');
 
             $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-            $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+            if ($target->isAdmin()) {
+                $this->assertAdminScopeContains($target, $data['scope_type'], $scopeId);
+            } else {
+                $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+            }
 
             $id = DB::table('farast_user_permission_overrides')->insertGetId([
                 'user_id' => $target->id,
@@ -597,6 +617,82 @@ class AdminAccessCenterController extends Controller
         }
 
         abort_unless($role->scope_type === 'own' && $assignmentScope === 'own', 422, 'محدوده انتساب با نقش سازگار نیست.');
+    }
+
+    private function assertAdminRoleAssignment(User $target, object $role, string $assignmentScope, ?int $assignmentScopeId): void
+    {
+        $adminScope = \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target);
+        $adminScopeId = \\App\\Http\\Middleware\\ResolveAdminScope::scopeIdFor($target);
+
+        $this->assertAdminScopeContains($target, $assignmentScope, $assignmentScopeId);
+        abort_unless(
+            $assignmentScope === $adminScope && $assignmentScopeId === $adminScopeId,
+            422,
+            'انتساب نقش مدیر باید دقیقاً در دامنه محدودشده همان مدیر انجام شود.'
+        );
+
+        if ($role->scope_type === 'global') {
+            return;
+        }
+
+        if ($adminScope === 'organization') {
+            abort_unless(
+                $role->scope_type === 'organization' && (int) $role->scope_id === (int) $adminScopeId,
+                422,
+                'نقش انتخاب‌شده خارج از سازمان محدودشده مدیر است.'
+            );
+
+            return;
+        }
+
+        if ($adminScope === 'team') {
+            $teamOrganizationId = Team::query()->whereKey($adminScopeId)->value('organization_id');
+            $roleIsContained = $role->scope_type === 'team'
+                ? (int) $role->scope_id === (int) $adminScopeId
+                : ($role->scope_type === 'organization'
+                    && $teamOrganizationId !== null
+                    && (int) $role->scope_id === (int) $teamOrganizationId);
+
+            abort_unless($roleIsContained, 422, 'نقش انتخاب‌شده خارج از تیم محدودشده مدیر است.');
+
+            return;
+        }
+
+        abort_unless($adminScope === 'own' && $role->scope_type === 'own', 422, 'نقش مدیر شخصی باید در دامنه شخصی تعریف شده باشد.');
+    }
+
+    private function assertAdminScopeContains(User $target, string $scope, ?int $scopeId): void
+    {
+        $adminScope = \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($target);
+        $adminScopeId = \\App\\Http\\Middleware\\ResolveAdminScope::scopeIdFor($target);
+        abort_unless($adminScope !== 'global', 422, 'دامنه مدیر سراسری قابل محدودسازی از مسیر مجوزهای مستقیم نیست.');
+
+        $rank = self::SCOPE_RANK;
+        abort_if(
+            ($rank[$scope] ?? 0) < ($rank[$adminScope] ?? 0),
+            422,
+            'محدوده مجوز نمی‌تواند از دامنه مدیر گسترده‌تر باشد.'
+        );
+
+        if ($adminScope === 'organization') {
+            $contained = match ($scope) {
+                'organization' => $scopeId === $adminScopeId,
+                'team' => $scopeId !== null
+                    && Team::query()->whereKey($scopeId)->where('organization_id', $adminScopeId)->exists(),
+                'own' => true,
+                default => false,
+            };
+        } elseif ($adminScope === 'team') {
+            $contained = match ($scope) {
+                'team' => $scopeId === $adminScopeId,
+                'own' => true,
+                default => false,
+            };
+        } else {
+            $contained = $scope === 'own' && $scopeId === null;
+        }
+
+        abort_unless($contained, 422, 'محدوده مجوز خارج از دامنه مدیر محدودشده است.');
     }
 
     private function validatedScopeId(string $scope, mixed $scopeId): ?int
