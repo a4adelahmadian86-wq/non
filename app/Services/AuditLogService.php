@@ -1,24 +1,29 @@
 <?php
 
-namespace App\Services;
+namespace App\\Services;
 
-use Illuminate\Support\Facades\DB;
+use Illuminate\\Support\\Facades\\DB;
 
 class AuditLogService
 {
     public function record(?int $userId, string $action, ?string $ip, array $meta = []): void
     {
+        // Queue workers may retain a Request instance from an earlier lifecycle.
+        // The explicit trace context is authoritative for the currently executing
+        // request/job; request attributes are only a fallback.
+        $trace = app(FarastTraceContext::class)->current();
         $request = app()->bound('request') ? request() : null;
-        if ($request) {
-            $requestId = $request->attributes->get('farast.request_id');
-            $correlationId = $request->attributes->get('farast.correlation_id');
 
-            if (is_string($requestId) && $requestId !== '') {
-                $meta['request_id'] ??= $requestId;
-            }
-            if (is_string($correlationId) && $correlationId !== '') {
-                $meta['correlation_id'] ??= $correlationId;
-            }
+        $requestId = $trace['request_id']
+            ?? $request?->attributes->get('farast.request_id');
+        $correlationId = $trace['correlation_id']
+            ?? $request?->attributes->get('farast.correlation_id');
+
+        if (is_string($requestId) && $requestId !== '') {
+            $meta['request_id'] ??= $requestId;
+        }
+        if (is_string($correlationId) && $correlationId !== '') {
+            $meta['correlation_id'] ??= $correlationId;
         }
 
         $safeMeta = $this->sanitize($meta);
