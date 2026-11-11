@@ -174,7 +174,7 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $context = ['user_id' => $user->id, 'document_id' => 991];
+        $context = ['user_id' => $user->id, 'document_id' => 991, 'revision' => 1];
         $completed = $engine->dispatch('document.saved', $context, 'document:991:revision:1');
 
         $this->assertSame(1, $completed);
