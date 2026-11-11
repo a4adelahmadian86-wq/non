@@ -99,10 +99,10 @@ const requestPersistence=()=>{
   await Promise.resolve();
   let persisted=false,granted=false,reason=null,estimate=null;
   try{
-   if(navigator.storage?.estimate)estimate=await navigator.storage.estimate();
    if(navigator.storage?.persisted)persisted=await navigator.storage.persisted();
    if(!persisted&&navigator.storage?.persist){granted=await navigator.storage.persist();persisted=granted;}
    else if(!navigator.storage?.persist)reason='unsupported';
+   if(navigator.storage?.estimate)estimate=await navigator.storage.estimate();
   }catch(error){reason=error?.name||'request-failed';}
   const result={supported:!!navigator.storage?.persist,persisted,granted,reason,usage:estimate?.usage??null,quota:estimate?.quota??null};
   if(!persisted)persistPromise=null;
