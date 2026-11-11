@@ -80,5 +80,7 @@ class AuditEventObservabilityTest extends TestCase
         $this->assertSame('observability.incident.critical', $snapshot['incidents'][0]['event_type']);
         $this->assertSame('critical', $snapshot['incidents'][0]['severity']);
         $this->assertSame(['database' => 'critical'], $snapshot['incidents'][0]['affected_components']);
+        $this->assertSame(1, $snapshot['incident_trend_24h']['critical']);
+        $this->assertSame(1, $snapshot['incident_trend_24h']['sampled']);
     }
 }
