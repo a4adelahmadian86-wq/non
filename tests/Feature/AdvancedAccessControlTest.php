@@ -485,6 +485,54 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_team_membership_writes_are_atomic_audited_and_clear_primary_supervisor(): void
+    {
+        $organization = Organization::create(['name' => 'Team Audit Org', 'slug' => 'team-audit-org', 'status' => 'active']);
+        $admin = $this->user('09140000143', User::ROLE_ADMIN);
+        $supervisor = $this->user('09140000144', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $team = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Audited Team',
+            'slug' => 'audited-team',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/teams/'.$team->id.'/members', [
+            'user_id' => $supervisor->id,
+            'team_role' => 'supervisor',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('team_user', [
+            'team_id' => $team->id,
+            'user_id' => $supervisor->id,
+            'team_role' => 'supervisor',
+        ]);
+        $this->assertDatabaseHas('teams', [
+            'id' => $team->id,
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $this->assertDatabaseHas('farast_access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_user_id' => $supervisor->id,
+            'action' => 'team.member.added',
+        ]);
+
+        $this->delete('/admin/teams/'.$team->id.'/members/'.$supervisor->id)->assertRedirect();
+
+        $this->assertDatabaseMissing('team_user', [
+            'team_id' => $team->id,
+            'user_id' => $supervisor->id,
+        ]);
+        $this->assertDatabaseHas('teams', [
+            'id' => $team->id,
+            'supervisor_id' => null,
+        ]);
+        $this->assertDatabaseHas('farast_access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_user_id' => $supervisor->id,
+            'action' => 'team.member.removed',
+        ]);
+    }
+
     public function test_existing_owner_and_supervisor_team_roles_grant_only_managed_team_scope(): void
     {
         $organization = Organization::create(['name' => 'Managed Roles Org', 'slug' => 'managed-roles-org', 'status' => 'active']);
