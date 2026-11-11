@@ -163,11 +163,17 @@ class StorageBackupRestoreIntegrationTest extends TestCase
         $this->assertSame(0, $exitCode, $output);
         $this->assertDatabaseHas('users', ['id' => $beforeSnapshot->id]);
         $this->assertDatabaseMissing('users', ['id' => $afterSnapshot->id]);
-        // The backup run and its uploaded object were created after the snapshot;
-        // restoring the snapshot correctly removes both the run row and its capacity accounting.
-        $this->assertDatabaseMissing('storage_backup_runs', ['id' => $run->id]);
+        // The backup run and its object were created after the snapshot.
+        // RestoreStorageBackup must re-create their audit record and capacity accounting.
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $run->id,
+            'status' => 'completed',
+            'object_key' => $objectKey,
+            'checksum' => $checksum,
+            'size_bytes' => $size,
+        ]);
         $restoredVolume = StorageVolume::findOrFail($volume->id);
-        $this->assertSame(0, $restoredVolume->used_bytes);
-        $this->assertSame(0, $restoredVolume->object_count);
+        $this->assertSame($size, $restoredVolume->used_bytes);
+        $this->assertSame(1, $restoredVolume->object_count);
     }
 }
