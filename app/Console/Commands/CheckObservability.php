@@ -155,7 +155,8 @@ class CheckObservability extends Command
         string $body,
         array $snapshot,
         array $affected,
-        ?string $incidentId
+        ?string $incidentId,
+        string $alertKey
     ): void {
         $url = trim((string) config('observability.webhook.url', ''));
         if ($url === '') {
@@ -185,6 +186,7 @@ class CheckObservability extends Command
             $response = $request->post($url, [
                 'source' => 'FARAST',
                 'incident_id' => $incidentId,
+                'alert_key' => $alertKey,
                 'severity' => $severity,
                 'title' => $title,
                 'message' => $body,
@@ -229,6 +231,10 @@ class CheckObservability extends Command
             }
         }
 
+        $cooldown = max(5, min(1440, (int) config('observability.alerts.cooldown_minutes', 30)));
+        $bucket = (int) floor(now()->timestamp / ($cooldown * 60));
+        $alertKey = hash('sha256', json_encode([$severity, $affected, $bucket], JSON_UNESCAPED_SLASHES) ?: $severity);
+
         $incidentEvent = null;
         try {
             $incidentEvent = $auditEvents->record(
@@ -252,7 +258,7 @@ class CheckObservability extends Command
             ]);
         }
 
-        $this->deliverWebhook($severity, $title, $body, $snapshot, $affected, $incidentEvent?->event_id);
+        $this->deliverWebhook($severity, $title, $body, $snapshot, $affected, $incidentEvent?->event_id, $alertKey);
 
         $userIds = (array) config('observability.alerts.user_ids', []);
         if ($userIds === []) {
@@ -276,7 +282,7 @@ class CheckObservability extends Command
                         'url' => $url,
                     ],
                     false,
-                    'farast-observability:'.Str::uuid()
+                    'farast-observability:'.(int) $user->id.':'.$alertKey
                 );
             } catch (Throwable $exception) {
                 $this->safeLog('warning', 'farast.observability.notification_failed', [
