@@ -35,7 +35,7 @@ class CheckObservability extends Command
         }
 
         try {
-            return $this->run($observability, $notifications, $auditEvents);
+            return $this->executeCheck($observability, $notifications, $auditEvents);
         } finally {
             try {
                 Log::withoutContext();
@@ -46,7 +46,7 @@ class CheckObservability extends Command
         }
     }
 
-    private function run(
+    private function executeCheck(
         FarastObservabilityService $observability,
         NotificationService $notifications,
         AuditEventService $auditEvents
