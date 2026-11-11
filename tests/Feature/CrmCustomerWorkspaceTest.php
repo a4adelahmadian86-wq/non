@@ -5,6 +5,11 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreCategory;
+use App\Models\StoreCourse;
+use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseLessonProgress;
+use App\Models\StoreCourseSection;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
@@ -100,6 +105,37 @@ class CrmCustomerWorkspaceTest extends TestCase
             'expires_at' => now()->addDay(), 'download_count' => 2,
         ]);
 
+        $courseProduct = StoreProduct::create([
+            'category_id' => $category->id, 'seller_id' => $admin->id,
+            'title' => 'دوره CRM', 'slug' => 'crm-course', 'sku' => 'CRM-COURSE-1',
+            'type' => 'course', 'price_rials' => 300000, 'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $course = StoreCourse::create(['product_id' => $courseProduct->id, 'level' => 'beginner', 'language' => 'fa']);
+        $section = StoreCourseSection::create(['course_id' => $course->id, 'title' => 'فصل CRM', 'sort_order' => 1]);
+        $completedLesson = StoreCourseLesson::create([
+            'section_id' => $section->id, 'title' => 'درس تکمیل‌شده', 'slug' => 'crm-course-completed',
+            'lesson_type' => 'article', 'content' => 'متن درس', 'is_published' => true, 'sort_order' => 1,
+        ]);
+        StoreCourseLesson::create([
+            'section_id' => $section->id, 'title' => 'درس در حال انجام', 'slug' => 'crm-course-pending',
+            'lesson_type' => 'article', 'content' => 'متن درس دوم', 'is_published' => true, 'sort_order' => 2,
+        ]);
+        $courseOrder = Order::create([
+            'user_id' => $customer->id, 'subtotal_rials' => 300000, 'discount_rials' => 0,
+            'tax_rials' => 0, 'total_rials' => 300000, 'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'], 'paid_at' => now(),
+        ]);
+        $courseLibraryItem = StoreLibraryItem::create([
+            'user_id' => $customer->id, 'product_id' => $courseProduct->id,
+            'order_id' => $courseOrder->id, 'granted_at' => now(),
+        ]);
+        $enrollment = app(\App\Services\StoreCourseEnrollmentService::class)->grant($courseLibraryItem, $courseProduct);
+        StoreCourseLessonProgress::create([
+            'enrollment_id' => $enrollment->id, 'lesson_id' => $completedLesson->id,
+            'last_position_seconds' => 45, 'completed_at' => now(),
+        ]);
+
         $this->actingAs($admin)->getJson('/admin/crm/customers')
             ->assertOk()->assertJsonFragment(['id' => $customer->id]);
 
@@ -119,6 +155,19 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonPath('metrics.store_downloads_count', 1)
             ->assertJsonFragment(['type' => 'store_download', 'download_count' => 2])
             ->assertJsonFragment(['type' => 'store_entitlement', 'status' => 'active']);
+        $this->getJson('/admin/crm/customers/'.$customer->id)
+            ->assertOk()
+            ->assertJsonPath('metrics.course_enrollments_count', 1)
+            ->assertJsonPath('metrics.completed_course_enrollments_count', 0)
+            ->assertJsonPath('metrics.completed_course_lessons_count', 1)
+            ->assertJsonFragment([
+                'type' => 'course_enrollment',
+                'id' => $enrollment->id,
+                'status' => 'active',
+                'completed_lessons_count' => 1,
+                'published_lessons_count' => 2,
+                'progress_percent' => 50,
+            ]);
 
         $this->postJson('/admin/crm/customers/'.$customer->id.'/notes', [
             'note' => 'مشتری برای سفارش بعدی تماس می‌خواهد.',
