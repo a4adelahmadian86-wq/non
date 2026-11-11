@@ -117,11 +117,6 @@ class AuthorizationService
         }
 
         // Compatibility for users not yet migrated to scoped access control.
-
-        if ($user->access_control_managed) {
-            return false;
-        }
-
         if ($user->role === User::ROLE_ADMIN) {
             return true;
         }
@@ -158,6 +153,10 @@ class AuthorizationService
                 ->filter(fn (object $assignment): bool => $this->scopeContains($user, $assignment->scope, $assignment, $record));
 
             return $inScope->isNotEmpty() && $this->assignedRoleAllows($inScope, $permission);
+        }
+
+        if ($user->access_control_managed) {
+            return false;
         }
 
         if ($user->role === User::ROLE_ADMIN) {
