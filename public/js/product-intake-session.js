@@ -182,7 +182,7 @@
     const id = payload.file_id;
     totalBytes += item.file.size;
     const directory = (item.relativePath || '').split('/').slice(0, -1).join('/');
-    if (directory) folderNames.add(directory);
+    if (directory) { const parts = directory.split('/'); for (let depth = 1; depth <= parts.length; depth++) folderNames.add(parts.slice(0, depth).join('/')); }
     const row = { uploaded: false, isPrimary: !!payload.file.is_primary, supervisorStatus: 'pending', securityGate: null };
     rows.set(id, row);
     makeCard(item.file, item.relativePath, { ...payload.inspection, file_id: id });
