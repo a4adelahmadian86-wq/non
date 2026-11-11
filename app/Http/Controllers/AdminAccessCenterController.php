@@ -41,7 +41,7 @@ class AdminAccessCenterController extends Controller
             403,
             'مدیریت ساختار نقش‌ها فقط برای مدیر اصلی با دامنهٔ سراسری مجاز است.'
         );
-        foreach (['farast_roles', 'farast_role_permissions', 'farast_user_roles', 'farast_user_permission_overrides', 'farast_access_audit_logs'] as $table) {
+        foreach (['farast_roles', 'farast_role_permissions', 'farast_user_roles', 'farast_user_permission_overrides', 'farast_access_audit_logs', 'farast_user_admin_scopes'] as $table) {
             abort_unless(Schema::hasTable($table), 503, 'زیرساخت مدیریت دسترسی هنوز نصب نشده است.');
         }
     }
@@ -91,6 +91,73 @@ class AdminAccessCenterController extends Controller
             'search' => $search,
             'scopeOptions' => self::SCOPES,
         ]);
+    }
+
+    public function setAdminScope(Request $request, User $user)
+    {
+        $this->ensurePlatformAdmin($request);
+        abort_unless($user->isAdmin(), 422, 'دامنه محدود فقط برای حساب مدیر قابل تنظیم است.');
+
+        $data = $request->validate([
+            'scope_type' => ['required', Rule::in(['global', 'organization', 'team', 'own'])],
+            'scope_id' => ['nullable', 'integer', 'min:1'],
+            'reason' => ['required', 'string', 'min:8', 'max:500'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after:starts_at'],
+        ]);
+
+        $scopeType = $data['scope_type'];
+        $scopeId = isset($data['scope_id']) ? (int) $data['scope_id'] : null;
+
+        if ($scopeType === 'organization') {
+            abort_unless($scopeId && DB::table('organizations')->where('id', $scopeId)->exists(), 422, 'سازمان انتخاب‌شده معتبر نیست.');
+        } elseif ($scopeType === 'team') {
+            abort_unless($scopeId && Team::query()->whereKey($scopeId)->exists(), 422, 'تیم انتخاب‌شده معتبر نیست.');
+        } else {
+            abort_unless($scopeId === null, 422, 'برای دامنه شخصی یا سراسری شناسه محدوده نباید ارسال شود.');
+        }
+
+        DB::transaction(function () use ($request, $user, $scopeType, $scopeId, $data): void {
+            $before = DB::table('farast_user_admin_scopes')
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($scopeType === 'global') {
+                DB::table('farast_user_admin_scopes')->where('user_id', $user->id)->delete();
+                $after = null;
+            } else {
+                $after = [
+                    'user_id' => $user->id,
+                    'scope_type' => $scopeType,
+                    'scope_id' => $scopeId,
+                    'reason' => trim($data['reason']),
+                    'starts_at' => $data['starts_at'] ?? null,
+                    'expires_at' => $data['expires_at'] ?? null,
+                    'created_by' => $request->user()->id,
+                    'updated_at' => now(),
+                    'created_at' => $before?->created_at ?? now(),
+                ];
+                DB::table('farast_user_admin_scopes')->updateOrInsert(
+                    ['user_id' => $user->id],
+                    $after
+                );
+            }
+
+            $this->audit(
+                $request,
+                'admin.scope.updated',
+                $user->id,
+                null,
+                null,
+                $before ? (array) $before : null,
+                $after
+            );
+        });
+
+        app(AuthorizationService::class)->forgetUser($user->id);
+
+        return back()->with('status', 'دامنه دسترسی مدیر ذخیره شد.');
     }
 
     public function updateBaseRole(Request $request, string $role)
