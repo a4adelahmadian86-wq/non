@@ -329,6 +329,46 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_team_manager_cannot_list_a_foreign_organization_user_joined_to_its_team(): void
+    {
+        $organizationA = Organization::create(['name' => 'Manager Home Org', 'slug' => 'manager-home-org', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Foreign Member Org', 'slug' => 'foreign-member-org', 'status' => 'active']);
+        $manager = $this->user('09140000133', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $foreignMember = $this->user('09140000134', User::ROLE_EMPLOYEE, $organizationB->id);
+        $team = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Home Organization Team',
+            'slug' => 'home-organization-team',
+            'supervisor_id' => $manager->id,
+        ]);
+
+        // Simulate a stale/corrupted cross-organization membership.
+        DB::table('team_user')->insert([
+            'team_id' => $team->id,
+            'user_id' => $foreignMember->id,
+            'team_role' => 'employee',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $visibleIds = \\App\\Http\\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team');
+        $this->assertNotContains($foreignMember->id, $visibleIds);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allowsFor($manager, 'users.view', [
+            'owner_id' => $foreignMember->id,
+            'organization_id' => $organizationB->id,
+            'team_ids' => [$team->id],
+        ]));
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'team');
+        $this->assertNotContains(
+            $foreignMember->id,
+            app(AdminConsoleService::class)->visibleUserIds($manager, 'users.view')
+        );
+    }
+
     public function test_regular_team_membership_does_not_create_team_management_scope(): void
     {
         $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
