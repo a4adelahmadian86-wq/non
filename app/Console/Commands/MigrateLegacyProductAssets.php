@@ -28,7 +28,7 @@ class MigrateLegacyProductAssets extends Command
         $migrated = 0;
         $failed = 0;
 
-        foreach (StoreProductDocumentArtifact::query()->where(fn ($q) => $q->whereNull('disk')->orWhere('disk', 'private'))->orderBy('id')->cursor() as $artifact) {
+        foreach (StoreProductDocumentArtifact::query()->where(fn ($q) => $q->whereNull('disk')->orWhereIn('disk', ['private', 'public']))->orderBy('id')->cursor() as $artifact) {
             if ($remaining < 1) break;
             if ($this->hasManagedReference(StoreProductDocumentArtifact::class, (int) $artifact->id)) continue;
             $this->attemptMigration(fn () => $this->migrateArtifact($artifact, $storage, $transfer), 'سند تولیدشده محصول', $artifact->id, $remaining, $migrated, $failed);
@@ -96,48 +96,56 @@ class MigrateLegacyProductAssets extends Command
         $document = $artifact->document()->first();
         if (! $document) throw new RuntimeException('سند والد برای فایل تولیدشده پیدا نشد.');
         $legacyPath = (string) $artifact->path;
-        $disk = Storage::disk('private');
-        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل تولیدشده قدیمی روی فضای خصوصی پیدا نشد.');
+        $legacyDiskName = $artifact->disk ?: 'private';
+        if (! in_array($legacyDiskName, ['private', 'public'], true)) return false;
+        $disk = Storage::disk($legacyDiskName);
+        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل تولیدشده قدیمی روی دیسک مبدأ پیدا نشد.');
+        $absolute = $disk->path($legacyPath);
         $mime = (string) ($artifact->mime ?: ($disk->mimeType($legacyPath) ?: 'application/octet-stream'));
-        $managed = $storage->adoptExistingPrivate($legacyPath, basename($legacyPath), $mime, (int) $disk->size($legacyPath), 'store-product-artifact', StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $document->product_id, StorageManager::CRITICAL);
+        $upload = new UploadedFile($absolute, basename($legacyPath), $mime, UPLOAD_ERR_OK, true);
+        $managed = $storage->storeUploadedFile($upload, StorageManager::CRITICAL, 'store-product-artifact', StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $document->product_id, 'private');
 
         try {
-            DB::transaction(function () use ($artifact, $legacyPath, $managed, $document, $storage, $transfer): void {
+            DB::transaction(function () use ($artifact, $legacyPath, $legacyDiskName, $managed, $document, $storage, $transfer): void {
                 $locked = StoreProductDocumentArtifact::query()->whereKey($artifact->id)->lockForUpdate()->firstOrFail();
-                if ((string) $locked->path !== $legacyPath || ($locked->disk ?: 'private') !== 'private') throw new RuntimeException('فایل تولیدشده هم‌زمان تغییر کرده است.');
+                if ((string) $locked->path !== $legacyPath || ($locked->disk ?: 'private') !== $legacyDiskName) throw new RuntimeException('فایل تولیدشده هم‌زمان تغییر کرده است.');
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $locked->id, (int) $document->product_id);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\Throwable $exception) {
+        } catch (\\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
 
-        $this->deleteLegacyPrivateIfUnreferenced($legacyPath);
+        $this->deleteLegacyAssetIfUnreferenced($legacyDiskName, $legacyPath);
         return true;
     }
 
     private function migrateProductFile(StoreProductFile $file, StorageManager $storage, StorageTransferService $transfer): bool
     {
         $legacyPath = (string) $file->path;
-        $disk = Storage::disk('private');
-        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل دانلود قدیمی محصول روی فضای خصوصی پیدا نشد.');
+        $legacyDiskName = $file->disk ?: 'private';
+        if (! in_array($legacyDiskName, ['private', 'public'], true)) return false;
+        $disk = Storage::disk($legacyDiskName);
+        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل دانلود قدیمی محصول روی دیسک مبدأ پیدا نشد.');
+        $absolute = $disk->path($legacyPath);
         $mime = (string) ($file->mime ?: ($disk->mimeType($legacyPath) ?: 'application/octet-stream'));
-        $managed = $storage->adoptExistingPrivate($legacyPath, (string) $file->original_name, $mime, (int) ($file->size_bytes ?: $disk->size($legacyPath)), 'store-product-file', StoreProductFile::class, (int) $file->id, (int) $file->product_id, StorageManager::CRITICAL);
+        $upload = new UploadedFile($absolute, (string) ($file->original_name ?: basename($legacyPath)), $mime, UPLOAD_ERR_OK, true);
+        $managed = $storage->storeUploadedFile($upload, StorageManager::CRITICAL, 'store-product-file', StoreProductFile::class, (int) $file->id, (int) $file->product_id, 'private');
 
         try {
-            DB::transaction(function () use ($file, $legacyPath, $managed, $storage, $transfer): void {
+            DB::transaction(function () use ($file, $legacyPath, $legacyDiskName, $managed, $storage, $transfer): void {
                 $locked = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
-                if ((string) $locked->path !== $legacyPath || ($locked->disk ?: 'private') !== 'private') throw new RuntimeException('فایل محصول هم‌زمان تغییر کرده است.');
+                if ((string) $locked->path !== $legacyPath || ($locked->disk ?: 'private') !== $legacyDiskName) throw new RuntimeException('فایل محصول هم‌زمان تغییر کرده است.');
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductFile::class, (int) $locked->id, (int) $locked->product_id);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\Throwable $exception) {
+        } catch (\\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
 
-        $this->deleteLegacyPrivateIfUnreferenced($legacyPath);
+        $this->deleteLegacyAssetIfUnreferenced($legacyDiskName, $legacyPath);
         return true;
     }
 
@@ -145,51 +153,53 @@ class MigrateLegacyProductAssets extends Command
     {
         $isAudio = $field === 'audio_path';
         $legacyPath = (string) ($isAudio ? $preview->audio_path : $preview->path);
-        $legacyDisk = $isAudio ? ($preview->audio_disk ?: 'private') : ($preview->disk ?: 'private');
-        if ($legacyPath === '' || $legacyDisk !== 'private') return false;
-        $disk = Storage::disk('private');
-        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل قدیمی پیش‌نمایش روی فضای خصوصی پیدا نشد.');
+        $legacyDiskName = $isAudio ? ($preview->audio_disk ?: 'private') : ($preview->disk ?: 'private');
+        if ($legacyPath === '' || ! in_array($legacyDiskName, ['private', 'public'], true)) return false;
+        $disk = Storage::disk($legacyDiskName);
+        if (! $disk->exists($legacyPath)) throw new RuntimeException('فایل قدیمی پیش‌نمایش روی دیسک مبدأ پیدا نشد.');
+        $absolute = $disk->path($legacyPath);
         $mime = (string) (($isAudio ? $preview->audio_mime : $preview->mime) ?: ($disk->mimeType($legacyPath) ?: 'application/octet-stream'));
-        $managed = $storage->adoptExistingPrivate($legacyPath, basename($legacyPath), $mime, (int) $disk->size($legacyPath), 'store-product-preview', StoreProductPreview::class, (int) $preview->id, (int) $preview->product_id, StorageManager::CRITICAL);
+        $upload = new UploadedFile($absolute, basename($legacyPath), $mime, UPLOAD_ERR_OK, true);
+        $managed = $storage->storeUploadedFile($upload, StorageManager::CRITICAL, 'store-product-preview', StoreProductPreview::class, (int) $preview->id, (int) $preview->product_id, 'private');
 
         try {
-            DB::transaction(function () use ($preview, $field, $legacyPath, $managed, $storage, $transfer): void {
+            DB::transaction(function () use ($preview, $field, $legacyPath, $legacyDiskName, $managed, $storage, $transfer): void {
                 $locked = StoreProductPreview::query()->whereKey($preview->id)->lockForUpdate()->firstOrFail();
                 $currentPath = $field === 'audio_path' ? $locked->audio_path : $locked->path;
                 $currentDisk = $field === 'audio_path' ? ($locked->audio_disk ?: 'private') : ($locked->disk ?: 'private');
-                if ((string) $currentPath !== $legacyPath || $currentDisk !== 'private') throw new RuntimeException('پیش‌نمایش هم‌زمان تغییر کرده است.');
+                if ((string) $currentPath !== $legacyPath || $currentDisk !== $legacyDiskName) throw new RuntimeException('پیش‌نمایش هم‌زمان تغییر کرده است.');
                 $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $locked->id, (int) $locked->product_id, $field);
                 $transfer->syncSourceReference(StorageManagedFile::findOrFail($managed['managed_file_id']), $managed['disk']);
             });
-        } catch (\Throwable $exception) {
+        } catch (\\Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
             throw $exception;
         }
 
-        $this->deleteLegacyPrivateIfUnreferenced($legacyPath);
+        $this->deleteLegacyAssetIfUnreferenced($legacyDiskName, $legacyPath);
         return true;
     }
 
-    private function deleteLegacyPrivateIfUnreferenced(string $path): void
+    private function deleteLegacyAssetIfUnreferenced(string $diskName, string $path): void
     {
         $previewReferences = StoreProductPreview::query()
             ->where(fn ($query) => $query->where('path', $path)->orWhere('audio_path', $path))
             ->get()
             ->contains(fn (StoreProductPreview $preview) =>
-                ((string) $preview->path === $path && ($preview->disk ?: 'private') === 'private')
-                || ((string) $preview->audio_path === $path && ($preview->audio_disk ?: 'private') === 'private')
+                ((string) $preview->path === $path && ($preview->disk ?: 'private') === $diskName)
+                || ((string) $preview->audio_path === $path && ($preview->audio_disk ?: 'private') === $diskName)
             );
         $artifactReferences = StoreProductDocumentArtifact::query()
             ->where('path', $path)
-            ->where(fn ($query) => $query->whereNull('disk')->orWhere('disk', 'private'))
-            ->exists();
+            ->get()
+            ->contains(fn (StoreProductDocumentArtifact $artifact) => ($artifact->disk ?: 'private') === $diskName);
         $fileReferences = StoreProductFile::query()
             ->where('path', $path)
-            ->where(fn ($query) => $query->whereNull('disk')->orWhere('disk', 'private'))
-            ->exists();
+            ->get()
+            ->contains(fn (StoreProductFile $file) => ($file->disk ?: 'private') === $diskName);
 
         if (! $previewReferences && ! $artifactReferences && ! $fileReferences) {
-            Storage::disk('private')->delete($path);
+            Storage::disk($diskName)->delete($path);
         }
     }
 
