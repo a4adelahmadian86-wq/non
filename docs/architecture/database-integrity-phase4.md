@@ -38,7 +38,7 @@ The original core schema used cascading deletes for:
 
 The Phase 4 financial migration adds stable unique idempotency keys to orders and payments, backfills existing rows deterministically, and refuses to create unique indexes if duplicate keys are found. It also changes financial-history deletion behavior to restrictive behavior. SQLite uses equivalent insert/update/delete triggers because its schema grammar cannot drop an existing foreign key by name.
 
-Wallet transaction records are protected against Eloquent updates and deletes. This model-level protection does not claim to block raw SQL or query-builder writes.
+Wallet transaction records are immutable at two layers: Eloquent rejects model updates/deletes, and a database trigger rejects direct SQL and query-builder updates/deletes. SQLite, MySQL, and PostgreSQL have driver-specific trigger implementations. The protection is retained during rollback so a rollback cannot silently make the ledger mutable again.
 
 ### Commercial ledger references
 
@@ -63,12 +63,13 @@ Important: editing an already-applied migration does not rerun it in an existing
 ## Additional consistency fixes
 
 - Store checkout now builds order items from the cart relation reloaded under the transaction's row lock, rather than from the pre-lock in-memory cart snapshot. This closes a race where totals could be calculated from one cart version while order lines came from another.
+- Wallet ledger immutability is enforced in the database, not only through Eloquent model events.
 
 ## Automated coverage added
 
 - Repeated order/payment idempotency keys resolve to one record.
 - Existing financial records block cascading account, wallet, and order deletion.
-- Wallet ledger records reject Eloquent updates and deletes.
+- Wallet ledger records reject Eloquent updates and deletes, and database triggers also reject query-builder/raw SQL mutation.
 - The financial migration backfills legacy rows, is repeatable, and rejects duplicate legacy keys without merging them.
 - The commercial ledger migration rejects orphan references and preserves the orphaned row for manual reconciliation.
 - Subscription canonicalization preserves all source rows and unknown legacy fields, and refuses to discard a subscription whose plan cannot be resolved.
