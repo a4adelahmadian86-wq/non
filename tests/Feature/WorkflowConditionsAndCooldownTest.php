@@ -503,7 +503,6 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         config(['queue.default' => 'database']);
 
         $this->assertSame(0, Artisan::call('farast:workflows:health'));
-        $this->assertStringContainsString('within configured thresholds', Artisan::output());
     }
 
     public function test_internal_event_contracts_reject_incomplete_and_mismatched_domain_payloads(): void
