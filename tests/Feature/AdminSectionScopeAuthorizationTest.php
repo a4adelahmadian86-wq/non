@@ -182,6 +182,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'permission_id' => $financePermission->id,
         ]);
         app(AuthorizationService::class)->forgetUser();
+        $this->assertTrue(app(AuthorizationService::class)->allows($manager, 'finance.view'));
+        $this->assertTrue(app(\App\Services\AdminConsoleService::class)->sectionAllowed($manager, 'finance'));
         $finance = $this->get('/admin/finance')->assertOk();
         $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
         $finance->assertViewHas('walletTotal', 300);
