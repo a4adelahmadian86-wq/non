@@ -19,15 +19,31 @@ class AuditIntegrityService
             ->orderBy('id')
             ->chunkById(500, function ($rows) use (&$previous, &$checked, &$errorCount, &$errors): void {
                 foreach ($rows as $row) {
-                    $payload = [
-                        'event_type' => $row->event_type,
-                        'user_id' => $row->user_id,
-                        'project_id' => $row->project_id,
-                        'aggregate_type' => $row->aggregate_type,
-                        'aggregate_id' => $row->aggregate_id,
-                        'source' => $row->source,
-                        'payload_meta' => $row->payload_meta,
-                    ];
+                    $checksumVersion = (int) ($row->payload_meta['_ledger_checksum_version'] ?? 1);
+                    $payload = match ($checksumVersion) {
+                        1 => [
+                            'event_type' => $row->event_type,
+                            'user_id' => $row->user_id,
+                            'project_id' => $row->project_id,
+                            'aggregate_type' => $row->aggregate_type,
+                            'aggregate_id' => $row->aggregate_id,
+                            'source' => $row->source,
+                            'payload_meta' => $row->payload_meta,
+                        ],
+                        2 => [
+                            'event_id' => $row->event_id,
+                            'event_type' => $row->event_type,
+                            'user_id' => $row->user_id,
+                            'project_id' => $row->project_id,
+                            'aggregate_type' => $row->aggregate_type,
+                            'aggregate_id' => $row->aggregate_id,
+                            'source' => $row->source,
+                            'payload_meta' => $row->payload_meta,
+                            'created_at' => (string) $row->getRawOriginal('created_at'),
+                            'updated_at' => (string) $row->getRawOriginal('updated_at'),
+                        ],
+                        default => throw new \UnexpectedValueException('Unsupported audit checksum version.'),
+                    };
 
                     $encoded = json_encode(
                         $payload,
