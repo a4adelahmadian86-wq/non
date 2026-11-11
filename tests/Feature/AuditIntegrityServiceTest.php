@@ -36,6 +36,25 @@ class AuditIntegrityServiceTest extends TestCase
         $this->assertSame(1, $result['checked']);
     }
 
+    public function test_versioned_checksum_detects_event_identity_and_timestamp_tampering(): void
+    {
+        $service = app(\App\Services\AuditEventService::class);
+        $first = $service->record('test.identity');
+        $second = $service->record('test.timestamp');
+
+        DB::table('farast_audit_events')
+            ->where('id', $first->id)
+            ->update(['event_id' => (string) Str::uuid()]);
+        DB::table('farast_audit_events')
+            ->where('id', $second->id)
+            ->update(['created_at' => now()->subDay()->format('Y-m-d H:i:s')]);
+
+        $result = (new AuditIntegrityService())->verify();
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame(2, $result['error_count']);
+    }
+
     public function test_integrity_verification_caps_error_samples_but_reports_total_count(): void
     {
         for ($index = 0; $index < 101; $index++) {
