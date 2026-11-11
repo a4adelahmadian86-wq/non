@@ -129,7 +129,9 @@ class PaymentController extends Controller
                     'terms_accepted_at' => now(),
                 ]);
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
                 if ($total > $wallet->balance_rials) {
@@ -264,7 +266,9 @@ class PaymentController extends Controller
                     throw new \RuntimeException('مبلغ سفارش معتبر نیست.');
                 }
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 if ($total > $wallet->balance_rials) {
                     throw new \RuntimeException('موجودی کیف پول برای این سفارش کافی نیست.');
@@ -364,7 +368,9 @@ class PaymentController extends Controller
                 abort_unless($path !== '' && Storage::disk('private')->exists($path), 404, 'فایل مربوط به این برآورد پیدا نشد.');
                 abort_unless(hash_equals($hash, hash('sha256', Storage::disk('private')->get($path))), 409, 'فایل پس از برآورد تغییر کرده است.');
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 $amount = (int) $locked->total_rials;
 
