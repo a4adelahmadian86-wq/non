@@ -30,7 +30,7 @@ class VerifyAuditLedger extends Command
             $errors = array_slice((array) ($result['errors'] ?? []), 0, 50);
             Log::critical('farast.audit.integrity_violation', [
                 'checked' => (int) ($result['checked'] ?? 0),
-                'error_count' => count((array) ($result['errors'] ?? [])),
+                'error_count' => (int) ($result['error_count'] ?? count((array) ($result['errors'] ?? []))),
                 'affected_event_ids' => array_values(array_filter(array_column($errors, 'event_id'), 'is_string')),
             ]);
             $this->error('Audit ledger integrity verification failed. Review the protected logs and incident process.');
