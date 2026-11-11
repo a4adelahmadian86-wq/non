@@ -215,4 +215,5 @@ class AdminStorageController extends Controller
         });
 
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
-    }}
+    }
+}
