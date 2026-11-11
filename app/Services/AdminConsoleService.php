@@ -51,18 +51,28 @@ class AdminConsoleService
             return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
         }
 
-        if (! $this->authorization->allows($user, $def['permission'])) {
-            return false;
-        }
-
         $rank = config('farast_admin.scope_rank', ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3]);
         $userRank = $rank[$scope] ?? 3;
         $requiredRank = $rank[$def['min_scope']] ?? 3;
         $allowed = $userRank <= $requiredRank;
 
+        // A restricted platform administrator keeps administrative capabilities
+        // only inside the explicitly assigned scope. Context-free permission
+        // checks intentionally fail for such accounts; record guards below
+        // enforce the concrete organization/team/owner boundary.
+        if ($user->isAdmin() && $scope !== self::SCOPE_GLOBAL) {
+            if ($allowed) {
+                request()->attributes->set('farast.section_permission', (string) $def['permission']);
+            }
+
+            return $allowed;
+        }
+
+        if (! $this->authorization->allows($user, $def['permission'])) {
+            return false;
+        }
+
         if ($allowed) {
-            // Downstream list/query helpers use this exact section permission
-            // to apply custom role scopes and direct deny overrides per record.
             request()->attributes->set('farast.section_permission', (string) $def['permission']);
         }
 
@@ -148,9 +158,13 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            $ids = $user->organization_id
-                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->map(fn ($id) => (int) $id)->all()
+            $organizationId = $user->isAdmin() ? ResolveAdminScope::scopeIdFor($user) : $user->organization_id;
+            $ids = $organizationId
+                ? Team::query()->where('organization_id', $organizationId)->pluck('id')->map(fn ($id) => (int) $id)->all()
                 : [];
+        } elseif ($scope === self::SCOPE_TEAM && $user->isAdmin()) {
+            $teamId = ResolveAdminScope::scopeIdFor($user);
+            $ids = $teamId && Team::query()->whereKey($teamId)->exists() ? [$teamId] : [];
         } elseif ($scope === self::SCOPE_TEAM) {
             $ids = $user->organization_id
                 ? Team::query()
@@ -206,7 +220,8 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            $ids = $user->organization_id ? [(int) $user->organization_id] : [];
+            $organizationId = $user->isAdmin() ? ResolveAdminScope::scopeIdFor($user) : $user->organization_id;
+            $ids = $organizationId ? [(int) $organizationId] : [];
         } elseif ($scope === self::SCOPE_TEAM) {
             $teamIds = $this->visibleTeamIds($user, $permission) ?? [];
             $ids = Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->map(fn ($id) => (int) $id)->all();
@@ -270,7 +285,8 @@ class AdminConsoleService
     ): void {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
-        if ($requiredPermission !== null) {
+        if ($requiredPermission !== null
+            && ! ($user?->isAdmin() && self::scopeOf($user) !== self::SCOPE_GLOBAL)) {
             abort_unless(
                 $this->authorization->allows($user, $requiredPermission),
                 403,
