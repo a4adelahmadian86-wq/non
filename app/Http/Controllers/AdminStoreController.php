@@ -418,7 +418,7 @@ class AdminStoreController extends Controller
         $aiContentReadiness = $contentGenerator->readiness($product);
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
-            && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+            && $file->is_active && $file->is_primary && in_array($file->scan_status, ['clean', 'structural'], true));
         $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
             && $publicationReadiness->hasReadyPrimaryReader($product);
         $contentReady = $product->type === 'course'
@@ -585,7 +585,7 @@ class AdminStoreController extends Controller
                         ->where('purpose', 'product_download')
                         ->where('is_active', true)
                         ->where('is_primary', true)
-                        ->where('scan_status', 'clean')
+                        ->whereIn('scan_status', ['clean', 'structural'])
                         ->exists();
                     if (! $hasSafePrimaryFile) {
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
@@ -1098,7 +1098,7 @@ class AdminStoreController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
-                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
+                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'structural',
                     'scan_engine' => 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
@@ -1281,7 +1281,7 @@ class AdminStoreController extends Controller
                     ->where('id', '!=', $lockedFile->id)
                     ->where('is_active', true)
                     ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
+                    ->whereIn('scan_status', ['clean', 'structural'])
                     ->exists();
                 if (! $hasReplacement) {
                     throw ValidationException::withMessages([
