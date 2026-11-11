@@ -636,7 +636,7 @@ class AdminStoreController extends Controller
 
     public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
     {
-        $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
+        $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related', 'publicationReview']);
         $categories = StoreCategory::orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = app(ProductRelatedProductsService::class)->recommend($product);
@@ -672,7 +672,8 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
+        $canPublishProduct = app(\\App\\Services\\AuthorizationService::class)->allows(auth()->user(), 'store.products.publish');
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublishProduct'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
@@ -697,8 +698,21 @@ class AdminStoreController extends Controller
             $fieldEvidence = $contentGenerator->validateFieldEvidence($product, $submittedFieldEvidence);
         }
         $data = $this->validated($request, $product);
+        $publicationReview = StoreProductPublicationReview::query()->where('product_id', $product->id)->first();
+        $manualQueueApproval = false;
+        $managerApprovalNote = null;
         if (($data['status'] ?? null) === 'published') {
-            abort_unless(app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
+            abort_unless(app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
+            if ($publicationReview?->status === StoreProductPublicationReview::STATUS_PENDING_AI) {
+                throw ValidationException::withMessages(['status' => 'تا پایان بررسی ناظر هوشمند امکان انتشار محصول وجود ندارد.']);
+            }
+            if ($publicationReview?->status === StoreProductPublicationReview::STATUS_PENDING_MANAGER) {
+                abort_unless(in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403, 'تصمیم نهایی صف انتشار فقط برای مدیران مجاز است.');
+                $managerApprovalNote = $request->validate([
+                    'manager_approval_note' => 'required|string|min:20|max:2000',
+                ])['manager_approval_note'];
+                $manualQueueApproval = true;
+            }
         }
         $tagIds = $data['tag_ids'] ?? [];
         $aiTagNames = $request->validate([
@@ -722,7 +736,7 @@ class AdminStoreController extends Controller
         }
 
         $actor = $request->user();
-        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $actor) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $actor, $manualQueueApproval, $managerApprovalNote) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -804,7 +818,7 @@ class AdminStoreController extends Controller
                     );
                     $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
                     $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
-                    if (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved') {
+                    if (! $manualQueueApproval && (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved')) {
                         throw ValidationException::withMessages([
                             'status' => 'برای انتشار در حالت تأییدمحور، ابتدا اطلاعات و رسانه‌ها را ذخیره کنید و پس از اجرای یک بررسی تازه با نتیجه تأیید، دوباره انتشار را انجام دهید.',
                         ]);
@@ -881,6 +895,33 @@ class AdminStoreController extends Controller
                 $data['metadata'] = $metadata;
             }
             $lockedProduct->update($data);
+            if (($data['status'] ?? null) === 'published' && $manualQueueApproval) {
+                $lockedReview = StoreProductPublicationReview::query()
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                abort_unless($lockedReview->status === StoreProductPublicationReview::STATUS_PENDING_MANAGER, 409, 'وضعیت صف انتشار تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+                $lockedReview->update([
+                    'status' => StoreProductPublicationReview::STATUS_PUBLISHED,
+                    'manager_reviewed_by' => $actor->id,
+                    'manager_reviewed_at' => now(),
+                    'manager_notes' => $managerApprovalNote,
+                    'published_at' => now(),
+                ]);
+                $metadata = (array) ($lockedProduct->metadata ?? []);
+                $metadata['intake_publication'] = array_merge((array) ($metadata['intake_publication'] ?? []), [
+                    'state' => 'published_by_manager',
+                    'manager_reviewed_by' => $actor->id,
+                    'manager_reviewed_at' => now()->toISOString(),
+                    'manager_notes' => $managerApprovalNote,
+                ]);
+                $lockedProduct->update(['metadata' => $metadata]);
+                $this->audit('store.product.publication_manager_approved', $lockedProduct, [
+                    'review_id' => $lockedReview->id,
+                    'ai_verdict' => $lockedReview->ai_verdict,
+                    'manager_reviewed_by' => $actor->id,
+                ]);
+            }
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
             if ($provenance !== null) {
