@@ -92,6 +92,11 @@ class BusinessCommerceLifecycleTest extends TestCase
         $this->assertSame('store', data_get($order->pricing_snapshot, 'kind'));
         $this->assertSame($order->total_rials, (int) $orderItem->total_rials + (int) $orderItem->tax_rials);
 
+        // A later catalog edit must not silently reprice an already-confirmed order.
+        $product->update(['price_rials' => 990000]);
+        $this->assertSame(120000, (int) $orderItem->fresh()->unit_price_rials);
+        $this->assertSame(990000, (int) $product->fresh()->price_rials);
+
         $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
             ->assertRedirect(route('store'));
 
