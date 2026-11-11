@@ -104,4 +104,67 @@ class SupportNotificationEventIdentityTest extends TestCase
             'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_customer_reply:identity:message:'.$message->id.':user:'.$staff->id,
         ]);
     }
+
+    public function test_distinct_ticket_closures_are_not_suppressed_by_an_earlier_closure(): void
+    {
+        $user = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $user->id,
+            'subject' => 'بستن و بازگشایی تیکت',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $service = new SupportNotificationService(
+            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            app(NotificationService::class),
+        );
+
+        $service->statusChanged($ticket, 'open', 'closed', 'transition:close-1');
+        $service->statusChanged($ticket, 'open', 'closed', 'transition:close-1');
+        $this->assertDatabaseCount('farast_notifications', 1);
+
+        $service->statusChanged($ticket, 'open', 'closed', 'transition:close-2');
+
+        $this->assertDatabaseCount('farast_notifications', 2);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'type' => 'ticket_closed',
+            'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_closed:identity:transition:close-2:user:'.$user->id,
+        ]);
+    }
+
+    public function test_distinct_assignment_events_notify_the_same_agent_once_per_transition(): void
+    {
+        $customer = User::factory()->create();
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'assigned_to' => $staff->id,
+            'subject' => 'ارجاع مجدد تیکت',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $service = new SupportNotificationService(
+            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            app(NotificationService::class),
+        );
+
+        $service->assigned($ticket, $staff, 'assignment:1');
+        $service->assigned($ticket, $staff, 'assignment:1');
+        $this->assertDatabaseCount('farast_notifications', 1);
+
+        $service->assigned($ticket, $staff, 'assignment:2');
+
+        $this->assertDatabaseCount('farast_notifications', 2);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $staff->id,
+            'type' => 'ticket_assigned',
+            'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_assigned:identity:assignment:2:user:'.$staff->id,
+        ]);
+    }
+
 }
