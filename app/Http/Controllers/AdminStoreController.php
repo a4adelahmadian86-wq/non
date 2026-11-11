@@ -15,6 +15,7 @@ use App\Jobs\ReviewProductForPublication;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
+use App\Services\AuthorizationService;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductRelatedProductsService;
 use App\Services\StoreProductIntakeService;
@@ -1058,7 +1059,7 @@ class AdminStoreController extends Controller
     public function manualReviewIntakeFile(Request $request, StoreProductIntakeSession $session, string $ingestionId)
     {
         abort_unless(
-            app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.publish_products'),
+            app(AuthorizationService::class)->allows($request->user(), 'store.publish_products'),
             403
         );
 
