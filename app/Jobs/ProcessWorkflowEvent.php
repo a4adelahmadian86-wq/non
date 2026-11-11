@@ -48,6 +48,7 @@ class ProcessWorkflowEvent implements ShouldQueue, ShouldBeUnique
             ->whereNotIn('status', ['completed', 'paused'])
             ->update([
                 'status' => 'failed',
+                'attempts' => 5,
                 'failed_at' => now(),
                 'error_summary' => mb_substr($exception->getMessage(), 0, 4000),
                 'updated_at' => now(),
