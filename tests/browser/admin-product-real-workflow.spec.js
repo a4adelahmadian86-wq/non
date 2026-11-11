@@ -123,8 +123,10 @@ test.describe('Real admin product workflow', () => {
 
     await form.locator('select[name="department"]').selectOption('support');
     await form.locator('select[name="priority"]').selectOption('normal');
-    await form.locator('input[name="topic_area"][value="services"]').check();
-    await form.locator('input[name="related_service"][value="typing"]').check();
+    await form.locator('label.tk-chip').filter({ hasText: 'خدمات' }).click();
+    await expect(form.locator('#servicesBlock')).toBeVisible();
+    await form.locator('#servicesBlock label.tk-chip').filter({ hasText: 'تایپ آنلاین' }).click();
+    await expect(form.locator('input[name="related_service"][value="typing"]')).toBeChecked();
     await form.locator('input[name="subject"]').fill(subject);
     await form.locator('textarea[name="body"]').fill(firstMessage);
 
