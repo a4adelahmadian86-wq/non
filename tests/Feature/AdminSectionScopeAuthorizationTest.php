@@ -62,6 +62,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->actingAs($employee)->get('/admin')->assertOk();
         $this->get('/admin/access')->assertForbidden();
         $this->get('/admin/access-center')->assertForbidden();
+        $this->post('/admin/access-center/roles', ['name' => 'Should Not Be Created', 'key' => 'should-not-be-created'])->assertForbidden();
+        $this->get('/admin/access-center')->assertForbidden();
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
