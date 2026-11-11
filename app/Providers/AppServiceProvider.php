@@ -78,8 +78,7 @@ class AppServiceProvider extends ServiceProvider
             } catch (Throwable $exception) {
                 error_log('FARAST queue completion logging failed: '.get_class($exception));
             } finally {
-                app(FarastTraceContext::class)->clear();
-                Log::withoutContext();
+                $this->clearQueueTrace();
             }
         });
 
@@ -93,24 +92,31 @@ class AppServiceProvider extends ServiceProvider
             } catch (Throwable $exception) {
                 error_log('FARAST queue exception logging failed: '.get_class($exception));
             } finally {
-                app(FarastTraceContext::class)->clear();
-                Log::withoutContext();
+                $this->clearQueueTrace();
             }
         });
 
         Event::listen(AuthenticationFailed::class, function (AuthenticationFailed $event): void {
             // Never log the submitted credentials or the attempted email/phone.
-            Log::warning('farast.security.authentication_failed', [
-                'guard' => $event->guard,
-                'actor_id' => $event->user?->getAuthIdentifier(),
-            ]);
+            try {
+                Log::warning('farast.security.authentication_failed', [
+                    'guard' => $event->guard,
+                    'actor_id' => $event->user?->getAuthIdentifier(),
+                ]);
+            } catch (Throwable $exception) {
+                error_log('FARAST authentication failure logging failed: '.get_class($exception));
+            }
         });
 
         Event::listen(Login::class, function (Login $event): void {
-            Log::info('farast.security.authentication_succeeded', [
-                'guard' => $event->guard,
-                'actor_id' => $event->user->getAuthIdentifier(),
-            ]);
+            try {
+                Log::info('farast.security.authentication_succeeded', [
+                    'guard' => $event->guard,
+                    'actor_id' => $event->user->getAuthIdentifier(),
+                ]);
+            } catch (Throwable $exception) {
+                error_log('FARAST authentication success logging failed: '.get_class($exception));
+            }
 
             try {
                 app(SupportTicketService::class)->claimGuestTickets($event->user);
@@ -122,10 +128,29 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Event::listen(Logout::class, function (Logout $event): void {
-            Log::info('farast.security.logout', [
-                'guard' => $event->guard,
-                'actor_id' => $event->user?->getAuthIdentifier(),
-            ]);
+            try {
+                Log::info('farast.security.logout', [
+                    'guard' => $event->guard,
+                    'actor_id' => $event->user?->getAuthIdentifier(),
+                ]);
+            } catch (Throwable $exception) {
+                error_log('FARAST logout logging failed: '.get_class($exception));
+            }
         });
+    }
+
+    private function clearQueueTrace(): void
+    {
+        try {
+            app(FarastTraceContext::class)->clear();
+        } catch (Throwable $exception) {
+            error_log('FARAST queue trace cleanup failed: '.get_class($exception));
+        }
+
+        try {
+            Log::withoutContext();
+        } catch (Throwable $exception) {
+            error_log('FARAST queue log context cleanup failed: '.get_class($exception));
+        }
     }
 }
