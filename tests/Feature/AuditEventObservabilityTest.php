@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\AuditEventService;
 use App\Services\AuditIntegrityService;
 use App\Services\FarastTraceContext;
+use App\Services\FarastObservabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
@@ -55,5 +56,29 @@ class AuditEventObservabilityTest extends TestCase
         $this->assertSame('job-request-123', $event->payload_meta['request_id']);
         $this->assertSame('job-correlation-456', $event->payload_meta['correlation_id']);
         $this->assertTrue(app(AuditIntegrityService::class)->verify()['ok']);
+    }
+
+    public function test_dashboard_incident_history_reads_from_the_canonical_audit_ledger(): void
+    {
+        app(AuditEventService::class)->record(
+            'observability.incident.critical',
+            null,
+            null,
+            'observability',
+            null,
+            [
+                'status' => 'critical',
+                'severity' => 'critical',
+                'affected_components' => ['database' => 'critical'],
+            ],
+            'operations'
+        );
+
+        $snapshot = app(FarastObservabilityService::class)->snapshot();
+
+        $this->assertCount(1, $snapshot['incidents']);
+        $this->assertSame('observability.incident.critical', $snapshot['incidents'][0]['event_type']);
+        $this->assertSame('critical', $snapshot['incidents'][0]['severity']);
+        $this->assertSame(['database' => 'critical'], $snapshot['incidents'][0]['affected_components']);
     }
 }
