@@ -200,12 +200,13 @@ class SupportNotificationService
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'هشدار SLA — '.$ticket->displayCode();
         $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
+        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown').':threshold:'.$minutesLeft;
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind);
+            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', 'sla-warning:'.$kind.':'.$minutesLeft);
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', $cycleIdentity);
                 }
             } catch (\Throwable) {
             }
@@ -222,7 +223,7 @@ class SupportNotificationService
                         'token' => $ticket->displayCode(),
                         'token2' => (string) $minutesLeft,
                     ],
-                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$minutesLeft
+                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$cycleIdentity
                 );
             }
         }
@@ -235,9 +236,10 @@ class SupportNotificationService
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'نقض SLA — '.$ticket->displayCode();
         $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
+        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind);
+            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
                 if ($staff->email) {
                     $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', 'sla-breached:'.$kind);
@@ -254,7 +256,7 @@ class SupportNotificationService
                     'ticket_sla_breach',
                     'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
                     ['token' => $ticket->displayCode()],
-                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind
+                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$cycleIdentity
                 );
             }
         }
