@@ -248,17 +248,21 @@
 
 ### Migrationهای دارای پیشوند زمانی مشترک
 
-در نام فایل‌ها چند گروه دارای تاریخ و شماره ترتیبی یکسان ولی نام متفاوت دیده شد، از جمله:
-- `2026_10_03_000001_*`
-- `2026_10_19_000002_*`
-- `2026_11_07_000001_*`
-- `2026_11_08_000001_*`
-- `2026_11_09_000012_*`
-- `2026_11_10_000001_*`
-- `2026_11_10_000005_*`
-- `2026_11_10_000006_*`
+در ۱۱۴ فایل Migration فعلی، **۱۰ گروه timestamp تکراری** وجود دارد:
+- `2026_09_12_000012`: افزودن email به users / ایجاد ai_interactions و ai_feedback
+- `2026_10_03_000001`: ساخت لایه FARAST Phase 5 / ایجاد Professional Commercial Engine
+- `2026_10_19_000002`: افزودن SLA به tickets / توسعه announcements
+- `2026_11_07_000001`: ledger اجرای workflow / همگام‌سازی مجوزهای اسناد
+- `2026_11_08_000001`: سطح دسترسی preview / ایجاد ingestion و knowledge محصول
+- `2026_11_09_000012`: anchor گفت‌وگوی خوانشگر / رهگیری تحویل ایمیل
+- `2026_11_10_000001`: رضایت بازاریابی کاربر / ساخت جداول Storage
+- `2026_11_10_000005`: ساخت جداول امنیت حساب / اتصال کوپن مصرف‌شده به سفارش
+- `2026_11_10_000006`: کنترل دستگاه مورد اعتماد / ساخت پیام‌رسان داخلی
+- `2026_11_10_000011`: hash کلید فایل Storage / توسعه مشوق‌های CRM
 
-این موضوع به‌تنهایی اثبات خرابی Migration نیست؛ اما ترتیب اجرای فایل‌ها با نام کامل و وابستگی واقعی باید ثبت شود. به‌ویژه migrationهای هم‌زمان که یکی به جدول ساخته‌شده در دیگری وابسته است، باید با اجرای دیتابیس خالی و ارتقای دیتابیس موجود بررسی شوند.
+تکرار timestamp به‌تنهایی خطا نیست؛ Laravel فایل‌ها را بر اساس نام Migration مرتب می‌کند. اما در گروه `2026_10_03_000001` ترتیب lexical اثر معماری مستقیم دارد: فایل `create_farast_phase5_platform_layer` زودتر از `professional_commercial_engine` اجرا می‌شود و پیشاپیش `farast_subscriptions` و `farast_usage_counters` را می‌سازد. بنابراین createهای guarded در Migration دوم برای این دو جدول اجرا نمی‌شوند. پیامد این ترتیب در بخش ۱۷ بررسی شده است.
+
+برای هر گروه، وابستگی schema باید با clean install و upgrade snapshot آزموده شود؛ صرف وجود نام timestamp مشترک نباید به حذف یا تغییر نام شتاب‌زده Migration منجر شود.
 
 ## 6. ماتریس جریان‌های کلیدی
 
@@ -620,12 +624,18 @@ farast_workflow_events
 | #347 | هسته scoped RBAC، resource permission، Workflow Outbox/Job/lease/fencing | AuthorizationService، AdminConsoleService، ResolveAdminScope، WorkflowEngine، PlatformCompletionController، web_core_part2.php، AppServiceProvider و Migrationها | Draft؛ Phase 3 روی HEAD آن ۵ شکست StoreReader دارد؛ Phase 4 Agent موفق | کاندید اصلی بررسی هسته امنیت/اتوماسیون؛ قبل از ادغام با تمام call-siteها و Migrationها بازبینی شود |
 | #330 | شاخه قدیمی‌تر scoped RBAC و Workflow با مجموعه فایل تقریباً مشابه #347 | تقریباً همان فایل‌های #347؛ از جمله AuthorizationService، WorkflowEngine، PlatformCompletionController و routeها | Draft؛ test در صف؛ با #347 diverged و ۷۴ commit عقب‌تر از آن گزارش شد | دو شاخه نباید هر دو ادغام شوند؛ #347 صراحتاً نسخه port/rebase شده #330 است. #330 شاخه موازی/قدیمی تلقی شود |
 | #335 | یکپارچه‌سازی artifact/preview/audio با StorageManager، reservation، delete lifecycle، restore و migration legacy | StorageManager، StorageTransferService، AdminStoreController، StoreController، مدل‌های storage و reader، Migration رزرو | Draft؛ Product Supervisor Agent موفق؛ Phase 3: ۶۲۰ موفق و یک شکست در StorageBackupRestoreIntegrationTest؛ FARAST CI pending | مالک پیشنهادی اصلاح شکاف Storage محصول؛ نباید اصلاح preview/audio موازی در این ممیزی ساخته شود. شکست restore باید پیش از ادغام رفع شود |
-| #340 | idempotency مالی، retention، ledger FK و Migration preflight | Order، Payment، WalletTransaction، PaymentController، StoreCartController و Migrationهای commerce | Draft؛ تست‌های SQLite/MySQL/Postgres در صف؛ CI کامل نهایی نشده | کاندید رفع روابط بدون FK و idempotency؛ قبل از ادغام preflight داده یتیم روی snapshot الزامی است |
-| #350 | اصلاح تست‌های Reader و workflowهای CI، بدون تغییر رفتار production | StoreReaderAccessTest، farast-ci.yml و phase3-commerce.yml | غیر Draft؛ Agent موفق، تست اصلی در صف | برای بستن پنج شکست شناخته‌شده StoreReader مناسب است؛ فقط پس از سبز شدن روی HEAD خودش ادغام شود |
+| #340 | idempotency مالی، retention، ledger FK، canonical subscription migration و preflight | Order، Payment، WalletTransaction، PaymentController، StoreCartController، `farast_subscriptions` و Migrationهای commerce | Draft؛ ۳ workflow برای HEAD فعلی در صف/درحال اجرا؛ تست‌های migration safety و ledger FK اضافه شده‌اند | مالک اصلی اصلاح خطر Migration اشتراک و FKهای دفترکل؛ پیش از ادغام همه driverها و clean/upgrade migrationها باید سبز شوند. unique counter مصرف در دامنه این PR دیده نشد |
+| #350 | اصلاح قرارداد تست‌های Reader و workflowهای CI، بدون تغییر رفتار production | StoreReaderAccessTest، farast-ci.yml، phase3-commerce.yml و script محیط تست | غیر Draft؛ Phase 3 روی HEAD قبلی موفق؛ برای HEAD جدید FARAST CI و Phase 3 دوباره در صف ثبت شده‌اند | رفع پنج شکست Reader به‌صورت test/workflow-only؛ ادغام فقط پس از سبز شدن هر دو workflow روی آخرین SHA |
 | #333 | type-first product intake، AI-gated publication و course flow | AdminStoreController، StoreProduct، AuthorizationService و store_routes.php | غیر Draft؛ در زمان snapshot check-run ثبت نشده | با #318 و #335 روی مسیر intake هم‌پوشانی دارد؛ باید قرارداد نهایی یک مسیر intake را انتخاب و قابلیت‌های لازم را از شاخه‌های دیگر port کند |
 | #318 | file-first secure intake، staging، document ingestion و reader integration | AdminStoreController، StoreController، StoreProduct، StoreProductFile، store_routes.php و web_core_part1.php | Draft؛ FARAST CI شکست خورده، Reader browser و Product Supervisor موفق | مسیر ایجاد محصول با #333 هم‌پوشان است؛ ادغام جداگانه بدون تصمیم واحد، خطر دو جریان intake دارد |
 | #353 | observability و trace/audit integration | web_core_part2.php، AppServiceProvider، AuditLogService و middleware | Draft؛ چند check در صف | تغییر Route در همان فایل با اصلاح اعلان ما هم‌فایل است؛ پس از ادغام، حذف دو Route اعلان و route inventory دوباره کنترل شود |
 | #351 | قراردادهای integration ماژول‌های کسب‌وکار | فقط سند معماری جدید | Draft؛ Laravel check ناموفق، برخی checks دیگر موفق/درحال اجرا | مکمل این ممیزی است، نه منبع حقیقت runtime؛ اختلاف اصطلاحات و مبنا باید پس از ادغام همسان شود |
+| #348 | ممیزی منابع حقیقت و حذف مالکیت تکراری اعلان | `routes/web_core_part2.php`, `routes/notifications.php`, تست `NotificationRouteOwnershipTest` و همین سند | Draft؛ تست اختصاصی مالکیت اعلان در suite موفق؛ suite کلی ۵ شکست Reader و ۶۰۴ موفق؛ FARAST CI هنوز در حال اجرا | تغییر route کوچک و تست آن آماده‌اند؛ merge تا رفع baseline Reader و تکمیل runtime route:list متوقف بماند |
+| #357 | stream کردن audio preview از Storage | `StoreController.php` | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با #335 هم‌پوشانی مستقیم دارد؛ تغییر بازیابی audio باید با StorageManager و volume-aware streaming سازگار بماند |
+| #358 | جلوگیری از ادغام/حذف ناخواسته اعلان‌های پاسخ تیکت | `SupportNotificationService.php`, `SupportTicketService.php` و تست identity اعلان | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با مالکیت NotificationService هم‌راستا شود؛ dedupe key باید هویت هر reply را حفظ کند و فقط retry همان رخداد را dedupe کند |
+| #359 | اصلاح restore بکاپ وقتی manifest اولین ورودی ZIP است | `RestoreStorageBackup.php` | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با lifecycle بکاپ Storage مرتبط است؛ تست archiveهای چندترتیبی و restore واقعی لازم است |
+| #360 | بازیابی اتصال IndexedDB خوانشگر پس از invalidation | `farast-reader-storage.js`, `farast-reader.js`, reader view و browser test | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | مصرف‌کننده client-side ذخیره‌سازی است؛ نباید قرارداد metadata یا دسترسی سرور را دور بزند |
+| #361 | ثبت پیشرفت دوره در نمای 360 مشتری | `CrmController.php`, `StoreCourseLearningController.php`, `StoreCourseProgressService.php` و تست CRM | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | مصرف‌کننده جدید داده پیشرفت دوره؛ منبع حقیقت پیشرفت باید همان جدول/سرویس enrollment باشد، نه یک timeline مستقل موازی |
 | #354 | بهینه‌سازی گزارش پشتیبانی و SLA | SupportReportController و SupportSlaService | Draft؛ testها در صف، regression skipped | بعد از merge، مسیر گزارش و query ownership در بخش پشتیبانی به‌روزرسانی شود |
 | #234 | قرنطینه و تأیید منابع درس | AdminCourseController، store_routes.php و تست‌ها | غیر Draft؛ check نهایی باید هنگام ادغام دوباره خوانده شود | به‌عنوان vertical slice دوره با #333/#335 سازگار شود؛ فایل‌های lesson از مسیر Storage واحد استفاده کنند |
 
@@ -795,3 +805,108 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 - PricingRule برای تعرفه تایپ با FarastPricingPolicyVersion یکی نیست؛ این دو باید به‌عنوان دو دامنه قیمت‌گذاری جدا مستند شوند، نه اینکه نام کلی Pricing باعث یکی فرض کردنشان شود.
 - Migration professional_commercial_engine جدول‌های farast_price_quotes و farast_output_authorizations را می‌سازد؛ در سرویس‌های اصلی بررسی‌شده writer/reader قطعی برای farast_output_authorizations و مدل متناظر پیدا نشد. این دو جدول باید با جست‌وجوی کامل call-site در کل repository تعیین تکلیف شوند؛ فعلاً orphan-schema candidate هستند.
 
+
+
+## 17. یافته‌های تکمیلی حاصل از ردیابی Migration، سرویس و مصرف‌کننده
+
+### 17.1 منبع حقیقت تجاری اشتراک
+
+زنجیره واقعی Migration و کد مصرف‌کننده نشان می‌دهد دو نسل schema وجود دارد:
+
+1. `2026_09_29_000006_create_farast_completion_tables.php` ابتدا `farast_plans`، `farast_subscriptions` و `farast_usage_counters` را ایجاد می‌کند. در این نسل، `farast_subscriptions.plan_id` به `farast_plans.id` وصل است.
+2. `2026_10_03_000001_professional_commercial_engine.php` جدول `farast_commercial_plans` را می‌سازد؛ اما چون جدول اشتراک و شمارنده مصرف از قبل وجود دارد، بلوک‌های `if (! Schema::hasTable(...))` برای آن دو جدول اجرا نمی‌شوند.
+3. `2026_10_03_000003_normalize_commercial_runtime.php` ردیف‌های `farast_plans` را به `farast_commercial_plans` منتقل می‌کند و schema اشتراک/شمارنده را توسعه می‌دهد.
+4. نسخه موجود در `main` از `2026_10_03_000004_canonicalize_farast_subscriptions.php` جدول اشتراک قدیمی را rename و سپس drop می‌کند؛ جدول canonical را بدون FK برای `plan_id` می‌سازد و در صورت resolve نشدن plan بعضی ردیف‌ها را از کپی کنار می‌گذارد. این رفتار خطر از دست رفتن تاریخچه اشتراک یا اتصال اشتباه plan در دیتابیس upgrade‌شده را ایجاد می‌کند.
+
+مصرف‌کننده‌های فعال مشاهده‌شده:
+- `ProfessionalCommerceService` با `FarastCommercialPlan` و `FarastSubscription` اشتراک می‌سازد.
+- `SubscriptionEntitlementService` quota را از `FarastCommercialPlan` می‌خواند.
+- `PlatformCompletionController` برای billing، `farast_subscriptions` را به `farast_commercial_plans` join می‌کند.
+- `FarastSubscription` مدل جدول `farast_subscriptions` است؛ مدل فعال `FarastPlan` در مسیر مدل‌ها مشاهده نشد.
+
+**مالکیت canonical فعلی:** `farast_commercial_plans` کاتالوگ طرح و `farast_subscriptions` تاریخچه اشتراک است. `farast_plans` منبع legacy مهاجرت است، نه کاتالوگ فعال فعلی.
+
+**مالک اصلاح در شاخه‌های موجود:** PR #340 نسخه Migration را به staging و preflight غیرمخرب تغییر داده، در صورت plan حل‌نشده پیش از حذف منبع fail می‌کند و Migration بعدی FK اشتراک به `farast_commercial_plans` را با orphan preflight اضافه می‌کند. تست‌های `CommercialSubscriptionMigrationSafetyTest` و `CommerceLedgerForeignKeyTest` نیز اضافه شده‌اند. این اصلاح هنوز در main نیست؛ وضعیت آن باید با CI همان SHA و سپس merge کنترل‌شده تأیید شود.
+
+### 17.2 شکاف باقی‌مانده در شمارنده مصرف تجاری
+
+این مورد در diff فعلی PR #340 نیز پوشش داده نشده است:
+
+- schema اولیه `farast_usage_counters` در Migration پایه دارای `user_id`, `metric`, `used` و unique قدیمی `(user_id, metric, period_start)` است.
+- Migration `professional_commercial_engine` یک schema جدید با unique روی `(scope_key, capability, unit, period_start)` تعریف می‌کند، اما به علت وجود جدول قبلی، create آن skip می‌شود.
+- `normalize_commercial_runtime` ستون‌های `scope_key`, `capability`, `unit`, `quantity` را nullable اضافه و داده legacy را backfill می‌کند، ولی unique constraint متناظر با کلید جدید را اضافه نمی‌کند.
+- `FarastUsageCounter` و `ProfessionalCommerceService::recordUsageCounter` از کلید جدید استفاده می‌کنند و با `firstOrCreate` سپس `increment` شمارنده را به‌روزرسانی می‌کنند.
+
+**ریسک:** دو درخواست هم‌زمان می‌توانند قبل از وجود ردیف، هر دو آن را ایجاد کنند؛ چون unique index روی کلید جدید در schema فعلی تعریف نشده است، حفاظت دیتابیس در برابر duplicate counter وجود ندارد. unique قدیمی بر ستون‌های legacy این رقابت را برای کلید جدید متوقف نمی‌کند.
+
+**اقدام لازم:** preflight تکرار روی tuple جدید، سپس Migration forward برای unique index و تست رقابت/تکرار روی SQLite و MySQL/PostgreSQL. تا اجرای این کار، این مورد به‌عنوان شکاف یکپارچگی مصرف باقی می‌ماند؛ ایجاد counter موازی یا جدول جدید ممنوع است.
+
+### 17.3 سه دفتر رخداد با سه مسئولیت متفاوت
+
+سه جدول زیر نباید در مستندات یا داشبورد به‌عنوان یک دفتر واحد فرض شوند:
+
+| جدول | مالک فعلی مشاهده‌شده | مصرف‌کننده | نقش |
+|---|---|---|---|
+| `audit_logs` | `AuditLogService` | `AdminController`, `AdminPlatformController::audit` | ثبت رویدادهای عملیاتی مدیر و منبع فعلی صفحه ممیزی مدیریت |
+| `farast_audit_events` | `FarastAuditEvent`, `AuditEventService`, `AuditIntegrityService` | سرویس ثبت و verifier زنجیره checksum | دفتر رویداد دامنه با زنجیره checksum |
+| `farast_security_events` | queryهای مستقیم `DB::table` در `AccountSecurityController` و `TrackAuthenticatedSession` | مرکز امنیت حساب و middleware نشست | رخدادهای امنیتی حساب/دستگاه |
+
+نکته مهم: `AdminPlatformController::audit` و شاخص audit داشبورد از `audit_logs` می‌خوانند؛ این صفحه در مسیر مشاهده‌شده `farast_audit_events` را verify یا نمایش نمی‌دهد. `AuditIntegrityService` زنجیره `farast_audit_events` را بررسی می‌کند، اما اتصال عملیاتی آن به صفحه ممیزی مدیریت در مسیرهای بررسی‌شده اثبات نشد. بنابراین «ممیزی مدیریتی قابل مشاهده» و «دفتر checksumدار دامنه» فعلاً دو قابلیت با دو منبع داده‌اند. قبل از یکپارچه‌سازی، call-siteهای کامل `AuditEventService` و سیاست پوشش رخدادهای حساس باید استخراج شود.
+
+### 17.4 قرارداد واقعی جدول رخداد امنیتی
+
+`farast_security_events` نخست در Migration `2026_09_29_000006` ایجاد می‌شود. Migration امنیت حساب `2026_11_10_000005` نیز create-if-missing برای همین نام جدول دارد؛ اما در نصب معمول که جدول از قبل وجود دارد، آن create اجرا نمی‌شود. Migration تعمیر `2026_11_10_000012` هم در صورت وجود جدول، ستون‌های آن را reconcile نمی‌کند.
+
+در کد فعلی، `AccountSecurityController` و `TrackAuthenticatedSession` با Query Builder مستقیماً روی این جدول کار می‌کنند و مدل Eloquent اختصاصی برای آن مشاهده نشد. schema اولیه ستون‌های لازم این مسیرها را دارد؛ بنابراین این مورد فعلاً «مالکیت و تکامل schema چندپاره» است، نه اثبات خطای runtime. مالکیت آینده باید در یک Migration forward واحد تثبیت شود و تست upgrade از دیتابیس قدیمی داشته باشد.
+
+### 17.5 Route ownership: نتیجه تست در CI
+
+در HEAD شاخه ممیزی، `NotificationRouteOwnershipTest` در اجرای Laravel suite واقعاً **PASS** شده است. این تست ثابت می‌کند نام‌های `platform.notifications` و `platform.notifications.read` به `NotificationController@index/read` resolve می‌شوند.
+
+همان اجرای suite در مجموع **۶۰۴ تست موفق و ۵ تست ناموفق** داشته؛ هر پنج شکست در `StoreReaderAccessTest` بوده‌اند (قرارداد streamed response، audio status، PDF preview، CSP و محتوای transcript). بنابراین:
+- تست اختصاصی اصلاح Route اعلان موفق است.
+- suite کامل Laravel هنوز سبز نیست.
+- مراحل بعدی همان job که بعد از `php artisan test` قرار دارند، از جمله `route:list`، در آن run اجرا نشده‌اند.
+- PR #350 برای هم‌راستاسازی تست‌های Reader ایجاد شده؛ روی HEAD جدید آن، FARAST CI و Phase 3 دوباره در صف‌اند و تا نتیجه نهایی نباید آن را سبز فرض کرد.
+
+### 17.6 فهرست Routeها
+
+فهرست declarationهای فعال، به تفکیک فایل، همراه با method، URI نهایی پس از prefix، route name، action، middleware گروه و middleware صریح در فایل زیر ثبت شده است:
+
+- `docs/architecture/ROUTE_OWNERSHIP_INVENTORY.md`
+
+این فایل از Routeهای بارگذاری‌شده توسط `routes/web.php` استخراج شده و `routes/legal.php` orphan را عمداً وارد inventory فعال نمی‌کند. route inventory ایستا است؛ پس از عبور CI از `php artisan route:list` باید با خروجی runtime تطبیق داده شود.
+
+## 18. به‌روزرسانی مالکیت و هم‌پوشانی شاخه‌های جدید
+
+از آخرین snapshot زنده PRهای باز، نقاط تماس جدید زیر نیز به نقشه وابستگی افزوده شدند:
+
+- #357 مالک تغییر stream صوت preview در `StoreController` است و با #335 در Storage overlap دارد.
+- #358 هویت اعلان‌های reply پشتیبانی را در `SupportNotificationService` و `SupportTicketService` اصلاح می‌کند؛ dedupe باید فقط retry همان رخداد را یکی کند، نه دو پاسخ مجزا را.
+- #359 یک اصلاح محدود در `RestoreStorageBackup` برای ترتیب ورودی ZIP دارد و باید در تست restore ذخیره‌سازی دیده شود.
+- #360 مصرف‌کننده client-side ذخیره‌سازی Reader را در IndexedDB اصلاح می‌کند؛ نباید منبع مجوز یا metadata سرور را تغییر دهد.
+- #361 پیشرفت دوره را به نمای CRM اضافه می‌کند و `StoreCourseProgressService` را معرفی می‌کند؛ منبع پیشرفت باید همان enrollment/progress فعلی باشد، نه جدول timeline مستقل.
+- #352 تست‌های E2E واقعی محصول/پشتیبانی را هدف می‌گیرد؛ پس از تثبیت مسیرهای intake و پشتیبانی باید به‌عنوان تست پذیرش یکپارچه استفاده شود.
+
+این شاخه‌ها تغییر داده نشده‌اند. ترتیب و مالکیت فوق برای جلوگیری از ویرایش هم‌زمان فایل‌های `StoreController`, `SupportTicketService`, `StoreCourseLearningController` و `RestoreStorageBackup` ثبت شده است.
+
+## 19. وضعیت پذیرش مرحله دوم پس از ممیزی عمیق‌تر
+
+مواردی که اکنون شواهد قابل استناد دارند:
+- ترکیب ورودی و Providerها؛
+- inventory ایستای Routeهای فعال و تعارض‌های واقعی؛
+- مالکیت اولیه جدول/مدل/سرویس/کنترلر در تمام دامنه‌های اصلی؛
+- ERD سطح اول و روابط FK صریح/ارجاع‌های بدون FK؛
+- جریان‌های محصول، خرید، Storage، پشتیبانی، پیام‌رسان و Workflow؛
+- تفکیک سه دفتر audit/security؛
+- ریسک‌های migration و شاخه‌های باز هم‌پوشان.
+
+مواردی که هنوز معیار «پایان» را می‌بندند:
+1. اجرای `php artisan route:list` روی HEAD نهایی و تطبیق با inventory؛
+2. اجرای `migrate:status` و مقایسه schema واقعی SQLite/MySQL/PostgreSQL با ERD؛
+3. اجرای suite کامل پس از رفع شکست‌های Reader؛
+4. تکمیل call-site inventory برای دسترسی مستقیم `DB::table`, `Storage::disk`, `Gate/authorize` و سرویس‌های audit؛
+5. تعیین تکلیف unique index شمارنده‌های مصرف؛
+6. تأیید آخرین PRهای دارای migration و سپس به‌روزرسانی این سند روی آخرین main.
+
+**وضعیت نهایی این مرحله در این snapshot: ممیزی معماری و منابع حقیقت به سطح مستندات و شواهد کد رسیده، اما پذیرش runtime هنوز باز است. هیچ refactor گسترده‌ای بر مبنای این snapshot مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
