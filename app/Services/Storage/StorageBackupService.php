@@ -83,7 +83,7 @@ class StorageBackupService
                     if (! is_string($remoteChecksum) || ! hash_equals($checksum, $remoteChecksum)) {
                         throw new RuntimeException('Checksum نسخه پشتیبان پس از انتقال با فایل اصلی مطابقت ندارد.');
                     }
-                    DB::transaction(function () use ($run, $objectKey, $checksum, $reservationKey): void {
+                    DB::transaction(function () use ($run, $objectKey, $checksum, $reservationKey, $archivePath): void {
                         $run->update([
                             'status' => 'completed',
                             'object_key' => $objectKey,
