@@ -184,7 +184,7 @@ class StorageBackupService
                 'pg_dump', '--host='.(string) ($config['host'] ?? '127.0.0.1'),
                 '--port='.(string) ($config['port'] ?? '5432'),
                 '--username='.(string) ($config['username'] ?? ''),
-                '--format=plain', '--no-owner', '--no-privileges',
+                '--format=plain', '--no-owner', '--no-privileges', '--clean', '--if-exists',
                 '--file='.$dump,
                 (string) ($config['database'] ?? ''),
             ];
