@@ -194,7 +194,7 @@ class WorkflowEngine
             throw new \InvalidArgumentException('Workflow event requires a valid user_id.');
         }
         if (! Schema::hasTable('farast_workflow_events')) {
-            throw new \\RuntimeException('Workflow event ledger is not installed; refusing to lose a domain event.');
+            throw new \RuntimeException('Workflow event ledger is not installed; refusing to lose a domain event.');
         }
 
         $allowedContextFields = WorkflowConditionEvaluator::FIELDS;
