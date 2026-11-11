@@ -109,9 +109,10 @@ class StorageBackupRecoveryTest extends TestCase
 
         $backupRun = StorageBackupRun::query()
             ->where('source_name', 'application')
-            ->where('status', 'completed')
             ->latest('id')
-            ->firstOrFail();
+            ->first();
+        $this->assertNotNull($backupRun, 'StorageBackupService did not create an application backup run.');
+        $this->assertSame('completed', $backupRun->status, (string) $backupRun->error_message);
 
         $verifyExitCode = Artisan::call('storage:verify-backup', ['runId' => $backupRun->id]);
         $this->assertSame(0, $verifyExitCode, Artisan::output());
