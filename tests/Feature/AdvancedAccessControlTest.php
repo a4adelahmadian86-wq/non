@@ -329,7 +329,9 @@ class AdvancedAccessControlTest extends TestCase
         $other = $this->user('09140000132');
 
         $this->actingAs($admin);
-        request()->attributes->set('farast.scope', 'own');
+        $request = request();
+        $request->setUserResolver(fn () => $admin);
+        $request->attributes->set('farast.scope', 'own');
 
         $authorization = app(AuthorizationService::class);
         $this->assertTrue($authorization->allows($admin, 'documents.view'));
