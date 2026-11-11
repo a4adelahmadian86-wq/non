@@ -22,6 +22,7 @@ if [ "$ACTUAL_SHA256" != "$PDFJS_ARCHIVE_SHA256" ]; then
   echo "PDF.js archive checksum mismatch: expected $PDFJS_ARCHIVE_SHA256, received $ACTUAL_SHA256" >&2
   exit 1
 fi
+echo "Verified PDF.js release archive: $PDFJS_VERSION ($ACTUAL_SHA256)"
 
 mkdir -p "$DIST_DIR"
 unzip -q "$ARCHIVE_PATH" -d "$DIST_DIR"
