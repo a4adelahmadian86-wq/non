@@ -768,6 +768,7 @@ class AdminController extends Controller
     public function toggleUser(User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_if($user->isAdmin(), 403);
+        abort_if((int) $user->id === (int) auth()->id(), 422, 'نمی‌توانید حساب خودتان را مسدود کنید.');
         // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
         $console->authorizeAction(auth()->user(), 'users', $user->id, 'users.suspend');
 
@@ -992,7 +993,8 @@ class AdminController extends Controller
     public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
     {
         abort_if($user->isAdmin(), 403);
-        $console->authorizeAction($r->user(), 'users', $user->id, 'users.edit');
+        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
+        $console->authorizeAction($r->user(), 'users', $user->id, 'users.capabilities.manage');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1024,6 +1026,7 @@ class AdminController extends Controller
     public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
+        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر موجودی کیف پول خودتان مجاز نیست.');
         $console->authorizeAction($r->user(), 'finance', $user->id, 'finance.manage');
 
         $d = $r->validate([
