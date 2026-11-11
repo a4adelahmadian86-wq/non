@@ -613,10 +613,8 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'user_id' => $owner->id,
             'type' => 'workflow',
         ]);
-        $this->assertDatabaseHas('farast_workflow_runs', [
-            'workflow_id' => $workflow,
-            'status' => 'failed',
-        ]);
+        // A worker with a stale token cannot even register a new execution run.
+        $this->assertDatabaseCount('farast_workflow_runs', 0);
     }
 
     public function test_duplicate_idempotency_key_cannot_mutate_the_original_outbox_payload(): void
