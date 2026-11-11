@@ -154,6 +154,25 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::get('/editor/voice/status',[VoiceController::class,'voiceStatus'])->middleware(['throttle:60,1','web'])->name('editor.voice.status');
+Route::get('/editor/voice/health',function(){
+    $gateway=rtrim(trim((string)config('services.ai_gateway.url','')),'/');
+    if($gateway==='')return response()->json(['status'=>'unavailable'],503,['Cache-Control'=>'no-store']);
+    try{
+        $upstream=\\Illuminate\\Support\\Facades\\Http::acceptJson()->connectTimeout(4)->timeout(12)->get($gateway.'/health');
+        $data=$upstream->json();
+        $ready=$upstream->successful()&&is_array($data)&&($data['status']??null)==='ok'
+            &&($data['asr_configured']??false)===true&&($data['tts_configured']??false)===true&&($data['chat_configured']??false)===true;
+        return response()->json([
+            'status'=>$ready?'ok':'unavailable',
+            'asr_configured'=>(bool)($data['asr_configured']??false),
+            'tts_configured'=>(bool)($data['tts_configured']??false),
+            'chat_configured'=>(bool)($data['chat_configured']??false),
+        ],$ready?200:503,['Cache-Control'=>'no-store']);
+    }catch(\\Throwable $e){
+        \\Illuminate\\Support\\Facades\\Log::warning('Voice gateway health proxy failed',['exception'=>get_class($e)]);
+        return response()->json(['status'=>'unavailable'],503,['Cache-Control'=>'no-store']);
+    }
+})->middleware(['auth','throttle:60,1','web'])->name('editor.voice.health');
 Route::post('/editor/voice/stream-config',[VoiceController::class,'streamConfig'])->middleware('throttle:120,1')->name('editor.voice.stream-config');
 Route::post('/editor/voice/provider-config',[VoiceController::class,'streamProviderConfig'])->middleware('throttle:120,1')->name('editor.voice.provider-config');
 Route::post('/editor/voice/stream-usage',[VoiceController::class,'streamUsage'])->middleware('throttle:120,1')->name('editor.voice.stream-usage');
