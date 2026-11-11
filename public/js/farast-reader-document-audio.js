@@ -11,9 +11,11 @@
   const pollUrl = root.dataset.readerAudioPollUrl || '';
   const audioStatus = root.dataset.readerAudioStatus || '';
 
-  if (pendingStatus && audioStatus === 'unavailable' && !url) {
+  if (pendingStatus && !url && ['unavailable', 'failed'].includes(audioStatus)) {
     pendingStatus.hidden = false;
-    pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+    pendingStatus.textContent = audioStatus === 'failed'
+      ? 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.'
+      : 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
   }
 
   if (pendingStatus && pollUrl && ['pending', 'upgrading'].includes(audioStatus)) {
