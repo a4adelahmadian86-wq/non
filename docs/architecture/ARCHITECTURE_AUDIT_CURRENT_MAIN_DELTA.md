@@ -306,7 +306,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
 
-### 8.1 دو تعریف ناسازگار برای Publication Review
+### 10.1 دو تعریف ناسازگار برای Publication Review
 
 | مورد | PR #262 | PR #333 |
 |---|---|---|
@@ -321,7 +321,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 هر دو Migration با `Schema::create('store_product_publication_reviews')` شروع می‌شوند و هر دو همان نام مدل PHP را تعریف می‌کنند، اما schema و state machine آن‌ها متفاوت است. ادغام هر دو به‌صورت مستقل باعث شکست migration دوم و overwrite معنای مدل/فیلدها می‌شود.
 
-### 8.2 دو قرارداد intake و antivirus روی ingestion
+### 10.2 دو قرارداد intake و antivirus روی ingestion
 
 - PR #262 فایل‌محور است و `StoreProductIngestion` را با `product_id` nullable و `relative_path` گسترش می‌دهد.
 - PR #333 یک aggregate جدید `StoreProductIntakeSession` و `StoreProductIntakeFile` ایجاد می‌کند؛ این‌ها staging، نوع محصول، فایل‌های intake و supervisor review را نگه می‌دارند.
@@ -330,7 +330,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 دو Migration antivirus در هر دو، همین پنج ستون را به `store_product_ingestions` اضافه می‌کنند: `antivirus_requested`, `antivirus_status`, `antivirus_engine`, `antivirus_version`, `antivirus_scanned_at`. هر دو مجوز `store.security_scan` را نیز در کاتالوگ ثبت می‌کنند؛ PR #318 علاوه بر آن `store.publish_products` را اضافه می‌کند. اجرای هر دو Migration روی یک دیتابیس به افزودن مجدد ستون‌ها می‌رسد.
 
-### 8.3 هم‌پوشانی اجرایی
+### 10.3 هم‌پوشانی اجرایی
 
 | PR | نقش پیشنهادی در خوشه | فایل‌های مشترک/حساس |
 |---|---|---|
@@ -351,7 +351,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 این jobها به یک supervisor و یک محصول اشاره می‌کنند، اما ورودی، رکورد state و قرارداد خروجی یکسانی ندارند. `ProcessProductDocument` باید همان job پردازش سند باقی بماند؛ AI review فایل و publication نباید آن را با pipeline مستقل دیگری جایگزین کنند.
 
-### 8.4 تصمیم معماری لازم
+### 10.4 تصمیم معماری لازم
 
 **منبع حقیقت فعلی در main:**
 - کاتالوگ و هویت محصول: `StoreProduct`.
