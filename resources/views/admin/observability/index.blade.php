@@ -36,6 +36,7 @@
                             @case('database') پایگاه داده @break
                             @case('queue') صف و پردازش پس‌زمینه @break
                             @case('storage') ذخیره‌سازی @break
+                            @case('product_services') سرویس‌های پردازش محصول و صوت @break
                             @default ثبت لاگ
                         @endswitch
                     </h2>
@@ -53,6 +54,17 @@
                 </dl>
                 @if(is_array($component['volumes'] ?? null))
                     <p class="mt-3 text-sm">Volumeها: {{ $component['volumes']['healthy'] }} سالم از {{ $component['volumes']['total'] }} · غیرسالم/تأییدنشده: {{ $component['volumes']['unhealthy_or_unverified'] }}</p>
+                @endif
+
+                @if(is_array($component['services'] ?? null))
+                    <div class="mt-3 space-y-2 text-sm">
+                        @foreach($component['services'] as $serviceKey => $service)
+                            <div class="flex items-center justify-between gap-3">
+                                <span>{{ $serviceKey === 'supervisor' ? 'ناظر پردازش محصول' : 'پردازش صوت اسناد' }}</span>
+                                <span>{{ $service['status'] ?? 'unknown' }}</span>
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </section>
         @endforeach
