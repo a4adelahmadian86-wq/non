@@ -83,6 +83,7 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
 function makePdfFixture(pageCount = 1, withAnnotations = false) {
   const annotationId = 3 + pageCount * 3;
   const widgetId = annotationId + 1;
+  const internalLinkId = annotationId + 2;
   const objects = [
     withAnnotations
       ? '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [' + widgetId + ' 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >>'
@@ -94,13 +95,16 @@ function makePdfFixture(pageCount = 1, withAnnotations = false) {
     const fontId = pageId + 1;
     const streamId = pageId + 2;
     const stream = 'BT /F1 24 Tf 72 720 Td (FARAST PDF PAGE ' + page + ') Tj ET';
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ' + fontId + ' 0 R >> >> /Contents ' + streamId + ' 0 R ' + (page === 1 && withAnnotations ? '/Annots [' + annotationId + ' 0 R ' + widgetId + ' 0 R]' : '') + ' >>');
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ' + fontId + ' 0 R >> >> /Contents ' + streamId + ' 0 R ' + (page === 1 && withAnnotations ? '/Annots [' + annotationId + ' 0 R ' + widgetId + ' 0 R' + (pageCount > 1 ? ' ' + internalLinkId + ' 0 R' : '') + ']' : '') + ' >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream');
   }
   if (withAnnotations) {
     objects.push('<< /Type /Annot /Subtype /Link /Rect [72 700 240 735] /Border [0 0 0] /A << /S /URI /URI (https://example.com/reader-fixture) >> /F 4 /P 3 0 R >>');
     objects.push('<< /Type /Annot /Subtype /Widget /FT /Tx /T (ReaderName) /V (Initial) /Rect [72 640 260 675] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>');
+    if (pageCount > 1) {
+      objects.push('<< /Type /Annot /Subtype /Link /Rect [72 590 240 625] /Border [0 0 0] /Dest [6 0 R /Fit] /F 4 /P 3 0 R >>');
+    }
   }
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
@@ -162,7 +166,7 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
 }
 
 test('PDF annotations expose safe external links and interactive AcroForm text fields', async ({ page }) => {
-  await mountPdfReader(page, 1, true);
+  await mountPdfReader(page, 2, true);
   const root = page.locator('[data-reader-root]');
   await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
 
@@ -170,6 +174,11 @@ test('PDF annotations expose safe external links and interactive AcroForm text f
   await expect(link).toHaveAttribute('href', 'https://example.com/reader-fixture');
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', /noopener/);
+
+  const internalLink = root.locator('.farast-pdf-annotation-layer .linkAnnotation a[href^="#"]').first();
+  await expect(internalLink).toBeVisible();
+  await internalLink.click();
+  await expect(root.locator('#reader-page-number')).toHaveValue('2');
 
   const field = root.locator('.farast-pdf-annotation-layer input').first();
   await expect(field).toHaveValue('Initial');
