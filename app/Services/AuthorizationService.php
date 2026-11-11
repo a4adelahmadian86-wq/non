@@ -180,8 +180,8 @@ class AuthorizationService
         string $scope,
         ?int $organizationId = null,
         ?int $teamId = null,
-        ?\\DateTimeInterface $startsAt = null,
-        ?\\DateTimeInterface $expiresAt = null,
+        ?\DateTimeInterface $startsAt = null,
+        ?\DateTimeInterface $expiresAt = null,
         ?Request $request = null,
     ): object {
         abort_unless(in_array($scope, self::SCOPES, true), 422, 'محدوده دسترسی معتبر نیست.');
@@ -226,8 +226,8 @@ class AuthorizationService
         string $scope,
         ?int $organizationId = null,
         ?int $teamId = null,
-        ?\\DateTimeInterface $startsAt = null,
-        ?\\DateTimeInterface $expiresAt = null,
+        ?\DateTimeInterface $startsAt = null,
+        ?\DateTimeInterface $expiresAt = null,
         ?Request $request = null,
     ): object {
         abort_unless(in_array($effect, ['allow', 'deny'], true), 422, 'نوع مجوز مستقیم معتبر نیست.');
@@ -329,7 +329,7 @@ class AuthorizationService
             if ($teamId === null || ! $subject->teams()->whereKey($teamId)->exists()) {
                 return false;
             }
-            $teamOrganizationId = \\App\\Models\\Team::query()->whereKey($teamId)->value('organization_id');
+            $teamOrganizationId = \App\Models\Team::query()->whereKey($teamId)->value('organization_id');
 
             if ($teamOrganizationId === null
                 || ($organizationId !== null && $organizationId !== (int) $teamOrganizationId)) {
@@ -345,7 +345,7 @@ class AuthorizationService
             }
 
             return $actorScope === 'organization'
-                || \\App\\Models\\Team::query()
+                || \App\Models\Team::query()
                     ->whereKey($teamId)
                     ->where('supervisor_id', $actor->id)
                     ->exists()
@@ -367,7 +367,7 @@ class AuthorizationService
                 ->wherePivot('team_role', 'manager')
                 ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
                 ->exists()
-                || \\App\\Models\\Team::query()
+                || \App\Models\Team::query()
                     ->where('supervisor_id', $actor->id)
                     ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
                     ->exists();
