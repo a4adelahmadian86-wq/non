@@ -88,6 +88,7 @@ class StorageBackupService
                             'status' => 'completed',
                             'object_key' => $objectKey,
                             'completed_at' => now(),
+                            'size_bytes' => (int) filesize($archivePath),
                             'metadata' => ['sha256' => $checksum, 'encrypted' => true, 'encryption' => 'Zip AES-256'],
                         ]);
                         $this->storage->commitVolumeCapacityReservation((string) $reservationKey);
