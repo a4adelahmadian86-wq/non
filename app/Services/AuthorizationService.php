@@ -267,9 +267,9 @@ class AuthorizationService
         if ($scope === 'team') {
             $teamIds = $teamId !== null
                 ? collect([(int) $teamId])
-                : \\App\\Models\\Team::query()
+                : \App\Models\Team::query()
                     ->where('supervisor_id', $user->id)
-                    ->orWhereHas('members', fn ($query) => $query->where('users.id', $user->id)->wherePivot('team_role', 'manager'))
+                    ->orWhereHas('members', fn ($query) => $query->where('users.id', $user->id)->where('team_user.team_role', 'manager'))
                     ->pluck('id');
 
             if ($teamIds->isEmpty()) {
