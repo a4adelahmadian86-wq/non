@@ -117,20 +117,20 @@ function makePdfAnnotationFixture() {
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R /Annots [6 0 R 7 0 R] >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\\nstream\\n' + stream + '\\nendstream',
+    '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream',
     '<< /Type /Annot /Subtype /Link /Rect [72 700 260 740] /Border [0 0 0] /A << /S /URI /URI (https://example.com/) >> >>',
     '<< /Type /Annot /Subtype /Widget /FT /Tx /T (readerField) /TU (Reader test field) /V (Initial value) /Rect [72 650 300 682] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>'
   ];
-  let pdf = '%PDF-1.4\\n';
+  let pdf = '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(pdf, 'binary'));
-    pdf += (index + 1) + ' 0 obj\\n' + object + '\\nendobj\\n';
+    pdf += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
   });
   const xrefOffset = Buffer.byteLength(pdf, 'binary');
-  pdf += 'xref\\n0 ' + (objects.length + 1) + '\\n0000000000 65535 f \\n';
-  offsets.slice(1).forEach(offset => { pdf += String(offset).padStart(10, '0') + ' 00000 n \\n'; });
-  pdf += 'trailer\\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\\nstartxref\\n' + xrefOffset + '\\n%%EOF';
+  pdf += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+  offsets.slice(1).forEach(offset => { pdf += String(offset).padStart(10, '0') + ' 00000 n \n'; });
+  pdf += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
   return Buffer.from(pdf, 'binary');
 }
 
