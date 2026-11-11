@@ -27,11 +27,11 @@ echo "Verified PDF.js release archive: $PDFJS_VERSION ($ACTUAL_SHA256)"
 mkdir -p "$DIST_DIR"
 unzip -q "$ARCHIVE_PATH" -d "$DIST_DIR"
 
-BUILD_FILE="$(find "$DIST_DIR" -type f \\( -path '*/legacy/build/pdf.mjs' -o -path '*/build/pdf.mjs' \\) -print -quit)"
+BUILD_FILE="$(find "$DIST_DIR" -type f \( -path '*/legacy/build/pdf.mjs' -o -path '*/build/pdf.mjs' \) -print -quit)"
 BUILD_DIR="${BUILD_FILE%/pdf.mjs}"
 if [ -z "$BUILD_FILE" ] || [ ! -s "$BUILD_DIR/pdf.mjs" ] || [ ! -s "$BUILD_DIR/pdf.worker.mjs" ]; then
   echo "Verified PDF.js archive is missing its legacy display or worker build." >&2
-  unzip -Z1 "$ARCHIVE_PATH" | grep -E 'build/pdf\\.mjs|build/pdf\\.worker\\.mjs' | head -80 >&2 || true
+  unzip -Z1 "$ARCHIVE_PATH" | grep -E 'build/pdf\.mjs|build/pdf\.worker\.mjs' | head -80 >&2 || true
   exit 1
 fi
 
