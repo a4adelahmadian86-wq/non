@@ -207,6 +207,46 @@ class UnifiedAuthorizationTest extends TestCase
         self::assertFalse(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
     }
 
+    public function test_team_scoped_access_manager_cannot_delegate_into_another_team(): void
+    {
+        $organization = Organization::create(['name' => 'Delegation', 'slug' => 'delegation', 'status' => 'active']);
+        $teamA = Team::create(['organization_id' => $organization->id, 'name' => 'Team A', 'slug' => 'team-a']);
+        $teamB = Team::create(['organization_id' => $organization->id, 'name' => 'Team B', 'slug' => 'team-b']);
+        $manager = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $memberA = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $memberB = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $manager->teams()->attach($teamA->id, ['team_role' => 'manager']);
+        $memberA->teams()->attach($teamA->id, ['team_role' => 'employee']);
+        $memberB->teams()->attach($teamB->id, ['team_role' => 'employee']);
+
+        $accessPermission = $this->permission('access.manage');
+        RolePermission::firstOrCreate(['role' => 'team_admin', 'permission_id' => $accessPermission->id]);
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => 'team_admin',
+            'name' => 'Team administrator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $manager->id,
+            'role_id' => $roleId,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $teamA->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $authorization = app(AuthorizationService::class);
+        $assignment = $authorization->assignRole($manager, $memberA, 'employee', 'own');
+        self::assertSame($memberA->id, (int) $assignment->user_id);
+
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $authorization->assignRole($manager, $memberB, 'employee', 'own');
+    }
+
     public function test_direct_permission_grant_and_revocation_are_audited(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
