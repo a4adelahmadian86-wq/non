@@ -7,6 +7,10 @@ use App\Models\StoreProduct;
 
 class ProductSupervisorSnapshotBuilder
 {
+    public function __construct(private readonly ProductKnowledgeService $knowledge)
+    {
+    }
+
     public function build(StoreProduct $product, array $settings): array
     {
         $product->loadMissing(['category', 'tags']);
@@ -96,7 +100,7 @@ class ProductSupervisorSnapshotBuilder
     public function buildReviewSnapshot(StoreProduct $product, array $settings): array
     {
         $snapshot = $this->build($product, $settings);
-        $snapshot['document_knowledge'] = app(ProductKnowledgeService::class)
+        $snapshot['document_knowledge'] = $this->knowledge
             ->contextForProduct($product, 12000);
 
         return $snapshot;
