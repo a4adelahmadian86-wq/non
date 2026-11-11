@@ -38,7 +38,8 @@ class PaymentController extends Controller
         $total = max(0, $gross - $depositCredit);
         $hash = hash('sha256', (string) $document->content);
 
-        $order = Order::create([
+        $idempotencyKey = 'typing-document-'.$request->user()->id.'-'.$document->id.'-'.$hash;
+        $order = Order::firstOrCreate(['idempotency_key' => $idempotencyKey], [
             'user_id' => auth()->id(),
             'document_id' => $document->id,
             'subtotal_rials' => $subtotal,
@@ -59,6 +60,10 @@ class PaymentController extends Controller
             'free_pages_applied' => $freeApplied,
             'terms_accepted_at' => now(),
         ]);
+
+        if ($order->isPaid()) {
+            return redirect()->route('library')->with('status', 'این سند قبلاً تسویه شده است.');
+        }
 
         return redirect()->route('checkout', $order);
     }
@@ -153,7 +158,7 @@ class PaymentController extends Controller
                     $free->consume(auth()->user(), $freeApplied, $this->freePagesSetting());
                 }
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-typing-final-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $total,
@@ -284,7 +289,7 @@ class PaymentController extends Controller
 
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-store-order-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $total,
@@ -384,7 +389,7 @@ class PaymentController extends Controller
                     ]);
                 }
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-typing-deposit-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $amount,

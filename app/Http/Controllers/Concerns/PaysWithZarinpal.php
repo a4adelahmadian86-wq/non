@@ -38,7 +38,9 @@ trait PaysWithZarinpal
                 abort_unless((int) $locked->total_rials === $amount, 409, 'مبلغ سفارش تغییر کرده است.');
 
                 $locked->update(['status' => 'gateway_pending']);
+                $attemptNumber = Payment::query()->where('order_id', $locked->id)->where('gateway', 'zarinpal')->count() + 1;
                 $attempt = Payment::create([
+                    'idempotency_key' => 'zarinpal-order-'.$locked->id.'-attempt-'.$attemptNumber,
                     'order_id' => $locked->id,
                     'gateway' => 'zarinpal',
                     'amount_rials' => $amount,
