@@ -9,6 +9,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FinancialIdempotencyAndRetentionTest extends TestCase
@@ -146,6 +147,26 @@ class FinancialIdempotencyAndRetentionTest extends TestCase
             'id' => $transaction->id,
             'description' => 'Immutable ledger test',
         ]);
+        try {
+            DB::table('wallet_transactions')->where('id', $transaction->id)->update(['description' => 'query-builder tampering']);
+            $this->fail('Database constraints must reject query-builder updates to wallet ledger entries.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('wallet_transactions', [
+                'id' => $transaction->id,
+                'description' => 'Immutable ledger test',
+            ]);
+        }
+
+        try {
+            DB::table('wallet_transactions')->where('id', $transaction->id)->delete();
+            $this->fail('Database constraints must reject query-builder deletes of wallet ledger entries.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('wallet_transactions', [
+                'id' => $transaction->id,
+                'description' => 'Immutable ledger test',
+            ]);
+        }
+
     }
 
     public function test_account_with_order_history_cannot_be_deleted(): void
