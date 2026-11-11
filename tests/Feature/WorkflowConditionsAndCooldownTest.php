@@ -703,4 +703,53 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_queue_job_terminal_failure_is_persisted_without_overwriting_completed_events(): void
+    {
+        $owner = $this->owner('09140000238');
+        $failedEventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'terminal-job-failure:document:238',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 238, 'revision' => 1]),
+            'status' => 'processing',
+            'attempts' => 4,
+            'matched_workflows' => 1,
+            'failed_workflows' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new ProcessWorkflowEvent($failedEventId))->failed(new \\RuntimeException('terminal provider failure'));
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $failedEventId,
+            'status' => 'failed',
+            'attempts' => 5,
+            'error_summary' => 'terminal provider failure',
+        ]);
+        $this->assertNotNull(DB::table('farast_workflow_events')->where('id', $failedEventId)->value('failed_at'));
+
+        $completedEventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'completed-job-guard:document:238',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 238, 'revision' => 2]),
+            'status' => 'completed',
+            'attempts' => 1,
+            'matched_workflows' => 0,
+            'failed_workflows' => 0,
+            'processed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new ProcessWorkflowEvent($completedEventId))->failed(new \\RuntimeException('late queue callback'));
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $completedEventId,
+            'status' => 'completed',
+            'attempts' => 1,
+        ]);
+    }
+
 }
