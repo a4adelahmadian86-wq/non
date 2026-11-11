@@ -3,6 +3,7 @@
 @php($isEdit = $product->exists)
 @php($intakeMode = $intakeMode ?? false)
 @php($intakeSession = $intakeSession ?? null)
+@php($publicationWorkflow = (array) data_get($product->metadata, 'publication_workflow', []))
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
     <div class="store-section-head">
@@ -29,12 +30,35 @@
         <p>این بررسی وضعیت واقعی اطلاعات ذخیره‌شده را نشان می‌دهد. کنترل نهایی انتشار همچنان در سرور انجام می‌شود.</p>
       </section>
     @endif
+    @if($isEdit && in_array($publicationWorkflow['status'] ?? null, ['awaiting_admin_approval', 'awaiting_manual_approval'], true))
+      <section class="store-panel product-publication-review" aria-labelledby="publication-review-title">
+        <div class="product-editor-heading"><div><span>دروازه انتشار</span><h2 id="publication-review-title">تصمیم ناظر و تأیید مدیر</h2></div><span class="product-editor-step">{{ ($publicationWorkflow['status'] ?? '') === 'awaiting_manual_approval' ? 'نیازمند بررسی انسانی' : 'تأیید نهایی مدیر' }}</span></div>
+        <p>{{ ($publicationWorkflow['status'] ?? '') === 'awaiting_manual_approval' ? 'ناظر هوشمند محصول را تأیید نکرده یا اصلاح خواسته است. این وضعیت هرگز به انتشار خودکار منجر نمی‌شود و فقط پس از بررسی انسانی و ثبت دلیل می‌توان تصمیم نهایی گرفت.' : 'ناظر هوشمند محصول را تأیید کرده است؛ با این حال انتشار خودکار برای ارسال‌کننده مجاز نبوده و تأیید مدیر لازم است.' }}</p>
+        @if(filled($publicationWorkflow['review_summary'] ?? null))<blockquote>{{ $publicationWorkflow['review_summary'] }}</blockquote>@endif
+        @if(!empty($publicationWorkflow['review_findings']))
+          <ul>@foreach($publicationWorkflow['review_findings'] as $finding)<li>{{ is_array($finding) ? ($finding['message'] ?? $finding['title'] ?? json_encode($finding, JSON_UNESCAPED_UNICODE)) : $finding }}</li>@endforeach</ul>
+        @endif
+        @if(!empty($publicationWorkflow['publication_blockers']))
+          <div class="store-alert error"><strong>موانع فنی:</strong> {{ implode(' · ', $publicationWorkflow['publication_blockers']) }}</div>
+        @endif
+        @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.publish_products'))
+          <form method="post" action="{{ route('admin.store.publication.manual-approve', $product) }}" class="product-file-upload" onsubmit="return confirm('تأیید انسانی شما ثبت و محصول منتشر می‌شود. آیا بررسی کامل انجام شده است؟')">
+            @csrf
+            <label class="product-field product-field-wide">دلیل و مستند تأیید انسانی *<textarea name="reason" required minlength="10" maxlength="1000" rows="3" placeholder="یادداشت کنید چه مواردی را بررسی کردید و چرا تصمیم به انتشار گرفته‌اید."></textarea></label>
+            <button type="submit" class="store-primary-btn">ثبت تأیید انسانی و انتشار</button>
+          </form>
+        @else
+          <p class="product-help">حساب فعلی مجوز انتشار دستی ندارد؛ درخواست باید به مدیر دارای مجوز ارجاع شود.</p>
+        @endif
+      </section>
+    @endif
 
     <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
       @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
+      @elseif($intakeMode)<a href="#product-identity"><span>۴</span><b>فایل‌ها</b><small>بررسی‌شده</small></a>
       @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
       <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
       <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
@@ -271,7 +295,7 @@
 
       <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : ($intakeMode ? 'ثبت محصول و ارسال به صف بررسی' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل') }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : ($intakeMode ? 'محصول ابتدا خصوصی ثبت می‌شود و تا پایان بررسی ناظر و تأیید مجاز منتشر نخواهد شد.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.') }}</span></div>
     </form>
-    @if(!$isEdit && $product->type !== 'course')
+    @if(!$isEdit && !$intakeMode && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
         <div class="product-editor-heading"><div><span>گام چهارم · فایل اصلی</span><h2 id="product-upload-step-title">انتخاب و بارگذاری فایل محصول</h2></div><span class="product-editor-step">مرحله بعد از ذخیره</span></div>
         <p>برای اینکه فایل به همین محصول متصل شود و در فضای خصوصی قرنطینه، بررسی و پردازش شود، ابتدا پیش‌نویس محصول را ذخیره کنید. بلافاصله پس از ذخیره، به همین بخش در صفحه محصول منتقل می‌شوید و می‌توانید یک یا چند فایل را انتخاب کنید.</p>
