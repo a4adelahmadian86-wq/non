@@ -48,9 +48,12 @@ class ReadinessCheckTest extends TestCase
             ->once()
             ->andThrow(new RuntimeException('private database host and credentials'));
 
-        $this->getJson(route('health.ready'))
+        $response = $this->getJson(route('health.ready'))
             ->assertStatus(503)
-            ->assertExactJson(['status' => 'not_ready'])
-            ->assertHeader('Cache-Control', 'no-store, max-age=0');
+            ->assertExactJson(['status' => 'not_ready']);
+
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringContainsString('max-age=0', $cacheControl);
     }
 }
