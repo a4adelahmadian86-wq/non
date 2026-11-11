@@ -193,6 +193,23 @@ class CrmController extends Controller
                 'created_at' => $download->created_at,
             ]);
 
+        $documentVersions = FarastDocumentVersion::query()
+            ->whereHas('document', fn ($query) => $query->where('user_id', $user->id))
+            ->with(['document:id,title,project_id', 'user:id,name'])
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map(fn (FarastDocumentVersion $version) => [
+                'type' => 'farast_document_version',
+                'id' => $version->id,
+                'document_id' => $version->document_id,
+                'document_title' => $version->document?->title,
+                'project_id' => $version->document?->project_id,
+                'label' => $version->label,
+                'editor_name' => $version->user?->name,
+                'created_at' => $version->created_at,
+            ]);
+
         $courseEnrollments = StoreCourseEnrollment::query()
             ->with(['product:id,title', 'libraryItem:id,revoked_at', 'course.sections.lessons', 'progress'])
             ->where('user_id', $user->id)
@@ -261,7 +278,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($courseEnrollments)->concat($ticketMessages)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($documentVersions)->concat($courseEnrollments)->concat($ticketMessages)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
