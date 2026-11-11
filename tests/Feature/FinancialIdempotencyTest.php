@@ -27,6 +27,28 @@ class FinancialIdempotencyTest extends TestCase
         ]);
     }
 
+    public function test_models_generate_fallback_idempotency_keys(): void
+    {
+        $user = User::factory()->create();
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 1000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 1000,
+            'status' => 'pending',
+        ]);
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'wallet',
+            'amount_rials' => 1000,
+            'status' => 'pending',
+        ]);
+
+        self::assertNotEmpty($order->idempotency_key);
+        self::assertNotEmpty($payment->idempotency_key);
+    }
+
     public function test_order_idempotency_key_is_unique_across_users(): void
     {
         $first = User::factory()->create();
