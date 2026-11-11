@@ -1186,3 +1186,15 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 - ۱ Route گزارش پشتیبانی با نام `admin.support.report`.
 
 برای Store Admin، نبود section gate با نبود guard داخلی یکپارچه در Controllerهای CRUD/review همراه است و ریسک دسترسی واقعی دارد. برای گزارش پشتیبانی، guard داخلی `isAdmin()` وجود دارد اما با RBAC مرکزی هم‌راستا نیست. این دو مورد باید جداگانه و با آزمون منفی/مثبت رفع شوند؛ یک اصلاح گروهی بدون تست route-level کافی نیست.
+
+
+## 28. شواهد Runtime از اجرای CI و اصلاح شکست تست
+
+در اجرای GitHub Actions روی HEAD قبلی این شاخه (`708f84abb12331a322b8f56b4bd0ee6b1282b721`):
+
+- نصب Composer و آماده‌سازی SQLite موفق بود.
+- فرمان `php artisan migrate --force` از ابتدای تاریخچه Migration تا آخرین Migration موجود، بدون شکست و با وضعیت `DONE` برای همه Migrationها اجرا شد.
+- job مرحله چهارم در گام PHPUnit متوقف شد؛ علت، syntax error در فایل جدید `NotificationRouteOwnershipTest.php` بود: namespace و useها به‌اشتباه با دو backslash نوشته شده بودند.
+- این خطا در commit `315831edec7e825c1930f5f28ba515cf3dbfb534` با بازگرداندن namespace separator استاندارد PHP اصلاح شد. این اصلاح فقط فایل تست را تغییر داده و به کد اجرایی یا schema دست نزده است.
+
+**نتیجه معتبر فعلی:** clean-install migration روی SQLite در آن HEAD موفق بوده است. این نتیجه هنوز upgrade از دیتابیس قدیمی، MySQL/PostgreSQL، آزمون‌های کامل و route ownership test روی HEAD اصلاح‌شده را ثابت نمی‌کند. CI باید روی HEAD پس از اصلاح دوباره اجرا شود؛ failure قبلی نباید به‌عنوان شکست migration ثبت شود.
