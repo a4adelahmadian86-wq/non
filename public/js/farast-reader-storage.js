@@ -49,6 +49,7 @@ const transaction=(mode,work,retry=true)=>open().then(db=>{
   let settled=false;
   const fail=error=>{if(settled)return;settled=true;reject(error||new Error('IndexedDB transaction failed'));};
   const retryStaleTransaction=error=>{
+   if(settled)return true;
    if(!retry||!['InvalidStateError','NotFoundError'].includes(error?.name))return false;
    settled=true;
    invalidateDatabase(db);
