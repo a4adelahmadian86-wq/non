@@ -990,11 +990,12 @@ class AdminController extends Controller
         return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
     }
 
-    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
+    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_if($user->isAdmin(), 403);
         abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
         $console->authorizeAction($r->user(), 'users', $user->id, 'users.capabilities.manage');
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'زیرساخت ثبت ممیزی در دسترس نیست.');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1018,7 +1019,24 @@ class AdminController extends Controller
             $values[$key] = array_key_exists($key, $data) && $data[$key] !== '' ? $data[$key] : null;
         }
 
-        UserCapability::updateOrCreate(['user_id' => $user->id], $values);
+        DB::transaction(function () use ($r, $user, $values, $audit): void {
+            $capability = UserCapability::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            $before = $capability?->getAttributes() ?? [];
+
+            if ($capability) {
+                $capability->fill($values)->save();
+            } else {
+                $capability = UserCapability::create(['user_id' => $user->id, ...$values]);
+            }
+
+            $audit->record((int) $r->user()->id, 'admin.user.capabilities_updated', $r->ip(), [
+                'target_user_id' => (int) $user->id,
+                'before' => $before,
+                'after' => $capability->getAttributes(),
+            ]);
+        });
+
+        app(\\App\\Services\\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', 'دسترسی‌های کاربر ذخیره شد.');
     }
