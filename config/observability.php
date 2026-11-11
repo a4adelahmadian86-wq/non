@@ -13,6 +13,11 @@ return [
         'user_ids' => $alertUserIds,
         'cooldown_minutes' => max(5, min(1440, (int) env('FARAST_OBSERVABILITY_ALERT_COOLDOWN_MINUTES', 30))),
     ],
+    'webhook' => [
+        // Optional operator-managed out-of-band destination. Only HTTPS endpoints are accepted.
+        'url' => env('FARAST_OBSERVABILITY_WEBHOOK_URL'),
+        'token' => env('FARAST_OBSERVABILITY_WEBHOOK_TOKEN'),
+    ],
     'security' => [
         'failed_authentication_window_minutes' => 10,
         'failed_authentication_warning_threshold' => 5,
