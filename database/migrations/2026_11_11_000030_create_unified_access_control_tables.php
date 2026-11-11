@@ -9,6 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasColumn('users', 'access_control_managed')) {
+            Schema::table('users', function (Blueprint $table): void {
+                $table->boolean('access_control_managed')->default(false);
+            });
+        }
+
         if (! Schema::hasTable('roles')) {
             Schema::create('roles', function (Blueprint $table): void {
                 $table->id();
@@ -86,6 +92,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::hasColumn('users', 'access_control_managed')) {
+            Schema::table('users', function (Blueprint $table): void {
+                $table->dropColumn('access_control_managed');
+            });
+        }
+
         Schema::dropIfExists('access_audit_logs');
         Schema::dropIfExists('user_permission_grants');
         Schema::dropIfExists('role_assignments');
