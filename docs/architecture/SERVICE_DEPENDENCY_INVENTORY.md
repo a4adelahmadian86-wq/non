@@ -51,3 +51,19 @@
 | `GeminiService` | `app/Services/GeminiService.php` | — | `AiInteraction`, `SiteSetting` | — | — | `transcribe()` | 0 | 0 |
 | `GoogleSpeechToTextService` | `app/Services/GoogleSpeechToTextService.php` | — | `AiInteraction` | — | — | `enabled()`, `transcribe()` | 0 | 0 |
 | `HumanTaskService` | `app/Services/HumanTaskService.php` | `AuditEventService` | `User` | `farast_human_tasks` | — | `request()`, `assign()`, `submitOutput()`, `qa()`, `accept()` | 5 | 0 |
+
+| `LocalTotpService` | `app/Services/LocalTotpService.php` | — | — | — | — | `generateSecret()`, `provisioningUri()`, `verify()`, `matchingCounter()`, `codeAtCounter()`, `generateRecoveryCodes()`, `normalizeRecoveryCode()` | 0 | 0 |
+| `MailConfigService` | `app/Services/MailConfigService.php` | — | `SiteSetting` | — | — | `currentProvider()`, `apply()`, `providerConfigured()`, `assertAvailable()`, `diagnostics()`, `localMtaAvailable()`, `sendmailBinaryAvailable()` | 0 | 0 |
+| `MarketingSignalService` | `app/Services/MarketingSignalService.php` | `SmartDiscountMarketingService` | `User` | `farast_workflow_events`, `store_coupon_assignments`, `store_coupons` | — | `record()`, `withdraw()` | 7 | 0 |
+| `MessengerAccessService` | `app/Services/MessengerAccessService.php` | — | `Conversation`, `User` | — | — | `canUse()`, `assertCanUse()`, `usersFor()`, `canInvite()`, `canCreateGroup()`, `canAddToGroup()`, `assertConversationScope()` | 0 | 0 |
+| `NotificationService` | `app/Services/NotificationService.php` | — | `FarastNotification`, `User` | `farast_notifications` | — | `push()`, `pushToUser()`, `unreadCount()`, `latest()`, `paginateForUser()`, `markRead()`, `markAllRead()`, `archive()`, `restore()`, `countsByCategory()` | 0 | 0 |
+| `OcrManager` | `app/Services/Ocr/OcrManager.php` | — | — | — | — | `__construct()`, `recognize()`, `available()` | 0 | 0 |
+| `OcrProviderInterface` | `app/Services/Ocr/OcrProviderInterface.php` | — | — | — | — | `recognize()` | 0 | 0 |
+| `OcrToolHandler` | `app/Services/OcrToolHandler.php` | `GeminiService` | `User` | — | — | `__construct()`, `handle()` | 0 | 0 |
+| `OutputAuthorizationService` | `app/Services/OutputAuthorizationService.php` | `CommerceAuthorizationService` | `Order`, `FarastProject`, `TypingDocument`, `User` | — | — | `__construct()`, `authorize()` | 0 | 0 |
+| `PricingEngine` | `app/Services/PricingEngine.php` | — | `FarastPricingPolicyVersion` | — | — | `resolve()`, `quote()` | 0 | 0 |
+| `PricingPolicyAdminService` | `app/Services/PricingPolicyAdminService.php` | — | `FarastPricingPolicyVersion` | — | — | `createVersion()`, `schedule()`, `retire()`, `compare()`, `activate()` | 1 | 0 |
+| `PricingService` | `app/Services/PricingService.php` | `PricingEngine` | `PricingRule`, `FarastPricingPolicy` | — | — | `projectQuote()`, `initialTypingPrices()`, `calculate()`, `quote()`, `estimateByPages()` | 0 | 0 |
+| `ProductContentGenerationService` | `app/Services/ProductContentGenerationService.php` | `ProductKnowledgeService`, `EditorAiAssistService`, `ProductContentPrivacyFilter` | `StoreCategory`, `StoreProduct`, `User` | — | — | `__construct()`, `readiness()`, `generate()`, `currentSourceFingerprints()`, `signature()`, `assertFreshProvenance()`, `validateFieldEvidence()` | 0 | 0 |
+| `ProductContentPrivacyFilter` | `app/Services/ProductContentPrivacyFilter.php` | — | — | — | — | `sanitize()`, `sanitizeText()` | 0 | 0 |
+| `ProductDocumentAudioService` | `app/Services/ProductDocumentAudioService.php` | — | — | — | — | `configured()`, `generate()` | 0 | 0 |
