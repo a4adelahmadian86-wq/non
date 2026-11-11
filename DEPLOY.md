@@ -18,7 +18,7 @@
 1. فایل `.env.example` را به `.env` کپی کنید.
 2. همه placeholderها را در Secret Manager/Environment میزبان تکمیل کنید؛ فایل واقعی `.env` را در Git قرار ندهید.
 3. `APP_ENV=production`، `APP_DEBUG=false` و `APP_URL=https://...` را بررسی کنید.
-4. `APP_KEY` را فقط یک بار برای این محیط تولید کنید و در Secret Manager نگه دارید. هنگام Deployهای بعدی آن را regenerate نکنید.
+4. `APP_KEY` را فقط یک بار برای این محیط تولید کنید (مثلاً با `php artisan key:generate --show` در محیط امن)، در Secret Manager نگه دارید و هنگام Deployهای بعدی regenerate نکنید.
 5. `FARAST_BACKUP_ENCRYPTION_KEY` را جداگانه و تصادفی تولید کنید؛ آن را در همان محل یا همان حسابی که بکاپ‌ها ذخیره می‌شوند نگه ندارید.
 6. `FARAST_VOICE_TOKEN` باید با مقدار متناظر در سرویس Voice-typing یکسان باشد. کلیدهای Gemini، Groq، Kavenegar و سرویس‌های کمکی نیز فقط در محیط سرور تنظیم شوند.
 7. SMTP را با `MAIL_HOST`، `MAIL_PORT`، `MAIL_USERNAME`، `MAIL_PASSWORD` و `MAIL_ENCRYPTION` پیکربندی کنید؛ بدون این مقادیر ارسال ایمیل Production را تأییدشده تلقی نکنید.
@@ -87,16 +87,21 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 - پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
 - `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.
 - `php artisan queue:failed` و `php artisan migrate:status` را بررسی کنید.
+- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up` و پاسخ JSON `/ready` را کنترل می‌کند.
 - موفقیت `/ready` به‌تنهایی سلامت Redis، Storage خارجی، سرویس صوت یا ارائه‌دهندگان AI را تضمین نمی‌کند.
 
 ## Backup و Restore
 
-- `storage:backup-weekly` فقط وقتی موفق است که `FARAST_BACKUP_ENCRYPTION_KEY` و حداقل یک Volume سالم با `drive_key=foreign_backup` پیکربندی شده باشد.
-- بکاپ با AES-256 رمزنگاری می‌شود؛ SHA-256 پس از انتقال مقایسه می‌شود و در نسخه فعلی، خوانایی Manifest و جریان دیتابیس رمزگشایی‌شده نیز قبل از موفق علامت‌گذاری شدن بررسی می‌شود.
+- `storage:backup-weekly` یک درخواست را در صف اختصاصی `backups` قرار می‌دهد؛ تولید آرشیو توسط `RunStorageBackupJob` و Worker صف `backups` انجام می‌شود، نه در فرایند Cron. درخواست‌های `queued/running` در `storage_backup_runs` قابل پایش‌اند.
+- درخواست زمان‌بندی‌شده فقط وقتی قابل اجراست که `FARAST_BACKUP_ENCRYPTION_KEY` و حداقل یک Volume سالم با `drive_key=foreign_backup` پیکربندی شده باشد.
+- بکاپ با AES-256 رمزنگاری می‌شود؛ SHA-256 پس از انتقال مقایسه می‌شود و خوانایی Manifest و جریان دیتابیس رمزگشایی‌شده نیز قبل از موفق علامت‌گذاری شدن بررسی می‌شود.
+- درخواست زمان‌بندی‌شده‌ای که بیش از ۵ ساعت در حالت running یا بیش از ۲۴ ساعت در حالت queued بماند، هنگام اجرای بعدی فرمان زمان‌بندی‌شده به failed تبدیل می‌شود؛ این پاک‌سازی جایگزین پایش پیوسته Worker و صف نیست.
 - بررسی دستی: `php artisan storage:verify-backup {runId}`.
 - Restore مخرب است و دیتابیس و فایل‌ها را جایگزین می‌کند: `php artisan storage:restore-backup {runId} --confirm`. فقط در محیط بازیابی جداگانه یا پنجره رخداد کنترل‌شده اجرا شود. پس از Restore برنامه عمداً در Maintenance Mode باقی می‌ماند؛ پس از اعتبارسنجی داده‌ها، Storage و Workerها، اپراتور باید `php artisan up` را اجرا کند.
 - آزمون Restore باید از دیتابیس و Storage جداگانه استفاده کند؛ هرگز برای تمرین روی Production اجرا نشود.
-- کلید رمزنگاری بکاپ، `APP_KEY)، دسترسی مقصدهای خارجی و دستورالعمل دسترسی به آن‌ها باید خارج از همان محیط/حساب نگهداری بکاپ قابل بازیابی باشند.
+- **محدودیت بازیابی از نابودی کامل دیتابیس:** فرمان فعلی Restore برای پیدا کردن آرشیو به رکورد `storage_backup_runs` و تنظیمات Volume در دیتابیس موجود نیاز دارد. بنابراین بازیابی از دیتابیس کاملاً ازدست‌رفته هنوز مسیر bootstrap مستقل و خودکار ندارد؛ این سناریو تا زمان طراحی و آزمون Restore از آرشیو محلی/Manifest خارجی، تأییدشده محسوب نمی‌شود.
+- کلید رمزنگاری بکاپ، `APP_KEY`، اطلاعات دسترسی مقصدهای خارجی و شناسه/مسیر آرشیوها باید خارج از همان محیط/حساب نگهداری بکاپ قابل بازیابی باشند.
+- Retention فعلی عملاً `keep_all` است و حذف خودکار بکاپ‌های قدیمی پیاده‌سازی نشده؛ ظرفیت مقصد را پایش کنید و تا تصویب RPO/RTO حذف خودکار را فعال نکنید.
 
 ## وضعیت میزبان و سرویس‌های جانبی
 
