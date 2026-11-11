@@ -87,6 +87,37 @@ class UnifiedAuthorizationTest extends TestCase
         ));
     }
 
+    public function test_admin_with_a_limited_assignment_cannot_bypass_record_scope(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $other = User::factory()->create(['role' => 'employee']);
+        $permission = $this->permission('documents.view');
+        $accessPermission = $this->permission('access.manage');
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => 'limited_admin',
+            'name' => 'Limited administrator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::create(['role' => 'limited_admin', 'permission_id' => $permission->id]);
+        RolePermission::create(['role' => 'limited_admin', 'permission_id' => $accessPermission->id]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $admin->id,
+            'role_id' => $roleId,
+            'scope' => 'own',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        self::assertFalse(app(AuthorizationService::class)->allowsRecord(
+            $admin,
+            'documents.view',
+            $this->record(['user_id' => $other->id]),
+        ));
+    }
+
     public function test_expired_direct_allow_does_not_grant_access(): void
     {
         $user = User::factory()->create(['role' => 'employee']);
