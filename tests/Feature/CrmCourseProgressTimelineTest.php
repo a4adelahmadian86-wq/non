@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\StoreCategory;
+use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
 use App\Models\StoreCourseLesson;
@@ -115,12 +117,41 @@ class CrmCourseProgressTimelineTest extends TestCase
         $this->assertSame(100, $summary['progress_percent']);
         $this->assertNotNull($enrollment->completed_at);
 
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'ticket_code' => 'TK-CRM-001',
+            'subject' => 'پیگیری سفارش دوره',
+            'status' => 'answered',
+            'priority' => 'normal',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'body' => 'لطفاً وضعیت دسترسی دوره را بررسی کنید.',
+            'is_internal' => false,
+            'is_staff' => false,
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $admin->id,
+            'body' => 'این یادداشت داخلی محرمانه است.',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
         $this->actingAs($admin)
             ->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('metrics.course_enrollments_count', 1)
             ->assertJsonPath('metrics.completed_course_enrollments_count', 1)
             ->assertJsonPath('metrics.completed_course_lessons_count', 1)
+            ->assertJsonFragment([
+                'type' => 'ticket_message',
+                'ticket_id' => $ticket->id,
+                'body' => 'لطفاً وضعیت دسترسی دوره را بررسی کنید.',
+                'sender_type' => 'customer',
+            ])
+            ->assertDontSee('این یادداشت داخلی محرمانه است')
             ->assertJsonFragment([
                 'type' => 'course_enrollment',
                 'id' => $enrollment->id,
