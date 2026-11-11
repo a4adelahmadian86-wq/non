@@ -389,6 +389,9 @@ class AdvancedAccessControlTest extends TestCase
     {
         $organization = Organization::create(['name' => 'Console Scope Org', 'slug' => 'console-scope-org', 'status' => 'active']);
         $manager = $this->user('09140000121', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        // Remove the legacy organization-wide grant so this test isolates the custom team-scoped grant.
+        DB::table('role_permissions')->where('role', User::ROLE_ORGANIZATION_MANAGER)
+            ->where('permission_id', $this->permissionId('users.view'))->delete();
         $otherSupervisor = $this->user('09140000122', User::ROLE_TEAM_SUPERVISOR, $organization->id);
         $teamA = Team::create([
             'organization_id' => $organization->id,
