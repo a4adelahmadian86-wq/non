@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\SmsLog;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -132,18 +134,96 @@ class SmsService
      *
      * @param  array<string, string|int>  $tokens
      */
-    public function sendEvent(string $mobile, string $event, string $fallbackText, array $tokens = []): bool
-    {
-        $template = config("support.sms_templates.{$event}")
-            ?: config("services.kavenegar.templates.{$event}");
+    public function sendEvent(
+        string $mobile,
+        string $event,
+        string $fallbackText,
+        array $tokens = [],
+        ?string $idempotencyKey = null,
+    ): bool {
+        $mobile = $this->normalizeMobile($mobile);
+        if (! $mobile || $event === '') {
+            return false;
+        }
 
-        if ($template) {
-            if ($this->sendLookup($mobile, $template, $tokens)) {
+        if ($idempotencyKey === null || trim($idempotencyKey) === '') {
+            $template = config("support.sms_templates.{$event}")
+                ?: config("services.kavenegar.templates.{$event}");
+
+            if ($template && $this->sendLookup($mobile, $template, $tokens)) {
                 return true;
+            }
+
+            return $this->sendText($mobile, $fallbackText);
+        }
+
+        $mobileHash = hash('sha256', $mobile);
+        $key = mb_substr(trim($idempotencyKey).':mobile:'.$mobileHash, 0, 191);
+
+        try {
+            $log = SmsLog::firstOrCreate(
+                ['idempotency_key' => $key],
+                [
+                    'event' => mb_substr($event, 0, 100),
+                    'mobile_hash' => $mobileHash,
+                    'status' => 'sending',
+                    'attempts' => 1,
+                    'last_attempt_at' => now(),
+                    'meta' => ['provider' => 'kavenegar'],
+                ],
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('farast.sms.ledger_failed', [
+                'event' => $event,
+                'mobile_hash' => $this->hashMobile($mobile),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        if (! $log->wasRecentlyCreated) {
+            if ($log->status === 'accepted') {
+                return true;
+            }
+
+            $staleBefore = now()->subMinutes(15);
+            $claimed = SmsLog::query()
+                ->whereKey($log->id)
+                ->where(function ($query) use ($staleBefore): void {
+                    $query->where('status', 'failed')
+                        ->orWhere(function ($stale) use ($staleBefore): void {
+                            $stale->where('status', 'sending')
+                                ->where('last_attempt_at', '<=', $staleBefore);
+                        });
+                })
+                ->update([
+                    'status' => 'sending',
+                    'attempts' => DB::raw('attempts + 1'),
+                    'last_attempt_at' => now(),
+                    'error' => null,
+                ]);
+
+            if ($claimed === 0) {
+                return false;
             }
         }
 
-        return $this->sendText($mobile, $fallbackText);
+        $template = config("support.sms_templates.{$event}")
+            ?: config("services.kavenegar.templates.{$event}");
+
+        $sent = $template ? $this->sendLookup($mobile, $template, $tokens) : false;
+        if (! $sent) {
+            $sent = $this->sendText($mobile, $fallbackText);
+        }
+
+        $log->refresh()->update([
+            'status' => $sent ? 'accepted' : 'failed',
+            'accepted_at' => $sent ? now() : null,
+            'error' => $sent ? null : 'Provider rejected the SMS or no provider is configured.',
+        ]);
+
+        return $sent;
     }
 
     protected function normalizeMobile(string $mobile): ?string

@@ -56,13 +56,14 @@ class SupportNotificationService
                     [
                         'token' => $ticket->displayCode(),
                         'token2' => Str::limit($ticket->subject, 30),
-                    ]
+                    ],
+                    'support:ticket:'.$ticket->id.':created:staff'
                 );
             }
         }
     }
 
-    public function customerReplied(Ticket $ticket, string $body): void
+    public function customerReplied(Ticket $ticket, string $body, ?int $messageId = null): void
     {
         $ticket->loadMissing(['user', 'assignee']);
 
@@ -80,9 +81,10 @@ class SupportNotificationService
                 'پاسخ کاربر روی '.$ticket->displayCode(),
                 Str::limit($body, 120),
                 $ticket,
-                staff: true
+                staff: true,
+                eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
-            $this->email->sendTicketCustomerReply($staff, $ticket, $body);
+            $this->email->sendTicketCustomerReply($staff, $ticket, $body, $messageId === null ? null : 'message:'.$messageId);
         }
 
         if ($this->smsEnabled('ticket_customer_reply') && $ticket->priority === 'high') {
@@ -92,13 +94,14 @@ class SupportNotificationService
                     $mobile,
                     'ticket_customer_reply',
                     'فراست: پاسخ فوری کاربر روی '.$ticket->displayCode(),
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':customer-reply:'.($messageId ? 'message:'.$messageId : 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':staff'
                 );
             }
         }
     }
 
-    public function staffReplied(Ticket $ticket, string $body, bool $isInternal = false): void
+    public function staffReplied(Ticket $ticket, string $body, bool $isInternal = false, ?int $messageId = null): void
     {
         if ($isInternal) {
             return;
@@ -112,24 +115,26 @@ class SupportNotificationService
                 'ticket_reply',
                 'پاسخ جدید به تیکت '.$ticket->displayCode(),
                 Str::limit($body, 160),
-                $ticket
+                $ticket,
+                eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
-            $this->email->sendTicketReply($ticket->user, $ticket, $body);
+            $this->email->sendTicketReply($ticket->user, $ticket, $body, $messageId === null ? null : 'message:'.$messageId);
 
             if ($this->smsEnabled('ticket_reply') && $ticket->user?->mobile) {
                 $this->sms->sendEvent(
                     $ticket->user->mobile,
                     'ticket_reply',
                     'فراست: پاسخ جدید برای تیکت '.$ticket->displayCode().'. مشاهده در پنل پشتیبانی.',
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':staff-reply:'.($messageId ? 'message:'.$messageId : 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':user'
                 );
             }
         } elseif ($ticket->guest_email) {
-            $this->email->sendTicketReplyGuest($ticket, $body);
+            $this->email->sendTicketReplyGuest($ticket, $body, $messageId === null ? null : 'message:'.$messageId);
         }
     }
 
-    public function statusChanged(Ticket $ticket, string $oldStatus, string $newStatus): void
+    public function statusChanged(Ticket $ticket, string $oldStatus, string $newStatus, ?string $eventIdentity = null): void
     {
         if ($oldStatus === $newStatus) {
             return;
@@ -143,22 +148,24 @@ class SupportNotificationService
                 'ticket_closed',
                 'تیکت '.$ticket->displayCode().' بسته شد',
                 'در صورت نیاز می‌توانید تیکت جدید ثبت کنید یا به کیفیت پشتیبانی امتیاز دهید.',
-                $ticket
+                $ticket,
+                eventIdentity: $eventIdentity ?? 'transition:'.$ticket->updated_at?->format('U.u')
             );
-            $this->email->sendTicketClosed($ticket->user, $ticket);
+            $this->email->sendTicketClosed($ticket->user, $ticket, $eventIdentity ?? 'transition:'.($ticket->updated_at?->format('U.u') ?? 'unknown'));
 
             if ($this->smsEnabled('ticket_closed') && $ticket->user?->mobile) {
                 $this->sms->sendEvent(
                     $ticket->user->mobile,
                     'ticket_closed',
                     'فراست: تیکت '.$ticket->displayCode().' بسته شد.',
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':closed:'.($eventIdentity ?? 'transition:'.($ticket->updated_at?->format('U.u') ?? 'unknown'))
                 );
             }
         }
     }
 
-    public function assigned(Ticket $ticket, ?User $agent): void
+    public function assigned(Ticket $ticket, ?User $agent, ?string $eventIdentity = null): void
     {
         if (! $agent) {
             return;
@@ -170,16 +177,18 @@ class SupportNotificationService
             'تیکت '.$ticket->displayCode().' به شما ارجاع شد',
             $ticket->subject,
             $ticket,
-            staff: true
+            staff: true,
+            eventIdentity: $eventIdentity ?? 'assignment:'.$ticket->updated_at?->format('U.u')
         );
-        $this->email->sendTicketAssigned($agent, $ticket);
+        $this->email->sendTicketAssigned($agent, $ticket, $eventIdentity ?? 'assignment:'.($ticket->updated_at?->format('U.u') ?? 'unknown'));
 
         if ($this->smsEnabled('ticket_assigned') && $agent->mobile) {
             $this->sms->sendEvent(
                 $agent->mobile,
                 'ticket_assigned',
                 'فراست: تیکت '.$ticket->displayCode().' به شما ارجاع شد.',
-                ['token' => $ticket->displayCode()]
+                ['token' => $ticket->displayCode()],
+                'support:ticket:'.$ticket->id.':assigned:'.($eventIdentity ?? 'assignment:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':agent:'.$agent->id
             );
         }
     }
@@ -191,12 +200,13 @@ class SupportNotificationService
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'هشدار SLA — '.$ticket->displayCode();
         $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
+        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown').':threshold:'.$minutesLeft;
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind);
+            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning');
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', $cycleIdentity);
                 }
             } catch (\Throwable) {
             }
@@ -212,7 +222,8 @@ class SupportNotificationService
                     [
                         'token' => $ticket->displayCode(),
                         'token2' => (string) $minutesLeft,
-                    ]
+                    ],
+                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$cycleIdentity
                 );
             }
         }
@@ -225,12 +236,13 @@ class SupportNotificationService
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'نقض SLA — '.$ticket->displayCode();
         $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
+        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind);
+            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach');
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', 'sla-breached:'.$kind);
                 }
             } catch (\Throwable) {
             }
@@ -243,7 +255,8 @@ class SupportNotificationService
                     $mobile,
                     'ticket_sla_breach',
                     'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$cycleIdentity
                 );
             }
         }
@@ -259,7 +272,7 @@ class SupportNotificationService
         return $this->staffUsers();
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null): void
     {
         try {
             $url = $staff
@@ -277,7 +290,7 @@ class SupportNotificationService
                     'url' => $url,
                 ],
                 false,
-                'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).':user:'.$userId,
+                'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).($eventIdentity ? ':identity:'.$eventIdentity : '').':user:'.$userId,
             );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
