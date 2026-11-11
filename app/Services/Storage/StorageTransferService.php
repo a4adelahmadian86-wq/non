@@ -212,8 +212,7 @@ class StorageTransferService
                         @unlink($verificationPath);
                     }
                 } elseif ($target->driver === 'local') {
-                    $root = storage_path('app/storage-volumes/'.$target->id);
-                    $destination = $root.'/'.$objectKey;
+                    $destination = StoragePath::localVolumePath($target, $objectKey);
                     if (! is_dir(dirname($destination)) && ! mkdir(dirname($destination), 0750, true) && ! is_dir(dirname($destination))) {
                         throw new RuntimeException('ساخت پوشه مقصد ناموفق بود.');
                     }
@@ -275,7 +274,7 @@ class StorageTransferService
                         if ($target->driver === 's3') {
                             $this->s3->delete($target, $file->file_key);
                         } elseif ($target->driver === 'local') {
-                            $destination = storage_path('app/storage-volumes/'.$target->id.'/'.StoragePath::normalizeObjectKey($file->file_key));
+                            $destination = StoragePath::localVolumePath($target, $file->file_key);
                             if (is_file($destination) && ! @unlink($destination)) {
                                 throw new RuntimeException('پاک‌سازی فایل ناقص مقصد ناموفق بود.');
                             }
@@ -342,7 +341,7 @@ class StorageTransferService
             $volume = StorageVolume::findOrFail($volumeId);
             $key = StoragePath::normalizeObjectKey($key);
             if ($volume->driver === 'local') {
-                $path = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
+                $path = StoragePath::localVolumePath($volume, $key);
                 if (is_file($path) && ! @unlink($path)) {
                     throw new RuntimeException('حذف نسخه قدیمی فایل بازیابی‌شده از فضای محلی ناموفق بود.');
                 }
