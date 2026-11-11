@@ -201,31 +201,7 @@ class AdminStoreController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->validated($request);
-        $data['sku'] = filled($data['sku'] ?? null) ? $data['sku'] : $this->uniqueSku();
-        $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'] ?? null);
-        // A new catalog item must not become public before its protected payload/curriculum exists.
-        $data['status'] = 'draft';
-        $data['published_at'] = null;
-        $tagIds = $data['tag_ids'] ?? [];
-        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
-        $product = DB::transaction(function () use ($data, $tagIds) {
-            $product = StoreProduct::create($data);
-            if ($product->type === 'course') {
-                StoreCourse::firstOrCreate(['product_id' => $product->id]);
-            }
-            $product->tags()->sync($tagIds);
-            $product->related()->sync(app(ProductRelatedProductsService::class)->recommend($product)->pluck('id')->all());
-            $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
-
-            return $product;
-        });
-
-        if ($product->type === 'course') {
-            return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
-        }
-
-        return redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'پیش‌نویس ایجاد شد؛ اکنون فایل اصلی را در بخش بارگذاری امن انتخاب کنید.');
+        abort(409, 'ثبت مستقیم محصول غیرفعال است؛ ابتدا نوع محصول و فایل‌ها را در فرایند امن ثبت کنید.');
     }
 
     public function submitIntake(Request $request, StoreProductIntakeSession $session, StoreProductIntakeService $intake, StorageManager $storage)
