@@ -14,8 +14,9 @@
   (storageToolbar||root).prepend(storageWarning);
   let storageWriteFailed=false,storagePersistenceUnavailable=false;
   window.addEventListener('farast:storage-persistence-status',event=>{
-    if(event.detail?.persisted===true&&!storageWriteFailed){storageWarning.hidden=true;return;}
+    if(event.detail?.persisted===true){storagePersistenceUnavailable=false;if(!storageWriteFailed)storageWarning.hidden=true;return;}
     if(event.detail?.persisted!==true){
+      storagePersistenceUnavailable=true;
       storageWarning.textContent='ذخیره‌سازی پایدار مرورگر فعال نشده است. اطلاعات در IndexedDB نگه‌داری می‌شوند، اما ممکن است در پاک‌سازی داده‌های سایت یا کمبود فضای دستگاه حذف شوند.';
       storageWarning.hidden=false;
     }
