@@ -106,6 +106,8 @@ return new class extends Migration {
     }
     private function ensureStorageObjectPathHash(): void
     {
+        // A disk+1000-character path index can exceed MySQL's 3072-byte key limit.
+        // The fixed-size digest preserves full-path uniqueness without truncation.
         $table = 'farast_storage_objects';
         if (! Schema::hasTable($table)) {
             return;
