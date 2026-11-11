@@ -70,9 +70,9 @@ class RestoreStorageBackup extends Command
                     || strlen($name) > 4096
                     || str_starts_with($name, '/')
                     || preg_match('/^[A-Za-z]:/', $name)
-                    || str_contains($name, '\\\\')
+                    || str_contains($name, '\\')
                     || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
-                    || str_contains($name, "\\0")
+                    || str_contains($name, "\0")
                     || isset($seenEntries[$name])
                 ) {
                     $zip->close();
