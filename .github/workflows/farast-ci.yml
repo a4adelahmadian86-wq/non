@@ -189,6 +189,26 @@ jobs:
           SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006 node voice-stream/scripts/sherpa-sidecar-smoke.mjs
           cat /tmp/farast-sherpa.log
 
+  product-supervisor-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.11'
+          cache: pip
+          cache-dependency-path: services/product-supervisor/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: pip install --no-cache-dir -r requirements.txt
+        working-directory: services/product-supervisor
+      - name: Compile Product Supervisor modules
+        run: python -m compileall -q .
+        working-directory: services/product-supervisor
+      - name: Run Product Supervisor unit and API contract tests
+        run: python -m unittest discover -s tests -v
+        working-directory: services/product-supervisor
+
   voice-service-contract-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
