@@ -122,6 +122,9 @@ class FarastObservabilityService
                 if ($result['volumes']['unhealthy_or_unverified'] > 0 && $result['status'] === 'healthy') {
                     $result['status'] = 'warning';
                 }
+            } else {
+                $result['status'] = 'warning';
+                $result['inventory_warning'] = 'جدول موجودی Volumeها نصب نشده است.';
             }
 
             if (Schema::hasTable('storage_managed_files')) {
@@ -131,6 +134,9 @@ class FarastObservabilityService
                 if ($result['pending_transfers'] > 0 && $result['status'] === 'healthy') {
                     $result['status'] = 'warning';
                 }
+            } else {
+                $result['status'] = 'warning';
+                $result['transfer_warning'] = 'جدول مدیریت فایل‌ها نصب نشده است.';
             }
 
             if ($result['status'] === 'unknown') {
