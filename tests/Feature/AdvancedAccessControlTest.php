@@ -271,6 +271,64 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_team_authority_and_role_assignment_cannot_cross_organization_boundaries(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Owner Org', 'slug' => 'team-owner-org', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Foreign Team Org', 'slug' => 'foreign-team-org', 'status' => 'active']);
+        $manager = $this->user('09140000131', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $admin = $this->user('09140000132', User::ROLE_ADMIN);
+
+        // Simulate inconsistent legacy data: both a manager pivot and supervisor
+        // pointer connect an organization-A account to an organization-B team.
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Foreign Managed Team',
+            'slug' => 'foreign-managed-team',
+            'supervisor_id' => $manager->id,
+        ]);
+        DB::table('team_user')->insert([
+            'team_id' => $foreignTeam->id,
+            'user_id' => $manager->id,
+            'team_role' => 'manager',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $roleId = $this->role('foreign-team-role', 'team', $foreignTeam->id);
+        $this->grant($roleId, 'users.view', 'team');
+        $this->assign($manager, $roleId, 'team', $foreignTeam->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allowsFor($manager, 'users.view', [
+            'organization_id' => $organizationB->id,
+            'team_id' => $foreignTeam->id,
+        ]));
+        $this->assertFalse($authorization->allowsFor($manager, 'users.view', [
+            'organization_id' => $organizationA->id,
+            'team_id' => $foreignTeam->id,
+        ]));
+
+        $this->assertSame(
+            [$manager->id],
+            \\App\\Http\\Middleware\\ResolveAdminScope::visibleUserIds($manager, 'team')
+        );
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'team');
+        $this->assertSame([], app(AdminConsoleService::class)->visibleTeamIds($manager, 'users.view'));
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$manager->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $foreignTeam->id,
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $manager->id,
+            'role_id' => $roleId,
+        ]);
+    }
+
     public function test_regular_team_membership_does_not_create_team_management_scope(): void
     {
         $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
