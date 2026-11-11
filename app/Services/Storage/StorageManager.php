@@ -39,6 +39,7 @@ class StorageManager
         foreach ($volumes as $volume) {
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
+                $this->verifyWrittenObject($volume, $key, $checksum);
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
                 } catch (\Throwable $exception) {
@@ -108,6 +109,7 @@ class StorageManager
     public function exists(string $disk, string $path): bool
     {
         if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
             $volume = StorageVolume::find((int) substr($disk, 15));
             if (! $volume) return false;
             return $volume->driver === 'local'
@@ -120,6 +122,7 @@ class StorageManager
     public function get(string $disk, string $path): string
     {
         if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
             $volume = StorageVolume::findOrFail((int) substr($disk, 15));
             if ($volume->driver === 'local') {
                 $contents = @file_get_contents($this->localVolumePath($volume, $path));
@@ -134,6 +137,7 @@ class StorageManager
     public function delete(string $disk, string $path): void
     {
         $volumeId = str_starts_with($disk, 'storage_volume:') ? (int) substr($disk, 15) : null;
+        if ($volumeId) $path = StoragePath::normalizeObjectKey($path);
         $managed = StorageManagedFile::query()
             ->when($volumeId, fn ($q) => $q->where('storage_volume_id', $volumeId), fn ($q) => $q->whereNull('storage_volume_id'))
             ->where('file_key', $path)
@@ -156,19 +160,34 @@ class StorageManager
         if ($volumeId) {
             $volume = StorageVolume::find($volumeId);
             if ($volume) {
-                if ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $path));
-                else $this->s3->delete($volume, $path);
+                if ($volume->driver === 'local') {
+                    $localPath = $this->localVolumePath($volume, $path);
+                    if (is_file($localPath) && ! @unlink($localPath)) {
+                        throw new RuntimeException('حذف فایل از فضای محلی ناموفق بود.');
+                    }
+                } else {
+                    $this->s3->delete($volume, $path);
+                }
             }
         } else {
-            Storage::disk($disk ?: 'private')->delete($path);
+            $sourceDisk = Storage::disk($disk ?: 'private');
+            if ($sourceDisk->exists($path) && ! $sourceDisk->delete($path)) {
+                throw new RuntimeException('حذف فایل از فضای خصوصی ناموفق بود.');
+            }
         }
 
         if ($managed) {
-            if ($volumeId && $managed->volume) {
-                $managed->volume->decrement('used_bytes', (int) $managed->size_bytes);
-                $managed->volume->decrement('object_count');
-            }
-            $managed->update(['status' => 'deleted']);
+            DB::transaction(function () use ($managed, $volumeId): void {
+                $locked = StorageManagedFile::query()->lockForUpdate()->find($managed->id);
+                if (! $locked || $locked->status === 'deleted') return;
+                if ($volumeId) {
+                    DB::table('storage_volumes')->where('id', $volumeId)->update([
+                        'used_bytes' => DB::raw('CASE WHEN used_bytes >= '.(int) $locked->size_bytes.' THEN used_bytes - '.(int) $locked->size_bytes.' ELSE 0 END'),
+                        'object_count' => DB::raw('CASE WHEN object_count > 0 THEN object_count - 1 ELSE 0 END'),
+                    ]);
+                }
+                $locked->update(['status' => 'deleted']);
+            });
         }
     }
 
@@ -186,6 +205,7 @@ class StorageManager
     public function downloadTo(string $disk, string $path, string $target): void
     {
         if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
             $volume = StorageVolume::findOrFail((int) substr($disk, 15));
             if ($volume->driver === 'local') {
                 $source = $this->localVolumePath($volume, $path);
@@ -209,7 +229,7 @@ class StorageManager
 
     public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
     {
-        $this->writeToVolume($volume, $key, $localPath);
+        $this->writeToVolume($volume, StoragePath::normalizeObjectKey($key), $localPath);
     }
 
     public function volumeDisk(StorageVolume $volume): string
@@ -233,22 +253,45 @@ class StorageManager
 
     private function localVolumePath(StorageVolume $volume, string $key): string
     {
-        $root = storage_path('app/storage-volumes/'.$volume->id);
-        $path = $root.'/'.ltrim($key, '/');
-        abort_unless(str_starts_with($path, $root.'/'), 400);
-        return $path;
+        return StoragePath::localVolumePath($volume, $key);
     }
 
     private function writeToVolume(StorageVolume $volume, string $key, string $localPath): void
     {
         if ($volume->driver === 'local') {
             $target = $this->localVolumePath($volume, $key);
-            if (! is_dir(dirname($target))) mkdir(dirname($target), 0775, true);
-            if (! copy($localPath, $target)) throw new RuntimeException('کپی فایل روی فضای محلی هاست ناموفق بود.');
+            if (! is_dir(dirname($target)) && ! mkdir(dirname($target), 0750, true) && ! is_dir(dirname($target))) {
+                throw new RuntimeException('ساخت مسیر فایل روی فضای محلی هاست ناموفق بود.');
+            }
+            $temporary = dirname($target).'/.farast-upload-'.Str::uuid().'.tmp';
+            try {
+                if (! copy($localPath, $temporary)) throw new RuntimeException('کپی فایل موقت روی فضای محلی هاست ناموفق بود.');
+                if (! rename($temporary, $target)) throw new RuntimeException('ثبت اتمیک فایل روی فضای محلی هاست ناموفق بود.');
+            } finally {
+                if (is_file($temporary)) @unlink($temporary);
+            }
             return;
         }
         if ($volume->driver !== 's3') throw new RuntimeException('آداپتور این نوع سرویس هنوز نصب نشده است.');
         $this->s3->putFile($volume, $key, $localPath);
+    }
+
+    private function verifyWrittenObject(StorageVolume $volume, string $key, string $expectedChecksum): void
+    {
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-storage-verify');
+        if (! is_string($temporary)) {
+            throw new RuntimeException('ساخت فایل موقت برای تأیید صحت آپلود ناموفق بود.');
+        }
+
+        try {
+            $this->downloadTo($this->volumeDisk($volume), $key, $temporary);
+            $actualChecksum = hash_file('sha256', $temporary);
+            if (! is_string($actualChecksum) || ! hash_equals($expectedChecksum, $actualChecksum)) {
+                throw new RuntimeException('Checksum فایل ذخیره‌شده با فایل اصلی مطابقت ندارد.');
+            }
+        } finally {
+            @unlink($temporary);
+        }
     }
 
     private function register(

@@ -29,7 +29,10 @@ class StorageConnectionService
             }
         } elseif ($volume->driver === 'local') {
             $root = storage_path('app/storage-volumes/'.$volume->id);
-            if (! is_dir($root) && ! mkdir($root, 0775, true) && ! is_dir($root)) {
+            if (is_link($root)) {
+                throw new RuntimeException('مسیر ریشه فضای ذخیره‌سازی محلی پیوند نمادین است و ایمن نیست.');
+            }
+            if (! is_dir($root) && ! mkdir($root, 0750, true) && ! is_dir($root)) {
                 throw new RuntimeException('ایجاد مسیر فضای ذخیره‌سازی محلی ممکن نشد.');
             }
             $probe = $root.'/.farast-health-'.bin2hex(random_bytes(12)).'.txt';
@@ -70,10 +73,23 @@ class StorageConnectionService
         if (! is_dir($root)) return ['object_count' => 0, 'used_bytes' => 0];
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
-            if ($file->isFile() && ! str_starts_with($file->getFilename(), '.farast-health-')) {
-                $count++;
-                $bytes += $file->getSize();
+            if (! $file->isFile() || $file->isLink()) continue;
+
+            $name = $file->getFilename();
+            $isTemporary = str_starts_with($name, '.farast-health-')
+                || str_starts_with($name, '.farast-upload-')
+                || str_starts_with($name, '.farast-transfer-');
+            if ($isTemporary) {
+                // A process can be terminated between creating and renaming a temp file.
+                // Keep recent in-flight writes safe; reclaim abandoned artifacts after one hour.
+                if ($file->getMTime() < now()->subHour()->timestamp) {
+                    @unlink($file->getPathname());
+                }
+                continue;
             }
+
+            $count++;
+            $bytes += $file->getSize();
         }
         return ['object_count' => $count, 'used_bytes' => $bytes];
     }

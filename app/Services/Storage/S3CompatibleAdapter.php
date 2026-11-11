@@ -43,6 +43,7 @@ class S3CompatibleAdapter
         try {
             $partNumber = 1;
             while (! feof($stream)) {
+                if ($partNumber > 10000) throw new RuntimeException('تعداد بخش‌های آپلود از سقف S3 بیشتر شد.');
                 $part = fread($stream, $partSize);
                 if (! is_string($part) || $part === '') break;
                 $partStream = fopen('php://temp', 'w+b');
@@ -57,7 +58,6 @@ class S3CompatibleAdapter
                 if ($etag === '') throw new RuntimeException('ETag بخش آپلودشده دریافت نشد.');
                 $parts[] = ['number' => $partNumber, 'etag' => $etag];
                 $partNumber++;
-                if ($partNumber > 10000) throw new RuntimeException('تعداد بخش‌های آپلود از سقف S3 بیشتر شد.');
             }
             if ($parts === []) throw new RuntimeException('فایل بکاپ خالی است.');
             $completion = '<CompleteMultipartUpload>'.implode('', array_map(
@@ -170,6 +170,8 @@ class S3CompatibleAdapter
         array $extraHeaders = [],
         array $options = []
     ) {
+        if ($key !== '') $key = StoragePath::normalizeObjectKey($key);
+
         $credentials = (array) ($volume->credentials ?? []);
         $accessKey = (string) ($credentials['key'] ?? '');
         $secretKey = (string) ($credentials['secret'] ?? '');
@@ -177,8 +179,16 @@ class S3CompatibleAdapter
         $endpoint = rtrim((string) ($volume->endpoint ?: ($credentials['endpoint'] ?? '')), '/');
         $region = (string) ($volume->region ?: ($credentials['region'] ?? 'us-east-1'));
 
-        if ($accessKey === '' || $secretKey === '' || $bucket === '' || ! filter_var($endpoint, FILTER_VALIDATE_URL)) {
-            throw new RuntimeException('اطلاعات دسترسی S3 ناقص است.');
+        $parsedEndpoint = parse_url($endpoint);
+        if ($accessKey === '' || $secretKey === '' || $bucket === ''
+            || ! is_array($parsedEndpoint)
+            || strtolower((string) ($parsedEndpoint['scheme'] ?? '')) !== 'https'
+            || empty($parsedEndpoint['host'])
+            || isset($parsedEndpoint['user'])
+            || isset($parsedEndpoint['pass'])
+            || isset($parsedEndpoint['query'])
+            || isset($parsedEndpoint['fragment'])) {
+            throw new RuntimeException('اطلاعات دسترسی یا Endpoint امن S3 ناقص یا نامعتبر است.');
         }
 
         $pathStyle = (bool) ($credentials['use_path_style_endpoint'] ?? true);
@@ -231,7 +241,16 @@ class S3CompatibleAdapter
         $headers['accept'] = '*/*';
 
         try {
-            $client = new Client(['connect_timeout' => 8, 'timeout' => 120, 'http_errors' => false, 'verify' => true]);
+            $connectTimeout = max(1, (int) config('storage_management.health.connect_timeout', 8));
+            $requestTimeout = max($connectTimeout, (int) config('storage_management.health.request_timeout', 300));
+            $client = new Client([
+                'connect_timeout' => $connectTimeout,
+                'timeout' => $requestTimeout,
+                'http_errors' => false,
+                'verify' => true,
+                // A redirect would forward a signed request to a different host.
+                'allow_redirects' => false,
+            ]);
             $response = $client->request($method, $url, array_merge($options, ['headers' => $headers, 'body' => $body]));
         } catch (GuzzleException $exception) {
             throw new RuntimeException('ارتباط با فضای ذخیره‌سازی برقرار نشد: '.$exception->getMessage(), 0, $exception);
