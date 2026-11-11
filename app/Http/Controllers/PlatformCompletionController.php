@@ -431,7 +431,7 @@ class PlatformCompletionController extends Controller {
  }
  private function auditAccessChange(Request $request,string $action,int $subjectUserId,array $before,array $after):void
  {
-  abort_unless(\\Illuminate\\Support\\Facades\\Schema::hasTable('farast_access_audit_logs'),503,'زیرساخت ممیزی دسترسی در دسترس نیست.');
+  abort_unless(\Illuminate\Support\Facades\Schema::hasTable('farast_access_audit_logs'),503,'زیرساخت ممیزی دسترسی در دسترس نیست.');
   DB::table('farast_access_audit_logs')->insert([
    'actor_id'=>$request->user()?->id,
    'subject_user_id'=>$subjectUserId,
