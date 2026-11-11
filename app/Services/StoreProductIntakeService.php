@@ -44,17 +44,21 @@ class StoreProductIntakeService
             'id', 'status', 'original_name', 'mime', 'size_bytes', 'inspection_json',
             'supervisor_status', 'antivirus_status', 'is_primary',
         ]);
+        // Rejected/cancelled records remain as an audit trail, but must not block
+        // completion or inflate the active intake's file and size counters.
+        $active = $ingestions->whereIn('status', ['inspected', 'uploaded'])->values();
 
         return [
-            'file_count' => $ingestions->count(),
-            'uploaded_count' => $ingestions->where('status', 'uploaded')->count(),
-            'pending_inspection_count' => $ingestions->where('status', 'inspected')->count(),
-            'review_pending_count' => $ingestions->whereIn('supervisor_status', ['pending', 'queued', 'reviewing', 'awaiting_supervisor'])->count(),
-            'review_completed_count' => $ingestions->where('supervisor_status', 'completed')->count(),
-            'review_blocked_count' => $ingestions->whereIn('supervisor_status', ['blocked', 'failed', 'manual_review_required'])->count(),
-            'archive_file_count' => $ingestions->sum(fn ($item) => (int) data_get($item->inspection_json, 'archive_entry_count', 0)),
-            'total_size_bytes' => (int) $ingestions->sum('size_bytes'),
-            'files' => $ingestions->map(fn ($item) => [
+            'file_count' => $active->count(),
+            'uploaded_count' => $active->where('status', 'uploaded')->count(),
+            'pending_inspection_count' => $active->where('status', 'inspected')->count(),
+            'review_pending_count' => $active->whereIn('supervisor_status', ['pending', 'queued', 'reviewing', 'awaiting_supervisor'])->count(),
+            'review_completed_count' => $active->where('status', 'uploaded')->where('supervisor_status', 'completed')->count(),
+            'review_blocked_count' => $active->where('status', 'uploaded')->whereIn('supervisor_status', ['blocked', 'failed', 'manual_review_required'])->count(),
+            'cancelled_count' => $ingestions->whereIn('status', ['rejected', 'cancel_pending'])->count(),
+            'archive_file_count' => $active->sum(fn ($item) => (int) data_get($item->inspection_json, 'archive_entry_count', 0)),
+            'total_size_bytes' => (int) $active->sum('size_bytes'),
+            'files' => $active->map(fn ($item) => [
                 'id' => $item->id,
                 'name' => $item->original_name,
                 'mime' => $item->mime,
