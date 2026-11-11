@@ -130,7 +130,14 @@ Artisan::command('farast:workflows:health', function () {
     $pending = (int) ($counts['pending'] ?? 0);
     $queueConnection = (string) config('queue.default');
     $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
-    if (($queueConnection === 'sync' && $pending > 0) || $failed > 0 || $staleProcessing > 0 || $failedQueueJobs > 0 || $delay >= 300 || $queueDelay >= 300) {
+    $unhealthy = ($queueConnection === 'sync' && $pending > 0)
+        || $failed > 0
+        || $staleProcessing > 0
+        || $failedQueueJobs > 0
+        || $delay >= 300
+        || $queueDelay >= 300;
+
+    if ($unhealthy) {
         Log::warning('FARAST workflow queue health threshold exceeded', [
             'queue_connection' => $queueConnection,
             'pending' => $pending,
@@ -141,7 +148,11 @@ Artisan::command('farast:workflows:health', function () {
             'oldest_pending_seconds' => $delay,
             'oldest_queue_seconds' => $queueDelay,
         ]);
+        $this->error('Workflow queue is unhealthy; inspect the metrics above and application logs.');
+        return 1;
     }
+
+    $this->info('Workflow queue health is within configured thresholds.');
     return 0;
 })->purpose('Report workflow queue backlog, latency and terminal failures');
 
