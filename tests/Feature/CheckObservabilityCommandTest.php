@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Tests\TestCase;
 
@@ -73,9 +74,22 @@ class CheckObservabilityCommandTest extends TestCase
         $this->assertSame(1, Artisan::call('farast:observability:check'));
         $this->assertDatabaseCount('farast_notifications', 3);
         Http::assertSentCount(3);
+
+        $incidentEvents = DB::table('farast_audit_events')
+            ->where('event_type', 'like', 'observability.incident.%')
+            ->orderBy('id')
+            ->get(['payload_meta']);
+        $incidentPayloads = $incidentEvents->map(fn ($event) => json_decode((string) $event->payload_meta, true) ?: []);
+        $this->assertCount(3, $incidentPayloads);
+        $firstIncidentId = $incidentPayloads[0]['incident_id'] ?? null;
+        $this->assertIsString($firstIncidentId);
+        $this->assertSame($firstIncidentId, $incidentPayloads[1]['incident_id'] ?? null);
+        $this->assertNotSame($firstIncidentId, $incidentPayloads[2]['incident_id'] ?? null);
+
         Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'https://alerts.example.test/farast'
             && $request->hasHeader('Authorization', 'Bearer webhook-secret')
-            && ($request['severity'] ?? null) === 'critical');
+            && ($request['severity'] ?? null) === 'critical'
+            && ($request['incident_id'] ?? null) === $firstIncidentId);
 
     }
 
