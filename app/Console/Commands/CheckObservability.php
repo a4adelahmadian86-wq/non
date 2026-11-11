@@ -262,7 +262,6 @@ class CheckObservability extends Command
             }
         }
 
-        $cooldown = max(5, min(1440, (int) config('observability.alerts.cooldown_minutes', 30)));
         // Each emitted transition is a distinct notification identity. The
         // command-level fingerprint gate provides retry deduplication.
         $alertKey = (string) Str::uuid();
