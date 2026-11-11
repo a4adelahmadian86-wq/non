@@ -52,7 +52,7 @@ class AuditEventService
 
             $payload = $this->normalizePayload($payload);
 
-            return FarastAuditEvent::create([
+            $event = new FarastAuditEvent([
                 'event_id' => $payload['event_id'],
                 'user_id' => $payload['user_id'],
                 'project_id' => $payload['project_id'],
@@ -61,14 +61,18 @@ class AuditEventService
                 'aggregate_id' => $payload['aggregate_id'],
                 'source' => $payload['source'],
                 'payload_meta' => $payload['payload_meta'],
-                'created_at' => $timestamp,
-                'updated_at' => $timestamp,
                 'payload_checksum' => hash('sha256', json_encode(
                     $payload,
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
                 )),
                 'previous_checksum' => $previous,
             ]);
+            $event->forceFill([
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ])->save();
+
+            return $event;
         });
     }
 
