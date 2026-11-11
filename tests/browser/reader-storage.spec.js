@@ -126,3 +126,17 @@ test('device records survive Cache API cleanup and local backup round-trips only
  expect(result.leakedOtherProduct).toBe(false);
 });
 
+test('IndexedDB read failures emit a visible storage warning event',async({page})=>{
+ await page.addInitScript(()=>{
+  Object.defineProperty(indexedDB,'open',{configurable:true,value:()=>{throw new Error('blocked read');}});
+  window.__storageReadErrors=[];
+  window.addEventListener('farast:storage-read-error',event=>window.__storageReadErrors.push(event.detail));
+ });
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const failed=await page.evaluate(async()=>{try{await window.FarastReaderDurableStore.restore('farast-reader:blocked-read');return false;}catch(_){return true;}});
+ expect(failed).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>window.__storageReadErrors.length)).toBe(1);
+ expect(await page.evaluate(()=>window.__storageReadErrors[0].key)).toBe('farast-reader:blocked-read');
+});
+
