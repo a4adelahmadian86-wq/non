@@ -2,7 +2,7 @@ name: FARAST CI
 
 concurrency:
   group: farast-ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 on:
   push:
     branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming, feature/reader-audio-synchronization]
