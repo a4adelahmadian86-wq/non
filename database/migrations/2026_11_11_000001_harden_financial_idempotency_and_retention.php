@@ -9,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $this->assertUniqueGatewayAuthorities();
         $this->ensureIdempotencyColumn('orders', 'legacy-order-');
         $this->ensureIdempotencyColumn('payments', 'legacy-payment-');
 
@@ -17,6 +18,43 @@ return new class extends Migration
         $this->restrictDelete('wallet_transactions', 'wallet_id', 'wallets');
         $this->restrictDelete('orders', 'user_id', 'users');
         $this->restrictDelete('payments', 'order_id', 'orders');
+    }
+
+    private function assertUniqueGatewayAuthorities(): void
+    {
+        if (! Schema::hasTable('payments')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('payments', 'gateway') || ! Schema::hasColumn('payments', 'authority')) {
+            throw new RuntimeException('Cannot enforce payment authority uniqueness: payments.gateway or payments.authority is missing.');
+        }
+
+        $duplicate = DB::table('payments')
+            ->select('gateway', 'authority')
+            ->whereNotNull('authority')
+            ->where('authority', '<>', '')
+            ->groupBy('gateway', 'authority')
+            ->havingRaw('COUNT(*) > 1')
+            ->first();
+
+        if ($duplicate) {
+            throw new RuntimeException(
+                'Duplicate payment authority exists for gateway '.$duplicate->gateway
+                .'. Reconcile duplicate gateway attempts before applying payment integrity constraints.'
+            );
+        }
+
+        $hasUniqueIndex = collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false)
+                && ($index['columns'] ?? []) === ['gateway', 'authority']
+        );
+
+        if (! $hasUniqueIndex) {
+            Schema::table('payments', function (Blueprint $table): void {
+                $table->unique(['gateway', 'authority'], 'payments_gateway_authority_unique');
+            });
+        }
     }
 
     private function ensureIdempotencyColumn(string $tableName, string $legacyPrefix): void
