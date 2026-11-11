@@ -158,35 +158,40 @@ class StorageBackupService
                 throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ JSON معتبر نیست.', 0, $exception);
             }
 
-            $entries = is_array($manifest) ? ($manifest['entries'] ?? null) : null;
-            if (
-                ! is_array($manifest)
-                || ($manifest['format_version'] ?? null) !== 2
-                || empty($manifest['database_driver'])
-                || ! is_array($entries)
-                || count($entries) < 1
-                || (int) ($manifest['entry_count'] ?? -1) !== count($entries)
-            ) {
+            $formatVersion = is_array($manifest) ? (int) ($manifest['format_version'] ?? 1) : 0;
+            if (! is_array($manifest) || ! in_array($formatVersion, [1, 2], true) || empty($manifest['database_driver'])) {
                 throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ ناقص یا ناسازگار است.');
             }
 
-            ksort($entries, SORT_STRING);
-            $expectedHmac = hash_hmac('sha256', $this->canonicalizeEntries($entries), $password);
-            if (! hash_equals($expectedHmac, (string) ($manifest['inventory_hmac'] ?? ''))) {
-                throw new RuntimeException('امضای موجودی فایل‌های بکاپ معتبر نیست.');
-            }
-
-            foreach ($entries as $entryName => $metadata) {
+            $entries = [];
+            if ($formatVersion === 2) {
+                $entries = $manifest['entries'] ?? null;
                 if (
-                    ! is_string($entryName)
-                    || $entryName === ''
-                    || ! is_array($metadata)
-                    || ! is_int($metadata['size_bytes'] ?? null)
-                    || $metadata['size_bytes'] < 0
-                    || ! is_string($metadata['sha256'] ?? null)
-                    || ! preg_match('/^[a-f0-9]{64}$/i', $metadata['sha256'])
+                    ! is_array($entries)
+                    || count($entries) < 1
+                    || (int) ($manifest['entry_count'] ?? -1) !== count($entries)
                 ) {
-                    throw new RuntimeException('ساختار موجودی فایل‌های بکاپ نامعتبر است.');
+                    throw new RuntimeException('موجودی فایل‌های بکاپ ناقص است.');
+                }
+
+                ksort($entries, SORT_STRING);
+                $expectedHmac = hash_hmac('sha256', $this->canonicalizeEntries($entries), $password);
+                if (! hash_equals($expectedHmac, (string) ($manifest['inventory_hmac'] ?? ''))) {
+                    throw new RuntimeException('امضای موجودی فایل‌های بکاپ معتبر نیست.');
+                }
+
+                foreach ($entries as $entryName => $metadata) {
+                    if (
+                        ! is_string($entryName)
+                        || $entryName === ''
+                        || ! is_array($metadata)
+                        || ! is_int($metadata['size_bytes'] ?? null)
+                        || $metadata['size_bytes'] < 0
+                        || ! is_string($metadata['sha256'] ?? null)
+                        || ! preg_match('/^[a-f0-9]{64}$/i', $metadata['sha256'])
+                    ) {
+                        throw new RuntimeException('ساختار موجودی فایل‌های بکاپ نامعتبر است.');
+                    }
                 }
             }
 
@@ -217,8 +222,8 @@ class StorageBackupService
                     continue;
                 }
 
-                $expected = $entries[$name] ?? null;
-                if (! is_array($expected)) {
+                $expected = $formatVersion === 2 ? ($entries[$name] ?? null) : null;
+                if ($formatVersion === 2 && ! is_array($expected)) {
                     throw new RuntimeException('فایلی خارج از موجودی رمزنگاری‌شده در آرشیو وجود دارد: '.$name);
                 }
 
@@ -248,28 +253,34 @@ class StorageBackupService
                     fclose($stream);
                 }
 
-                $actualChecksum = hash_final($hash);
-                if (
-                    $bytesRead !== (int) ($stat['size'] ?? -1)
-                    || $bytesRead !== $expected['size_bytes']
-                    || ! hash_equals($expected['sha256'], $actualChecksum)
-                ) {
-                    throw new RuntimeException('اندازه یا SHA-256 فایل رمزگشایی‌شده با موجودی بکاپ مطابقت ندارد: '.$name);
+                if ($bytesRead !== (int) ($stat['size'] ?? -1)) {
+                    throw new RuntimeException('اندازه فایل رمزگشایی‌شده با ZIP مطابقت ندارد: '.$name);
                 }
 
-                $seenEntries[$name] = true;
+                if ($formatVersion === 2) {
+                    $actualChecksum = hash_final($hash);
+                    if (
+                        $bytesRead !== $expected['size_bytes']
+                        || ! hash_equals($expected['sha256'], $actualChecksum)
+                    ) {
+                        throw new RuntimeException('اندازه یا SHA-256 فایل رمزگشایی‌شده با موجودی بکاپ مطابقت ندارد: '.$name);
+                    }
+                    $seenEntries[$name] = true;
+                }
+
                 if ($name === 'database/database.sql') {
                     $databaseBytes = $bytesRead;
                 }
             }
 
-            $expectedNames = array_keys($entries);
-            $actualNames = array_keys($seenEntries);
-            sort($expectedNames, SORT_STRING);
-            sort($actualNames, SORT_STRING);
-
-            if ($expectedNames !== $actualNames) {
-                throw new RuntimeException('موجودی فایل‌های بکاپ با محتوای واقعی آرشیو مطابقت ندارد.');
+            if ($formatVersion === 2) {
+                $expectedNames = array_keys($entries);
+                $actualNames = array_keys($seenEntries);
+                sort($expectedNames, SORT_STRING);
+                sort($actualNames, SORT_STRING);
+                if ($expectedNames !== $actualNames) {
+                    throw new RuntimeException('موجودی فایل‌های بکاپ با محتوای واقعی آرشیو مطابقت ندارد.');
+                }
             }
 
             if (! is_int($databaseBytes) || $databaseBytes < 1) {

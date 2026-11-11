@@ -197,7 +197,7 @@ class RestoreStorageBackup extends Command
                 StorageBackupRun::create([
                     'backup_type' => 'recovery',
                     'source_name' => 'bootstrap_restore',
-                    'status' => 'restored',
+                    'status' => 'completed',
                     'size_bytes' => (int) filesize($archive),
                     'checksum' => $checksum,
                     'started_at' => now(),
