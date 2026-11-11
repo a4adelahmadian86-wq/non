@@ -114,7 +114,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $engine = app(WorkflowEngine::class);
         $rolledBackKey = 'document:outbox-rollback:revision:1';
         $committedKey = 'document:outbox-commit:revision:1';
-        $context = ['user_id' => $owner->id, 'customer_id' => $owner->id, 'document_id' => 220, 'revision' => 1];
+        $context = ['user_id' => $owner->id, 'customer_id' => $owner->id, 'document_id' => 220, 'revision' => 1, 'event_type' => 'order.paid'];
 
         try {
             DB::transaction(function () use ($engine, $context, $rolledBackKey): void {
@@ -136,6 +136,8 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'idempotency_key' => $committedKey,
             'status' => 'pending',
         ]);
+        $storedEvent = DB::table('farast_workflow_events')->where('idempotency_key', $committedKey)->first();
+        $this->assertSame('document.saved', data_get(json_decode($storedEvent->context, true), 'event_type'));
         $this->assertSame(1, $engine->retryFailedEvents());
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => $committedKey,
