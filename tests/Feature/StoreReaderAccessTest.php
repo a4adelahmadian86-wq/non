@@ -229,6 +229,7 @@ class StoreReaderAccessTest extends TestCase
             'page_count' => 2,
             'structure_json' => [
                 'reader' => ['ready' => true, 'page_count' => 2],
+                'audio' => ['status' => 'pending'],
                 'completeness' => [
                     'extraction_complete' => true,
                     'analysis_batches_complete' => false,
@@ -273,16 +274,30 @@ class StoreReaderAccessTest extends TestCase
         ]);
         \Illuminate\Support\Facades\Queue::fake();
 
+        $unauthorizedReader = User::create([
+            'name' => 'Unauthorized Reader',
+            'mobile' => '09123456791',
+            'password' => 'secret',
+        ]);
+        $this->actingAs($unauthorizedReader)
+            ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertForbidden();
+
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
-            ->assertSee('data-reader-audio-status="unavailable"', false)
-            ->assertDontSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
+            ->assertSee('data-reader-audio-status="pending"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
 
         \Illuminate\Support\Facades\Queue::assertNothingPushed();
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\GenerateProductDocumentAudio::class);
+
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(202)
+            ->assertHeader('Retry-After', '5');
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
@@ -305,6 +320,14 @@ class StoreReaderAccessTest extends TestCase
             ->assertJsonMissingPath('disk');
 
         $audioBytes = '0123456789';
+        $document->chunks()->create([
+            'chunk_index' => 0,
+            'chunk_type' => 'paragraph',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'متن مجاز صفحه اول کتاب',
+            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
+        ]);
+
         $audioPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/audio-v3.wav';
         Storage::disk('private')->put($audioPath, $audioBytes);
         $document->artifacts()->create([
@@ -326,14 +349,6 @@ class StoreReaderAccessTest extends TestCase
                 ]],
             ],
         ]);
-        $document->chunks()->create([
-            'chunk_index' => 0,
-            'chunk_type' => 'paragraph',
-            'locator_json' => ['page' => 1, 'reader_page' => 1],
-            'content_text' => 'متن مجاز صفحه اول کتاب',
-            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
-        ]);
-
         $readyReaderResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readyReaderResponse->assertOk()
             ->assertSee('data-reader-audio-status="ready"', false)
@@ -355,6 +370,80 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($user)->get(route('store.preview', $full))->assertNotFound();
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))->assertForbidden();
+
+        $document->artifacts()->delete();
+        Storage::disk('private')->delete($audioPath);
+
+        $olderAudioPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/audio-v2.wav';
+        Storage::disk('private')->put($olderAudioPath, 'older-audio');
+        $document->artifacts()->create([
+            'artifact_type' => 'audio_full_wav',
+            'version' => 2,
+            'disk' => 'private',
+            'path' => $olderAudioPath,
+            'mime' => 'audio/wav',
+            'size_bytes' => strlen('older-audio'),
+            'sha256' => hash('sha256', 'older-audio'),
+            'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 500],
+        ]);
+        $structure = (array) $document->fresh()->structure_json;
+        $structure['audio'] = ['status' => 'upgrading'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="upgrading"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=2', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(202);
+
+        (new \App\Jobs\ProcessProductDocument($document->id))->failed(new \RuntimeException('audio-upgrade-failure'));
+        $failedUpgrade = $document->fresh();
+        $this->assertSame('failed', data_get($failedUpgrade->structure_json, 'audio.status'));
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="ready"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=2', false)
+            ->assertDontSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(409);
+
+        $document->artifacts()->delete();
+        Storage::disk('private')->delete($olderAudioPath);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="failed"', false);
+
+        $structure['audio'] = ['status' => 'awaiting_provider'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="unavailable"', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(410);
+
+        $structure['audio'] = ['status' => 'not_applicable'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="unavailable"', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(410);
+
+        unset($structure['audio']);
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status=""', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertNotFound();
+
+        $structure['audio'] = ['status' => 'pending'];
+        $document->update(['structure_json' => $structure]);
+        (new \App\Jobs\ProcessProductDocument($document->id))->failed(new \RuntimeException('browser-e2e-failure'));
+        $failedDocument = $document->fresh();
+        $this->assertSame('extracted', $failedDocument->processing_status);
+        $this->assertSame('failed', data_get($failedDocument->structure_json, 'audio.status'));
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
@@ -590,10 +679,12 @@ class StoreReaderAccessTest extends TestCase
             "frame-ancestors 'self'",
             "base-uri 'self'",
             "form-action 'self'",
+            "script-src 'self' blob: 'wasm-unsafe-eval'",
             "worker-src 'self' blob:",
         ] as $directive) {
             $this->assertStringContainsString($directive, $contentSecurityPolicy);
         }
+        $this->assertStringNotContainsString("default-src *", $contentSecurityPolicy);
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
@@ -705,8 +796,14 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee(route('store.preview.audio', $preview))
             ->assertSee('data-audio-timing')
             ->assertSee('farast-reader-audio.js')
-            ->assertSee('سلام')
             ->assertDontSee('store/reader-audio/sample/narration.mp3');
+
+        $html = new \DOMDocument();
+        @$html->loadHTML($response->getContent());
+        $timingNode = (new \DOMXPath($html))->query('//*[@data-audio-timing]')->item(0);
+        $this->assertNotNull($timingNode, 'The reader must expose the safe timing manifest in its page data.');
+        $timings = json_decode($timingNode->getAttribute('data-audio-timing'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('سلام', $timings[0]['text'] ?? null);
     }
 
 

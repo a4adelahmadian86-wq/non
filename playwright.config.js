@@ -2,6 +2,7 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: './tests/browser',
+  testIgnore: process.env.FARAST_SKIP_ADMIN_E2E === '1' ? ['admin-product-real-workflow.spec.js'] : [],
   timeout: 30000,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
