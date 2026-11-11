@@ -14,6 +14,10 @@ required_extensions=(
 )
 
 echo "PHP: $(php -r 'echo PHP_VERSION;')"
+if ! php -r 'exit(version_compare(PHP_VERSION, "8.2.0", ">=") ? 0 : 1);'; then
+  echo "PHP 8.2 or newer is required." >&2
+  exit 1
+fi
 echo "Composer: $(composer --version --no-ansi)"
 
 for extension in "${required_extensions[@]}"; do
