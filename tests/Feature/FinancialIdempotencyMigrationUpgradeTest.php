@@ -187,7 +187,18 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             'idempotency_key' => 'duplicate-legacy-key',
         ]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->runFinancialMigration();
+        try {
+            $this->runFinancialMigration();
+            $this->fail('Duplicate legacy idempotency keys must stop the migration before schema mutation.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Duplicate idempotency_key values exist in orders', $exception->getMessage());
+        }
+
+        $this->assertFalse(collect(Schema::getIndexes('orders'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['idempotency_key']
+        ));
+        $this->assertFalse(collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
+        ));
     }
 }
