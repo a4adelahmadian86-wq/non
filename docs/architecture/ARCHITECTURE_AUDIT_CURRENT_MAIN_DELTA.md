@@ -185,6 +185,23 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 
 **وضعیت:** PR #335 هنوز پذیرفته‌شده تلقی نمی‌شود. ابتدا PR #379 باید روی خط مبنای جاری و تست‌های backup/recovery تثبیت شود؛ سپس تغییرهای product artifact در PR #335 به همان خط مبنا منتقل و آزمون‌های Storage و Reader دوباره اجرا شوند. تا آن زمان هیچ مهاجرت دستی فایل یا حذف مسیر legacy انجام نشود.
 
+
+### Reader audio: StorageManager دارد streaming مرکزی، اما PR #357 آن را دور می‌زند
+
+در main، `StorageManager` از قبل این عملیات را فراهم می‌کند:
+- `exists(disk, path)`
+- `size(disk, path)`
+- `streamRange(disk, path, start, length, output)`
+
+پیاده‌سازی `streamRange` برای `storage_volume:{id}` به adapter S3-compatible می‌رود و Range را در لایه مرکزی اجرا می‌کند؛ برای diskهای داخلی نیز stream را از داخل همان abstraction باز می‌کند.
+
+اما:
+- main فعلی `StoreController::readerAudio` مستقیماً `Storage::disk()->readStream()` می‌زند.
+- PR #357 نیز همین bypass مستقیم را برای streaming حفظ می‌کند.
+- PR #335 از `StorageManager::downloadTo` استفاده می‌کند، سپس فایل کامل را از temp محلی stream می‌کند.
+
+**تصمیم:** یک endpoint و یک مسیر StorageManager کافی است. مسیر مطلوب، بررسی metadata با `exists/size` و ارسال byte range با `streamRange` داخل response callback است؛ این کار هم remote streaming را نگه می‌دارد، هم فایل کامل را روی دیسک موقت کپی نمی‌کند. این نکته به PRهای #335 و #357 گزارش شده است.
+
 ## 7. مرزهای تجارت که باید حفظ شوند
 
 - `Order` در main برای خریدهای فروشگاه و جریان خدمات سند استفاده می‌شود؛ مدل دارای relation به `TypingDocument` و `StoreOrderItem` است. این یک aggregate مشترک با item/snapshotهای دامنه‌ای است، نه دو جدول سفارش مستقل.
