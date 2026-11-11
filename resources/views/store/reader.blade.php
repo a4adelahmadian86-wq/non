@@ -94,6 +94,7 @@
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
                   <canvas class="farast-pdf-canvas"></canvas>
                   <div class="farast-pdf-text-layer"></div>
+                  <div class="farast-pdf-annotation-layer annotationLayer"></div>
                   <div class="farast-pdf-continuous-pages" hidden></div>
                   <div class="farast-pdf-loading" role="status">در حال آماده‌سازی سند PDF…</div>
                 </div>
@@ -128,8 +129,10 @@
 
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107reader1">
+<link rel="stylesheet" href="/vendor/pdfjs/legacy/web/pdf_viewer.css?v=6.5.438">
 <style>
 html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,sans-serif}*,*::before,*::after{box-sizing:border-box}
+.farast-pdf-document{position:relative}.farast-pdf-annotation-layer.annotationLayer{position:absolute;inset:0;z-index:4}
 .farast-reader{--reader-bg:#0b1220;--reader-panel:#111d30;--reader-line:rgba(255,255,255,.09);--reader-text:#e8eef8;--reader-muted:#91a4c1;min-height:calc(100vh - 70px);background:var(--reader-bg);color:var(--reader-text);display:flex;flex-direction:column;font-family:inherit}
 .farast-reader[data-theme="light"]{--reader-bg:#e9eef6;--reader-panel:#fff;--reader-line:rgba(20,40,70,.12);--reader-text:#1c2b43;--reader-muted:#64748b}
 .farast-reader-header{height:auto;min-height:64px;padding:10px clamp(12px,3vw,32px);display:grid;grid-template-columns:1fr minmax(180px,2fr) 1fr;align-items:center;gap:16px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel)}
@@ -184,7 +187,7 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
-<script src="/js/farast-reader.js?v=20261111pdfcompat6"></script>
+<script src="/js/farast-reader.js?v=20261111annotations1"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
