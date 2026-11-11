@@ -13,6 +13,7 @@ use App\Services\StoreCourseProgressService;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class StoreCourseLearningController extends Controller
 {
@@ -28,7 +29,14 @@ class StoreCourseLearningController extends Controller
 
         abort_if($libraryItems->isEmpty(), 404);
         foreach ($libraryItems as $libraryItem) {
-            $enrollment = app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+            try {
+                $enrollment = app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+            } catch (RuntimeException $exception) {
+                report($exception);
+
+                continue;
+            }
+
             if ($enrollment && (! $enrollment->expires_at || $enrollment->expires_at->isFuture())) {
                 abort_unless($enrollment->user_id === $request->user()->id, 404);
                 return $enrollment;
