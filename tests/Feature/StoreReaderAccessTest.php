@@ -353,6 +353,13 @@ class StoreReaderAccessTest extends TestCase
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('data-reader-audio-status=""', false);
+
+        $structure['audio'] = ['status' => 'pending'];
+        $document->update(['structure_json' => $structure]);
+        (new \\App\\Jobs\\ProcessProductDocument($document->id))->failed(new \\RuntimeException('browser-e2e-failure'));
+        $failedDocument = $document->fresh();
+        $this->assertSame('failed', $failedDocument->processing_status);
+        $this->assertSame('failed', data_get($failedDocument->structure_json, 'audio.status'));
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
