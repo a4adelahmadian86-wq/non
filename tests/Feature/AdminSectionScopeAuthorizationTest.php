@@ -318,4 +318,14 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $employee->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+
+
+    public function test_legacy_store_and_support_admin_routes_require_their_global_sections(): void
+    {
+        $employee = $this->makeUser('09123456806', User::ROLE_EMPLOYEE);
+
+        $this->actingAs($employee)->get('/admin/store')->assertForbidden();
+        $this->actingAs($employee)->get('/admin/store/operations')->assertForbidden();
+        $this->actingAs($employee)->get('/admin/support-report')->assertForbidden();
+    }
 }
