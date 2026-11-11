@@ -116,6 +116,11 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Read-only operational health view; reuses the existing global audit permission.
+    Route::get('/observability', [\\App\\Http\\Controllers\\Admin\\ObservabilityController::class, 'index'])
+        ->middleware('admin.section:audit')
+        ->name('observability.index');
+
     // Central storage and backup management.
     Route::get('/storage', [\App\Http\Controllers\AdminStorageController::class, 'index'])->middleware('admin.section:storage')->name('storage.index');
     Route::get('/storage/backups', [\App\Http\Controllers\AdminStorageController::class, 'backups'])->middleware('admin.section:storage')->name('storage.backups');
