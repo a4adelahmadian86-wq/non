@@ -16,7 +16,6 @@ $requiredExtensions = [
     'dom',
     'fileinfo',
     'pdo_sqlite',
-    'sqlite3',
     'gd',
     'zip',
     'curl',
