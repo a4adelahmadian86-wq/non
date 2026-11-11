@@ -1,7 +1,7 @@
 name: FARAST CI
 
 concurrency:
-  group: farast-ci-${{ github.ref }}
+  group: farast-ci-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 on:
   push:
@@ -92,6 +92,7 @@ jobs:
       - run: npx playwright test --workers=1
         env:
           FARAST_E2E_URL: http://127.0.0.1:8000
+          FARAST_SKIP_ADMIN_E2E: '1'
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
@@ -249,3 +250,57 @@ jobs:
         env:
           FARAST_TTS_AUTO_DOWNLOAD: 'false'
           FARAST_VOICE_TOKEN: 'test-token-for-contract-tests'
+
+  admin-product-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure isolated SQLite environment
+        run: |
+          cat > .env <<'EOF'
+          APP_NAME=FARAST
+          APP_ENV=testing
+          APP_KEY=
+          APP_DEBUG=true
+          APP_URL=http://localhost
+          DB_CONNECTION=sqlite
+          DB_DATABASE=database/database.sqlite
+          CACHE_STORE=array
+          SESSION_DRIVER=file
+          QUEUE_CONNECTION=sync
+          EOF
+      - run: php artisan key:generate
+      - run: touch database/database.sqlite
+      - run: php artisan migrate --force
+      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
+      - run: php artisan db:seed --class=StoreDemoSeeder --force
+      - run: E2E_EMPLOYEE_PASSWORD=${GITHUB_RUN_ID}-farast-employee php artisan db:seed --class=BrowserE2ESeeder --force
+      - run: npm init -y
+      - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-admin-e2e-server.log 2>&1 &
+      - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-admin-e2e-server.log; exit 1
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install chromium
+      - run: npx playwright test tests/browser/admin-product-real-workflow.spec.js --workers=1
+        env:
+          FARAST_E2E_URL: http://127.0.0.1:8000
+      - if: always()
+        run: |
+          mkdir -p test-results
+          if test -f /tmp/farast-admin-e2e-server.log; then cp /tmp/farast-admin-e2e-server.log test-results/server.log; fi
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-product-e2e-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
