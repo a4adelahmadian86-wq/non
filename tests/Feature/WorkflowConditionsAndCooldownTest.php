@@ -476,4 +476,30 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_workflow_queue_health_command_fails_when_sync_mode_leaves_events_pending(): void
+    {
+        $owner = $this->owner('09140000233');
+        config(['queue.default' => 'sync']);
+
+        $eventId = app(WorkflowEngine::class)->enqueue(
+            'document.saved',
+            ['user_id' => $owner->id, 'document_id' => 233],
+            'document:233:revision:1',
+        );
+
+        $this->assertGreaterThan(0, $eventId);
+        $this->assertSame(1, Artisan::call('farast:workflows:health'));
+        $this->assertStringContainsString('queue_connection=sync', Artisan::output());
+        $this->assertStringContainsString('unhealthy', Artisan::output());
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'pending']);
+    }
+
+    public function test_workflow_queue_health_command_succeeds_when_database_queue_is_empty_and_healthy(): void
+    {
+        config(['queue.default' => 'database']);
+
+        $this->assertSame(0, Artisan::call('farast:workflows:health'));
+        $this->assertStringContainsString('within configured thresholds', Artisan::output());
+    }
+
 }
