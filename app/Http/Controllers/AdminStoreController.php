@@ -1116,10 +1116,20 @@ class AdminStoreController extends Controller
             };
             $lockedSession->update(['status' => $nextStatus]);
 
-            $this->audit('store.product.intake_file_manager_reviewed', $ingestion, [
-                'intake_session_id' => $lockedSession->id,
-                'reviewed_by' => $request->user()->id,
-            ]);
+            app(\\App\\Services\\AuditEventService::class)->record(
+                'store.product.intake_file_manager_reviewed',
+                (int) $request->user()->id,
+                null,
+                'store_product_intake',
+                null,
+                [
+                    'intake_session_id' => (string) $lockedSession->id,
+                    'ingestion_id' => (string) $ingestion->id,
+                    'reviewed_by' => (int) $request->user()->id,
+                    'review_status' => 'completed',
+                ],
+                'admin_console'
+            );
         }, 3);
 
         return back()->with('status', 'بازبینی دستی ثبت شد؛ انتشار نهایی محصول همچنان نیازمند تأیید مستقل است.');
