@@ -47,12 +47,14 @@ class FarastObservabilityService
             ? 'critical'
             : (count(array_filter($statuses, static fn ($value) => $value !== 'healthy')) > 0 ? 'warning' : 'healthy');
 
+        $history = $this->incidentHistory();
+
         return [
             'status' => $status,
             'components' => $components,
-            'incident_history_available' => $this->incidentHistory()['available'],
-            'incident_trend_24h' => $this->incidentHistory()['trend'],
-            'incidents' => $this->incidentHistory()['incidents'],
+            'incident_history_available' => $history['available'],
+            'incident_trend_24h' => $history['trend'],
+            'incidents' => $history['incidents'],
         ];
     }
 
@@ -149,6 +151,13 @@ class FarastObservabilityService
         ])));
     }
 
+    private function eventSeverity(string $eventType): string
+    {
+        $parts = explode('.', $eventType);
+
+        return (string) end($parts);
+    }
+
     private function component(string $status, array $metadata = []): array
     {
         return ['status' => $status, 'checked_at' => now()->toISOString()] + $metadata;
@@ -180,7 +189,7 @@ class FarastObservabilityService
             $counts = ['critical' => 0, 'warning' => 0, 'recovered' => 0];
             foreach ($rows as $row) {
                 $meta = (array) ($row->payload_meta ?? []);
-                $severity = (string) ($meta['severity'] ?? str($row->event_type)->afterLast('.')->toString());
+                $severity = (string) ($meta['severity'] ?? $this->eventSeverity($row->event_type));
                 if (array_key_exists($severity, $counts)) {
                     $counts[$severity]++;
                 }
@@ -192,7 +201,7 @@ class FarastObservabilityService
                 return [
                     'event_id' => $row->event_id,
                     'event_type' => $row->event_type,
-                    'severity' => (string) ($meta['severity'] ?? str($row->event_type)->afterLast('.')->toString()),
+                    'severity' => (string) ($meta['severity'] ?? $this->eventSeverity($row->event_type)),
                     'incident_id' => (string) ($meta['incident_id'] ?? $row->event_id),
                     'status' => $meta['status'] ?? null,
                     'affected_components' => (array) ($meta['affected_components'] ?? []),
