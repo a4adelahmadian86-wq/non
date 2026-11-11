@@ -554,7 +554,7 @@ class AuthorizationService
 
     private function userHasTeamAccess(User $user, int $teamId): bool
     {
-        return \\App\\Models\\Team::query()
+        return \App\Models\Team::query()
             ->whereKey($teamId)
             ->where(function ($query) use ($user): void {
                 $query->where('supervisor_id', $user->id)
