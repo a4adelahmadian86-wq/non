@@ -19,10 +19,10 @@ async function signInAsSeededAdmin(page) {
   await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
 }
 
-async function advanceProductWizard(page) {
-  for (const panel of [2, 3, 4]) {
-    await page.locator(`[data-wizard-panel="${panel - 1}"] .product-wizard-next`).click();
-    await expect(page.locator(`[data-wizard-panel="${panel}"]`)).toBeVisible();
+async function advanceProductWizardToReview(page) {
+  for (const [current, next] of [[2, 3], [3, 4]]) {
+    await page.locator(`[data-wizard-panel="${current}"] .product-wizard-next`).click();
+    await expect(page.locator(`[data-wizard-panel="${next}"]`)).toBeVisible();
   }
 }
 
@@ -72,7 +72,7 @@ test.describe('Real admin product workflow', () => {
     await page.locator('input[name="price_rials"]').fill('125000');
     await page.locator('input[name="compare_at_price_rials"]').fill('100000');
     await page.locator('[data-wizard-panel="1"] .product-wizard-next').click();
-    await advanceProductWizard(page);
+    await advanceProductWizardToReview(page);
     await page.locator('#productSaveButton').click();
 
     await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
@@ -83,7 +83,7 @@ test.describe('Real admin product workflow', () => {
     await expect(page.locator('[data-wizard-panel="1"]')).toBeVisible();
     await page.locator('input[name="compare_at_price_rials"]').fill('150000');
     await page.locator('[data-wizard-panel="1"] .product-wizard-next').click();
-    await advanceProductWizard(page);
+    await advanceProductWizardToReview(page);
     await page.locator('#productSaveButton').click();
 
     await expect(page).toHaveURL(/\/admin\/store\/\d+\/edit#product-files$/);
