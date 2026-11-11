@@ -472,7 +472,7 @@ class AdminController extends Controller
     {
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
         abort_unless($console->sectionAllowed($request->user(), 'access'), 403, 'تغییر نقش فقط در دامنهٔ سراسری مجاز است.');
-        $console->authorizeAction($request->user(), 'users', $user->id);
+        $console->authorizeAction($request->user(), 'users', $user->id, 'users.edit');
         abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
@@ -769,7 +769,7 @@ class AdminController extends Controller
     {
         abort_if($user->isAdmin(), 403);
         // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
-        $console->authorizeAction(auth()->user(), 'users', $user->id);
+        $console->authorizeAction(auth()->user(), 'users', $user->id, 'users.suspend');
 
         $user->update(['is_blocked' => ! $user->is_blocked]);
 
@@ -992,7 +992,7 @@ class AdminController extends Controller
     public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
     {
         abort_if($user->isAdmin(), 403);
-        $console->authorizeAction($r->user(), 'users', $user->id);
+        $console->authorizeAction($r->user(), 'users', $user->id, 'users.edit');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1024,7 +1024,7 @@ class AdminController extends Controller
     public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
-        $console->authorizeAction($r->user(), 'finance', $user->id);
+        $console->authorizeAction($r->user(), 'finance', $user->id, 'finance.manage');
 
         $d = $r->validate([
             'type' => ['required', 'in:credit,debit'],
