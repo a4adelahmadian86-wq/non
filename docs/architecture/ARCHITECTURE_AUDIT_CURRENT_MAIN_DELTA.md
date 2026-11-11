@@ -350,6 +350,14 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 آزمون `AuditEventObservabilityTest` در main جدید، هویت incident را در تاریخچه observability بررسی می‌کند؛ این آزمون پوشش نمایش/trace است و جایگزین تست integrity زنجیره یا ثبت تمام عملیات حساس نیست.
 
+### محدودیت فعلی hash-chain
+
+`AuditEventService` checksum را از `event_type/user_id/project_id/aggregate_type/aggregate_id/source/payload_meta` می‌سازد؛ `event_id` و timestampهای ثبت در checksum وارد نمی‌شوند. بنابراین تغییر event_id یا created_at به‌تنهایی توسط `AuditIntegrityService` کشف نمی‌شود. همچنین `lockForUpdate` فقط آخرین row موجود را قفل می‌کند؛ در جدول خالی، دو insert هم‌زمان می‌توانند هر دو previous_checksum=null بگیرند و دو ریشه بسازند.
+
+آزمون فعلی `AuditIntegrityServiceTest` فقط یک event سالم را verify می‌کند؛ chain چندرویدادی، دستکاری payload، event_id، timestamp، previous_checksum و concurrency در آن پوشش ندارد. برای ادعای tamper-evident بودن، payload canonical باید event identity و زمان/sequence را هم شامل شود، append باید با یک lock anchor پایدار serialize شود، و تست‌های tamper/concurrency اضافه شوند.
+
+
+
 ## 11. تعارض معماری قطعی در خوشه توسعه محصول
 
 بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
