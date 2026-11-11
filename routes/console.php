@@ -92,6 +92,12 @@ Artisan::command('farast:workflows:resume {eventId}', function (WorkflowEngine $
     return $resumed ? 0 : 1;
 })->purpose('Resume a paused workflow event');
 
+Artisan::command('farast:workflows:retry-event {eventId}', function (WorkflowEngine $engine) {
+    $retried = $engine->retryFailedEvent((int) $this->argument('eventId'));
+    $this->info($retried ? 'Terminally failed event queued for a new recovery cycle.' : 'Event is not in terminal failed state.');
+    return $retried ? 0 : 1;
+})->purpose('Manually retry a terminally failed workflow event');
+
 Artisan::command('farast:workflows:health', function () {
     if (! Schema::hasTable('farast_workflow_events')) {
         $this->warn('Workflow event ledger is not installed.');
