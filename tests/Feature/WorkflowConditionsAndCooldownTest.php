@@ -434,4 +434,40 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseMissing('jobs', ['queue' => 'automation']);
     }
 
+    public function test_terminal_failed_event_can_be_retried_without_deleting_its_ledger(): void
+    {
+        $owner = $this->owner('09140000232');
+        $workflow = $this->workflow($owner);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'manual-retry:document:232',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 232, 'event_type' => 'document.saved']),
+            'status' => 'failed',
+            'attempts' => 5,
+            'matched_workflows' => 1,
+            'failed_workflows' => 1,
+            'error_summary' => 'provider unavailable',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('farast_workflow_event_workflows')->insert([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'failed',
+            'attempts' => 5,
+            'last_error' => 'provider unavailable',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertTrue(app(WorkflowEngine::class)->retryFailedEvent($eventId));
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId, 'status' => 'pending', 'attempts' => 0, 'error_summary' => null,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'event_id' => $eventId, 'workflow_id' => $workflow, 'status' => 'pending', 'attempts' => 0,
+        ]);
+    }
+
 }
