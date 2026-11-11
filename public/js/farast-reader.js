@@ -710,6 +710,11 @@
       }
       const groups=pdfOptionalContentConfig?.getGroups?.()||{};
       const entries=groups instanceof Map?[...groups.entries()]:Object.entries(groups);
+      root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
+        supported:typeof pdfDoc.getOptionalContentConfig==='function',
+        count:entries.length,
+        groups:entries.map(([id,group])=>({id:String(id),name:String(group?.name||''),visible:group?.visible!==false}))
+      }}));
       layersHost.replaceChildren();
       const visibleGroups=entries.filter(([,group])=>group&&typeof group==='object');
       if(!visibleGroups.length){layersSection.hidden=true;return;}
