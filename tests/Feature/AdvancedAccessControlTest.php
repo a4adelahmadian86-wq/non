@@ -364,6 +364,13 @@ class AdvancedAccessControlTest extends TestCase
         $manager = $this->user('09140000141', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
         $customer = $this->user('09140000142', User::ROLE_EMPLOYEE, $organization->id);
 
+        // Isolate the scoped custom grant from the legacy organization-manager default.
+        DB::table('role_permissions')
+            ->where('role', User::ROLE_ORGANIZATION_MANAGER)
+            ->where('permission_id', $this->permissionId('users.edit'))
+            ->delete();
+        app(AuthorizationService::class)->forgetUser();
+
         $viewRole = $this->role('organization-customer-view', 'organization', $organization->id);
         $this->grant($viewRole, 'users.view', 'organization');
         $this->assign($manager, $viewRole, 'organization', $organization->id);
@@ -432,6 +439,10 @@ class AdvancedAccessControlTest extends TestCase
         $this->actingAs($manager);
         request()->attributes->set('farast.scope', 'team');
         $this->assertSame([], app(AdminConsoleService::class)->visibleTeamIds($manager, 'users.view'));
+
+        // Remove the deliberately injected corrupt assignment before testing that
+        // the HTTP assignment endpoint rejects a second cross-organization grant.
+        DB::table('farast_user_roles')->where('user_id', $manager->id)->where('role_id', $roleId)->delete();
 
         $this->actingAs($admin)->post('/admin/access-center/users/'.$manager->id.'/roles', [
             'role_id' => $roleId,
