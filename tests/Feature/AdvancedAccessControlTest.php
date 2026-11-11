@@ -295,6 +295,61 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_base_role_and_block_state_changes_are_recorded_in_access_audit(): void
+    {
+        $organization = Organization::create(['name' => 'Audit Role Org', 'slug' => 'audit-role-org', 'status' => 'active']);
+        $admin = $this->user('09140000145', User::ROLE_ADMIN);
+        $target = $this->user('09140000146', User::ROLE_EMPLOYEE, $organization->id);
+
+        $this->actingAs($admin)->post('/admin/users/'.$target->id.'/role', [
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('farast_access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_user_id' => $target->id,
+            'action' => 'user.base_role.updated',
+        ]);
+
+        $this->post('/admin/users/'.$target->id.'/block')->assertRedirect();
+
+        $this->assertDatabaseHas('farast_access_audit_logs', [
+            'actor_id' => $admin->id,
+            'subject_user_id' => $target->id,
+            'action' => 'user.blocked',
+        ]);
+    }
+
+    public function test_capability_mutation_requires_its_own_permission_and_is_audited(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+        $organization = Organization::create(['name' => 'Capability Admin Org', 'slug' => 'capability-admin-org', 'status' => 'active']);
+        $manager = $this->user('09140000147', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $target = $this->user('09140000148', User::ROLE_EMPLOYEE, $organization->id);
+        $roleId = $this->role('capability-administrator', 'organization', $organization->id);
+        $this->grant($roleId, 'users.capabilities.manage', 'organization');
+        $this->assign($manager, $roleId, 'organization', $organization->id);
+
+        $this->actingAs($manager)->post('/admin/users/'.$target->id.'/capabilities', [
+            'can_ai' => true,
+            'active' => true,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('user_capabilities', [
+            'user_id' => $target->id,
+            'can_ai' => true,
+        ]);
+        $this->assertDatabaseHas('farast_access_audit_logs', [
+            'actor_id' => $manager->id,
+            'subject_user_id' => $target->id,
+            'action' => 'user.capabilities.updated',
+        ]);
+
+        $this->post('/admin/users/'.$manager->id.'/capabilities', [
+            'can_ai' => true,
+        ])->assertForbidden();
+    }
+
     public function test_view_permission_cannot_be_used_as_a_record_write_permission(): void
     {
         $organization = Organization::create(['name' => 'Scoped Action Org', 'slug' => 'scoped-action-org', 'status' => 'active']);
