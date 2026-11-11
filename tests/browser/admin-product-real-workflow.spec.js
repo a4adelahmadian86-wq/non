@@ -19,6 +19,25 @@ async function signInAsSeededAdmin(page) {
   await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
 }
 
+async function signInAsSeededEmployee(page) {
+  const password = String(process.env.GITHUB_RUN_ID || 'local') + '-farast-employee';
+
+  await page.goto('/login?continue=%2Fdashboard');
+  await page.locator('input[name="mobile"]').fill('09150000001');
+
+  const phoneResponsePromise = page.waitForResponse(response =>
+    response.url().endsWith('/login/phone') && response.request().method() === 'POST'
+  );
+  await page.getByRole('button', { name: /ادامه با شماره موبایل/ }).click();
+  const phoneResponse = await phoneResponsePromise;
+  expect(phoneResponse.ok()).toBeTruthy();
+
+  await expect(page).toHaveURL(/\\/login\\/password/);
+  await page.locator('input[name="password"]').fill(password);
+  await page.getByRole('button', { name: 'ورود به حساب' }).click();
+  await expect(page).toHaveURL(/\\/dashboard(?:[?#].*)?$/);
+}
+
 async function advanceProductWizardToReview(page) {
   for (const [current, next] of [[2, 3], [3, 4]]) {
     await page.locator(`[data-wizard-panel="${current}"] .product-wizard-next`).click();
@@ -156,6 +175,62 @@ test.describe('Real admin product workflow', () => {
     expect(csatResponse.status()).toBe(302);
     await expect(page.getByText('امتیاز شما: 5 از ۵')).toBeVisible();
     await expect(page.getByText('پاسخ‌گویی آزمایشی قابل قبول بود.')).toBeVisible();
+  });
+
+  test('admin can open the role console and see the role matrix', async ({ page }) => {
+    await signInAsSeededAdmin(page);
+    const response = await page.goto('/admin/access');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText('مدیریت نقش‌ها و مجوزها')).toBeVisible();
+    await expect(page.getByText('مدیر سازمان')).toBeVisible();
+    await expect(page.getByText('سرپرست تیم')).toBeVisible();
+    await expect(page.getByText('کارمند')).toBeVisible();
+  });
+
+  test('employee can use the dashboard but cannot open the role permission console', async ({ page }) => {
+    await signInAsSeededEmployee(page);
+    await expect(page).toHaveURL(/\\/dashboard/);
+    const response = await page.goto('/admin/access');
+    expect(response?.status()).toBe(403);
+  });
+
+  test('free storefront checkout grants a library entitlement and a secure file download', async ({ page }) => {
+    await signInAsSeededAdmin(page);
+    await page.goto('/store/product/demo-free');
+    await expect(page.getByRole('heading', { name: 'فایل آزمایشی رایگان' })).toBeVisible();
+
+    const addButton = page.locator('.add-to-cart[data-product-id]');
+    const addResponsePromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname.startsWith('/cart/products/') &&
+      response.request().method() === 'POST'
+    );
+    await addButton.click();
+    const addResponse = await addResponsePromise;
+    expect(addResponse.status()).toBe(200);
+    await expect(addButton).toContainText('در سبد خرید قرار گرفت');
+
+    await page.goto('/cart');
+    await expect(page.getByText('فایل آزمایشی رایگان', { exact: true })).toBeVisible();
+    const checkoutForm = page.locator('form.store-checkout-form');
+    await checkoutForm.locator('input[name="accept_terms"]').check();
+
+    const checkoutResponsePromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/cart/checkout' &&
+      response.request().method() === 'POST'
+    );
+    await checkoutForm.getByRole('button', { name: 'دریافت رایگان' }).click();
+    const checkoutResponse = await checkoutResponsePromise;
+    expect(checkoutResponse.status()).toBe(302);
+    await expect(page).toHaveURL(/\\/library(?:[?#].*)?$/);
+    await expect(page.locator('.store-alert.success[role="status"]')).toContainText('سفارش رایگان ثبت شد');
+
+    const downloadButton = page.locator('.library-download');
+    await expect(downloadButton).toBeVisible();
+    const downloadPromise = page.waitForEvent('download');
+    await downloadButton.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('demo-free.txt');
+    expect(await download.failure()).toBeNull();
   });
 
   test('mobile product editor fits the viewport and its primary fields are keyboard reachable', async ({ page }) => {
