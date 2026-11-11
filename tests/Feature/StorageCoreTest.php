@@ -217,7 +217,7 @@ class StorageCoreTest extends TestCase
     }
 
 
-    public function test_rebinding_a_restored_remote_file_releases_the_old_volume_counters(): void
+    public function test_rebinding_a_restored_remote_file_cleans_old_object_after_successful_transfer(): void
     {
         $volume = StorageVolume::create([
             'drive_key' => 'iran_primary', 'name' => 'Iran restore source', 'driver' => 'local',
@@ -318,6 +318,52 @@ class StorageCoreTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         app(StorageManager::class)->exists('storage_volume:'.$volume->id, '../outside.txt');
+    }
+
+
+    public function test_empty_volume_can_be_deleted_after_historical_file_rows_are_detached(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_blocked' => false,
+        ]);
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Empty historical volume',
+            'driver' => 'local',
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => false,
+            'last_checked_at' => now(),
+            'priority' => 1,
+        ]);
+        StorageManagedFile::create([
+            'storage_volume_id' => $volume->id,
+            'drive_key' => 'iran_primary',
+            'file_key' => 'historical/deleted-file.txt',
+            'file_key_hash' => hash('sha256', 'historical/deleted-file.txt'),
+            'original_name' => 'deleted-file.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => 10,
+            'checksum' => hash('sha256', 'deleted-file'),
+            'classification' => 'critical',
+            'source_module' => 'storage-test',
+            'visibility' => 'private',
+            'status' => 'deleted',
+            'metadata' => ['disk' => 'storage_volume:'.$volume->id],
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.storage.destroy', $volume))
+            ->assertRedirect(route('admin.storage.index'));
+
+        $this->assertDatabaseMissing('storage_volumes', ['id' => $volume->id]);
+        $this->assertDatabaseHas('storage_managed_files', [
+            'file_key' => 'historical/deleted-file.txt',
+            'storage_volume_id' => null,
+            'status' => 'deleted',
+        ]);
     }
 
 }
