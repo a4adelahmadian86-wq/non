@@ -220,7 +220,7 @@ class AuthorizationService
         // A supervisor with no managed team is effectively personal-scope.
         if ($scope === 'team'
             && (! $user->organization_id
-                || (! $user->teams()->where('teams.organization_id', $user->organization_id)->wherePivot('team_role', 'manager')->exists()
+                || (! $user->teams()->where('teams.organization_id', $user->organization_id)->wherePivotIn('team_role', ['manager', 'owner', 'supervisor'])->exists()
                     && ! \App\Models\Team::query()->where('organization_id', $user->organization_id)->where('supervisor_id', $user->id)->exists()))) {
             return 'own';
         }
@@ -403,7 +403,7 @@ class AuthorizationService
             $memberIds = $user->organization_id
                 ? $user->teams()
                     ->where('teams.organization_id', $user->organization_id)
-                    ->wherePivot('team_role', 'manager')
+                    ->wherePivotIn('team_role', ['manager', 'owner', 'supervisor'])
                     ->pluck('teams.id')
                     ->map(fn ($id) => (int) $id)
                     ->all()
