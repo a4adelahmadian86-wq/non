@@ -882,7 +882,7 @@ class AdminStoreController extends Controller
             }
 
             if (in_array($extension, ['pdf', 'docx'], true) && $accessLevel === 'sample') {
-                $sample = app(\\App\\Services\\StorePdfPreviewPreparer::class)->prepareSample(
+                $sample = app(\App\Services\StorePdfPreviewPreparer::class)->prepareSample(
                     $preparedBytes,
                     max(1, min(50, (int) ($product->preview_pages ?: 3)))
                 );
@@ -892,7 +892,7 @@ class AdminStoreController extends Controller
             }
 
             if ($extension === 'xlsx') {
-                $preparedBytes = app(\\App\\Services\\StoreXlsxPreviewRenderer::class)->render(
+                $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
                     $sourceBytes,
                     '__FARAST_READER_IDENTITY__',
                     $accessLevel === 'sample'
