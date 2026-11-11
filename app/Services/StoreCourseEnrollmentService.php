@@ -56,6 +56,7 @@ class StoreCourseEnrollmentService
                 ->whereKey($lockedLibraryItem->order_item_id)
                 ->where('order_id', $order->id)
                 ->where('product_id', $product->id)
+                ->lockForUpdate()
                 ->first();
 
             if (! $orderItem || (int) $orderItem->quantity < 1) {
