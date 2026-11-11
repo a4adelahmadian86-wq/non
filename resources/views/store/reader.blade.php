@@ -153,6 +153,17 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 
 
 .farast-reader-sheet-table-wrap{max-width:100%;overflow:auto;margin:1rem 0;border:1px solid rgba(100,116,139,.25);border-radius:12px;background:#fff;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.farast-reader-sheet-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;color:#1f2937;font-size:.9rem;direction:rtl}.farast-reader-sheet-table caption{caption-side:top;text-align:right;padding:.8rem 1rem;font-weight:700;color:#334155;background:#f1f5f9}.farast-reader-sheet-table th,.farast-reader-sheet-table td{min-width:105px;max-width:280px;padding:.65rem .8rem;border-left:1px solid #e2e8f0;border-top:1px solid #e2e8f0;text-align:start;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}.farast-reader-sheet-table th{position:sticky;right:0;z-index:1;min-width:48px;background:#e2e8f0;color:#334155;text-align:center;font-variant-numeric:tabular-nums}.farast-reader-sheet-table tr:first-child td{background:#f8fafc;font-weight:600}.farast-reader-sheet-table tr:nth-child(even) td{background:#f8fafc}.farast-reader-sheet-note{font-size:.82rem;color:#64748b;margin:.5rem 0}
+.farast-pdf-password-dialog{width:min(92vw,420px);border:1px solid var(--reader-line);border-radius:16px;padding:0;background:var(--reader-panel);color:var(--reader-text);box-shadow:0 24px 80px rgba(0,0,0,.4)}
+.farast-pdf-password-dialog::backdrop{background:rgba(2,8,23,.72);backdrop-filter:blur(4px)}
+.farast-pdf-password-form{display:grid;gap:14px;padding:22px}
+.farast-pdf-password-form strong{font-size:1rem}
+.farast-pdf-password-form p{margin:0;color:var(--reader-muted);font-size:.82rem;line-height:1.8}
+.farast-pdf-password-form input{width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--reader-line);border-radius:9px;background:var(--reader-bg);color:var(--reader-text);font:inherit}
+.farast-pdf-password-actions{display:flex;justify-content:flex-end;gap:8px}
+.farast-pdf-password-actions button,.farast-pdf-retry{min-height:38px;padding:7px 14px;border:1px solid var(--reader-line);border-radius:9px;background:var(--reader-panel);color:var(--reader-text);font:inherit;cursor:pointer}
+.farast-pdf-password-actions button[type=submit],.farast-pdf-retry{background:#2563eb;border-color:#2563eb;color:#fff}
+.farast-pdf-loading p{margin:0 0 10px}
+
 .farast-reader{min-height:100vh;font-family:Tahoma,Arial,sans-serif}
 .farast-reader i.fa-solid,.farast-reader i.fa-regular{display:none!important}
 .farast-reader .reader-tool:not(:has(span))[aria-label]::after{content:attr(aria-label);font-size:.62rem;line-height:1.25;white-space:nowrap}
