@@ -106,8 +106,7 @@ class AuthorizationService
             ];
         }
 
-        $hasCustomAssignment = $this->hasDynamicAssignmentForPermission($user, $permissionId);
-        if (! $hasCustomAssignment && $this->hasLegacyGrantForContext($user, $permissionId, $context)) {
+        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return ['allowed' => true, 'reason' => 'legacy_role_grant', 'source' => 'legacy_role', 'permission' => $permission];
         }
 
@@ -178,11 +177,7 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = true;
         }
 
-        // Once a custom role explicitly manages this permission for the user,
-        // its scopes become authoritative for that permission. This prevents a
-        // broad legacy role grant from silently bypassing a narrower custom role.
-        $hasCustomAssignment = $this->hasDynamicAssignmentForPermission($user, $permissionId);
-        if (! $hasCustomAssignment && $this->hasLegacyGrantForContext($user, $permissionId, $context)) {
+        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return $this->decisionCache[$cacheKey] = true;
         }
 
@@ -260,8 +255,7 @@ class AuthorizationService
         return $this->overrideRowsByUser[$user->id];
     }
 
-    /** Load active custom assignments once per user/request. */
-    private function dynamicAssignmentsFor(User $user): array
+    private function dynamicGrant(User $user, int $permissionId, array $context): ?object
     {
         if (! array_key_exists($user->id, $this->dynamicGrantsByUser)) {
             $this->dynamicGrantsByUser[$user->id] = Schema::hasTable('farast_user_roles')
@@ -294,28 +288,7 @@ class AuthorizationService
                 : [];
         }
 
-        return $this->dynamicGrantsByUser[$user->id];
-    }
-
-    /**
-     * A custom assignment is authoritative for its permission even when its
-     * scope does not match the current resource; otherwise a legacy broad grant
-     * could bypass the narrower custom assignment.
-     */
-    private function hasDynamicAssignmentForPermission(User $user, int $permissionId): bool
-    {
-        foreach ($this->dynamicAssignmentsFor($user) as $assignment) {
-            if ((int) $assignment->permission_id === $permissionId) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function dynamicGrant(User $user, int $permissionId, array $context): ?object
-    {
-        foreach ($this->dynamicAssignmentsFor($user) as $assignment) {
+        foreach ($this->dynamicGrantsByUser[$user->id] as $assignment) {
             if ((int) $assignment->permission_id !== $permissionId) {
                 continue;
             }
