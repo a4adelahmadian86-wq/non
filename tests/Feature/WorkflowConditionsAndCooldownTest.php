@@ -821,7 +821,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         try {
             (new ProcessWorkflowEvent($eventId))->handle($engine);
             $this->fail('A failed mapping below its own retry limit must be retried.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('retryable failed steps', $exception->getMessage());
         }
 
