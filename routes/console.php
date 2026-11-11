@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
@@ -65,12 +66,53 @@ Schedule::command('announcements:broadcast-due')
 
 // Retry failed workflow steps without replaying steps that already completed.
 Artisan::command('farast:workflows:retry {--limit=50}', function (WorkflowEngine $engine) {
-    $completed = $engine->retryFailedEvents((int) $this->option('limit'));
-    $this->info("Completed {$completed} retried workflow step(s).");
+    $queued = $engine->dispatchPendingEvents((int) $this->option('limit'));
+    $this->info("Queued {$queued} pending or recoverable workflow event(s).");
 })->purpose('Retry failed FARAST workflow event steps');
 
 Schedule::command('farast:workflows:retry --limit=50')
     ->everyMinute()
+    ->withoutOverlapping(10);
+
+// Dedicated database-backed automation worker; sync mode is intentionally excluded.
+Schedule::command('queue:work --queue=automation --stop-when-empty --max-time=900 --timeout=300 --tries=5 --backoff=60')
+    ->everyMinute()
+    ->withoutOverlapping(20)
+    ->when(fn () => (bool) config('queue.scheduled_worker', true) && config('queue.default') !== 'sync');
+
+Artisan::command('farast:workflows:pause {eventId}', function (WorkflowEngine $engine) {
+    $paused = $engine->pauseEvent((int) $this->argument('eventId'));
+    $this->info($paused ? 'Workflow event paused at a safe boundary.' : 'Event not found or already completed.');
+    return $paused ? 0 : 1;
+})->purpose('Pause a workflow event without deleting its history');
+
+Artisan::command('farast:workflows:resume {eventId}', function (WorkflowEngine $engine) {
+    $resumed = $engine->resumeEvent((int) $this->argument('eventId'));
+    $this->info($resumed ? 'Workflow event queued for recovery.' : 'Event is not paused or does not exist.');
+    return $resumed ? 0 : 1;
+})->purpose('Resume a paused workflow event');
+
+Artisan::command('farast:workflows:health', function () {
+    if (! Schema::hasTable('farast_workflow_events')) {
+        $this->warn('Workflow event ledger is not installed.');
+        return 1;
+    }
+    $counts = DB::table('farast_workflow_events')
+        ->selectRaw('status, COUNT(*) as total')
+        ->groupBy('status')->pluck('total', 'status');
+    $oldest = DB::table('farast_workflow_events')->where('status', 'pending')->orderBy('created_at')->first();
+    $delay = $oldest ? max(0, (int) Illuminate\Support\Carbon::parse($oldest->created_at)->diffInSeconds(now())) : 0;
+    $failed = (int) ($counts['failed'] ?? 0);
+    $pending = (int) ($counts['pending'] ?? 0);
+    $this->line('pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' oldest_pending_seconds='.$delay);
+    if ($failed > 0 || $delay >= 300) {
+        Log::warning('FARAST workflow queue health threshold exceeded', ['pending' => $pending, 'failed' => $failed, 'oldest_pending_seconds' => $delay]);
+    }
+    return 0;
+})->purpose('Report workflow queue backlog, latency and terminal failures');
+
+Schedule::command('farast:workflows:health')
+    ->everyFiveMinutes()
     ->withoutOverlapping();
 
 // Move legacy support attachments out of the public web root in bounded batches.
