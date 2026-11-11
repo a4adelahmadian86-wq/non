@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreCategory;
+use App\Models\StoreCoupon;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
 use App\Models\StoreCourseLesson;
@@ -292,6 +293,89 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $this->assertSame(1, Payment::query()->where('order_id', $order->id)->where('status', 'paid')->count());
         $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
         $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
+    }
+
+    public function test_verified_gateway_payment_is_not_rolled_back_when_coupon_rules_change_after_checkout(): void
+    {
+        Storage::fake('private');
+        $user = $this->makeUser('09123456788');
+        [$product] = $this->makeProduct('coupon-capture-safety');
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $orderItem = StoreOrderItem::query()->where('order_id', $order->id)->firstOrFail();
+        $order->update([
+            'subtotal_rials' => 50000,
+            'discount_rials' => 10000,
+            'total_rials' => 40000,
+            'pricing_snapshot' => [
+                'kind' => 'store',
+                'coupon_code' => 'LIMITED-CAPTURE',
+                'coupon_redemption_pending' => true,
+                'coupon_assignment_id' => null,
+                'coupon_product_id' => null,
+            ],
+        ]);
+        $orderItem->update([
+            'discount_rials' => 10000,
+            'total_rials' => 40000,
+        ]);
+
+        $coupon = StoreCoupon::create([
+            'code' => 'LIMITED-CAPTURE',
+            'type' => 'fixed',
+            'value' => 10000,
+            'min_subtotal_rials' => 0,
+            'max_uses' => 1,
+            'used_count' => 1,
+            'is_active' => true,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => 'AUTH-COUPON-CAPTURE',
+            'transaction_id' => 'AUTH-COUPON-CAPTURE',
+            'amount_rials' => 40000,
+            'status' => 'pending',
+        ]);
+
+        $gateway = Mockery::mock(ZarinpalService::class);
+        $gateway->shouldReceive('verify')
+            ->once()
+            ->with('AUTH-COUPON-CAPTURE', 40000)
+            ->andReturn(['code' => 100, 'ref_id' => 'COUPON-CAPTURE-REF']);
+        app()->instance(ZarinpalService::class, $gateway);
+
+        $email = Mockery::mock(EmailService::class);
+        $email->shouldReceive('sendOrderPaid')->once()->andReturnNull();
+        app()->instance(EmailService::class, $email);
+
+        $this->withSession([
+            'zarinpal_order_id' => $order->id,
+            'zarinpal_authority' => 'AUTH-COUPON-CAPTURE',
+        ])->get('/checkout/zarinpal/callback?Authority=AUTH-COUPON-CAPTURE&Status=OK')
+            ->assertRedirect(route('library'));
+
+        $paidOrder = $order->fresh();
+        $paidPayment = Payment::query()->where('order_id', $order->id)->firstOrFail();
+        $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
+
+        $this->assertSame('paid', $paidOrder->status);
+        $this->assertNotNull($paidOrder->paid_at);
+        $this->assertSame('paid', $paidPayment->status);
+        $this->assertSame(40000, (int) $paidPayment->amount_rials);
+        $this->assertSame($product->id, (int) $libraryItem->product_id);
+        $this->assertSame(1, (int) $coupon->fresh()->used_count);
+        $this->assertTrue((bool) data_get($paidOrder->pricing_snapshot, 'coupon_redemption_pending'));
+        $this->assertSame('required', data_get($paidOrder->pricing_snapshot, 'coupon_redemption_reconciliation.status'));
+        $this->assertSame('post_capture_validation_failed', data_get($paidOrder->pricing_snapshot, 'coupon_redemption_reconciliation.reason_code'));
     }
 
     public function test_wallet_payment_uses_the_exact_checkout_price_and_file_snapshot(): void
