@@ -48,7 +48,7 @@ class AuthorizationService
         // navigation behavior. Record access must still go through allowsFor().
         if ($user->isAdmin() && (
             $permission === 'dashboard.view'
-            || \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($user) === 'global'
+            || \App\Http\Middleware\ResolveAdminScope::scopeFor($user) === 'global'
         )) {
             return true;
         }
