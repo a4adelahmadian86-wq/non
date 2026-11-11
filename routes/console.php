@@ -44,6 +44,13 @@ Schedule::command('queue:work --queue=documents,documents-audio,default --stop-w
     ->withoutOverlapping(20)
     ->when(fn () => (bool) config('queue.scheduled_worker', true));
 
+// Run long backup jobs on the first-party database-backed backups connection.
+// A separate worker keeps the four-hour backup timeout independent of short document jobs.
+Schedule::command('queue:work backups --queue=backups --stop-when-empty --max-time=900 --timeout=14400 --tries=1')
+    ->everyMinute()
+    ->withoutOverlapping(300)
+    ->when(fn () => (bool) config('queue.scheduled_worker', true));
+
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
     ->everyFifteenMinutes()
