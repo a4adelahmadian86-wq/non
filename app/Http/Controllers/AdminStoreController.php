@@ -158,12 +158,15 @@ class AdminStoreController extends Controller
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = collect();
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
             'categories' => $categories,
             'tags' => $tags,
             'relatedProducts' => $relatedProducts,
+            'canRequestAntivirus' => $canRequestAntivirus,
         ]);
     }
 
