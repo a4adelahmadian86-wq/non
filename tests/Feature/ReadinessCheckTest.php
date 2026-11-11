@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Http\\Controllers\\ReadinessController;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\DB;
+use App\Http\Controllers\ReadinessController;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class ReadinessCheckTest extends TestCase
 {
@@ -28,10 +28,9 @@ class ReadinessCheckTest extends TestCase
 
         $response = app(ReadinessController::class)();
 
-        $response->assertStatus(503)
-            ->assertExactJson(['status' => 'not_ready'])
-            ->assertHeader('Cache-Control', 'no-store, max-age=0');
-
+        $this->assertSame(503, $response->getStatusCode());
+        $this->assertSame(['status' => 'not_ready'], $response->getData(true));
+        $this->assertSame('no-store, max-age=0', $response->headers->get('Cache-Control'));
         $this->assertStringNotContainsString('private database host', $response->getContent());
     }
 }
