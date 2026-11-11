@@ -22,6 +22,21 @@ class RunStorageBackup extends Command
         }
 
         try {
+            // The dedicated worker has a four-hour hard timeout and a 4h10m
+            // retry_after. A running request older than five hours is abandoned,
+            // not an active backup; recover it so one killed worker cannot block
+            // every future scheduled backup indefinitely.
+            StorageBackupRun::query()
+                ->where('source_name', 'scheduler_request')
+                ->where('status', 'running')
+                ->whereNotNull('started_at')
+                ->where('started_at', '<', now()->subHours(5))
+                ->update([
+                    'status' => 'failed',
+                    'completed_at' => now(),
+                    'error_message' => 'درخواست بکاپ پس از پایان مهلت اجرای Worker بدون نتیجه باقی مانده بود.',
+                ]);
+
             $existing = StorageBackupRun::query()
                 ->where('source_name', 'scheduler_request')
                 ->whereIn('status', ['queued', 'running'])
