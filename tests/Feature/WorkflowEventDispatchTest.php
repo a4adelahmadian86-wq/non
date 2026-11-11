@@ -5,12 +5,19 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WorkflowEventDispatchTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['queue.default' => 'database']);
+    }
 
     private function user(string $mobile): User
     {
@@ -31,8 +38,8 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $first = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17], 'document:17:revision:1');
-        $second = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17], 'document:17:revision:1');
+        $first = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17, 'revision' => 1], 'document:17:revision:1');
+        $second = $engine->dispatch('document.saved', ['user_id' => $user->id, 'document_id' => 17, 'revision' => 1], 'document:17:revision:1');
 
         $this->assertSame(1, $first);
         $this->assertSame(0, $second);
@@ -55,12 +62,12 @@ class WorkflowEventDispatchTest extends TestCase
 
         $first = app(WorkflowEngine::class)->dispatch(
             'order.paid',
-            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000, 'order_kind' => 'store', 'status' => 'paid'],
             'order:125:paid',
         );
         $second = app(WorkflowEngine::class)->dispatch(
             'order.paid',
-            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000, 'order_kind' => 'store', 'status' => 'paid'],
             'order:125:paid',
         );
 
@@ -82,7 +89,7 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $context = ['user_id' => $user->id, 'order_id' => 502, 'order_kind' => 'typing_deposit'];
+        $context = ['user_id' => $user->id, 'order_id' => 502, 'order_kind' => 'typing_deposit', 'amount_rials' => 100000, 'status' => 'deposit_paid'];
         $first = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
         $second = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
 
@@ -104,7 +111,7 @@ class WorkflowEventDispatchTest extends TestCase
 
         $count = app(WorkflowEngine::class)->dispatch(
             'ticket.created',
-            ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 91],
+            ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 91, 'ticket_code' => 'T-91'],
             'ticket:91:created',
         );
 
@@ -168,7 +175,7 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
 
         $engine = app(WorkflowEngine::class);
-        $context = ['user_id' => $user->id, 'document_id' => 991];
+        $context = ['user_id' => $user->id, 'document_id' => 991, 'revision' => 1];
         $completed = $engine->dispatch('document.saved', $context, 'document:991:revision:1');
 
         $this->assertSame(1, $completed);
@@ -230,11 +237,11 @@ class WorkflowEventDispatchTest extends TestCase
         $other = $this->user('09152223353');
         $engine = app(WorkflowEngine::class);
 
-        $engine->dispatch('document.saved', ['user_id' => $owner->id], 'shared-event-key');
+        $engine->dispatch('document.saved', ['user_id' => $owner->id, 'document_id' => 1, 'revision' => 1], 'shared-event-key');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already bound to another event');
-        $engine->dispatch('document.saved', ['user_id' => $other->id], 'shared-event-key');
+        $engine->dispatch('document.saved', ['user_id' => $other->id, 'document_id' => 1, 'revision' => 1], 'shared-event-key');
     }
 
     public function test_event_dispatch_never_runs_another_users_workflow(): void
@@ -247,8 +254,75 @@ class WorkflowEventDispatchTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $count = app(WorkflowEngine::class)->dispatch('ticket.created', ['user_id' => $owner->id], 'ticket:unique-1');
+        $count = app(WorkflowEngine::class)->dispatch('ticket.created', ['user_id' => $owner->id, 'ticket_id' => 1, 'ticket_code' => 'T-1'], 'ticket:unique-1');
         $this->assertSame(0, $count);
         $this->assertSame(0, DB::table('farast_workflow_runs')->count());
     }
+    public function test_financial_domain_events_use_the_isolated_critical_queue(): void
+    {
+        $user = $this->user('09152223350');
+
+        $eventId = app(WorkflowEngine::class)->enqueue('order.paid', [
+            'user_id' => $user->id,
+            'order_id' => 550,
+            'amount_rials' => 750000,
+            'order_kind' => 'store',
+            'status' => 'paid',
+        ], 'order:550:paid');
+
+        $this->assertGreaterThan(0, $eventId);
+        $this->assertDatabaseHas('jobs', [
+            'queue' => 'automation-critical',
+        ]);
+        $this->assertDatabaseMissing('jobs', [
+            'queue' => 'automation',
+        ]);
+    }
+
+    public function test_financial_event_is_processed_by_its_isolated_critical_worker(): void
+    {
+        $user = $this->user('09152223351');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Critical paid order workflow',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'پرداخت تأیید شد']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $eventId = app(WorkflowEngine::class)->enqueue('order.paid', [
+            'user_id' => $user->id,
+            'order_id' => 551,
+            'amount_rials' => 900000,
+            'order_kind' => 'store',
+            'status' => 'paid',
+        ], 'order:551:paid');
+
+        $this->assertDatabaseHas('jobs', ['queue' => 'automation-critical']);
+
+        Artisan::call('queue:work', [
+            'connection' => 'database',
+            '--queue' => 'automation-critical',
+            '--once' => true,
+            '--tries' => 5,
+            '--timeout' => 300,
+        ]);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'title' => 'پرداخت تأیید شد',
+        ]);
+        $this->assertDatabaseMissing('jobs', ['queue' => 'automation-critical']);
+    }
+
 }
