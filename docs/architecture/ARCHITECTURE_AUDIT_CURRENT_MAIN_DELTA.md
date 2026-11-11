@@ -130,7 +130,7 @@ PR `feat(platform): scoped RBAC and transactional workflow core` همین سه �
 
 همچنین `AdminSectionScopeAuthorizationTest` آزمون منفی برای دسترسی employee به `/admin/store`، `/admin/store/operations` و `/admin/support-report` اضافه کرده است.
 
-**وضعیت:** اصلاح هنوز در main این snapshot نیست؛ PR #347 باز است. فایل‌های Route و سرویس‌های Authorization در PR #347 تغییر می‌کنند، بنابراین اصلاح موازی همان فایل‌ها در شاخه دیگری انجام نمی‌شود. ادغام فقط پس از rebase/بررسی تعارض و CI کامل مجاز است.
+**وضعیت:** اصلاح هنوز در main این snapshot نیست؛ PR #347 باز است. در بررسی مجدد، GitHub آن را `mergeable=false / dirty` گزارش کرد و check-run قابل اتکایی روی head فعلی وجود نداشت. سه فایل مشترک بین تغییرات main و PR عبارت‌اند از `.github/workflows/farast-ci.yml`، `.github/workflows/phase3-commerce.yml` و `routes/web_core_part2.php`؛ مورد آخر با اصلاح Route اعلان در PR #371 تداخل دارد. این تعارض‌ها به PR گزارش شده‌اند. فایل‌های Route و سرویس‌های Authorization در PR #347 تغییر می‌کنند، بنابراین اصلاح موازی همان فایل‌ها در شاخه دیگری انجام نمی‌شود. ادغام فقط پس از rebase روی main جاری، حل تعارض‌ها و CI کامل مجاز است.
 
 
 ### نکته معماری پیش از ادغام PR #347: ورودی‌های چندگانه، یک evaluator
