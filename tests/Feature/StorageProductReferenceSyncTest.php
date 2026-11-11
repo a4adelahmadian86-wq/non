@@ -14,6 +14,8 @@ use App\Services\Storage\StorageTransferService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StorageProductReferenceSyncTest extends TestCase
@@ -218,6 +220,108 @@ class StorageProductReferenceSyncTest extends TestCase
         $this->assertSame('products/files/new-reader.pdf', $productFile->path);
         $this->assertSame('storage_volume:'.$volume->id, $preview->disk);
         $this->assertSame('products/files/new-reader.pdf', $preview->path);
+    }
+
+    public function test_legacy_product_files_and_reader_artifacts_migrate_once_and_update_preview_mirrors(): void
+    {
+        Storage::fake('private');
+        Storage::fake('public');
+        $product = $this->product();
+
+        $legacyProductFilePath = 'legacy/product-source.docx';
+        Storage::disk('public')->put($legacyProductFilePath, 'legacy product source');
+        $productFile = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => 1,
+            'disk' => 'public',
+            'path' => $legacyProductFilePath,
+            'original_name' => 'product-source.docx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'size_bytes' => strlen('legacy product source'),
+            'sha256' => hash('sha256', 'legacy product source'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+
+        $legacyArtifactPath = 'legacy/reader-sample.pdf';
+        Storage::disk('private')->put($legacyArtifactPath, '%PDF-1.4 legacy sample');
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $productFile->id,
+            'source_sha256' => hash('sha256', 'legacy product source'),
+            'processing_status' => 'completed',
+        ]);
+        $artifact = StoreProductDocumentArtifact::create([
+            'document_id' => $document->id,
+            'artifact_type' => 'sample_pdf',
+            'version' => 1,
+            'disk' => 'private',
+            'path' => $legacyArtifactPath,
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen('%PDF-1.4 legacy sample'),
+            'sha256' => hash('sha256', '%PDF-1.4 legacy sample'),
+        ]);
+        $artifactPreview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => $legacyArtifactPath,
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'kind' => 'pdf',
+            'access_level' => 'sample',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $filePreview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'public',
+            'path' => $legacyProductFilePath,
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'kind' => 'reader_document',
+            'access_level' => 'full',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        $this->assertSame(0, Artisan::call('storage:migrate-legacy-product-assets', ['--limit' => 20]));
+
+        $productFile->refresh();
+        $artifact->refresh();
+        $artifactPreview->refresh();
+        $filePreview->refresh();
+
+        $this->assertSame('private', $productFile->disk);
+        $this->assertNotSame($legacyProductFilePath, $productFile->path);
+        $this->assertTrue(Storage::disk('private')->exists($productFile->path));
+        $this->assertFalse(Storage::disk('public')->exists($legacyProductFilePath));
+        $this->assertSame($productFile->disk, $filePreview->disk);
+        $this->assertSame($productFile->path, $filePreview->path);
+
+        $this->assertSame('private', $artifact->disk);
+        $this->assertNotSame($legacyArtifactPath, $artifact->path);
+        $this->assertTrue(Storage::disk('private')->exists($artifact->path));
+        $this->assertFalse(Storage::disk('private')->exists($legacyArtifactPath));
+        $this->assertSame($artifact->disk, $artifactPreview->disk);
+        $this->assertSame($artifact->path, $artifactPreview->path);
+
+        $this->assertDatabaseHas('storage_managed_files', [
+            'source_type' => StoreProductFile::class,
+            'source_id' => $productFile->id,
+            'file_key' => $productFile->path,
+        ]);
+        $this->assertDatabaseHas('storage_managed_files', [
+            'source_type' => StoreProductDocumentArtifact::class,
+            'source_id' => $artifact->id,
+            'file_key' => $artifact->path,
+        ]);
+
+        $this->assertSame(0, Artisan::call('storage:migrate-legacy-product-assets', ['--limit' => 20]));
+        $this->assertSame(2, StorageManagedFile::query()->whereIn('source_type', [StoreProductFile::class, StoreProductDocumentArtifact::class])->count());
     }
 
 }
