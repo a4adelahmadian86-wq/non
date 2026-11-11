@@ -130,14 +130,14 @@ return new class extends Migration {
 
         $indexes = Schema::getIndexes($table);
         foreach ($indexes as $index) {
-            if (($index['columns'] ?? []) === ['disk', 'path'] && ! ($index['primary'] ?? false)) {
+            if (($index['unique'] ?? false) && ($index['columns'] ?? []) === ['disk', 'path'] && ! ($index['primary'] ?? false)) {
                 Schema::table($table, fn (Blueprint $blueprint) => $blueprint->dropUnique($index['name']));
             }
         }
 
         $indexes = Schema::getIndexes($table);
         $hasPathHashUnique = collect($indexes)->contains(
-            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['disk', 'path_hash']
+            fn (array $index): bool => ($index['name'] ?? null) === 'farast_storage_objects_disk_path_hash_unique' || (($index['unique'] ?? false) && ($index['columns'] ?? []) === ['disk', 'path_hash'])
         );
 
         if (! $hasPathHashUnique) {
