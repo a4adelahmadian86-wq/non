@@ -256,25 +256,6 @@ trait PaysWithZarinpal
             }
         }
 
-        if ($paymentProcessed) {
-            try {
-                app(\App\Services\WorkflowEngine::class)->dispatch(
-                    'order.paid',
-                    [
-                        'user_id' => (int) $order->user_id,
-                        'customer_id' => (int) $order->user_id,
-                        'order_id' => (int) $order->id,
-                        'amount_rials' => (int) $order->total_rials,
-                        'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'store'),
-                        'status' => (string) $order->status,
-                    ],
-                    'order:'.$order->id.':paid',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
-
         return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل یا دوره در کتابخانه شما فعال شد.');
     }
 }
