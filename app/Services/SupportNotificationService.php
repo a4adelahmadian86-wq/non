@@ -56,7 +56,8 @@ class SupportNotificationService
                     [
                         'token' => $ticket->displayCode(),
                         'token2' => Str::limit($ticket->subject, 30),
-                    ]
+                    ],
+                    'support:ticket:'.$ticket->id.':created:staff'
                 );
             }
         }
@@ -93,7 +94,8 @@ class SupportNotificationService
                     $mobile,
                     'ticket_customer_reply',
                     'فراست: پاسخ فوری کاربر روی '.$ticket->displayCode(),
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':customer-reply:'.($messageId ? 'message:'.$messageId : 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':staff'
                 );
             }
         }
@@ -123,7 +125,8 @@ class SupportNotificationService
                     $ticket->user->mobile,
                     'ticket_reply',
                     'فراست: پاسخ جدید برای تیکت '.$ticket->displayCode().'. مشاهده در پنل پشتیبانی.',
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':staff-reply:'.($messageId ? 'message:'.$messageId : 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':user'
                 );
             }
         } elseif ($ticket->guest_email) {
@@ -155,7 +158,8 @@ class SupportNotificationService
                     $ticket->user->mobile,
                     'ticket_closed',
                     'فراست: تیکت '.$ticket->displayCode().' بسته شد.',
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':closed:'.($eventIdentity ?? 'transition:'.($ticket->updated_at?->format('U.u') ?? 'unknown'))
                 );
             }
         }
@@ -183,7 +187,8 @@ class SupportNotificationService
                 $agent->mobile,
                 'ticket_assigned',
                 'فراست: تیکت '.$ticket->displayCode().' به شما ارجاع شد.',
-                ['token' => $ticket->displayCode()]
+                ['token' => $ticket->displayCode()],
+                'support:ticket:'.$ticket->id.':assigned:'.($eventIdentity ?? 'assignment:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':agent:'.$agent->id
             );
         }
     }
@@ -200,7 +205,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning');
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', 'sla-warning:'.$kind.':'.$minutesLeft);
                 }
             } catch (\Throwable) {
             }
@@ -216,7 +221,8 @@ class SupportNotificationService
                     [
                         'token' => $ticket->displayCode(),
                         'token2' => (string) $minutesLeft,
-                    ]
+                    ],
+                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$minutesLeft
                 );
             }
         }
@@ -234,7 +240,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach');
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', 'sla-breached:'.$kind);
                 }
             } catch (\Throwable) {
             }
@@ -247,7 +253,8 @@ class SupportNotificationService
                     $mobile,
                     'ticket_sla_breach',
                     'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
-                    ['token' => $ticket->displayCode()]
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind
                 );
             }
         }
