@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessWorkflowEvent;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,12 +81,20 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'idempotency_key' => 'ticket:'.$ticket->id.':created',
             'event_type' => 'ticket.created',
             'user_id' => $owner->id,
-            'status' => 'completed',
+            'status' => 'pending',
         ]);
         $ticketEvent = DB::table('farast_workflow_events')
             ->where('idempotency_key', 'ticket:'.$ticket->id.':created')
             ->first();
         $this->assertNotEmpty(data_get(json_decode($ticketEvent->context, true), 'ticket_code'));
+
+        // The committed outbox payload is processed by the dedicated queue job, not inline in the request.
+        (new ProcessWorkflowEvent((int) $ticketEvent->id))->handle(app(WorkflowEngine::class));
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $ticketEvent->id,
+            'status' => 'completed',
+        ]);
         $this->assertDatabaseHas('farast_workflow_runs', [
             'workflow_id' => $workflow,
             'status' => 'completed',
@@ -356,4 +365,36 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
         $this->assertSame(0, DB::table('farast_workflow_runs')->where('workflow_id', $workflow)->count());
     }
+    public function test_pending_workflow_event_can_be_paused_and_resumed_without_losing_its_ledger(): void
+    {
+        $owner = $this->owner('09140000230');
+        $workflow = $this->workflow($owner);
+        $engine = app(WorkflowEngine::class);
+        $eventId = $engine->enqueue(
+            'document.saved',
+            ['user_id' => $owner->id, 'document_id' => 230],
+            'document:230:revision:1',
+        );
+        DB::table('farast_workflow_event_workflows')->insert([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'pending',
+            'attempts' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertTrue($engine->pauseEvent($eventId));
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'paused']);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'event_id' => $eventId, 'workflow_id' => $workflow, 'status' => 'paused',
+        ]);
+
+        $this->assertTrue($engine->resumeEvent($eventId));
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'pending']);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'event_id' => $eventId, 'workflow_id' => $workflow, 'status' => 'pending',
+        ]);
+    }
+
 }
