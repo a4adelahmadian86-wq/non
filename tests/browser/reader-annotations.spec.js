@@ -65,7 +65,7 @@ test('annotations are restored from IndexedDB after localStorage is cleared',asy
   await page.locator('[data-tool="highlight"]').click();
   const key='farast-reader:annotations:v1:annotation-durable-test';
   await expect.poll(()=>page.evaluate(async key=>{const value=await window.FarastReaderDurableStore.restore(key);return value?JSON.parse(value).length:0;},key)).toBe(1);
-  await page.evaluate(()=>localStorage.clear());
+  await page.evaluate(async()=>{localStorage.clear();if('caches' in window){const cache=await caches.open('reader-test-cache');await cache.put('/reader-cache-probe',new Response('temporary'));await Promise.all((await caches.keys()).map(key=>caches.delete(key)));}});
   const restored=await page.evaluate(async key=>JSON.parse(await window.FarastReaderDurableStore.restore(key)),key);
   expect(restored).toHaveLength(1);
   expect(restored[0].type).toBe('highlight');
