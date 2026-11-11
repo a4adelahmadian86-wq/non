@@ -15,6 +15,13 @@ return new class extends Migration
             });
         }
 
+        if (Schema::hasTable('farast_workflow_event_workflows')
+            && ! Schema::hasColumn('farast_workflow_event_workflows', 'run_id')) {
+            Schema::table('farast_workflow_event_workflows', function (Blueprint $table): void {
+                $table->unsignedBigInteger('run_id')->nullable()->index();
+            });
+        }
+
         if (Schema::hasTable('farast_workflow_events')) {
             Schema::table('farast_workflow_events', function (Blueprint $table): void {
                 if (! Schema::hasColumn('farast_workflow_events', 'started_at')) {
