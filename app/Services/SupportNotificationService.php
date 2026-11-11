@@ -131,7 +131,7 @@ class SupportNotificationService
         }
     }
 
-    public function statusChanged(Ticket $ticket, string $oldStatus, string $newStatus): void
+    public function statusChanged(Ticket $ticket, string $oldStatus, string $newStatus, ?string $eventIdentity = null): void
     {
         if ($oldStatus === $newStatus) {
             return;
@@ -145,7 +145,8 @@ class SupportNotificationService
                 'ticket_closed',
                 'تیکت '.$ticket->displayCode().' بسته شد',
                 'در صورت نیاز می‌توانید تیکت جدید ثبت کنید یا به کیفیت پشتیبانی امتیاز دهید.',
-                $ticket
+                $ticket,
+                eventIdentity: $eventIdentity ?? 'transition:'.$ticket->updated_at?->format('U.u')
             );
             $this->email->sendTicketClosed($ticket->user, $ticket);
 
@@ -160,7 +161,7 @@ class SupportNotificationService
         }
     }
 
-    public function assigned(Ticket $ticket, ?User $agent): void
+    public function assigned(Ticket $ticket, ?User $agent, ?string $eventIdentity = null): void
     {
         if (! $agent) {
             return;
@@ -172,7 +173,8 @@ class SupportNotificationService
             'تیکت '.$ticket->displayCode().' به شما ارجاع شد',
             $ticket->subject,
             $ticket,
-            staff: true
+            staff: true,
+            eventIdentity: $eventIdentity ?? 'assignment:'.$ticket->updated_at?->format('U.u')
         );
         $this->email->sendTicketAssigned($agent, $ticket);
 
