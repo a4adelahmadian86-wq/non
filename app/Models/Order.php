@@ -10,7 +10,7 @@ class Order extends Model
 {
     protected $fillable = [
         'user_id','document_id','subtotal_rials','discount_rials','tax_rials','total_rials','status',
-        'pricing_snapshot','free_pages_applied','terms_accepted_at','paid_at','content_hash',
+        'pricing_snapshot','free_pages_applied','terms_accepted_at','paid_at','content_hash','idempotency_key',
     ];
 
     protected $casts = [
