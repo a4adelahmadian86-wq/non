@@ -205,6 +205,9 @@ jobs:
       - name: Compile Product Supervisor modules
         run: python -m compileall -q .
         working-directory: services/product-supervisor
+      - name: Verify Product Supervisor test discovery is non-empty
+        run: python -c "import unittest; suite=unittest.defaultTestLoader.discover('tests'); count=suite.countTestCases(); print(f'Discovered {count} Product Supervisor tests'); raise SystemExit(count == 0)"
+        working-directory: services/product-supervisor
       - name: Run Product Supervisor unit and API contract tests
         run: python -m unittest discover -s tests -v
         working-directory: services/product-supervisor
