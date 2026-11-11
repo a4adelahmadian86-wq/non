@@ -50,6 +50,12 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/ai-content/generate', [\App\Http\Controllers\AdminProductContentController::class, 'generate'])->middleware('throttle:3,10')->name('store.ai-content.generate');
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
+    Route::get('/store/intake/create', [AdminStoreController::class, 'createIntake'])->middleware('permission:store.products.create')->name('store.intake.create');
+    Route::post('/store/intake', [AdminStoreController::class, 'storeIntake'])->middleware('permission:store.products.create')->name('store.intake.store');
+    Route::get('/store/intake/{session}', [AdminStoreController::class, 'showIntake'])->middleware('permission:store.products.create')->name('store.intake.show');
+    Route::post('/store/intake/{session}/files/preflight', [AdminStoreController::class, 'preflightIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.preflight');
+    Route::post('/store/intake/{session}/files/{file}/confirm', [AdminStoreController::class, 'confirmIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.confirm');
+    Route::delete('/store/intake/{session}/files/{file}', [AdminStoreController::class, 'cancelIntakeFile'])->middleware('permission:store.products.create')->name('store.intake.files.cancel');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
