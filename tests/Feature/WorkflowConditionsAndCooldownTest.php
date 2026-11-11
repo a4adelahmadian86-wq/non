@@ -719,7 +719,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        (new ProcessWorkflowEvent($failedEventId))->failed(new \\RuntimeException('terminal provider failure'));
+        (new ProcessWorkflowEvent($failedEventId))->failed(new \RuntimeException('terminal provider failure'));
 
         $this->assertDatabaseHas('farast_workflow_events', [
             'id' => $failedEventId,
@@ -743,7 +743,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        (new ProcessWorkflowEvent($completedEventId))->failed(new \\RuntimeException('late queue callback'));
+        (new ProcessWorkflowEvent($completedEventId))->failed(new \RuntimeException('late queue callback'));
 
         $this->assertDatabaseHas('farast_workflow_events', [
             'id' => $completedEventId,
