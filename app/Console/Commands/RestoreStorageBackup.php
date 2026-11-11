@@ -162,33 +162,57 @@ class RestoreStorageBackup extends Command
             DB::purge();
             DB::reconnect();
 
-            // The backup run itself was recorded after its database snapshot. Recreate
-            // its audit row and account for the already-present backup object after restore.
-            $restoredRun = StorageBackupRun::query()->find($run->id);
-            if (! $restoredRun) {
-                $restoredRun = new StorageBackupRun();
-                $restoredRun->id = $run->id;
-                $volume = StorageVolume::query()->find($run->storage_volume_id);
-                if (! $volume) {
-                    throw new RuntimeException('مقصد نسخه پشتیبان در پایگاه داده بازیابی‌شده موجود نیست.');
+            if ($run) {
+                // The backup run itself was recorded after its database snapshot.
+                // Recreate its audit row and account for the already-present object.
+                $restoredRun = StorageBackupRun::query()->find($run->id);
+                if (! $restoredRun) {
+                    $restoredRun = new StorageBackupRun();
+                    $restoredRun->id = $run->id;
+                    $volume = StorageVolume::query()->find($run->storage_volume_id);
+                    if (! $volume) {
+                        throw new RuntimeException('مقصد نسخه پشتیبان در پایگاه داده بازیابی‌شده موجود نیست.');
+                    }
+                    $volume->increment('used_bytes', max(0, (int) $run->size_bytes));
+                    $volume->increment('object_count');
                 }
-                $volume->increment('used_bytes', max(0, (int) $run->size_bytes));
-                $volume->increment('object_count');
+                $runMetadata = (array) ($run->metadata ?? []);
+                $runMetadata['restored_at'] = now()->toIso8601String();
+                $restoredRun->forceFill([
+                    'storage_volume_id' => $run->storage_volume_id,
+                    'backup_type' => $run->backup_type,
+                    'source_name' => $run->source_name,
+                    'status' => 'completed',
+                    'object_key' => $run->object_key,
+                    'size_bytes' => $run->size_bytes,
+                    'checksum' => $run->checksum,
+                    'started_at' => $run->started_at,
+                    'completed_at' => $run->completed_at,
+                    'metadata' => $runMetadata,
+                ])->save();
+            } else {
+                // Bootstrap recovery has no surviving storage_backup_runs row.
+                // Record the restore itself without pretending the archive remains
+                // addressable through a database-backed storage volume.
+                StorageBackupRun::create([
+                    'backup_type' => 'recovery',
+                    'source_name' => 'bootstrap_restore',
+                    'status' => 'restored',
+                    'size_bytes' => (int) filesize($archive),
+                    'checksum' => $checksum,
+                    'started_at' => now(),
+                    'completed_at' => now(),
+                    'metadata' => [
+                        'bootstrap' => true,
+                        'restored_at' => now()->toIso8601String(),
+                        'archive_name' => basename((string) $sourceArchive),
+                        'archive_sha256' => $checksum,
+                        'archive_created_at' => $manifest['created_at'] ?? null,
+                        'database_driver' => $databaseDriver,
+                        'manifest_format_version' => (int) ($manifest['format_version'] ?? 1),
+                    ],
+                ]);
             }
-            $runMetadata = (array) ($run->metadata ?? []);
-            $runMetadata['restored_at'] = now()->toIso8601String();
-            $restoredRun->forceFill([
-                'storage_volume_id' => $run->storage_volume_id,
-                'backup_type' => $run->backup_type,
-                'source_name' => $run->source_name,
-                'status' => 'completed',
-                'object_key' => $run->object_key,
-                'size_bytes' => $run->size_bytes,
-                'checksum' => $run->checksum,
-                'started_at' => $run->started_at,
-                'completed_at' => $run->completed_at,
-                'metadata' => $runMetadata,
-            ])->save();
 
             // The snapshot necessarily captured its own lock row as "running".
             // It is no longer active after a restore and must not defer deletes for hours.
@@ -199,14 +223,19 @@ class RestoreStorageBackup extends Command
 
             // Scheduled and manual requests are marked running before their backup job
             // takes the snapshot. Complete both after restore so neither remains stuck.
+            $restoreRunId = $run?->id;
             StorageBackupRun::query()
                 ->whereIn('source_name', ['scheduler_request', 'manual_request'])
                 ->whereIn('status', ['queued', 'running'])
                 ->get()
-                ->each(function (StorageBackupRun $request) use ($run): void {
+                ->each(function (StorageBackupRun $request) use ($restoreRunId, $checksum): void {
                     $metadata = (array) ($request->metadata ?? []);
                     $metadata['restored_at'] = now()->toIso8601String();
-                    $metadata['restored_from_backup_run_id'] = (int) $run->id;
+                    if ($restoreRunId !== null) {
+                        $metadata['restored_from_backup_run_id'] = (int) $restoreRunId;
+                    } else {
+                        $metadata['restored_from_archive_sha256'] = $checksum;
+                    }
                     $request->forceFill([
                         'status' => 'completed',
                         'completed_at' => now(),
