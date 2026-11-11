@@ -129,10 +129,10 @@ class AuditEventObservabilityTest extends TestCase
             if ($lockIndex === null && $isAppendLock) {
                 $lockIndex = $index;
             }
-            if ($headIndex === null && str_contains($sql, 'select "payload_checksum" from "farast_audit_events"')) {
+            if ($headIndex === null && preg_match('/select\\s+[`"]?payload_checksum[`"]?\\s+from\\s+[`"]?farast_audit_events[`"]?/i', $sql) === 1) {
                 $headIndex = $index;
             }
-            if ($insertIndex === null && str_contains($sql, 'insert into "farast_audit_events"')) {
+            if ($insertIndex === null && preg_match('/insert\\s+into\\s+[`"]?farast_audit_events[`"]?/i', $sql) === 1) {
                 $insertIndex = $index;
             }
         }
