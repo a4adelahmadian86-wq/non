@@ -35,7 +35,9 @@
             <div>{{ number_format($file->size_bytes) }} بایت · {{ $file->mime }}</div>
             <div>وضعیت: {{ $file->status === 'uploaded' ? 'منتقل‌شده به ذخیره‌سازی' : ($file->status === 'inspected' ? 'بازرسی‌شده؛ منتظر تأیید شما' : $file->status) }}</div>
             <div>ناظر هوشمند: {{ $file->supervisor_status }}</div>
-            @if($file->supervisor_status === 'manual_review_required')
+            @if(data_get($file->supervisor_review_json, 'manual_review.approved'))
+              <p>تأیید دستی مدیر ثبت شده است؛ انتشار نهایی همچنان در صف تصمیم مدیر قرار می‌گیرد.</p>
+            @elseif($file->supervisor_status === 'manual_review_required')
               <p>بررسی خودکار کامل نشده است؛ انتشار این فایل بدون تصمیم دستی مدیر مجاز نیست.</p>
             @endif
             @if($canManageIntakeReview && $file->supervisor_status === 'manual_review_required')
