@@ -92,15 +92,15 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::dropIfExists('access_audit_logs');
+        Schema::dropIfExists('user_permission_grants');
+        Schema::dropIfExists('role_assignments');
+        Schema::dropIfExists('roles');
+
         if (Schema::hasColumn('users', 'access_control_managed')) {
             Schema::table('users', function (Blueprint $table): void {
                 $table->dropColumn('access_control_managed');
             });
         }
-
-        Schema::dropIfExists('access_audit_logs');
-        Schema::dropIfExists('user_permission_grants');
-        Schema::dropIfExists('role_assignments');
-        Schema::dropIfExists('roles');
     }
 };
