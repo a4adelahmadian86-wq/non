@@ -37,7 +37,7 @@ The application dashboard is not an external alerting system. Production still n
 - storage provider errors and transfer backlog;
 - repeated authentication/authorization failures.
 
-For each incident, record: incident ID, first-seen time, severity, affected service/tenant scope, request/correlation IDs, impact, mitigation, root cause, recovery verification and follow-up actions. Do not include secrets or unnecessary personal data.
+For each incident, use [the incident report template](incident-report-template.md) and record: incident ID, first-seen time, severity, affected service/tenant scope, request/correlation IDs, impact, mitigation, root cause, recovery verification and follow-up actions. Do not include secrets or unnecessary personal data.
 
 ## Acceptance tests still required
 
