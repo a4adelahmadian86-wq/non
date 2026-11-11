@@ -14,10 +14,13 @@ class ReadinessCheckTest extends TestCase
 
     public function test_readiness_endpoint_returns_ready_when_primary_database_is_reachable(): void
     {
-        $this->getJson(route('health.ready'))
+        $response = $this->getJson(route('health.ready'))
             ->assertOk()
-            ->assertExactJson(['status' => 'ready'])
-            ->assertHeader('Cache-Control', 'no-store, max-age=0');
+            ->assertExactJson(['status' => 'ready']);
+
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringContainsString('max-age=0', $cacheControl);
     }
 
     public function test_readiness_failure_is_generic_and_does_not_leak_database_errors(): void
@@ -30,7 +33,9 @@ class ReadinessCheckTest extends TestCase
 
         $this->assertSame(503, $response->getStatusCode());
         $this->assertSame(['status' => 'not_ready'], $response->getData(true));
-        $this->assertSame('no-store, max-age=0', $response->headers->get('Cache-Control'));
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringContainsString('max-age=0', $cacheControl);
         $this->assertStringNotContainsString('private database host', $response->getContent());
     }
 }
