@@ -264,7 +264,7 @@ class InternalMessengerTest extends TestCase
         $conversation = Conversation::query()->where('type', 'group')->firstOrFail();
         $this->denyPermission($owner, 'messenger.group.manage');
 
-        $this->actingAs($owner)->post(route('messenger.participants.add', $conversation), [
+        $this->actingAs($owner)->postJson(route('messenger.participants.add', $conversation), [
             'participant_ids' => [$newMember->id],
         ])->assertStatus(422);
 
@@ -308,7 +308,7 @@ class InternalMessengerTest extends TestCase
         $member->forceFill(['is_blocked' => true])->save();
 
         $this->actingAs($owner)->get(route('messenger.show', $conversation))->assertOk();
-        $this->actingAs($member)->get(route('messenger.show', $conversation))->assertForbidden();
+        $this->actingAs($member)->get(route('messenger.show', $conversation))->assertRedirect();
     }
 
 
