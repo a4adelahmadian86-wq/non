@@ -143,26 +143,31 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                     );
                     $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $lockedDocument->product_id);
 
-                    $fullReaderPreviews = StoreProductPreview::query()
+                    $productPreviews = StoreProductPreview::query()
                         ->where('product_id', $lockedDocument->product_id)
-                        ->where('access_level', 'full')
-                        ->where('is_active', true)
                         ->lockForUpdate()
                         ->get();
-                    foreach ($fullReaderPreviews as $fullReaderPreview) {
-                        $timingsForPreview = $fullReaderPreview->kind === 'reader_document'
-                            ? array_values(array_filter(
-                                $readerTimings,
-                                static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $fullReaderPreview->page_number
-                            ))
-                            : $readerTimings;
+                    foreach ($productPreviews as $productPreview) {
+                        $isActiveFullReader = $productPreview->access_level === 'full' && $productPreview->is_active;
+                        $referencesOldAudio = $oldPath
+                            && (string) $productPreview->audio_path === (string) $oldPath
+                            && ($productPreview->audio_disk ?: 'private') === $oldDisk;
+                        if (! $isActiveFullReader && ! $referencesOldAudio) continue;
 
-                        $fullReaderPreview->update([
+                        $changes = [
                             'audio_disk' => $artifact->disk,
                             'audio_path' => $artifact->path,
                             'audio_mime' => 'audio/wav',
-                            'audio_timing' => $timingsForPreview,
-                        ]);
+                        ];
+                        if ($isActiveFullReader) {
+                            $changes['audio_timing'] = $productPreview->kind === 'reader_document'
+                                ? array_values(array_filter(
+                                    $readerTimings,
+                                    static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $productPreview->page_number
+                                ))
+                                : $readerTimings;
+                        }
+                        $productPreview->update($changes);
                     }
 
                     return [$artifact, $oldDisk, $oldPath];
