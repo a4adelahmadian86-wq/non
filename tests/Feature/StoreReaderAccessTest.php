@@ -547,9 +547,8 @@ class StoreReaderAccessTest extends TestCase
         [$product, $preview] = $this->makePreviewFixture();
         $user = $this->makeReaderUser();
 
-        $this->actingAs($user)
-            ->get(route('store.reader', $product->slug))
-            ->assertOk()
+        $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
+        $readerResponse->assertOk()
             ->assertSee('09123456789')
             ->assertSee('farast-reader-watermark')
             ->assertSee('is-pdf')
