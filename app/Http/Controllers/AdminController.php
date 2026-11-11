@@ -795,27 +795,33 @@ class AdminController extends Controller
         return back()->with('status', 'تنظیمات کلی ذخیره شد.');
     }
 
-    public function toggleUser(User $user, AdminConsoleService $console, AuditLogService $audit)
+    public function toggleUser(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        abort_if($user->isAdmin(), 403);
-        abort_if((int) $user->id === (int) auth()->id(), 422, 'نمی‌توانید حساب خودتان را مسدود کنید.');
-        // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
-        $console->authorizeAction(auth()->user(), 'users', $user->id, 'users.suspend');
+        abort_unless(Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ممیزی دسترسی در دسترس نیست.');
 
-        $beforeBlocked = (bool) $user->is_blocked;
-        $afterBlocked = ! $beforeBlocked;
-        DB::transaction(function () use ($user, $audit, $beforeBlocked, $afterBlocked): void {
-            $user->update(['is_blocked' => $afterBlocked]);
-            $this->recordAccessAudit(request(), $afterBlocked ? 'user.blocked' : 'user.unblocked', (int) $user->id, [
+        DB::transaction(function () use ($r, $user, $console, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin(), 403);
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id, 422, 'نمی‌توانید حساب خودتان را مسدود کنید.');
+            $console->authorizeAction($r->user(), 'users', (int) $lockedUser->id, 'users.suspend');
+
+            $beforeBlocked = (bool) $lockedUser->is_blocked;
+            $afterBlocked = ! $beforeBlocked;
+            $lockedUser->update(['is_blocked' => $afterBlocked]);
+            $this->recordAccessAudit($r, $afterBlocked ? 'user.blocked' : 'user.unblocked', (int) $lockedUser->id, [
                 'is_blocked' => $beforeBlocked,
             ], [
                 'is_blocked' => $afterBlocked,
             ]);
 
             if (Schema::hasTable('audit_logs')) {
-                $audit->record(auth()->id(), $afterBlocked ? 'admin.user.blocked' : 'admin.user.unblocked', request()->ip(), ['target_user_id' => $user->id]);
+                $audit->record((int) $r->user()->id, $afterBlocked ? 'admin.user.blocked' : 'admin.user.unblocked', $r->ip(), [
+                    'target_user_id' => (int) $lockedUser->id,
+                ]);
             }
         });
+
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back();
     }
@@ -1031,10 +1037,7 @@ class AdminController extends Controller
 
     public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
-        abort_if($user->isAdmin(), 403);
-        abort_if((int) $user->id === (int) $r->user()?->id && ! $r->user()?->isAdmin(), 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
-        $console->authorizeAction($r->user(), 'users', $user->id, 'users.capabilities.manage');
-        abort_unless(Schema::hasTable('audit_logs'), 503, 'زیرساخت ثبت ممیزی در دسترس نیست.');
+        abort_unless(Schema::hasTable('audit_logs') && Schema::hasTable('farast_access_audit_logs'), 503, 'زیرساخت ثبت ممیزی در دسترس نیست.');
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -1058,23 +1061,28 @@ class AdminController extends Controller
             $values[$key] = array_key_exists($key, $data) && $data[$key] !== '' ? $data[$key] : null;
         }
 
-        DB::transaction(function () use ($r, $user, $values, $audit): void {
-            $capability = UserCapability::query()->where('user_id', $user->id)->lockForUpdate()->first();
+        DB::transaction(function () use ($r, $user, $console, $values, $audit): void {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedUser->isAdmin(), 403);
+            abort_if((int) $lockedUser->id === (int) $r->user()?->id, 403, 'تغییر قابلیت‌های حساب خودتان مجاز نیست.');
+            $console->authorizeAction($r->user(), 'users', (int) $lockedUser->id, 'users.capabilities.manage');
+
+            $capability = UserCapability::query()->where('user_id', $lockedUser->id)->lockForUpdate()->first();
             $before = $capability?->getAttributes() ?? [];
 
             if ($capability) {
                 $capability->fill($values)->save();
             } else {
-                $capability = UserCapability::create(['user_id' => $user->id, ...$values]);
+                $capability = UserCapability::create(['user_id' => $lockedUser->id, ...$values]);
             }
 
             $after = $capability->getAttributes();
             $audit->record((int) $r->user()->id, 'admin.user.capabilities_updated', $r->ip(), [
-                'target_user_id' => (int) $user->id,
+                'target_user_id' => (int) $lockedUser->id,
                 'before' => $before,
                 'after' => $after,
             ]);
-            $this->recordAccessAudit($r, 'user.capabilities.updated', (int) $user->id, $before, $after);
+            $this->recordAccessAudit($r, 'user.capabilities.updated', (int) $lockedUser->id, $before, $after);
         });
 
         app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
