@@ -104,3 +104,13 @@ test('durable backup import rejects another product and malformed records',async
   });
   expect(result.wrongProduct).toBe(true);expect(result.wrongKey).toBe(true);
 });
+
+test('reader exposes local storage durability status to the user',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="storage-status-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Storage status</span></div></div></article></section>');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
+  await page.locator('[data-action="storage"]').click();
+  await expect.poll(()=>page.locator('.farast-annotation-status').textContent()).toContain('مگابایت');
+});
