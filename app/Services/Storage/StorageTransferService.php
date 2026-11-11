@@ -26,9 +26,9 @@ class StorageTransferService
         if (! $file->source_id || ! $file->source_type) return;
         $reference = match ($file->source_type) {
             UserFile::class => UserFile::find($file->source_id),
-            StoreProductFile::class => StoreProductFile::find($file->source_id),
-            StoreProductPreview::class => StoreProductPreview::find($file->source_id),
-            StoreProductDocumentArtifact::class => StoreProductDocumentArtifact::with('document')->find($file->source_id),
+            StoreProductFile::class => StoreProductFile::query()->whereKey($file->source_id)->lockForUpdate()->first(),
+            StoreProductPreview::class => StoreProductPreview::query()->whereKey($file->source_id)->lockForUpdate()->first(),
+            StoreProductDocumentArtifact::class => StoreProductDocumentArtifact::with('document')->whereKey($file->source_id)->lockForUpdate()->first(),
             ConversationMessage::class => ConversationMessage::find($file->source_id),
             TicketMessage::class => TicketMessage::find($file->source_id),
             FarastStorageObject::class => FarastStorageObject::find($file->source_id),
