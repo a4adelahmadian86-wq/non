@@ -65,19 +65,10 @@ class AuthorizationService
             return ['allowed' => false, 'reason' => 'inactive_or_blocked', 'source' => null, 'permission' => $permission];
         }
 
-        if ($user->isAdmin()) {
-            $scope = $this->baseScope($user);
-            $allowed = $scope === 'global'
-                || ($context !== [] && $this->scopeMatches(
-                    $user,
-                    $scope,
-                    \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user),
-                    $context
-                ));
-
+        if ($user->isAdmin() && $this->baseScope($user) === 'global') {
             return [
-                'allowed' => $allowed,
-                'reason' => $allowed ? 'system_administrator' : 'outside_admin_scope',
+                'allowed' => true,
+                'reason' => 'system_administrator',
                 'source' => 'system',
                 'permission' => $permission,
             ];
@@ -146,19 +137,10 @@ class AuthorizationService
             return false;
         }
 
-        // The platform owner remains the immutable break-glass administrator for
-        // navigation and unscoped operations. Explicit record checks still honor
-        // a narrower scope imposed by the trusted admin-scope middleware.
-        if ($user->isAdmin()) {
-            $scope = $this->baseScope($user);
-
-            return $scope === 'global'
-                || ($context !== [] && $this->scopeMatches(
-                    $user,
-                    $scope,
-                    \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user),
-                    $context
-                ));
+        // Only an unrestricted platform administrator receives the break-glass
+        // bypass. Restricted administrators must hold an explicit scoped grant.
+        if ($user->isAdmin() && $this->baseScope($user) === 'global') {
+            return true;
         }
 
         $contextKey = $context ? hash('sha256', json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : 'navigation';
