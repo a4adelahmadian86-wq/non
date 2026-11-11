@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 @section('admin-content')
 @php($isEdit = $product->exists)
+@php($selectedProductType = $selectedProductType ?? ($isEdit ? $product->type : null))
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
     <div class="store-section-head">
@@ -64,15 +65,20 @@
       </section>
     @endif
 
-    @if(!$isEdit)
+    @if(!$isEdit && !$selectedProductType)
+      @include('admin.store.partials.product-type-selection')
+    @elseif(!$isEdit && $selectedProductType === 'digital_file')
       @include('admin.store.partials.file-first-intake')
     @else
+    @if(!$isEdit)
+      <div class="product-type-change-row"><a href="{{ route('admin.store.create') }}">بازگشت به انتخاب نوع محصول</a></div>
+    @endif
     <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
       @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
-      @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
+      @elseif($product->type !== 'course')<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
       <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
       <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
@@ -89,7 +95,7 @@
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
-        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
+        <label class="product-field">نوع محصول *@if($isEdit || $selectedProductType)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit || $selectedProductType)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ ($isEdit || $selectedProductType) ? 'نوع محصول پس از انتخاب و ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -306,7 +312,7 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : ($product->type === 'course' ? 'ذخیره پیش‌نویس و ورود به طراحی دوره' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل') }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : ($product->type === 'course' ? 'پس از ذخیره پیش‌نویس، فصل‌ها و جلسات دوره را طراحی کنید.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.') }}</span></div>
     </form>
     @if(!$isEdit && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
@@ -634,7 +640,7 @@
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
-.product-file-first-step{display:grid;gap:1rem}.product-file-first-step>p{line-height:1.95;color:var(--muted,#64748b);margin:0}.product-file-first-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem 1.25rem;list-style:none;padding:0;margin:0}.product-file-first-points li{position:relative;padding-inline-start:1.4rem;line-height:1.8}.product-file-first-points li:before{content:"✓";position:absolute;inset-inline-start:0;color:var(--success,#15803d);font-weight:800}@media(max-width:720px){.product-file-first-points{grid-template-columns:1fr}}
+.product-type-choice{padding:clamp(18px,3vw,28px);display:grid;gap:20px}.product-type-choice-head>span{font-size:.7rem;font-weight:900;color:var(--st-blue)}.product-type-choice-head h2{font-size:1.08rem;margin:6px 0}.product-type-choice-head p{max-width:760px;margin:0;color:var(--st-muted);font-size:.76rem;line-height:1.95}.product-type-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-type-choice-card{display:grid;gap:9px;align-content:start;padding:20px;border:1px solid var(--st-line);border-radius:15px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,background .18s,transform .18s}.product-type-choice-card:hover{border-color:var(--st-blue);background:#f7faff;transform:translateY(-2px)}.product-type-choice-number{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#edf5ff;color:var(--st-blue);font-size:.76rem;font-weight:900}.product-type-choice-card strong{font-size:.92rem}.product-type-choice-card p{margin:0;color:var(--st-muted);font-size:.72rem;line-height:1.9}.product-type-choice-action{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px;color:var(--st-blue);font-size:.72rem;font-weight:900}.product-type-change-row{display:flex;justify-content:flex-start}.product-type-change-row a{font-size:.7rem;color:var(--st-blue);text-decoration:none;font-weight:800}.product-file-first-step{display:grid;gap:1rem}.product-file-first-step>p{line-height:1.95;color:var(--muted,#64748b);margin:0}.product-file-first-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem 1.25rem;list-style:none;padding:0;margin:0}.product-file-first-points li{position:relative;padding-inline-start:1.4rem;line-height:1.8}.product-file-first-points li:before{content:"✓";position:absolute;inset-inline-start:0;color:var(--success,#15803d);font-weight:800}@media(max-width:720px){.product-file-first-points{grid-template-columns:1fr}.product-type-choice-grid{grid-template-columns:1fr}.product-type-choice-card{padding:16px}}
 </style>
 @endpush
 
