@@ -38,4 +38,19 @@ class ReadinessCheckTest extends TestCase
         $this->assertStringContainsString('max-age=0', $cacheControl);
         $this->assertStringNotContainsString('private database host', $response->getContent());
     }
+
+
+    public function test_readiness_route_reaches_the_probe_when_database_backed_sessions_are_unavailable(): void
+    {
+        config(['session.driver' => 'database']);
+
+        DB::shouldReceive('connection')
+            ->once()
+            ->andThrow(new RuntimeException('private database host and credentials'));
+
+        $this->getJson(route('health.ready'))
+            ->assertStatus(503)
+            ->assertExactJson(['status' => 'not_ready'])
+            ->assertHeader('Cache-Control', 'no-store, max-age=0');
+    }
 }
