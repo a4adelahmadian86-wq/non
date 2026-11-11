@@ -233,6 +233,70 @@ test.describe('Real admin product workflow', () => {
     expect(await download.failure()).toBeNull();
   });
 
+  test('admin and employee exchange real messages through the internal messenger UI', async ({ page }) => {
+    test.setTimeout(90_000);
+    const firstMessage = 'پیام آزمایشی مدیر برای آزمون ارتباط داخلی واقعی.';
+    const reply = 'پاسخ آزمایشی کارمند برای آزمون دریافت زنده پیام.';
+
+    await signInAsSeededAdmin(page);
+    await page.goto('/messenger');
+    await expect(page.getByRole('heading', { name: 'مرکز پیام‌رسانی' })).toBeVisible();
+
+    await page.locator('[data-open-compose]').click();
+    const compose = page.locator('dialog[data-compose]');
+    await expect(compose).toBeVisible();
+    const employeeOption = compose.locator('select[name="participant_ids[]"] option').filter({ hasText: 'کارمند آزمون رابط' });
+    const employeeId = await employeeOption.getAttribute('value');
+    expect(employeeId).toBeTruthy();
+    await compose.locator('select[name="type"]').selectOption('direct');
+    await compose.locator('select[name="participant_ids[]"]').selectOption(employeeId);
+
+    const createResponsePromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/messenger/conversations' &&
+      response.request().method() === 'POST'
+    );
+    await compose.getByRole('button', { name: 'ایجاد گفت‌وگو' }).click();
+    const createResponse = await createResponsePromise;
+    expect(createResponse.status()).toBe(302);
+    await expect(page).toHaveURL(/\/messenger\/conversations\/\d+$/);
+    const conversationUrl = page.url();
+
+    const composer = page.locator('#fm-composer');
+    await composer.locator('textarea[name="body"]').fill(firstMessage);
+    const firstSendPromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname.endsWith('/messages') &&
+      response.request().method() === 'POST'
+    );
+    await composer.getByRole('button', { name: 'ارسال پیام' }).click();
+    const firstSend = await firstSendPromise;
+    expect(firstSend.status()).toBe(201);
+    await expect(page.locator('#fm-messages')).toContainText(firstMessage);
+
+    const employeePage = await page.context().newPage();
+    try {
+      await signInAsSeededEmployee(employeePage);
+      const conversationResponse = await employeePage.goto(conversationUrl);
+      expect(conversationResponse?.status()).toBe(200);
+      await expect(employeePage.locator('#fm-messages')).toContainText(firstMessage);
+
+      const employeeComposer = employeePage.locator('#fm-composer');
+      await employeeComposer.locator('textarea[name="body"]').fill(reply);
+      const replyPromise = employeePage.waitForResponse(response =>
+        new URL(response.url()).pathname.endsWith('/messages') &&
+        response.request().method() === 'POST'
+      );
+      await employeeComposer.getByRole('button', { name: 'ارسال پیام' }).click();
+      const replyResponse = await replyPromise;
+      expect(replyResponse.status()).toBe(201);
+      await expect(employeePage.locator('#fm-messages')).toContainText(reply);
+
+      // The admin page remains open; its authenticated polling loop must receive the employee's message.
+      await expect(page.locator('#fm-messages')).toContainText(reply, { timeout: 12_000 });
+    } finally {
+      await employeePage.close();
+    }
+  });
+
   test('mobile product editor fits the viewport and its primary fields are keyboard reachable', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
