@@ -3,7 +3,7 @@
 use App\Http\Controllers\AdminAccessCenterController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'admin', 'admin.section:access'])
+Route::middleware(['auth', 'admin'])
     ->prefix('admin/access-center')
     ->name('admin.access-center.')
     ->group(function (): void {
