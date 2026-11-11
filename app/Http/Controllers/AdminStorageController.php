@@ -197,7 +197,10 @@ class AdminStorageController extends Controller
             'برای حذف امن، ابتدا اتصال را بررسی کنید و مطمئن شوید موجودی سرویس‌دهنده در ۳۰ دقیقه اخیر صفر بوده و هیچ فایل یا نسخه پشتیبانی باقی نمانده است.'
         );
 
-        $volume->files()->where('status', 'deleted')->update(['storage_volume_id' => null]);
+        // The public files() relation intentionally hides deleted records. Detach
+        // those historical rows through the unfiltered relation before deleting
+        // the volume because the database foreign key is RESTRICT.
+        $volume->allFiles()->where('status', 'deleted')->update(['storage_volume_id' => null]);
         StorageBackupRun::query()->where('storage_volume_id', $volume->id)->update(['storage_volume_id' => null]);
         $volume->delete();
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
