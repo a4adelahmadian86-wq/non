@@ -133,6 +133,7 @@ class StoreProductIntakeSessionTest extends TestCase
             'permission_id' => $createPermission->id,
         ]);
         $session = StoreProductIntakeSession::create([
+            'id' => (string) Str::uuid(),
             'user_id' => $owner->id,
             'product_type' => 'digital_file',
             'status' => StoreProductIntakeSession::STATUS_FILES_UPLOADED,
