@@ -24,6 +24,9 @@ class FarastObservabilityTest extends TestCase
 
         $this->assertSame('req-123', $response->headers->get('X-Request-Id'));
         $this->assertSame('trace.parent:456', $response->headers->get('X-Correlation-Id'));
+        $this->assertSame('req-123', $request->attributes->get('farast.request_id'));
+        $this->assertSame('trace.parent:456', $request->attributes->get('farast.correlation_id'));
+        $this->assertSame(['request_id' => null, 'correlation_id' => null], app(\\App\\Services\\FarastTraceContext::class)->current());
 
         Log::shouldHaveReceived('withContext')->once()->with([
             'request_id' => 'req-123',
