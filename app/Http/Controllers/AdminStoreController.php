@@ -555,6 +555,8 @@ class AdminStoreController extends Controller
 
     public function create()
     {
+        return redirect()->route('admin.store.intake.create');
+
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = collect();
