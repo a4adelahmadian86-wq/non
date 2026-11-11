@@ -607,7 +607,7 @@ class AdminStoreController extends Controller
         abort_unless($file->status === 'inspected', 409);
 
         Storage::disk($file->staging_disk ?: 'private')->delete((string) $file->staging_path);
-        $file->update(['status' => 'rejected', 'staging_path' => null]);
+        $file->update(['status' => 'rejected', 'staging_path' => null, 'is_primary' => false]);
 
         return response()->json(['success' => true]);
     }
