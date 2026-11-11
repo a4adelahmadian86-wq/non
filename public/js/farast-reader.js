@@ -54,7 +54,17 @@
     if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
     if(!pdfjsPromise){
       pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
-        .then(module=>{window.pdfjsLib=module;return module;})
+        .then(module=>{
+        window.pdfjsLib=module;
+        if(!document.querySelector('link[data-farast-pdfjs-viewer-css]')){
+          const style=document.createElement('link');
+          style.rel='stylesheet';
+          style.href='/vendor/pdfjs/web/pdf_viewer.css?v=6.5.438';
+          style.dataset.farastPdfjsViewerCss='1';
+          document.head.append(style);
+        }
+        return module;
+      })
         .catch(error=>{pdfjsPromise=null;if(error&&typeof error==='object')error.farastPdfEngineUnavailable=true;throw error;});
     }
     return pdfjsPromise;
@@ -263,6 +273,83 @@
     context.restore();
   };
 
+
+  const createPdfLinkService=()=>({
+    externalLinkEnabled:true,
+    externalLinkTarget:2,
+    externalLinkRel:'noopener noreferrer',
+    getDestinationHash:()=> '#',
+    getAnchorUrl:anchor=>anchor||'#',
+    addLinkAttributes(link,url){
+      try{
+        const target=new URL(String(url||''),location.href);
+        if(!['http:','https:','mailto:'].includes(target.protocol))return;
+        link.href=target.href;
+        if(target.protocol!=='mailto:'){
+          link.target='_blank';
+          link.rel='noopener noreferrer';
+        }
+      }catch(_){}
+    },
+    async goToDestination(destination){
+      try{
+        const resolved=typeof destination==='string'?await pdfDoc?.getDestination(destination):destination;
+        if(!Array.isArray(resolved)||!resolved[0]||!pdfDoc)return;
+        const index=await pdfDoc.getPageIndex(resolved[0]);
+        await navigatePdfPage(index+1);
+      }catch(error){showPdfError(error);}
+    },
+    navigateTo(destination){return this.goToDestination(destination);},
+    executeNamedAction(action){
+      const actions={
+        NextPage:()=>navigatePdfPage(pdfPage+1),
+        PrevPage:()=>navigatePdfPage(pdfPage-1),
+        FirstPage:()=>navigatePdfPage(1),
+        LastPage:()=>navigatePdfPage(pdfDoc?.numPages||1)
+      };
+      const result=actions[action]?.();
+      result?.catch?.(showPdfError);
+    },
+    executeSetOCGState:async()=>{},
+  });
+
+  const renderPdfAnnotationLayer=async(page,viewport,container)=>{
+    const pdfjs=window.pdfjsLib;
+    if(!pdfjs?.AnnotationLayer||!container||!pdfDoc)return;
+    const annotations=await page.getAnnotations({intent:'display'});
+    const fieldObjects=typeof pdfDoc.getFieldObjects==='function'?await pdfDoc.getFieldObjects():null;
+    const layerDiv=document.createElement('div');
+    layerDiv.className='annotationLayer farast-pdf-annotation-layer';
+    layerDiv.style.width=viewport.width+'px';
+    layerDiv.style.height=viewport.height+'px';
+    container.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
+    container.append(layerDiv);
+    const layerViewport=viewport.clone({dontFlip:true});
+    const annotationLayer=new pdfjs.AnnotationLayer({
+      div:layerDiv,
+      accessibilityManager:null,
+      annotationCanvasMap:null,
+      annotationEditorUIManager:null,
+      page,
+      viewport:layerViewport,
+      structTreeLayer:null
+    });
+    await annotationLayer.render({
+      annotations,
+      div:layerDiv,
+      viewport:layerViewport,
+      page,
+      linkService:createPdfLinkService(),
+      downloadManager:null,
+      annotationStorage:pdfDoc.annotationStorage,
+      imageResourcesPath:'/vendor/pdfjs/web/images/',
+      renderForms:true,
+      enableScripting:false,
+      hasJSActions:false,
+      fieldObjects
+    });
+  };
+
   const renderPdfPage=async(number)=>{
     if(!pdfDoc||!pdfCanvas)return;
     const request=++pdfRenderSequence;
@@ -283,13 +370,18 @@
     pdfCanvas.style.height=viewport.height+'px';
     if(pdfSurface){pdfSurface.style.width=viewport.width+'px';pdfSurface.style.minHeight=viewport.height+'px';}
     context.setTransform(ratio,0,0,ratio,0,0);
-    renderTask=page.render({canvasContext:context,viewport});
+    const renderOptions={canvasContext:context,viewport};
+    const formAnnotationMode=window.pdfjsLib?.AnnotationMode?.ENABLE_FORMS;
+    if(Number.isInteger(formAnnotationMode))renderOptions.annotationMode=formAnnotationMode;
+    renderTask=page.render(renderOptions);
     try{await renderTask.promise;}catch(error){
       if(error?.name==='RenderingCancelledException')return;
       throw error;
     }
     if(request!==pdfRenderSequence)return;
     paintPdfWatermark(pdfCanvas);
+    await renderPdfAnnotationLayer(page,viewport,pdfSurface);
+    if(request!==pdfRenderSequence)return;
 
     const textLayer=activeArticle()?.querySelector('.farast-pdf-text-layer');
     if(textLayer&&window.pdfjsLib?.TextLayer){
@@ -329,6 +421,7 @@
     if(canvas){canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';}
     const text=wrapper.querySelector('.farast-pdf-cont-text');
     if(text){text.innerHTML='';text.style.width='';text.style.height='';}
+    wrapper.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
     // Preserve the measured page box so off-screen pages remain scrollable placeholders.
     const width=Number(wrapper.dataset.renderedWidth)||0;
     const height=Number(wrapper.dataset.renderedHeight)||0;
@@ -368,8 +461,12 @@
     wrapper.dataset.renderedHeight=String(Math.round(viewport.height));
     const context=canvas.getContext('2d',{alpha:false});
     context.setTransform(ratio,0,0,ratio,0,0);
-    await page.render({canvasContext:context,viewport}).promise;
+    const renderOptions={canvasContext:context,viewport};
+    const formAnnotationMode=window.pdfjsLib?.AnnotationMode?.ENABLE_FORMS;
+    if(Number.isInteger(formAnnotationMode))renderOptions.annotationMode=formAnnotationMode;
+    await page.render(renderOptions).promise;
     paintPdfWatermark(canvas);
+    await renderPdfAnnotationLayer(page,viewport,wrapper);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
     if(textLayer&&window.pdfjsLib?.TextLayer){
       textLayer.innerHTML='';
