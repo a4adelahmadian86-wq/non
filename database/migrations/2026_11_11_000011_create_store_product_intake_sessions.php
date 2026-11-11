@@ -43,6 +43,9 @@ return new class extends Migration
             $table->boolean('is_primary')->default(false);
             $table->timestamp('expires_at')->nullable();
             $table->timestamp('uploaded_at')->nullable();
+            $table->string('supervisor_status', 24)->default('pending');
+            $table->longText('supervisor_review_json')->nullable();
+            $table->timestamp('supervisor_reviewed_at')->nullable();
             $table->timestamps();
 
             $table->index(['intake_session_id', 'status'], 'store_intake_files_state_idx');
