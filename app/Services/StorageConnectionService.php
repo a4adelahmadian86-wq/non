@@ -70,10 +70,23 @@ class StorageConnectionService
         if (! is_dir($root)) return ['object_count' => 0, 'used_bytes' => 0];
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
-            if ($file->isFile() && ! str_starts_with($file->getFilename(), '.farast-health-')) {
-                $count++;
-                $bytes += $file->getSize();
+            if (! $file->isFile() || $file->isLink()) continue;
+
+            $name = $file->getFilename();
+            $isTemporary = str_starts_with($name, '.farast-health-')
+                || str_starts_with($name, '.farast-upload-')
+                || str_starts_with($name, '.farast-transfer-');
+            if ($isTemporary) {
+                // A process can be terminated between creating and renaming a temp file.
+                // Keep recent in-flight writes safe; reclaim abandoned artifacts after one hour.
+                if ($file->getMTime() < now()->subHour()->timestamp) {
+                    @unlink($file->getPathname());
+                }
+                continue;
             }
+
+            $count++;
+            $bytes += $file->getSize();
         }
         return ['object_count' => $count, 'used_bytes' => $bytes];
     }
