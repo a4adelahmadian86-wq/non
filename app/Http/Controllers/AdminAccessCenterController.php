@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Permission;
+use App\Models\RolePermission;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
@@ -63,10 +64,14 @@ class AdminAccessCenterController extends Controller
             ->get(['id', 'name', 'mobile', 'email', 'role', 'organization_id']);
 
         $userIds = $users->pluck('id')->all();
+        $permissionList = Permission::query()->orderBy('group')->orderBy('key')->get();
 
         return view('admin.access-center', [
             'roles' => DB::table('farast_roles')->orderBy('scope_type')->orderBy('name')->get(),
-            'permissions' => Permission::query()->orderBy('group')->orderBy('key')->get()->groupBy('group'),
+            'permissions' => $permissionList->groupBy('group'),
+            'flatPermissions' => $permissionList,
+            'baseRoles' => collect(User::DASHBOARD_ROLES)->reject(fn (string $role) => $role === User::ROLE_ADMIN)->values(),
+            'baseRolePermissions' => RolePermission::query()->get()->groupBy('role'),
             'rolePermissions' => DB::table('farast_role_permissions')->get(),
             'users' => $users,
             'assignments' => $userIds
@@ -86,6 +91,56 @@ class AdminAccessCenterController extends Controller
             'search' => $search,
             'scopeOptions' => self::SCOPES,
         ]);
+    }
+
+    public function updateBaseRole(Request $request, string $role)
+    {
+        $this->ensurePlatformAdmin($request);
+        abort_unless(
+            in_array($role, User::DASHBOARD_ROLES, true) && $role !== User::ROLE_ADMIN,
+            422,
+            'نقش مدیر اصلی از این مسیر قابل ویرایش نیست.'
+        );
+
+        $data = $request->validate([
+            'permissions' => ['sometimes', 'array', 'max:250'],
+            'permissions.*' => ['required', 'string', 'distinct', 'exists:permissions,key'],
+        ]);
+        $keys = array_values(array_unique($data['permissions'] ?? []));
+        $ids = Permission::query()->whereIn('key', $keys)->pluck('id')->all();
+
+        DB::transaction(function () use ($request, $role, $ids, $keys): void {
+            $before = RolePermission::query()
+                ->where('role', $role)
+                ->lockForUpdate()
+                ->with('permission')
+                ->get()
+                ->pluck('permission.key')
+                ->filter()
+                ->sort()
+                ->values()
+                ->all();
+
+            RolePermission::query()->where('role', $role)->delete();
+            foreach ($ids as $permissionId) {
+                RolePermission::query()->create([
+                    'role' => $role,
+                    'permission_id' => $permissionId,
+                ]);
+            }
+
+            $this->audit($request, 'base_role.permissions.updated', null, null, null, [
+                'role' => $role,
+                'permissions' => $before,
+            ], [
+                'role' => $role,
+                'permissions' => $keys,
+            ]);
+        });
+
+        app(AuthorizationService::class)->forgetUser();
+
+        return back()->with('status', 'مجوزهای نقش پایه ذخیره شد.');
     }
 
     public function storeRole(Request $request)
