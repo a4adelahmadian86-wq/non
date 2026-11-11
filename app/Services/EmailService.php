@@ -127,7 +127,7 @@ class EmailService
         }
     }
 
-    public function sendTicketReply(User $user, Ticket $ticket, string $messageBody): void
+    public function sendTicketReply(User $user, Ticket $ticket, string $messageBody, ?string $eventIdentity = null): void
     {
         if (! $user->email || ! $this->isEnabled('ticket_reply')) {
             return;
@@ -161,11 +161,12 @@ class EmailService
             ),
             htmlView: 'emails.ticket-reply',
             viewData: $data,
-            meta: ['ticket_id' => $ticket->id],
+            meta: ['ticket_id' => $ticket->id, 'event_identity' => $eventIdentity],
+            idempotencyKey: $eventIdentity ? 'ticket-reply:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
         );
     }
 
-    public function sendTicketReplyGuest(Ticket $ticket, string $messageBody): void
+    public function sendTicketReplyGuest(Ticket $ticket, string $messageBody, ?string $eventIdentity = null): void
     {
         $email = $ticket->guest_email;
         if (! $email || ! $this->isEnabled('ticket_reply')) {
@@ -181,6 +182,7 @@ class EmailService
             body: mb_substr($messageBody, 0, 800),
             staffUrl: false,
             name: $ticket->guest_name ?: 'کاربر',
+            idempotencyKey: $eventIdentity ? 'ticket-reply:'.$ticket->id.':'.$eventIdentity.':guest:'.$this->hash($email) : null,
         );
     }
 
@@ -198,6 +200,7 @@ class EmailService
             headline: 'تیکت شما ثبت شد',
             body: 'تیکت شما با موفقیت ثبت شد و کارشناسان ما به‌زودی پاسخ می‌دهند.',
             staffUrl: false,
+            idempotencyKey: $eventIdentity ? 'ticket-closed:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
         );
     }
 
@@ -215,10 +218,11 @@ class EmailService
             headline: 'تیکت پشتیبانی جدید',
             body: 'از طرف '.$ticket->displayName()."\n\n".'موضوع: '.$ticket->subject,
             staffUrl: true,
+            idempotencyKey: $eventIdentity ? 'ticket-customer-reply:'.$ticket->id.':'.$eventIdentity.':staff:'.$staff->id : null,
         );
     }
 
-    public function sendTicketCustomerReply(User $staff, Ticket $ticket, string $body): void
+    public function sendTicketCustomerReply(User $staff, Ticket $ticket, string $body, ?string $eventIdentity = null): void
     {
         if (! $staff->email || ! $this->isEnabled('ticket_customer_reply')) {
             return;
@@ -232,10 +236,11 @@ class EmailService
             headline: 'پاسخ جدید کاربر',
             body: mb_substr($body, 0, 800),
             staffUrl: true,
+            idempotencyKey: $eventIdentity ? 'ticket-assigned:'.$ticket->id.':'.$eventIdentity.':agent:'.$agent->id : null,
         );
     }
 
-    public function sendTicketClosed(User $user, Ticket $ticket): void
+    public function sendTicketClosed(User $user, Ticket $ticket, ?string $eventIdentity = null): void
     {
         if (! $user->email || ! $this->isEnabled('ticket_closed')) {
             return;
@@ -252,7 +257,7 @@ class EmailService
         );
     }
 
-    public function sendTicketAssigned(User $agent, Ticket $ticket): void
+    public function sendTicketAssigned(User $agent, Ticket $ticket, ?string $eventIdentity = null): void
     {
         if (! $agent->email || ! $this->isEnabled('ticket_assigned')) {
             return;
@@ -375,6 +380,7 @@ class EmailService
         string $body,
         bool $staffUrl,
         ?string $name = null,
+        ?string $idempotencyKey = null,
     ): void {
         $url = $this->ticketUrl($ticket, $staffUrl);
         $status = $ticket->statusLabel();
@@ -433,6 +439,7 @@ class EmailService
         string $htmlView,
         array $viewData = [],
         array $meta = [],
+        ?string $idempotencyKey = null,
     ): void {
         $this->mailConfig->apply();
 
