@@ -113,18 +113,6 @@ class SupportTicketService
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
 
-        if ($ticket->user_id) {
-            try {
-                app(WorkflowEngine::class)->dispatch(
-                    'ticket.created',
-                    ['user_id' => (int) $ticket->user_id, 'customer_id' => (int) $ticket->user_id, 'ticket_id' => (int) $ticket->id, 'ticket_code' => $ticket->ticket_code],
-                    'ticket:'.$ticket->id.':created',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
-
         if ($ticket->assignee) {
             $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee));
         }
