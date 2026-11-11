@@ -48,8 +48,10 @@ class FarastObservabilityService
     private function queue(): array
     {
         $connection = (string) config('queue.default', 'unknown');
-        $queueDatabase = config('queue.connections.database.connection') ?: config('database.default');
+        $queueDatabase = config("queue.connections.{$connection}.connection") ?: config('database.default');
+        $queueTable = (string) config("queue.connections.{$connection}.table", 'jobs');
         $failedDatabase = config('queue.failed.database') ?: config('database.default');
+        $failedTable = (string) config('queue.failed.table', 'failed_jobs');
         $result = [
             'status' => 'healthy',
             'connection' => $connection,
@@ -63,8 +65,8 @@ class FarastObservabilityService
             if ($connection === 'sync') {
                 $result['status'] = 'warning';
                 $result['message'] = 'پردازش صف به‌صورت هم‌زمان انجام می‌شود؛ backlog پایدار قابل اندازه‌گیری نیست.';
-            } elseif (Schema::connection($queueDatabase)->hasTable('jobs')) {
-                $jobs = DB::connection($queueDatabase)->table('jobs');
+            } elseif (Schema::connection($queueDatabase)->hasTable($queueTable)) {
+                $jobs = DB::connection($queueDatabase)->table($queueTable);
                 $result['pending_jobs'] = (int) (clone $jobs)->count();
                 $oldest = (clone $jobs)->min('created_at');
                 $result['oldest_pending_minutes'] = $oldest
@@ -76,7 +78,7 @@ class FarastObservabilityService
             }
 
             if (Schema::connection($failedDatabase)->hasTable('failed_jobs')) {
-                $result['failed_jobs'] = (int) DB::connection($failedDatabase)->table('failed_jobs')->count();
+                $result['failed_jobs'] = (int) DB::connection($failedDatabase)->table($failedTable)->count();
                 if ($result['failed_jobs'] > 0) {
                     $result['status'] = 'warning';
                 }
@@ -114,6 +116,9 @@ class FarastObservabilityService
 
             if (Schema::hasTable('storage_volumes')) {
                 $query = DB::table('storage_volumes');
+                if (Schema::hasColumn('storage_volumes', 'is_active')) {
+                    $query->where('is_active', true);
+                }
                 $result['volumes'] = [
                     'total' => (int) (clone $query)->count(),
                     'healthy' => (int) (clone $query)->where('status', 'healthy')->count(),
