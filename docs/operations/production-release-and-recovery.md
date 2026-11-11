@@ -95,6 +95,14 @@ Rollback دیتابیس با `migrate:rollback` به‌صورت کورکوران
 - پس از Deploy، حداقل این موارد بررسی شوند: پاسخ HTTP، خطاهای 5xx، ورود، یک مسیر خواندن/نوشتن کنترل‌شده، دیتابیس، Redis/Cache در صورت استفاده، تأخیر صف، failed_jobs، اجرای Scheduler و دسترسی Storage.
 - لاگ‌ها باید با زمان، محیط، نسخه/commit، request ID و correlation ID قابل پیوند باشند؛ هرگز Token، Password یا متن حساس را ثبت نکنند.
 
+برای اجرای Smoke Test لایونِس و Readiness پس از Deploy، روی ماشین عملیاتی یا Runner مورداعتماد اجرا کنید:
+
+```bash
+FARAST_BASE_URL=https://your-production-domain.example bash scripts/ops/health-check.sh
+```
+
+این اسکریپت فقط HTTPS را می‌پذیرد، `/up` و `/ready` را با Timeout محدود بررسی می‌کند و هیچ Body یا اطلاعات داخلی را در خروجی چاپ نمی‌کند. در صورت شکست هرکدام، انتشار را موفق تلقی نکنید. Timeoutها با `FARAST_HEALTH_CONNECT_TIMEOUT` و `FARAST_HEALTH_TIMEOUT` قابل تنظیم‌اند.
+
 ## 6) Worker و Scheduler
 
 Scheduler لاراول باید دقیقاً یک اجراکننده فعال برای هر محیط داشته باشد؛ اجرای چند Scheduler هم‌زمان بدون قفل مشترک می‌تواند Job تکراری ایجاد کند.
