@@ -154,35 +154,53 @@ class StorageBackupService
                 throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ پس از انتقال قابل رمزگشایی نیست.');
             }
 
-            $database = $zip->getStream('database/database.sql');
-            if (! is_resource($database)) {
-                throw new RuntimeException('فایل دیتابیس بکاپ پس از انتقال قابل رمزگشایی نیست.');
-            }
-            $databaseBytes = 0;
-            try {
-                while (! feof($database)) {
-                    $chunk = fread($database, 1024 * 1024);
-                    if ($chunk === false) {
-                        throw new RuntimeException('خواندن کامل جریان دیتابیس بکاپ ناموفق بود.');
-                    }
-                    if ($chunk === '') {
-                        if (feof($database)) {
-                            break;
-                        }
-                        throw new RuntimeException('جریان دیتابیس بکاپ پیش از پایان متوقف شد.');
-                    }
-                    $databaseBytes += strlen($chunk);
+            $databaseBytes = null;
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $stat = $zip->statIndex($index);
+                $name = is_array($stat) ? (string) ($stat['name'] ?? '') : '';
+                if ($name === '' || str_ends_with($name, '/')) {
+                    continue;
                 }
-            } finally {
-                fclose($database);
+
+                if (($stat['encryption_method'] ?? null) !== ZipArchive::EM_AES_256) {
+                    throw new RuntimeException('همه فایل‌های آرشیو بکاپ باید با AES-256 رمزنگاری شده باشند.');
+                }
+
+                $stream = $zip->getStream($name);
+                if (! is_resource($stream)) {
+                    throw new RuntimeException('یکی از فایل‌های رمزنگاری‌شده بکاپ قابل رمزگشایی نیست: '.$name);
+                }
+
+                $bytesRead = 0;
+                try {
+                    while (! feof($stream)) {
+                        $chunk = fread($stream, 1024 * 1024);
+                        if ($chunk === false) {
+                            throw new RuntimeException('خواندن کامل یکی از فایل‌های بکاپ ناموفق بود: '.$name);
+                        }
+                        if ($chunk === '') {
+                            if (feof($stream)) {
+                                break;
+                            }
+                            throw new RuntimeException('جریان یکی از فایل‌های بکاپ پیش از پایان متوقف شد: '.$name);
+                        }
+                        $bytesRead += strlen($chunk);
+                    }
+                } finally {
+                    fclose($stream);
+                }
+
+                if ($bytesRead !== (int) ($stat['size'] ?? -1)) {
+                    throw new RuntimeException('اندازه فایل رمزگشایی‌شده با Manifest ZIP مطابقت ندارد: '.$name);
+                }
+
+                if ($name === 'database/database.sql') {
+                    $databaseBytes = $bytesRead;
+                }
             }
-            $databaseStat = $zip->statName('database/database.sql');
-            if (
-                $databaseBytes === 0
-                || ! is_array($databaseStat)
-                || $databaseBytes !== (int) ($databaseStat['size'] ?? -1)
-            ) {
-                throw new RuntimeException('خواندن کامل فایل دیتابیس بکاپ با اندازه ثبت‌شده مطابقت ندارد.');
+
+            if (! is_int($databaseBytes) || $databaseBytes < 1) {
+                throw new RuntimeException('جریان کامل دیتابیس در آرشیو بکاپ موجود یا قابل رمزگشایی نیست.');
             }
         } finally {
             $zip->close();
