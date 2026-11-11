@@ -51,7 +51,7 @@ class WorkflowEngine
                 // Commit side effects and the event-workflow completion marker together.
                 if ($eventWorkflowId !== null) {
                     if (! $eventWorkflowLeaseToken) {
-                        throw new \\RuntimeException('Workflow event lease token is missing.');
+                        throw new \RuntimeException('Workflow event lease token is missing.');
                     }
                     $updated = DB::table('farast_workflow_event_workflows')
                         ->where('id', $eventWorkflowId)
@@ -209,7 +209,7 @@ class WorkflowEngine
         }
         $context = json_decode((string) $event->context, true);
         if (! is_array($context)) {
-            throw new \\RuntimeException('Stored workflow event context is invalid.');
+            throw new \RuntimeException('Stored workflow event context is invalid.');
         }
         return $this->processEvent($event, $context);
     }
