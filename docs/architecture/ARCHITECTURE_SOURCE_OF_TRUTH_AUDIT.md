@@ -807,9 +807,9 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 
 
 
-## 17. یافته‌های تکمیلی حاصل از ردیابی Migration، سرویس و مصرف‌کننده
+## 18. تکمیل نقشه داده، مدل و Migration
 
-### 17.1 منبع حقیقت تجاری اشتراک
+### 18.1 منبع حقیقت تجاری اشتراک
 
 زنجیره واقعی Migration و کد مصرف‌کننده نشان می‌دهد دو نسل schema وجود دارد:
 
@@ -824,11 +824,11 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 - `PlatformCompletionController` برای billing، `farast_subscriptions` را به `farast_commercial_plans` join می‌کند.
 - `FarastSubscription` مدل جدول `farast_subscriptions` است؛ مدل فعال `FarastPlan` در مسیر مدل‌ها مشاهده نشد.
 
-**مالکیت canonical فعلی:** `farast_commercial_plans` کاتالوگ طرح و `farast_subscriptions` تاریخچه اشتراک است. `farast_plans` منبع legacy مهاجرت است، نه کاتالوگ فعال فعلی.
+**مالکیت canonical در main هنوز یکپارچه نیست:** `farast_commercial_plans` منبع کاتالوگ برای `ProfessionalCommerceService`، `SubscriptionEntitlementService` و مسیر billing در `PlatformCompletionController` است؛ اما `ProjectBillingService::includedAllowance()` همچنان `farast_subscriptions` را به `farast_plans` join می‌کند و سهمیه را از `farast_plans.quotas` می‌خواند. همین سرویس شمارنده legacy را با `user_id/metric/used` می‌خواند. این مسیر dead code نیست: `PaymentController::createForDocument()` و مسیر پرداخت سند پروژه‌ای، `ProjectBillingService::quote()` را فراخوانی می‌کنند. بنابراین در main، کاتالوگ اشتراک و محاسبه billing پروژه دو reader با قرارداد متفاوت دارند و هنوز یک منبع حقیقت واحد برای تمام billing وجود ندارد.
 
-**مالک اصلاح در شاخه‌های موجود:** PR #340 نسخه Migration را به staging و preflight غیرمخرب تغییر داده، در صورت plan حل‌نشده پیش از حذف منبع fail می‌کند و Migration بعدی FK اشتراک به `farast_commercial_plans` را با orphan preflight اضافه می‌کند. تست‌های `CommercialSubscriptionMigrationSafetyTest` و `CommerceLedgerForeignKeyTest` نیز اضافه شده‌اند. این اصلاح هنوز در main نیست؛ وضعیت آن باید با CI همان SHA و سپس merge کنترل‌شده تأیید شود.
+**مالک اصلاح در شاخه‌های موجود:** PR #340 نسخه Migration را به staging و preflight غیرمخرب تغییر داده، در صورت plan حل‌نشده پیش از حذف منبع fail می‌کند و Migration بعدی FK اشتراک به `farast_commercial_plans` را با orphan preflight اضافه می‌کند. تست‌های `CommercialSubscriptionMigrationSafetyTest` و `CommerceLedgerForeignKeyTest` نیز اضافه شده‌اند. بااین‌حال `ProjectBillingService.php` در diff فعلی #340 نیست؛ پس قبل از canonicalize کردن plan_id، مصرف‌کننده billing پروژه باید به catalog و usage canonical منتقل شود یا adapter سازگار رسمی داشته باشد. این وابستگی به‌صورت blocker در PR #340 ثبت شده است. اصلاح Migration هنوز در main نیست؛ وضعیت آن باید با CI همان SHA و سپس merge کنترل‌شده تأیید شود.
 
-### 17.2 شکاف باقی‌مانده در شمارنده مصرف تجاری
+### 18.2 شکاف باقی‌مانده در شمارنده مصرف تجاری
 
 این مورد در diff فعلی PR #340 نیز پوشش داده نشده است:
 
@@ -841,9 +841,9 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 
 **اقدام لازم:** preflight تکرار روی tuple جدید، سپس Migration forward برای unique index و تست رقابت/تکرار روی SQLite و MySQL/PostgreSQL. تا اجرای این کار، این مورد به‌عنوان شکاف یکپارچگی مصرف باقی می‌ماند؛ ایجاد counter موازی یا جدول جدید ممنوع است.
 
-### 17.3 سه دفتر رخداد با سه مسئولیت متفاوت
+### 18.3 تکمیل ARCH-15: سه دفتر رخداد با سه مسئولیت متفاوت
 
-سه جدول زیر نباید در مستندات یا داشبورد به‌عنوان یک دفتر واحد فرض شوند:
+ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جدا می‌کند. ردیابی حساب امنیتی، دفتر سوم را نیز آشکار می‌کند؛ این سه جدول نباید در مستندات یا داشبورد به‌عنوان یک دفتر واحد فرض شوند:
 
 | جدول | مالک فعلی مشاهده‌شده | مصرف‌کننده | نقش |
 |---|---|---|---|
@@ -853,13 +853,13 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 
 نکته مهم: `AdminPlatformController::audit` و شاخص audit داشبورد از `audit_logs` می‌خوانند؛ این صفحه در مسیر مشاهده‌شده `farast_audit_events` را verify یا نمایش نمی‌دهد. `AuditIntegrityService` زنجیره `farast_audit_events` را بررسی می‌کند، اما اتصال عملیاتی آن به صفحه ممیزی مدیریت در مسیرهای بررسی‌شده اثبات نشد. بنابراین «ممیزی مدیریتی قابل مشاهده» و «دفتر checksumدار دامنه» فعلاً دو قابلیت با دو منبع داده‌اند. قبل از یکپارچه‌سازی، call-siteهای کامل `AuditEventService` و سیاست پوشش رخدادهای حساس باید استخراج شود.
 
-### 17.4 قرارداد واقعی جدول رخداد امنیتی
+### 18.4 قرارداد واقعی جدول رخداد امنیتی
 
 `farast_security_events` نخست در Migration `2026_09_29_000006` ایجاد می‌شود. Migration امنیت حساب `2026_11_10_000005` نیز create-if-missing برای همین نام جدول دارد؛ اما در نصب معمول که جدول از قبل وجود دارد، آن create اجرا نمی‌شود. Migration تعمیر `2026_11_10_000012` هم در صورت وجود جدول، ستون‌های آن را reconcile نمی‌کند.
 
 در کد فعلی، `AccountSecurityController` و `TrackAuthenticatedSession` با Query Builder مستقیماً روی این جدول کار می‌کنند و مدل Eloquent اختصاصی برای آن مشاهده نشد. schema اولیه ستون‌های لازم این مسیرها را دارد؛ بنابراین این مورد فعلاً «مالکیت و تکامل schema چندپاره» است، نه اثبات خطای runtime. مالکیت آینده باید در یک Migration forward واحد تثبیت شود و تست upgrade از دیتابیس قدیمی داشته باشد.
 
-### 17.5 Route ownership: نتیجه تست در CI
+### 18.5 Route ownership: نتیجه تست در CI
 
 در HEAD شاخه ممیزی، `NotificationRouteOwnershipTest` در اجرای Laravel suite واقعاً **PASS** شده است. این تست ثابت می‌کند نام‌های `platform.notifications` و `platform.notifications.read` به `NotificationController@index/read` resolve می‌شوند.
 
@@ -869,15 +869,31 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 - مراحل بعدی همان job که بعد از `php artisan test` قرار دارند، از جمله `route:list`، در آن run اجرا نشده‌اند.
 - PR #350 برای هم‌راستاسازی تست‌های Reader ایجاد شده؛ روی HEAD جدید آن، FARAST CI و Phase 3 دوباره در صف‌اند و تا نتیجه نهایی نباید آن را سبز فرض کرد.
 
-### 17.6 فهرست Routeها
+### 18.6 فهرست Routeها
 
-فهرست declarationهای فعال، به تفکیک فایل، همراه با method، URI نهایی پس از prefix، route name، action، middleware گروه و middleware صریح در فایل زیر ثبت شده است:
+فهرست ۳۳۴ declaration فعال در شاخه ممیزی، به تفکیک فایل، همراه با method، URI نهایی پس از prefix، route name، action، middleware گروه و middleware صریح در فایل زیر ثبت شده است:
 
 - `docs/architecture/ROUTE_OWNERSHIP_INVENTORY.md`
 
+### 18.7 فهرست کامل مدل‌ها
+
+برای ۱۰۴ فایل مدل Eloquent، نام کلاس، table override صریح، primary key، connection و روابط قابل استخراج ثبت شده است:
+
+- `docs/architecture/MODEL_OWNERSHIP_INVENTORY.md`
+
+مدل‌هایی که `$table` صریح ندارند عمداً با برچسب «قرارداد Eloquent؛ runtime تأیید نشده» آمده‌اند؛ نام جدول آن‌ها تا اجرای runtime قطعی تلقی نمی‌شود.
+
+### 18.8 فهرست کامل Migrationها
+
+برای تمام ۱۱۴ Migration، جدول‌های create/alter/rename، FKهای صریح، unique/indexهای قابل استخراج و guardهای create-if-missing ثبت شده است:
+
+- `docs/architecture/MIGRATION_SCHEMA_INVENTORY.md`
+
+این فهرست عملیات source را نشان می‌دهد، نه schema واقعی محیط نصب‌شده؛ raw SQL، morph/polymorphic و وضعیت واقعی FKها نیازمند runtime introspection هستند.
+
 این فایل از Routeهای بارگذاری‌شده توسط `routes/web.php` استخراج شده و `routes/legal.php` orphan را عمداً وارد inventory فعال نمی‌کند. route inventory ایستا است؛ پس از عبور CI از `php artisan route:list` باید با خروجی runtime تطبیق داده شود.
 
-## 18. به‌روزرسانی مالکیت و هم‌پوشانی شاخه‌های جدید
+## 19. به‌روزرسانی مالکیت و هم‌پوشانی شاخه‌های جدید
 
 از آخرین snapshot زنده PRهای باز، نقاط تماس جدید زیر نیز به نقشه وابستگی افزوده شدند:
 
@@ -890,7 +906,7 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 
 این شاخه‌ها تغییر داده نشده‌اند. ترتیب و مالکیت فوق برای جلوگیری از ویرایش هم‌زمان فایل‌های `StoreController`, `SupportTicketService`, `StoreCourseLearningController` و `RestoreStorageBackup` ثبت شده است.
 
-## 19. وضعیت پذیرش مرحله دوم پس از ممیزی عمیق‌تر
+## 20. وضعیت پذیرش مرحله دوم پس از ممیزی عمیق‌تر
 
 مواردی که اکنون شواهد قابل استناد دارند:
 - ترکیب ورودی و Providerها؛
@@ -909,4 +925,4 @@ PlatformCompletionController پرریسک‌ترین hotspot است: تعریف 
 5. تعیین تکلیف unique index شمارنده‌های مصرف؛
 6. تأیید آخرین PRهای دارای migration و سپس به‌روزرسانی این سند روی آخرین main.
 
-**وضعیت نهایی این مرحله در این snapshot: ممیزی معماری و منابع حقیقت به سطح مستندات و شواهد کد رسیده، اما پذیرش runtime هنوز باز است. هیچ refactor گسترده‌ای بر مبنای این snapshot مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
+**وضعیت نهایی این مرحله در این snapshot: نقشه ایستای ۳۳۴ Route، ۱۰۴ Model و ۱۱۴ Migration به‌همراه جریان‌های اصلی و تعارض‌های منبع حقیقت ثبت شده است؛ اما پذیرش runtime هنوز باز است. به‌ویژه مصرف‌کننده legacy در `ProjectBillingService` و unique key شمارنده مصرف باید پیش از canonicalization مالی تعیین تکلیف شوند. هیچ refactor گسترده‌ای بر مبنای حدس مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
