@@ -650,11 +650,17 @@ class StoreController extends Controller
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
+        $readerPdfEngineReady = is_file(public_path('vendor/pdfjs/legacy/build/pdf.mjs'))
+            && is_file(public_path('vendor/pdfjs/legacy/build/pdf.worker.mjs'))
+            && is_file(public_path('vendor/pdfjs/web/pdf_viewer.css'))
+            && is_dir(public_path('vendor/pdfjs/cmaps'))
+            && is_dir(public_path('vendor/pdfjs/standard_fonts'));
 
         return response()
             ->view('store.reader', compact(
                 'product',
                 'previews',
+                'readerPdfEngineReady',
                 'readerIdentity',
                 'readerMode',
                 'readerDocument',
