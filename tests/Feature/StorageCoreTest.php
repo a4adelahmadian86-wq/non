@@ -391,4 +391,27 @@ class StorageCoreTest extends TestCase
         $this->assertFileDoesNotExist($abandoned);
     }
 
+
+    public function test_unknown_file_classification_is_rejected_without_storing_or_staging_the_file(): void
+    {
+        Storage::fake('private');
+
+        try {
+            app(StorageManager::class)->storeUploadedFile(
+                UploadedFile::fake()->createWithContent('misclassified.txt', 'must-not-leave-region'),
+                'critcal',
+                'test'
+            );
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('طبقه‌بندی فایل برای تعیین محل نگهداری معتبر نیست.', $exception->getMessage());
+            $this->assertDatabaseCount('storage_managed_files', 0);
+            $this->assertDatabaseCount('storage_volumes', 0);
+            $this->assertSame([], Storage::disk('private')->allFiles());
+
+            return;
+        }
+
+        $this->fail('Unknown file classification must fail closed.');
+    }
+
 }
