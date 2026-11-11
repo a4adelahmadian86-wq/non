@@ -433,7 +433,7 @@ class StorageManager
         $reservationKey = $this->reserveVolumeCapacity($volume, $size, 'backup', [
             'object_key' => $key,
             'backup_run_id' => $backupRunId,
-        ]);
+        ], 360);
         if ($reservationKey === null) {
             throw new StorageCapacityException('ظرفیت یا محدودیت تعداد فایل برای مقصد بکاپ کافی نیست.');
         }
@@ -467,13 +467,13 @@ class StorageManager
         }
     }
 
-    public function reserveVolumeCapacity(StorageVolume $volume, int $bytes, string $purpose, array $metadata = []): ?string
+    public function reserveVolumeCapacity(StorageVolume $volume, int $bytes, string $purpose, array $metadata = [], int $leaseMinutes = 120): ?string
     {
         if ($bytes < 0) {
             throw new RuntimeException('اندازه رزرو فضای ذخیره‌سازی معتبر نیست.');
         }
 
-        return DB::transaction(function () use ($volume, $bytes, $purpose, $metadata): ?string {
+        return DB::transaction(function () use ($volume, $bytes, $purpose, $metadata, $leaseMinutes): ?string {
             $locked = StorageVolume::query()->lockForUpdate()->find($volume->id);
             if (! $locked || ! $locked->is_active || $locked->status !== 'healthy') {
                 return null;
@@ -511,7 +511,7 @@ class StorageManager
                     'driver' => $locked->driver,
                     'disk' => $this->volumeDisk($locked),
                 ]),
-                'expires_at' => now()->addHours(2),
+                'expires_at' => now()->addMinutes(max(5, min(1440, $leaseMinutes))),
             ]);
 
             return $key;
