@@ -1,0 +1,115 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Services\FarastObservabilityService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Client\Request as HttpRequest;
+use Tests\TestCase;
+
+class CheckObservabilityCommandTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::flush();
+    }
+
+    public function test_critical_alert_is_sent_once_per_cooldown_and_recovery_is_notified(): void
+    {
+        $recipient = User::create([
+            'name' => 'مدیر عملیات',
+            'mobile' => '09150000991',
+            'password' => 'secret',
+            'role' => 'admin',
+        ]);
+        config([
+            'observability.alerts.user_ids' => [$recipient->id],
+            'observability.alerts.cooldown_minutes' => 30,
+            'observability.webhook.url' => 'https://alerts.example.test/farast',
+            'observability.webhook.token' => 'webhook-secret',
+        ]);
+        Http::fake();
+
+        $observability = \Mockery::mock(FarastObservabilityService::class);
+        $observability->shouldReceive('snapshot')->twice()->andReturn(
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]],
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]]
+        );
+        app()->instance(FarastObservabilityService::class, $observability);
+
+        $this->assertSame(1, Artisan::call('farast:observability:check'));
+        $this->assertSame(1, Artisan::call('farast:observability:check'));
+        $this->assertDatabaseCount('farast_notifications', 1);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'security_operational_alert',
+            'title' => 'هشدار بحرانی سلامت فراست',
+        ]);
+
+        $recovery = \Mockery::mock(FarastObservabilityService::class);
+        $recovery->shouldReceive('snapshot')->twice()->andReturn(
+            ['status' => 'healthy', 'components' => ['database' => ['status' => 'healthy']]],
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]]
+        );
+        app()->instance(FarastObservabilityService::class, $recovery);
+
+        $this->assertSame(0, Artisan::call('farast:observability:check'));
+        $this->assertDatabaseCount('farast_notifications', 2);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'security_operational_alert',
+            'title' => 'سلامت فراست بازیابی شد',
+        ]);
+
+        // The same degraded fingerprint after recovery is a new incident,
+        // not a duplicate of the previous incident's cooldown window.
+        $this->assertSame(1, Artisan::call('farast:observability:check'));
+        $this->assertDatabaseCount('farast_notifications', 3);
+        Http::assertSentCount(3);
+
+        $incidentEvents = DB::table('farast_audit_events')
+            ->where('event_type', 'like', 'observability.incident.%')
+            ->orderBy('id')
+            ->get(['payload_meta']);
+        $incidentPayloads = $incidentEvents->map(fn ($event) => json_decode((string) $event->payload_meta, true) ?: []);
+        $this->assertCount(3, $incidentPayloads);
+        $firstIncidentId = $incidentPayloads[0]['incident_id'] ?? null;
+        $this->assertIsString($firstIncidentId);
+        $this->assertSame($firstIncidentId, $incidentPayloads[1]['incident_id'] ?? null);
+        $this->assertNotSame($firstIncidentId, $incidentPayloads[2]['incident_id'] ?? null);
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'https://alerts.example.test/farast'
+            && $request->hasHeader('Authorization', 'Bearer webhook-secret')
+            && ($request['severity'] ?? null) === 'critical'
+            && ($request['incident_id'] ?? null) === $firstIncidentId);
+
+    }
+
+    public function test_alerts_are_not_broadcast_when_no_explicit_recipients_are_configured(): void
+    {
+        config([
+            'observability.alerts.user_ids' => [],
+            'observability.webhook.url' => 'http://untrusted.example.test/hook',
+        ]);
+        Http::fake();
+        $observability = \Mockery::mock(FarastObservabilityService::class);
+        $observability->shouldReceive('snapshot')->once()->andReturn([
+            'status' => 'warning',
+            'components' => ['queue' => ['status' => 'warning']],
+        ]);
+        app()->instance(FarastObservabilityService::class, $observability);
+
+        $this->assertSame(0, Artisan::call('farast:observability:check'));
+        $this->assertDatabaseCount('farast_notifications', 0);
+        Http::assertNothingSent();
+
+    }
+}
