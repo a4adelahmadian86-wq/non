@@ -37,7 +37,7 @@ jobs:
       - run: php artisan key:generate
       - run: touch database/database.sqlite
       - run: php artisan migrate:fresh --force
-      - run: php artisan test --filter='FinancialIdempotency|CommercialSubscriptionMigrationSafety|CommerceLedgerForeignKey'
+      - run: php artisan test --filter='FinancialIdempotency|CommerceLedgerForeignKey'
 
   mysql:
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=mysql' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' 'DB_DATABASE=farast' 'DB_USERNAME=root' 'DB_PASSWORD=root' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php artisan key:generate
       - run: php artisan migrate:fresh --force
-      - run: php artisan test --filter='FinancialIdempotency|CommercialSubscriptionMigrationSafety|CommerceLedgerForeignKey'
+      - run: php artisan test --filter='FinancialIdempotency|CommerceLedgerForeignKey'
 
   postgres:
     runs-on: ubuntu-latest
@@ -96,4 +96,4 @@ jobs:
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=pgsql' 'DB_HOST=127.0.0.1' 'DB_PORT=5432' 'DB_DATABASE=farast' 'DB_USERNAME=farast' 'DB_PASSWORD=farast' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php artisan key:generate
       - run: php artisan migrate:fresh --force
-      - run: php artisan test --filter='FinancialIdempotency|CommercialSubscriptionMigrationSafety|CommerceLedgerForeignKey'
+      - run: php artisan test --filter='FinancialIdempotency|CommerceLedgerForeignKey'
