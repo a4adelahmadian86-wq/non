@@ -38,6 +38,21 @@ class AuthorizationService
      */
     public function allows(?User $user, string $permission): bool
     {
+        if (! $user || $user->is_blocked) {
+            return false;
+        }
+
+        // Context-free checks drive navigation, not record access. Keep the
+        // dashboard entrypoint available to administrators under a narrowed
+        // scope, while global-scope administrators retain the legacy break-glass
+        // navigation behavior. Record access must still go through allowsFor().
+        if ($user->isAdmin() && (
+            $permission === 'dashboard.view'
+            || \\App\\Http\\Middleware\\ResolveAdminScope::scopeFor($user) === 'global'
+        )) {
+            return true;
+        }
+
         return $this->decide($user, $permission, []);
     }
 
