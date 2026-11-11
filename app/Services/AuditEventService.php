@@ -141,7 +141,10 @@ class AuditEventService
                     '$1[REDACTED]',
                     $value
                 );
-                $safe[$name] = mb_substr(is_string($redacted) ? $redacted : '[REDACTED]', 0, 2000);
+                $redacted = is_string($redacted) ? $redacted : '[REDACTED]';
+                $encodedString = json_encode($redacted, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+                $normalizedString = json_decode($encodedString, true, 512, JSON_THROW_ON_ERROR);
+                $safe[$name] = mb_substr(is_string($normalizedString) ? $normalizedString : '[REDACTED]', 0, 2000);
             } elseif (is_int($value) || is_float($value) || is_bool($value) || $value === null) {
                 $safe[$name] = $value;
             } else {
