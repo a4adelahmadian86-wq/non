@@ -325,11 +325,13 @@
       container.querySelector(':scope > .farast-pdf-annotation-layer')?.remove();
       container.append(layerDiv);
       const layerViewport=viewport.clone({dontFlip:true});
+      const linkService=createPdfLinkService();
       const annotationLayer=new pdfjs.AnnotationLayer({
         div:layerDiv,
         accessibilityManager:null,
         annotationCanvasMap:null,
         annotationEditorUIManager:null,
+        linkService,
         page,
         viewport:layerViewport,
         structTreeLayer:null
@@ -339,7 +341,7 @@
         div:layerDiv,
         viewport:layerViewport,
         page,
-        linkService:createPdfLinkService(),
+        linkService,
         downloadManager:null,
         annotationStorage:pdfDoc.annotationStorage,
         imageResourcesPath:'/vendor/pdfjs/web/images/',
