@@ -102,13 +102,13 @@ class ReviewProductFileAsset implements ShouldQueue
             throw new \RuntimeException('product_asset_stream_unavailable');
         }
 
-        $this->storeReview($product, [
-            'status' => 'reviewing',
-            'sha256' => (string) $file->sha256,
-            'started_at' => now()->toISOString(),
-        ]);
-
         try {
+            $this->storeReview($product, [
+                'status' => 'reviewing',
+                'sha256' => (string) $file->sha256,
+                'started_at' => now()->toISOString(),
+            ]);
+
             $hashContext = hash_init('sha256');
             hash_update_stream($hashContext, $stream);
             $sha256 = hash_final($hashContext);
