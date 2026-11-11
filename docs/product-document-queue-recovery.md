@@ -9,3 +9,18 @@ The farast:recover-product-documents scheduler command repairs only abandoned qu
 - Each run inspects at most 50 documents by default (hard cap 200). Existing artifacts are not deleted; the document job owns processing and artifact reuse.
 
 The processing lease threshold exceeds the current 10-minute job timeout. If the worker timeout changes, keep the recovery threshold comfortably above it.
+
+## Workflow event contracts and health gates
+
+The central workflow outbox accepts only these server-originated event contracts:
+
+| Event | Required immutable context |
+| --- | --- |
+| `document.saved` | positive `document_id` and `revision` |
+| `ticket.created` | positive `ticket_id` and non-empty `ticket_code` |
+| `order.paid` | positive `order_id`, non-negative `amount_rials`, `order_kind`, and status `paid` |
+| `order.deposit_paid` | positive `order_id`, non-negative `amount_rials`, `order_kind`, and status `deposit_paid` |
+
+Unknown context fields, malformed identifiers, mismatched payment status, and missing event-ledger schema fail closed. A valid domain operation must not silently commit after its required outbox write has been discarded.
+
+Run `php artisan farast:workflows:health` from the application environment. The command exits non-zero and logs a warning when sync mode leaves pending events, terminal failures exist, processing leases are stale, failed queue jobs exist, or queue/outbox latency reaches five minutes. A healthy queue exits zero.
