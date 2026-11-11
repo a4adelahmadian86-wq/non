@@ -66,10 +66,10 @@ class WorkflowConditionEvaluator
 
             $matched = match ($operator) {
                 'exists' => $present && $actual !== null && $actual !== '',
-                'equals' => $present && $actual == $expected,
-                'not_equals' => $present && $actual != $expected,
-                'in' => $present && in_array((string) $actual, $this->listValue($expected), true),
-                'not_in' => $present && ! in_array((string) $actual, $this->listValue($expected), true),
+                'equals' => $present && $this->sameValue($actual, $expected),
+                'not_equals' => $present && ! $this->sameValue($actual, $expected),
+                'in' => $present && is_scalar($actual) && in_array((string) $actual, $this->listValue($expected), true),
+                'not_in' => $present && is_scalar($actual) && ! in_array((string) $actual, $this->listValue($expected), true),
                 'contains' => is_array($actual)
                     ? in_array($expected, $actual, true)
                     : (is_string($actual) && is_string($expected) && str_contains($actual, $expected)),
@@ -86,6 +86,19 @@ class WorkflowConditionEvaluator
         }
 
         return true;
+    }
+
+    private function sameValue(mixed $actual, mixed $expected): bool
+    {
+        if ($actual === null || $expected === null) {
+            return $actual === $expected;
+        }
+
+        if (! is_scalar($actual) || ! is_scalar($expected)) {
+            return false;
+        }
+
+        return (string) $actual === (string) $expected;
     }
 
     private function listValue(mixed $value): array
