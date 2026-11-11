@@ -26,7 +26,7 @@ class AuditIntegrityServiceTest extends TestCase
     {
         $event = app(\App\Services\AuditEventService::class)->record(
             'test.invalid_utf8',
-            payloadMeta: ['label' => "bad\\xB1"],
+            payloadMeta: ['label' => "bad\xB1"],
             source: 'test'
         );
 
