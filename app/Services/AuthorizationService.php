@@ -424,6 +424,7 @@ class AuthorizationService
         array $context = [],
         ?Request $request = null,
     ): void {
+        $this->decisionCache = [];
         DB::table('access_audit_logs')->insert([
             'actor_id' => $actor?->getKey(),
             'subject_id' => $subject?->getKey(),
