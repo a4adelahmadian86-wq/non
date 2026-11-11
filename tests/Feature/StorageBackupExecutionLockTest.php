@@ -6,6 +6,7 @@ use App\Services\Storage\StorageBackupService;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Tests\TestCase;
+use ZipArchive;
 
 class StorageBackupExecutionLockTest extends TestCase
 {
