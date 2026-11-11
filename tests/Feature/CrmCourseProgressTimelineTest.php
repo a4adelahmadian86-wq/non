@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\FarastProject;
+use App\Models\FarastDocument;
+use App\Models\FarastDocumentVersion;
 use App\Models\StoreCategory;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
@@ -139,12 +142,60 @@ class CrmCourseProgressTimelineTest extends TestCase
             'is_staff' => true,
         ]);
 
+        $project = FarastProject::create([
+            'user_id' => $customer->id,
+            'name' => 'پروژه یکپارچه CRM',
+            'project_type' => 'typing',
+            'workflow' => 'manual',
+            'template_code' => 'default',
+            'status' => 'active',
+            'context' => ['source' => 'phase7-test'],
+            'billing_state' => ['status' => 'estimated'],
+            'output_state' => ['status' => 'locked'],
+            'estimated_pages' => 2,
+            'used_pages' => 1,
+            'estimated_price_rials' => 500000,
+            'paid_rials' => 200000,
+        ]);
+        $document = FarastDocument::create([
+            'user_id' => $customer->id,
+            'project_id' => $project->id,
+            'title' => 'سند مرجع پروژه CRM',
+            'content' => 'محتوای نسخه اصلی',
+            'status' => 'active',
+            'revision' => 3,
+            'last_saved_at' => now(),
+        ]);
+        FarastDocumentVersion::create([
+            'document_id' => $document->id,
+            'user_id' => $customer->id,
+            'content' => 'محتوای نسخه قبلی',
+            'label' => 'نسخه اول',
+        ]);
+
         $this->actingAs($admin)
             ->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('metrics.course_enrollments_count', 1)
             ->assertJsonPath('metrics.completed_course_enrollments_count', 1)
             ->assertJsonPath('metrics.completed_course_lessons_count', 1)
+            ->assertJsonPath('metrics.projects_count', 1)
+            ->assertJsonPath('metrics.farast_documents_count', 1)
+            ->assertJsonPath('metrics.farast_document_versions_count', 1)
+            ->assertJsonFragment([
+                'type' => 'farast_project',
+                'id' => $project->id,
+                'title' => 'پروژه یکپارچه CRM',
+                'documents_count' => 1,
+            ])
+            ->assertJsonFragment([
+                'type' => 'farast_document',
+                'id' => $document->id,
+                'title' => 'سند مرجع پروژه CRM',
+                'project_id' => $project->id,
+                'revision' => 3,
+                'versions_count' => 1,
+            ])
             ->assertJsonFragment([
                 'type' => 'ticket_message',
                 'ticket_id' => $ticket->id,
