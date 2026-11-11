@@ -665,14 +665,7 @@
       // Render Free sleeps after inactivity. Wake it over ordinary HTTP and wait
       // for its real health response before opening the WebSocket upgrade.
       if(service.provider==='render'){
-        var healthUrl='';
-        try{
-          var healthTarget=new URL(String(service.websocket_url||''));
-          healthTarget.protocol=healthTarget.protocol==='wss:'?'https:':'http:';
-          healthTarget.pathname='/health';healthTarget.search='';healthTarget.hash='';
-          healthUrl=healthTarget.toString();
-        }catch(e){throw new Error('نشانی سلامت درگاه رایگان Render معتبر نیست.');}
-        if(!healthUrl)throw new Error('نشانی سلامت درگاه رایگان Render تنظیم نشده است.');
+        var healthUrl='/editor/voice/health';
         var recentlyHealthy=renderGatewayReadyUrl===healthUrl&&(Date.now()-renderGatewayReadyAt)<720000;
         if(recentlyHealthy){
           voiceTitle.textContent='در حال اتصال به سرویس صوتی';
