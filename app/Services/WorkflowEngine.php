@@ -217,7 +217,8 @@ class WorkflowEngine
     /** Queue pending and recoverable outbox events in bounded batches. */
     public function dispatchPendingEvents(int $limit = 50): int
     {
-        if (! Schema::hasTable('farast_workflow_events') || config('queue.default') === 'sync') return 0;
+        if (! Schema::hasTable('farast_workflow_events')) return 0;
+        $sync = config('queue.default') === 'sync';
         $events = DB::table('farast_workflow_events')
             ->whereIn('status', ['pending', 'failed', 'processing'])
             ->where('attempts', '<', 5)
@@ -229,7 +230,15 @@ class WorkflowEngine
             })
             ->orderBy('id')->limit(max(1, min($limit, 200)))->get(['id']);
         foreach ($events as $event) {
-            $this->queueEvent((int) $event->id, false);
+            if ($sync) {
+                try {
+                    $this->processQueuedEvent((int) $event->id);
+                } catch (\\Throwable $exception) {
+                    report($exception);
+                }
+            } else {
+                $this->queueEvent((int) $event->id, false);
+            }
         }
         return $events->count();
     }
@@ -522,8 +531,17 @@ class WorkflowEngine
 
     private function queueEvent(int $eventId, bool $afterCommit = true): void
     {
-        // A sync driver is useful for unit tests but must never masquerade as background processing.
         if (config('queue.default') === 'sync') {
+            // Preserve the outbox boundary: never execute a workflow before its source
+            // transaction commits. With the sync driver, run inline after commit instead
+            // of leaving a pending event for a background worker that does not exist.
+            DB::afterCommit(function () use ($eventId): void {
+                try {
+                    $this->processQueuedEvent($eventId);
+                } catch (\\Throwable $exception) {
+                    report($exception);
+                }
+            });
             return;
         }
 
