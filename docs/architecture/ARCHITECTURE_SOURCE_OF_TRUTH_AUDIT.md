@@ -926,3 +926,61 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 6. تأیید آخرین PRهای دارای migration و سپس به‌روزرسانی این سند روی آخرین main.
 
 **وضعیت نهایی این مرحله در این snapshot: نقشه ایستای ۳۳۴ Route، ۱۰۴ Model و ۱۱۴ Migration به‌همراه جریان‌های اصلی و تعارض‌های منبع حقیقت ثبت شده است؛ اما پذیرش runtime هنوز باز است. به‌ویژه مصرف‌کننده legacy در `ProjectBillingService` و unique key شمارنده مصرف باید پیش از canonicalization مالی تعیین تکلیف شوند. هیچ refactor گسترده‌ای بر مبنای حدس مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
+
+
+## 18. Findings in active implementation and candidate branches
+
+### ARCH-19 — Store administration routes in main lack section-level authorization
+
+**main evidence:**
+- routes/store_routes.php opens the complete admin store group with only auth + admin middleware.
+- routes/product_operations.php uses the same auth + admin-only group.
+- config/farast_admin.php already defines section store with permission store.manage and min_scope global, but the current main route groups do not apply admin.section:store.
+- AdminOnly in multi_role_console mode admits all User::DASHBOARD_ROLES, not only the platform administrator.
+- AdminStoreController main has no direct isAdmin, AuthorizationService, authorizeAction or Policy checks in its CRUD/upload methods; AdminCourseController routes inherit the same group.
+
+**Effect:** when multi-role console is enabled, dashboard roles can reach product catalog CRUD, bulk archive, upload, preview, course sections/lessons/resources and product operations without the store.manage section gate. This is a critical route authorization gap.
+
+**Candidate fix:** PR #347 changes both groups to auth + admin + admin.section:store. Since store section has global minimum scope, the route boundary becomes explicit. The PR must be rechecked after merge with a negative test for each dashboard role and every store mutation route; do not assume one index-page test covers all endpoints.
+
+### ARCH-20 — Backup restore misreads the first ZIP entry as missing
+
+**main evidence:** RestoreStorageBackup::handle checks the result of ZipArchive::locateName('database/database.sql') using a boolean negation. ZipArchive::locateName returns integer 0 when the requested file is the first entry; zero is falsey in PHP. The new StorageBackupRestoreIntegrationTest in PR #335 places database/database.sql as the first ZIP entry, so the command incorrectly reports that the database file is absent.
+
+**Effect:** valid backups whose database dump is the first archive entry cannot be restored. This is especially likely for a backup with no other managed files. The correct existence check is strict comparison with false, not boolean negation.
+
+**Coordination:** this exact cause was posted on PR #335. The backup integration test should remain; the restore command needs the strict false check and the test must pass before the Storage lifecycle PR is accepted.
+
+### ARCH-21 — Product intake proposals define competing pre-product state machines
+
+- Current main already has StoreProductIngestion for the preflight/confirm flow of files attached to an existing StoreProduct.
+- PR #318 adds a new-product file-first path that creates a draft StoreProduct immediately and uses StoreProductIngestion as the staging state.
+- PR #333 adds StoreProductIntakeSession and StoreProductIntakeFile before a StoreProduct exists; it supports multi-file and course intake, then creates StoreProduct and StoreProductFile at finalize.
+- Both proposals change AdminStoreController and store_routes.php and introduce separate review/antivirus lifecycle code.
+
+**Decision proposed:** use StoreProductIntakeSession/File as the sole pre-product intake aggregate; keep StoreProductIngestion for attaching files to an already existing product and downstream ingestion. Port any valuable scanner/review adapter from #318 into the #333 session pipeline, but do not merge both new-product intake routes or two publication-review engines. This decision and the exact route split were posted on PR #318 and PR #333.
+
+**Additional access requirement:** PR #333's reviewer lookup uses role + store.products.publish permission without an organization/team resource scope on the intake session. If a non-global role is ever granted that permission, it can inspect/review sessions across organizations. Reviewer access must be resource-scoped before the feature is enabled for organization/team roles.
+
+### ARCH-22 — Candidate Workflow queue branch must define sync-driver behavior
+
+PR #347 moves active event call-sites to WorkflowEngine::enqueue and dispatches ProcessWorkflowEvent after commit. In that branch queueEvent returns immediately when queue.default is sync, and dispatchPendingEvents also returns 0 for the sync driver. In the supplied environment context, queue.default is sync. Therefore an enqueue-only caller can persist a pending event that no worker or scheduler will process.
+
+The branch needs one explicit contract:
+- inline dispatchSync/processEvent after commit for sync driver; or
+- fail loudly on sync driver and make health checks prevent activation; or
+- require a real database/Redis worker in deployment and verify it end-to-end.
+
+This finding was posted on PR #347. Do not accept silent pending events as a valid sync-mode behavior.
+
+### وضعیت اجرایی Pull Requestهای وابسته
+
+آخرین snapshot checkها باید هنگام ادغام دوباره خوانده شود؛ وضعیت مشاهده‌شده در زمان این ممیزی:
+- PR #348: تست NotificationRouteOwnershipTest موفق شده؛ suite مرتبط در commit 9d9a4b498434aa3922d4543fc391cdfc29cfc649 دارای 604 موفق و 5 شکست StoreReaderAccessTest بود.
+- PR #350: Phase 3 در HEAD آن سبز شد و 608 تست موفق گزارش شد؛ Laravel check هنوز باید نهایی شود.
+- PR #335: Phase 3 دارای 620 موفق و یک شکست StorageBackupRestoreIntegrationTest بود؛ علت دقیق locateName index 0 شناسایی و در PR comment ثبت شد.
+- PR #340: Phase 3 دارای 614 موفق و 12 شکست بود؛ هفت شکست در setup تست FinancialIdempotencyMigrationUpgradeTest به‌علت duplicate transaction_id و پنج شکست StoreReader. تست‌های سه موتور دیتابیس در صف بودند. ایراد schema واقعی legacy و wallet holds نیز در PR comment ثبت شد.
+- PR #347: در اجرای قبلی 27 تست AdvancedAccessControlTest موفق بودند؛ Phase 3 به پنج شکست StoreReader رسیده بود. HEAD جدید آن در زمان آخرین بررسی هنوز checkهای کامل نداشت.
+- PR #318: تست اصلی موفق، اما Laravel check ناموفق؛ PR #333 هنوز check-run قابل اتکا نداشت.
+- PR #353 و #354: checkها در صف/در حال اجرا بودند.
+
