@@ -129,7 +129,7 @@ class ResolveAdminScope
             ->exists();
         $managerial = $user->teams()
             ->where('teams.organization_id', $user->organization_id)
-            ->wherePivot('team_role', 'manager')
+            ->wherePivotIn('team_role', ['manager', 'owner', 'supervisor'])
             ->exists();
 
         return $supervised || $managerial;
@@ -182,7 +182,7 @@ class ResolveAdminScope
                     ->orWhereIn('id', function ($q) use ($user) {
                         $q->select('team_id')->from('team_user')
                             ->where('user_id', $user->id)
-                            ->where('team_role', 'manager');
+                            ->whereIn('team_role', ['manager', 'owner', 'supervisor']);
                     });
             })
             ->pluck('id');
