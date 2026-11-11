@@ -320,7 +320,13 @@ class CrmMarketingCampaignTest extends TestCase
             ->assertSee('مرکز کمپین‌های بازاریابی')
             ->assertSee('ساخت سگمنت رفتاری')
             ->assertSee('سقف بودجه کمپین')
-            ->assertSee('عملکرد و چرخه کمپین‌ها');
+            ->assertSee('عملکرد و چرخه کمپین‌ها')
+            ->assertSee('نقش مشتری')
+            ->assertSee('وضعیت احراز هویت')
+            ->assertSee('ثبت‌نام از')
+            ->assertSee('حداقل تعداد سفارش')
+            ->assertSee('حداقل یک سفارش پرداخت‌شده')
+            ->assertSee('name="paid_customer"', false);
     }
 
 
