@@ -194,6 +194,159 @@ class AdminStoreController extends Controller
         return view('admin.store.intake-files', compact('session'));
     }
 
+    public function intakeDetails(Request $request, StoreProductIntakeSession $session)
+    {
+        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
+        abort_unless($session->isUsable(), 410);
+        $files = $session->files()->where('status', 'uploaded')->get();
+        abort_if($files->isEmpty(), 409, 'ابتدا حداقل یک فایل را بازرسی و منتقل کنید.');
+
+        foreach ($files as $file) {
+            abort_unless($file->supervisor_status === 'completed', 409, 'بررسی ناظر هوشمند برای همه فایل‌ها هنوز تکمیل نشده است.');
+            abort_unless(data_get($file->supervisor_review_json, 'security_gate') !== 'blocked', 409, 'یکی از فایل‌ها توسط ناظر هوشمند مسدود شده است.');
+        }
+
+        $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $tags = StoreTag::query()->orderBy('name')->get();
+        $relatedProducts = collect();
+        $product = new StoreProduct([
+            'status' => 'draft',
+            'price_rials' => 0,
+            'preview_pages' => 3,
+            'type' => $session->product_type,
+        ]);
+        $intakeSession = $session;
+
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'intakeSession'));
+    }
+
+    public function finalizeIntake(Request $request)
+    {
+        $request->validate(['intake_session_id' => 'required|uuid']);
+        $session = StoreProductIntakeSession::query()
+            ->whereKey($request->string('intake_session_id')->toString())
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+        abort_unless($session->isUsable(), 410);
+        $files = $session->files()->where('status', 'uploaded')->orderBy('id')->get();
+        abort_if($files->isEmpty(), 409, 'فایل تأییدشده‌ای برای ثبت محصول وجود ندارد.');
+
+        foreach ($files as $file) {
+            abort_unless($file->supervisor_status === 'completed', 409, 'بررسی ناظر هوشمند برای همه فایل‌ها باید تکمیل شود.');
+            abort_unless(data_get($file->supervisor_review_json, 'security_gate') !== 'blocked', 409, 'فایل مسدودشده قابل ثبت در محصول نیست.');
+        }
+
+        $data = $this->validated($request);
+        abort_unless(($data['type'] ?? null) === $session->product_type, 422, 'نوع محصول با نوع نشست ورود مطابقت ندارد.');
+        $data['sku'] = filled($data['sku'] ?? null) ? $data['sku'] : $this->uniqueSku();
+        $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'] ?? null);
+        $data['status'] = 'draft';
+        $data['published_at'] = null;
+        $tagIds = $data['tag_ids'] ?? [];
+        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
+
+        $created = DB::transaction(function () use ($data, $tagIds, $session, $files) {
+            $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedSession->isUsable(), 409, 'نشست ورود قبلاً مصرف شده یا منقضی شده است.');
+            abort_unless($lockedSession->product_id === null, 409, 'این نشست قبلاً به محصول متصل شده است.');
+
+            $product = StoreProduct::create($data);
+            if ($product->type === 'course') {
+                StoreCourse::firstOrCreate(['product_id' => $product->id]);
+            }
+            $product->tags()->sync($tagIds);
+            $product->related()->sync(app(ProductRelatedProductsService::class)->recommend($product)->pluck('id')->all());
+
+            $bindings = [];
+            foreach ($files as $index => $intakeFile) {
+                $inspection = (array) $intakeFile->inspection_json;
+                $antivirusClean = data_get($inspection, 'antivirus.status') === 'clean';
+                $record = StoreProductFile::create([
+                    'product_id' => $product->id,
+                    'course_lesson_id' => null,
+                    'purpose' => $product->type === 'course' ? 'course_asset' : 'product_download',
+                    'version' => $product->version,
+                    'disk' => $intakeFile->managed_disk,
+                    'path' => $intakeFile->managed_path,
+                    'original_name' => $intakeFile->original_name,
+                    'mime' => $intakeFile->mime,
+                    'size_bytes' => $intakeFile->size_bytes,
+                    'sha256' => $intakeFile->sha256,
+                    'is_primary' => $product->type === 'digital_file' && $intakeFile->is_primary,
+                    'is_active' => true,
+                    'scan_status' => $antivirusClean ? 'clean' : 'warning',
+                    'scan_engine' => $antivirusClean ? 'clamav' : 'farast_static_v1',
+                    'scanned_at' => now(),
+                ]);
+
+                DB::table('store_product_documents')->insert([
+                    'product_id' => $product->id,
+                    'product_file_id' => $record->id,
+                    'source_sha256' => $record->sha256,
+                    'processing_status' => $record->size_bytes <= 25 * 1024 * 1024 ? 'pending' : 'awaiting_provider',
+                    'detected_type' => $inspection['detected_type'] ?? null,
+                    'page_count' => $inspection['page_count'] ?? null,
+                    'word_count' => 0,
+                    'character_count' => 0,
+                    'language' => null,
+                    'extraction_version' => 1,
+                    'structure_json' => json_encode([
+                        'intake_session_id' => $session->id,
+                        'relative_path' => $intakeFile->relative_path,
+                        'preflight' => ['mime' => $record->mime, 'size_bytes' => $record->size_bytes],
+                        'supervisor' => $intakeFile->supervisor_review_json,
+                    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $bindings[] = ['managed_file_id' => (int) $intakeFile->managed_file_id, 'file_id' => (int) $record->id];
+                $intakeFile->update(['status' => 'attached', 'product_file_id' => $record->id]);
+            }
+
+            $lockedSession->update([
+                'product_id' => $product->id,
+                'status' => StoreProductIntakeSession::STATUS_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
+            $this->audit('store.product.created_from_intake', $product, [
+                'intake_session_id' => $session->id,
+                'file_count' => count($bindings),
+                'product_type' => $product->type,
+                'manual_security_review_required' => $files->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean'),
+            ]);
+
+            return [$product, $bindings];
+        }, 3);
+
+        [$product, $bindings] = $created;
+        foreach ($bindings as $binding) {
+            if ($binding['managed_file_id'] > 0) {
+                app(StorageManager::class)->bindReference($binding['managed_file_id'], StoreProductFile::class, $binding['file_id'], (int) $product->id);
+            }
+        }
+
+        foreach ($product->files()->where('purpose', $product->type === 'course' ? 'course_asset' : 'product_download')->get() as $productFile) {
+            $documentId = (int) DB::table('store_product_documents')->where('product_file_id', $productFile->id)->value('id');
+            if ($documentId && $productFile->size_bytes <= 25 * 1024 * 1024) {
+                try {
+                    ProcessProductDocument::dispatch($documentId);
+                } catch (Throwable $exception) {
+                    DB::table('store_product_documents')->where('id', $documentId)->update([
+                        'processing_status' => 'failed',
+                        'failure_code' => 'processing_dispatch_failed',
+                        'updated_at' => now(),
+                    ]);
+                    report($exception);
+                }
+            }
+        }
+
+        return $product->type === 'course'
+            ? redirect()->route('admin.store.course.edit', $product)->with('status', 'دوره پس از بررسی فایل‌ها ایجاد شد؛ منابع اولیه در انتظار اتصال به جلسه‌های دوره هستند.')
+            : redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'محصول به‌صورت پیش‌نویس ایجاد شد؛ فایل‌ها پس از بازرسی و بررسی ناظر به آن متصل شدند.');
+    }
+
     public function preflightIntakeFile(
         Request $request,
         StoreProductIntakeSession $session,
