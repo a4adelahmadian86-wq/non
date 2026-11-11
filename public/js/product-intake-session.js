@@ -139,6 +139,35 @@
     }
     refreshSummary();
   };
+  const confirmExisting = async (id, button) => {
+    button.disabled = true;
+    const card = button.closest('article');
+    const status = card?.querySelector('[data-intake-existing-status]') || document.createElement('div');
+    status.textContent = 'در حال انتقال امن فایل…';
+    if (!status.parentNode) card?.append(status);
+    try {
+      const response = await fetch(root.dataset.confirmUrl.replace('__FILE__', String(id)), {
+        method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.code || 'انتقال فایل ناموفق بود');
+      const row = rows.get(id) || { uploaded: true, supervisorStatus: payload.supervisor_status || 'pending', securityGate: null };
+      row.uploaded = true;
+      row.supervisorStatus = payload.supervisor_status || 'pending';
+      rows.set(id, row);
+      status.textContent = 'فایل ذخیره شد؛ بررسی ناظر هوشمند در حال انجام است.';
+      button.remove();
+      await pollStatus(id, status, row);
+    } catch (error) {
+      status.textContent = error.message;
+      button.disabled = false;
+    }
+    refreshSummary();
+  };
+  document.querySelectorAll('[data-intake-confirm-existing]').forEach(button => {
+    button.addEventListener('click', () => confirmExisting(Number(button.dataset.intakeConfirmExisting), button));
+  });
+
   const preflight = async (item, index) => {
     const form = new FormData();
     form.append('file', item.file);
