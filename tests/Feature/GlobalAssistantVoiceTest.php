@@ -48,7 +48,7 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertSame(hash_hmac('sha256', $encoded, 'render-shared-voice-token'), $signature);
         $payload = json_decode(base64_decode(strtr($encoded, '-_', '+/').str_repeat('=', (4 - strlen($encoded) % 4) % 4)), true);
         $this->assertSame('fa-IR', $payload['locale']);
-        $this->assertSame(120, $payload['exp'] - $payload['iat']);
+        $this->assertSame(600, $payload['exp'] - $payload['iat']);
         $this->assertNotEmpty($payload['nonce']);
         $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
         Http::assertSentCount(1);
