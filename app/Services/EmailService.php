@@ -339,6 +339,7 @@ class EmailService
                 'link' => $link,
             ],
             meta: ['announcement_id' => $announcement->id],
+            idempotencyKey: 'announcement:'.$announcement->id.':user:'.$user->id,
         );
     }
 
