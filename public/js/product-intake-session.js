@@ -30,7 +30,7 @@
           const status = document.createElement('div');
           status.textContent = 'ناظر هوشمند در حال بررسی فایل است…';
           card.append(status);
-          pollStatus(file.id, status, rows.get(file.id));
+          setTimeout(() => pollStatus(file.id, status, rows.get(file.id)), 0);
         }
       }
     });
