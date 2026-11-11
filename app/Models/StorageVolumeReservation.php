@@ -13,6 +13,7 @@ class StorageVolumeReservation extends Model
         'reserved_bytes',
         'reserved_objects',
         'purpose',
+        'status',
         'metadata',
         'expires_at',
     ];
