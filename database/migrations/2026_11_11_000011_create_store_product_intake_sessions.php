@@ -36,6 +36,7 @@ return new class extends Migration
             $table->unsignedBigInteger('managed_file_id')->nullable();
             $table->foreignId('product_file_id')->nullable()->constrained('store_product_files')->nullOnDelete();
             $table->string('original_name', 255);
+            $table->string('relative_path', 1024)->nullable();
             $table->string('mime', 180);
             $table->unsignedBigInteger('size_bytes');
             $table->char('sha256', 64);
