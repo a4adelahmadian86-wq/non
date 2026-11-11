@@ -162,7 +162,7 @@
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
 <script src="/js/farast-reader-document-audio.js?v=20261108readiness1" defer></script>
-<script src="/js/farast-reader-annotations.js?v=20261111backup1" defer></script>
+<script src="/js/farast-reader-annotations.js?v=20261111backup2" defer></script>
 <script src="/js/farast-reader-studio.js?v=20261110durable2" defer></script>
 <script src="/js/farast-reader-ink-pressure.js?v=20261110durable4" defer></script>
 @endpush
