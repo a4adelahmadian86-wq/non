@@ -60,6 +60,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
+    Route::post('/store/{product}/publication/manual-approve',[AdminStoreController::class,'approveManualPublication'])->middleware('throttle:10,10')->name('store.publication.manual-approve');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
     Route::delete('/store/{product}',[AdminStoreController::class,'destroy'])->name('store.destroy');
     Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
