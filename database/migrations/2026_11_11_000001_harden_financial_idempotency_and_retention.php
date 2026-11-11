@@ -59,7 +59,9 @@ return new class extends Migration
 
         $missingGateway = DB::table('payments')
             ->whereNotNull('authority')
-            ->whereNull('gateway')
+            ->where(function ($query): void {
+                $query->whereNull('gateway')->orWhere('gateway', '');
+            })
             ->exists();
 
         if ($missingGateway) {
@@ -90,7 +92,9 @@ return new class extends Migration
 
         $missingGateway = DB::table('payments')
             ->whereNotNull('transaction_id')
-            ->whereNull('gateway')
+            ->where(function ($query): void {
+                $query->whereNull('gateway')->orWhere('gateway', '');
+            })
             ->exists();
 
         if ($missingGateway) {
