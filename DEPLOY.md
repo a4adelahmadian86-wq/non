@@ -28,7 +28,10 @@
 برای هر Release از SHA مشخص و تأییدشده استفاده کنید:
 
 ```bash
+# Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
+# After the release is staged and its shared storage/.env are wired:
 php artisan down --render="errors::503" --retry=60
 php artisan migrate:status
 php artisan migrate --force
@@ -40,9 +43,11 @@ php artisan queue:restart
 php artisan up
 ```
 
-- قبل از اجرای Migration از دیتابیس و Storage بکاپ verifyشده بگیرید.
+- قبل از فعال‌سازی Release و اجرای Migration از دیتابیس و Storage بکاپ verifyشده بگیرید.
+- وابستگی‌ها را در Release جدید بسازید؛ `composer install` را روی `vendor/` نسخه‌ای که ترافیک زنده می‌گیرد اجرا نکنید.
+- فایل `.env` و مسیر `storage/` باید بین Releaseها به‌صورت کنترل‌شده و پایدار مشترک باشند.
 - Migrationهای destructive باید جداگانه بررسی شوند؛ `migrate:rollback` کورکورانه روش Rollback تولید نیست.
-- در استقرار Zero-Downtime، `artisan down/up` را با روش تعویض Release میزبان جایگزین کنید.
+- در استقرار Zero-Downtime، فعال‌سازی symlink/Release باید اتمیک باشد و فقط پس از بررسی سازگاری Schema انجام شود.
 - در اولین راه‌اندازی فقط، بعد از تعیین `ADMIN_INITIAL_PASSWORD` و بررسی Seederها، seed اولیه را اجرا کنید. `db:seed` را در هر Release به‌صورت خودکار اجرا نکنید.
 - وب‌سرور فقط باید به `public/` دسترسی مستقیم داشته باشد؛ `.env`، `storage/app/private`، فایل‌های بکاپ و کدهای داخلی نباید public باشند.
 
