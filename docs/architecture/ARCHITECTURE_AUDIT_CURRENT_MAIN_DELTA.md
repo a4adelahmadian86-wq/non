@@ -444,7 +444,7 @@ commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه 
 | کاتالوگ محصول | `store_products` / `StoreProduct` | Store product domain services | StoreController، AdminStoreController | مشخص |
 | intake فایل محصول | `store_product_ingestions` / `StoreProductIngestion` | upload/preflight + `ProcessProductDocument` | AdminStoreController | منبع فعلی؛ خوشه #262/#265/#279/#318/#333 هنوز pipeline رقیب می‌سازد |
 | محتوای پردازش‌شده محصول | `store_product_documents` و artifact/page/chunk/factها | `ProcessProductDocument` + processing services | Reader، product operations | مشخص؛ خروجی مشتق‌شده، نه جایگزین کاتالوگ |
-| آمادگی/انتشار محصول | `StoreProduct.status/is_published` + readiness state | `ProductPublicationReadiness` | AdminStoreController | review state هوشمند هنوز بین PRهای باز canonical نشده |
+| آمادگی/انتشار محصول | `StoreProduct.status + published_at` + readiness state | `ProductPublicationReadiness` | AdminStoreController | review state هوشمند هنوز بین PRهای باز canonical نشده |
 | فایل‌های مدیریت‌شده | `storage_managed_files + storage_volumes` | `StorageManager` | AdminStorage، Store، Support، Messenger | مالک مرکزی مشخص؛ برخی call-siteها هنوز bypass می‌کنند |
 | سبد و سفارش فروشگاه | `store_carts/store_cart_items`, `orders/store_order_items` | `StoreCartService` | StoreCartController | مشخص |
 | پرداخت فروشگاه | `payments` / `Payment` | PaymentController + gateway service | checkout/callback | مشخص؛ idempotency مالی در PR #340 pending |
