@@ -315,8 +315,33 @@ class StoreReaderAccessTest extends TestCase
             'mime' => 'audio/wav',
             'size_bytes' => strlen($audioBytes),
             'sha256' => hash('sha256', $audioBytes),
-            'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 1000],
+            'metadata_json' => [
+                'source_sha256' => $document->source_sha256,
+                'duration_ms' => 1000,
+                'segments' => [[
+                    'chunk_index' => 0,
+                    'text' => 'متن مجاز صفحه اول کتاب',
+                    'start_ms' => 0,
+                    'end_ms' => 1000,
+                ]],
+            ],
         ]);
+        $document->chunks()->create([
+            'chunk_index' => 0,
+            'chunk_type' => 'paragraph',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'متن مجاز صفحه اول کتاب',
+            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
+        ]);
+
+        $readyReaderResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
+        $readyReaderResponse->assertOk()
+            ->assertSee('data-reader-audio-status="ready"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        preg_match('/data-reader-audio-timing="([^"]*)"/', $readyReaderResponse->getContent(), $timingMatch);
+        $timing = json_decode(html_entity_decode($timingMatch[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame('متن مجاز صفحه اول کتاب', data_get($timing, '0.text'));
+
         $headResponse = $this->actingAs($user)
             ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3');
         $headResponse->assertOk()
