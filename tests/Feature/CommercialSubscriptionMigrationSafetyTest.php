@@ -81,6 +81,7 @@ class CommercialSubscriptionMigrationSafetyTest extends TestCase
 
         $this->assertSame(1, DB::table('farast_subscriptions')->count());
         $row = DB::table('farast_subscriptions')->first();
+        $this->assertSame(41, (int) $row->id);
         $this->assertSame('legacy-subscription-41', $row->subscription_id);
         $this->assertSame(7, (int) $row->plan_id);
         $metadata = json_decode($row->metadata, true);
