@@ -1,0 +1,122 @@
+const { test, expect } = require('@playwright/test');
+
+async function signInAsSeededAdmin(page) {
+  const password = String(process.env.GITHUB_RUN_ID || 'local') + '-farast-e2e';
+
+  await page.goto('/login?continue=%2Fadmin%2Fstore%2Fcreate');
+  await page.locator('input[name="mobile"]').fill('09151234567');
+
+  const phoneResponsePromise = page.waitForResponse(response =>
+    response.url().endsWith('/login/phone') && response.request().method() === 'POST'
+  );
+  await page.getByRole('button', { name: /ادامه با شماره موبایل/ }).click();
+  const phoneResponse = await phoneResponsePromise;
+  expect(phoneResponse.ok()).toBeTruthy();
+
+  await expect(page).toHaveURL(/\/login\/password/);
+  await page.locator('input[name="password"]').fill(password);
+  await page.getByRole('button', { name: 'ورود به حساب' }).click();
+  await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
+}
+
+async function advanceProductWizard(page) {
+  for (const panel of [2, 3, 4]) {
+    await page.locator(`[data-wizard-panel="${panel - 1}"] .product-wizard-next`).click();
+    await expect(page.locator(`[data-wizard-panel="${panel}"]`)).toBeVisible();
+  }
+}
+
+test.describe('Real admin product workflow', () => {
+  test.afterEach(async ({ page }) => {
+    try {
+      const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+      if (csrf) {
+        await page.evaluate(async token => fetch('/logout', {
+          method: 'POST',
+          headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
+          credentials: 'same-origin',
+        }), csrf);
+      }
+    } catch (_) {}
+  });
+
+  test('creates a category and product through the real UI, exposes validation errors, and persists a private draft', async ({ page }) => {
+    test.setTimeout(120_000);
+    const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
+    const categoryName = `دسته آزمون رابط ${runId}`;
+    const productTitle = `محصول آزمون رابط ${runId}`;
+
+    await signInAsSeededAdmin(page);
+
+    const categoryForm = page.locator('form[data-inline-create="category"]');
+    await categoryForm.locator('input[name="name"]').fill(categoryName);
+    await categoryForm.locator('input[name="slug"]').fill(`phase10-ui-${runId}`);
+    const categoryResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/admin/store/categories') && response.request().method() === 'POST'
+    );
+    await categoryForm.getByRole('button', { name: 'افزودن دسته' }).click();
+    const categoryResponse = await categoryResponsePromise;
+    expect(categoryResponse.status()).toBe(302);
+    await expect(page.locator('.store-alert.success')).toContainText('دسته ذخیره شد.');
+
+    const categorySelect = page.locator('select[name="category_id"]');
+    const categoryId = await categorySelect.locator('option').filter({ hasText: categoryName }).getAttribute('value');
+    expect(categoryId).toBeTruthy();
+
+    await page.locator('input[name="title"]').fill(productTitle);
+    await page.locator('select[name="type"]').selectOption('digital_file');
+    await categorySelect.selectOption(categoryId);
+    await page.locator('[data-wizard-panel="0"] .product-wizard-next').click();
+    await expect(page.locator('[data-wizard-panel="1"]')).toBeVisible();
+
+    await page.locator('input[name="price_rials"]').fill('125000');
+    await page.locator('input[name="compare_at_price_rials"]').fill('100000');
+    await page.locator('[data-wizard-panel="1"] .product-wizard-next').click();
+    await advanceProductWizard(page);
+    await page.locator('#productSaveButton').click();
+
+    await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
+    await expect(page.locator('[role="alert"]')).toBeVisible();
+    await expect(page.locator('input[name="compare_at_price_rials"]')).toHaveValue('100000');
+
+    await page.locator('[data-wizard-panel="0"] .product-wizard-next').click();
+    await expect(page.locator('[data-wizard-panel="1"]')).toBeVisible();
+    await page.locator('input[name="compare_at_price_rials"]').fill('150000');
+    await page.locator('[data-wizard-panel="1"] .product-wizard-next').click();
+    await advanceProductWizard(page);
+    await page.locator('#productSaveButton').click();
+
+    await expect(page).toHaveURL(/\/admin\/store\/\d+\/edit#product-files$/);
+    await expect(page.locator('.store-alert.success')).toContainText('پیش‌نویس ایجاد شد');
+    await expect(page.locator('input[name="title"]')).toHaveValue(productTitle);
+    await expect(page.locator('select[name="category_id"]')).toHaveValue(categoryId);
+    await expect(page.locator('input[name="price_rials"]')).toHaveValue('125000');
+    await expect(page.locator('input[name="compare_at_price_rials"]')).toHaveValue('150000');
+    await expect(page.locator('select[name="status"]')).toHaveValue('draft');
+    await expect(page.locator('#product-files')).toBeVisible();
+
+    await page.goto('/admin/store?q=' + encodeURIComponent(productTitle));
+    await expect(page.getByText(productTitle, { exact: true })).toBeVisible();
+  });
+
+  test('mobile product editor fits the viewport and its primary fields are keyboard reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto('/admin/store');
+    await expect(page).toHaveURL(/\/login/);
+
+    await signInAsSeededAdmin(page);
+    const dimensions = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+    }));
+    expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
+
+    const title = page.locator('input[name="title"]');
+    await title.focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('select[name="type"]')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('select[name="category_id"]')).toBeFocused();
+  });
+});
