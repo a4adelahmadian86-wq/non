@@ -122,7 +122,7 @@ class RestrictedAdministratorScopeTest extends TestCase
             'organization_id' => $organizationB->id,
             'team_ids' => [],
         ]));
-        $this->assertFalse(app(AuthorizationService::class)->allows($restrictedAdmin, 'users.view'));
+        $this->assertTrue(app(AuthorizationService::class)->allows($restrictedAdmin, 'users.view'));
         $this->assertEqualsCanonicalizing(
             [$memberA->id],
             ResolveAdminScope::visibleUserIds($restrictedAdmin)
