@@ -127,14 +127,22 @@ Artisan::command('farast:workflows:health', function () {
     $failedQueueJobs = Schema::hasTable('failed_jobs')
         ? DB::table('failed_jobs')->where('queue', 'automation')->count()
         : 0;
+    $staleRuns = Schema::hasTable('farast_workflow_runs')
+        ? DB::table('farast_workflow_runs')->where('status', 'running')->where('started_at', '<=', now()->subMinutes(30))->count()
+        : 0;
+    $failedRuns24h = Schema::hasTable('farast_workflow_runs')
+        ? DB::table('farast_workflow_runs')->where('status', 'failed')->where('updated_at', '>=', now()->subDay())->count()
+        : 0;
     $failed = (int) ($counts['failed'] ?? 0);
     $pending = (int) ($counts['pending'] ?? 0);
     $queueConnection = (string) config('queue.default');
-    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
+    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' stale_runs='.$staleRuns.' failed_runs_24h='.$failedRuns24h.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
     $unhealthy = ($queueConnection === 'sync' && $pending > 0)
         || $failed > 0
         || $staleProcessing > 0
         || $failedQueueJobs > 0
+        || $staleRuns > 0
+        || $failedRuns24h > 0
         || $delay >= 300
         || $queueDelay >= 300;
 
@@ -146,6 +154,8 @@ Artisan::command('farast:workflows:health', function () {
             'stale_processing' => $staleProcessing,
             'queue_jobs' => $queueJobs,
             'failed_queue_jobs' => $failedQueueJobs,
+            'stale_runs' => $staleRuns,
+            'failed_runs_24h' => $failedRuns24h,
             'oldest_pending_seconds' => $delay,
             'oldest_queue_seconds' => $queueDelay,
         ]);
