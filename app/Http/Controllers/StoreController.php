@@ -545,8 +545,10 @@ class StoreController extends Controller
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     // Reading a PDF must never trigger a remote speech-provider call.
-                    // Existing audio artifacts remain playable from this application's own storage.
-                    $readerAudioStatus = $audioArtifactReady ? 'ready' : 'unavailable';
+                    // Audio generation is scheduled by the document-processing pipeline, not by this page request.
+                    $audioState = (string) data_get($structure, 'audio.status', '');
+                    $audioPending = in_array($audioState, ['pending', 'queued', 'processing', 'upgrading'], true);
+                    $readerAudioStatus = $audioArtifactReady ? 'ready' : ($audioPending ? 'pending' : 'unavailable');
 
                     if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
@@ -573,6 +575,10 @@ class StoreController extends Controller
                                 'page' => $page,
                             ];
                         }
+                    } elseif ($audioPending) {
+                        // The browser polls the same entitlement-checked endpoint with HEAD until
+                        // the queued artifact is available; no storage path is exposed to the client.
+                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
                     }
 
                     $previews = $document->pages->map(function ($page) use ($product, $readerAudioTiming) {
