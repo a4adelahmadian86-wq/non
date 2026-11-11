@@ -27,6 +27,7 @@ class AuthorizationService
         'reports.team', 'reports.documents', 'reports.workflows', 'reports.ai', 'reports.resources',
         'system.audit', 'documents.share', 'store.manage',
         'access.roles.manage', 'access.assign', 'access.override', 'access.audit',
+        'messenger.use', 'messenger.invite', 'messenger.group.create', 'messenger.group.manage',
         'workflows.create', 'workflows.edit', 'workflows.delete', 'workflows.run', 'workflows.audit',
         'automation.manage', 'automation.run', 'automation.audit',
     ];
@@ -517,6 +518,10 @@ class AuthorizationService
             'system.audit' => 'نظارت سیستم',
             'documents.share' => 'اشتراک‌گذاری اسناد',
             'store.manage' => 'مدیریت محصولات و دوره‌ها',
+            'messenger.use' => 'استفاده از پیام‌رسان داخلی',
+            'messenger.invite' => 'دعوت مخاطب در پیام‌رسان',
+            'messenger.group.create' => 'ایجاد گروه پیام‌رسان',
+            'messenger.group.manage' => 'مدیریت اعضای گروه پیام‌رسان',
             'access.roles.manage' => 'ایجاد و مدیریت نقش‌ها',
             'access.assign' => 'انتساب نقش به کاربران',
             'access.override' => 'مدیریت دسترسی مستقیم کاربران',
@@ -541,9 +546,9 @@ class AuthorizationService
         $all = Permission::query()->pluck('id', 'key');
         $roles = [
             'user' => ['dashboard.view', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.share', 'documents.export', 'projects.create', 'ai.use', 'ocr.use', 'voice.use', 'billing.view', 'team.view'],
-            'organization_manager' => ['dashboard.view', 'users.view', 'users.edit', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.share', 'documents.export', 'projects.create', 'ai.use', 'ai.view', 'ocr.use', 'voice.use', 'billing.view', 'billing.manage', 'workflows.view', 'workflows.manage', 'support.manage', 'organization.manage', 'team.view', 'team.manage', 'reports.view', 'reports.users', 'reports.team', 'reports.documents', 'reports.ai', 'reports.resources'],
-            'team_supervisor' => ['dashboard.view', 'users.view', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.export', 'projects.create', 'ai.use', 'ai.view', 'ocr.use', 'voice.use', 'workflows.view', 'team.view', 'reports.team', 'reports.documents', 'documents.share'],
-            'employee' => ['dashboard.view', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.share', 'documents.export', 'projects.create', 'ai.use', 'ocr.use', 'voice.use', 'team.view'],
+            'organization_manager' => ['dashboard.view', 'users.view', 'users.edit', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.share', 'documents.export', 'projects.create', 'ai.use', 'ai.view', 'ocr.use', 'voice.use', 'billing.view', 'billing.manage', 'workflows.view', 'workflows.manage', 'support.manage', 'organization.manage', 'team.view', 'team.manage', 'messenger.use', 'messenger.invite', 'messenger.group.create', 'messenger.group.manage', 'reports.view', 'reports.users', 'reports.team', 'reports.documents', 'reports.ai', 'reports.resources'],
+            'team_supervisor' => ['dashboard.view', 'users.view', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.export', 'projects.create', 'ai.use', 'ai.view', 'ocr.use', 'voice.use', 'workflows.view', 'team.view', 'messenger.use', 'messenger.invite', 'messenger.group.create', 'messenger.group.manage', 'reports.team', 'reports.documents', 'documents.share'],
+            'employee' => ['dashboard.view', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'documents.share', 'documents.export', 'projects.create', 'ai.use', 'ocr.use', 'voice.use', 'team.view', 'messenger.use', 'messenger.invite', 'messenger.group.create', 'messenger.group.manage'],
             'observer' => ['dashboard.view', 'documents.view', 'ai.use', 'reports.view'],
             'guest' => ['dashboard.view', 'documents.view'],
         ];
