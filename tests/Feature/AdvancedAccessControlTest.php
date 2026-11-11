@@ -858,4 +858,26 @@ class AdvancedAccessControlTest extends TestCase
         $this->actingAs($admin)->get('/admin/access-center')->assertOk();
         $this->actingAs($employee)->get('/admin/access-center')->assertForbidden();
     }
+
+
+    public function test_sensitive_user_capability_permission_cannot_be_granted_as_a_direct_allow(): void
+    {
+        $admin = $this->user('09140000151', User::ROLE_ADMIN);
+        $employee = $this->user('09140000152');
+
+        $this->actingAs($admin)
+            ->post('/admin/access-center/users/'.$employee->id.'/overrides', [
+                'permission' => 'users.capabilities.manage',
+                'effect' => 'allow',
+                'scope_type' => 'own',
+                'reason' => 'Sensitive capability changes require reviewed role assignment.',
+            ])
+            ->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_permission_overrides', [
+            'user_id' => $employee->id,
+            'permission_id' => $this->permissionId('users.capabilities.manage'),
+            'effect' => 'allow',
+        ]);
+    }
 }
