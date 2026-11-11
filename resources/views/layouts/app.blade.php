@@ -14,6 +14,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
 @if(!$isReader)
 <link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 @endif
+@if(!$isReader)
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
 @if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
@@ -24,6 +25,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
 @if($isAdmin)<link rel="stylesheet" href="/css/admin.css?v=20261107-sidebar1"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
 <link rel="stylesheet" href="/css/farast-assistant.css?v=20261106micStates2">
+@endif
 @stack('styles')
 </head>
 <body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }} {{ !$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage ? 'has-mobile-dock' : '' }}">
