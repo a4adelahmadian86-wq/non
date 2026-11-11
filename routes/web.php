@@ -11,4 +11,11 @@ require __DIR__.'/messenger.php';
 require __DIR__.'/product_operations.php';
 
 // Liveness is provided by Laravel at /up; readiness additionally requires the primary database.
-Route::get('/ready', ReadinessController::class)->middleware('throttle:120,1')->name('health.ready');
+// Bypass session startup and cache-backed throttling so this endpoint can report a DB outage
+// instead of failing in middleware before the readiness check executes.
+Route::get('/ready', ReadinessController::class)
+    ->withoutMiddleware([
+        \\Illuminate\\Session\\Middleware\\StartSession::class,
+        \\Illuminate\\View\\Middleware\\ShareErrorsFromSession::class,
+    ])
+    ->name('health.ready');
