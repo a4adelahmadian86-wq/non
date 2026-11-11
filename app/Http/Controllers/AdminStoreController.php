@@ -439,13 +439,17 @@ class AdminStoreController extends Controller
             ]);
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
-            if ($exception instanceof ValidationException) {
+            if ($exception instanceof ValidationException
+                || ($exception instanceof \\Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface && $exception->getStatusCode() === 403)) {
                 throw $exception;
             }
+            $failureCode = class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed';
+            $failureStatus = in_array($failureCode, ['antivirus_engine_unavailable', 'antivirus_scan_failed', 'antivirus_file_unavailable'], true) ? 503 : 422;
+
             return response()->json([
                 'message' => 'بررسی فایل کامل نشد؛ فایل وارد مخزن اصلی نشده است.',
-                'code' => class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed',
-            ], $exception->getMessage() === 'antivirus_engine_unavailable' ? 503 : 422);
+                'code' => $failureCode,
+            ], $failureStatus);
         }
 
         $session->update(['status' => StoreProductIntakeSession::STATUS_SELECTING_FILES]);
@@ -488,7 +492,11 @@ class AdminStoreController extends Controller
         if ($session->antivirus_requested) {
             abort_unless(app(\App\Services\AuthorizationService::class)
                 ->allows($request->user(), 'store.security_scan'), 403);
-            $avResult = $antivirus->scan($disk->path($stagingPath));
+            try {
+                $avResult = $antivirus->scan($disk->path($stagingPath));
+            } catch (\\RuntimeException $exception) {
+                throw new \\Symfony\\Component\\HttpKernel\\Exception\\HttpException(503, 'موتور آنتی‌ویروس در دسترس نیست؛ فایل تأیید نشد.', $exception);
+            }
             if (($avResult['status'] ?? null) === 'infected') {
                 $disk->delete((string) $file->staging_path);
                 $file->update(['status' => 'rejected', 'staging_path' => null]);
