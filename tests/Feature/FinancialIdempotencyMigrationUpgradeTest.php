@@ -49,6 +49,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
             $table->string('gateway', 40)->nullable();
             $table->string('authority', 160)->nullable();
+            $table->string('transaction_id', 190)->nullable();
         });
 
         DB::table('users')->insert(['id' => 1]);
@@ -81,6 +82,9 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         $this->assertSame('legacy-payment-30', DB::table('payments')->where('id', 30)->value('idempotency_key'));
         $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
+        ));
+        $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'transaction_id']
         ));
 
         $this->expectException(QueryException::class);
@@ -194,6 +198,30 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
         $this->assertDatabaseHas('payments', ['id' => 30, 'authority' => '']);
         $this->assertDatabaseHas('payments', ['id' => 31, 'authority' => '']);
+    }
+
+    public function test_upgrade_stops_before_mutation_when_gateway_transaction_ids_are_duplicated(): void
+    {
+        DB::table('payments')->where('id', 30)->update(['transaction_id' => 'duplicate-ref']);
+        DB::table('payments')->insert([
+            'id' => 31,
+            'order_id' => 20,
+            'gateway' => 'zarinpal',
+            'authority' => 'different-authority',
+            'transaction_id' => 'duplicate-ref',
+        ]);
+
+        try {
+            $this->runFinancialMigration();
+            $this->fail('Duplicate gateway transaction IDs must stop the migration before schema mutation.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('Duplicate payment transaction ID', $exception->getMessage());
+        }
+
+        $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
+        $this->assertFalse(collect(Schema::getIndexes('payments'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'transaction_id']
+        ));
     }
 
     public function test_upgrade_stops_without_merging_duplicate_legacy_keys(): void
