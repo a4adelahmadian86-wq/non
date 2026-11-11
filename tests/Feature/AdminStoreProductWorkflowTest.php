@@ -97,6 +97,7 @@ class AdminStoreProductWorkflowTest extends TestCase
 
     public function test_product_editor_hides_internal_identifiers_and_generates_them_automatically(): void
     {
+        Queue::fake();
         $admin = $this->admin();
         $category = $this->category();
 
@@ -130,7 +131,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('draft', $product->fresh()->status);
         $this->assertDatabaseHas('store_product_publication_reviews', [
             'product_id' => $product->id,
-            'status' => StoreProductPublicationReview::STATUS_PENDING_MANAGER,
+            'status' => StoreProductPublicationReview::STATUS_PENDING_AI,
         ]);
 
         $this->actingAs($admin)
