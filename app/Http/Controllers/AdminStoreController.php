@@ -1229,7 +1229,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'تصویر گالری حذف شد.');
     }
 
-    public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
+    public function deletePreview(StoreProduct $product, StoreProductPreview $preview, StorageManager $storage)
     {
         abort_unless($preview->product_id === $product->id, 404);
         [$disk, $path, $audioDisk, $audioPath] = DB::transaction(function () use ($product, $preview) {
@@ -1244,12 +1244,35 @@ class AdminStoreController extends Controller
 
             return [$disk, $path, $audioDisk, $audioPath];
         });
-        Storage::disk($disk)->delete($path);
-        if ($audioPath) {
-            Storage::disk($audioDisk)->delete($audioPath);
-        }
+        $this->deleteProductAssetIfUnreferenced($storage, $disk, $path);
+        if ($audioPath) $this->deleteProductAssetIfUnreferenced($storage, $audioDisk, $audioPath);
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
+    }
+
+    private function deleteProductAssetIfUnreferenced(StorageManager $storage, string $disk, ?string $path): void
+    {
+        if (! $path) return;
+
+        $previewReferences = StoreProductPreview::query()
+            ->where(fn ($query) => $query->where('path', $path)->orWhere('audio_path', $path))
+            ->get()
+            ->contains(fn (StoreProductPreview $preview) =>
+                ((string) $preview->path === $path && ($preview->disk ?: 'private') === $disk)
+                || ((string) $preview->audio_path === $path && ($preview->audio_disk ?: 'private') === $disk)
+            );
+        $artifactReferences = StoreProductDocumentArtifact::query()
+            ->where('path', $path)
+            ->get()
+            ->contains(fn (StoreProductDocumentArtifact $artifact) => ($artifact->disk ?: 'private') === $disk);
+        $productFileReferences = StoreProductFile::query()
+            ->where('path', $path)
+            ->get()
+            ->contains(fn (StoreProductFile $file) => ($file->disk ?: 'private') === $disk);
+
+        if (! $previewReferences && ! $artifactReferences && ! $productFileReferences) {
+            $storage->delete($disk, $path);
+        }
     }
 
     public function storeTag(Request $request)
