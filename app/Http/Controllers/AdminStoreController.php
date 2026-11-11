@@ -18,6 +18,7 @@ use App\Models\StoreTag;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductRelatedProductsService;
 use App\Services\StoreProductIntakeService;
+use App\Services\AuthorizationService;
 use App\Services\UploadSecurityService;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
@@ -383,6 +384,52 @@ class AdminStoreController extends Controller
         return $product->type === 'course'
             ? redirect()->route('admin.store.course.edit', $product)->with('status', 'دوره و منابع اولیه ثبت شدند؛ اکنون فصل‌ها و جلسات را تکمیل کنید. محصول تا پایان بررسی نهایی در صف انتشار خصوصی می‌ماند.')
             : redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'محصول و فایل‌های بررسی‌شده ثبت شدند؛ انتشار فقط پس از بررسی ناظر و مجوز لازم انجام می‌شود.');
+    }
+
+    public function approveManualPublication(Request $request, StoreProduct $product, AuthorizationService $authorization, \\App\\Services\\ProductPublicationReadiness $readiness)
+    {
+        abort_unless($authorization->allows($request->user(), 'store.publish_products'), 403, 'مجوز انتشار محصول را ندارید.');
+        $data = $request->validate([
+            'reason' => 'required|string|min:10|max:1000',
+        ]);
+
+        DB::transaction(function () use ($request, $product, $readiness, $data) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $metadata = (array) ($lockedProduct->metadata ?? []);
+            $workflow = (array) data_get($metadata, 'publication_workflow', []);
+            abort_unless(
+                in_array($workflow['status'] ?? null, ['awaiting_admin_approval', 'awaiting_manual_approval'], true),
+                409,
+                'این محصول در صف تأیید دستی قرار ندارد.'
+            );
+
+            $review = data_get($metadata, 'ai_supervisor.last_review');
+            abort_unless(is_array($review) && filled($review['review_id'] ?? null), 409, 'گزارش ناظر برای تأیید دستی موجود نیست.');
+
+            $blockers = $readiness->publicationBlockers($lockedProduct);
+            abort_if($blockers !== [], 409, 'ابتدا موانع فنی انتشار را برطرف کنید: '.implode(' ', $blockers));
+
+            $lockedProduct->status = 'published';
+            $lockedProduct->published_at = now();
+            $workflow['status'] = 'published_by_manager';
+            $workflow['manual_approved_by'] = (int) $request->user()->id;
+            $workflow['manual_approved_at'] = now()->toISOString();
+            $workflow['manual_approval_reason'] = trim($data['reason']);
+            $workflow['publication_authorized'] = true;
+            $workflow['automated_publication'] = false;
+            $workflow['published_at'] = now()->toISOString();
+            $metadata['publication_workflow'] = $workflow;
+            $lockedProduct->metadata = $metadata;
+            $lockedProduct->save();
+
+            $this->audit('store.product.manual_publication_approved', $lockedProduct, [
+                'ai_verdict' => (string) ($workflow['ai_verdict'] ?? data_get($review, 'verdict', 'unknown')),
+                'reason' => trim($data['reason']),
+                'manual_approved_by' => (int) $request->user()->id,
+            ]);
+        }, 3);
+
+        return redirect()->route('admin.store.edit', $product)->with('status', 'تأیید دستی ثبت شد و محصول منتشر گردید.');
     }
 
     public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
