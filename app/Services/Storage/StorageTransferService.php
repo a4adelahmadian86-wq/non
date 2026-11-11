@@ -305,6 +305,7 @@ class StorageTransferService
     {
         StorageManagedFile::query()
             ->where('status', 'active')
+            ->whereNotNull('metadata->orphaned_source->volume_id')
             ->orderBy('id')
             ->limit($limit)
             ->get()
