@@ -96,6 +96,7 @@ const importProduct=async(data,product)=>{
 const requestPersistence=()=>{
  if(persistPromise)return persistPromise;
  const pending=(async()=>{
+  await Promise.resolve();
   let persisted=false,granted=false,reason=null,estimate=null;
   try{
    if(navigator.storage?.estimate)estimate=await navigator.storage.estimate();
