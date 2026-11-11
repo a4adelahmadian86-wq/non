@@ -96,6 +96,13 @@ class RestoreStorageBackup extends Command
             DB::purge();
             DB::reconnect();
 
+            // The snapshot necessarily captured its own lock row as "running".
+            // It is no longer active after a restore and must not defer deletes for hours.
+            StorageBackupRun::query()
+                ->where('source_name', 'snapshot_lock')
+                ->where('status', 'running')
+                ->update(['status' => 'completed', 'completed_at' => now(), 'error_message' => null]);
+
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
 
@@ -197,8 +204,18 @@ class RestoreStorageBackup extends Command
 
     private function restoreDirectory(string $source, string $destination): void
     {
+        // A restore is replacement, not a merge: remove files created after the snapshot.
+        // Refuse symlink roots so a malformed host layout cannot redirect destructive cleanup.
+        if (is_link($destination)) {
+            throw new RuntimeException('مسیر مقصد بازیابی نباید پیوند نمادین باشد.');
+        }
+        if (is_dir($destination)) {
+            File::deleteDirectory($destination);
+        }
         if (! is_dir($source)) return;
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS));
+
+        File::ensureDirectoryExists($destination);
+        $iterator = new \\RecursiveIteratorIterator(new \\RecursiveDirectoryIterator($source, \\FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $item) {
             if (! $item->isFile()) continue;
             $relative = ltrim(substr($item->getPathname(), strlen($source)), DIRECTORY_SEPARATOR);
