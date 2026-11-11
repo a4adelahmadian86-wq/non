@@ -21,6 +21,36 @@ class GlobalAssistantVoiceTest extends TestCase
             .pack('V', 8000).pack('V', 16000).pack('v', 2).pack('v', 16).'data'.pack('V', 2).pack('v', 0);
     }
 
+    public function test_render_voice_health_is_proxied_through_the_authenticated_same_origin_route(): void
+    {
+        config(['services.ai_gateway.url' => 'https://voice.example.test']);
+        Http::fake([
+            'https://voice.example.test/health' => Http::response([
+                'service' => 'farast-voice',
+                'status' => 'ok',
+                'asr_configured' => true,
+                'tts_configured' => true,
+                'chat_configured' => true,
+                'voice_id' => 'farast-fa-male-v1',
+            ], 200),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/health');
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('asr_configured', true)
+            ->assertJsonPath('tts_configured', true)
+            ->assertJsonPath('chat_configured', true)
+            ->assertHeader('Cache-Control', 'no-store');
+        $this->assertStringNotContainsString('voice_id', $response->getContent());
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/health'
+            && ! $request->hasHeader('Authorization')
+        );
+    }
+
     public function test_global_assistant_issues_a_short_lived_render_verifiable_voice_session_token(): void
     {
         config([
