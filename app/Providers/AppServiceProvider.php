@@ -6,7 +6,9 @@ use App\Models\Ticket;
 use App\Policies\TicketPolicy;
 use App\Services\FarastTraceContext;
 use App\Services\SupportTicketService;
+use Illuminate\Auth\Events\Failed as AuthenticationFailed;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -96,7 +98,20 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
+        Event::listen(AuthenticationFailed::class, function (AuthenticationFailed $event): void {
+            // Never log the submitted credentials or the attempted email/phone.
+            Log::warning('farast.security.authentication_failed', [
+                'guard' => $event->guard,
+                'actor_id' => $event->user?->getAuthIdentifier(),
+            ]);
+        });
+
         Event::listen(Login::class, function (Login $event): void {
+            Log::info('farast.security.authentication_succeeded', [
+                'guard' => $event->guard,
+                'actor_id' => $event->user->getAuthIdentifier(),
+            ]);
+
             try {
                 app(SupportTicketService::class)->claimGuestTickets($event->user);
             } catch (Throwable $exception) {
@@ -104,6 +119,13 @@ class AppServiceProvider extends ServiceProvider
                 // must remain visible to operators and the central error tracker.
                 report($exception);
             }
+        });
+
+        Event::listen(Logout::class, function (Logout $event): void {
+            Log::info('farast.security.logout', [
+                'guard' => $event->guard,
+                'actor_id' => $event->user?->getAuthIdentifier(),
+            ]);
         });
     }
 }
