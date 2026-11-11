@@ -1,9 +1,9 @@
 <?php
 
-namespace Database\\Seeders;
+namespace Database\Seeders;
 
-use App\\Models\\User;
-use Illuminate\\Database\\Seeder;
+use App\Models\User;
+use Illuminate\Database\Seeder;
 use RuntimeException;
 
 class BrowserE2ESeeder extends Seeder
