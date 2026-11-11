@@ -1958,8 +1958,10 @@ test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ pa
   expect(annotationErrors).toEqual([]);
   const layer = root.locator('.farast-pdf-annotation-layer');
   await expect(layer).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__pdfLayerDiagnostics.length)).toBe(1);
   const layerDiagnostics = await page.evaluate(() => window.__pdfLayerDiagnostics);
   expect(layerDiagnostics).toHaveLength(1);
+  expect(layerDiagnostics[0].error).toBeUndefined();
   expect(layerDiagnostics[0].supported).toBe(true);
   expect(layerDiagnostics[0].count).toBe(1);
   expect(layerDiagnostics[0].groups[0].name).toBe('Optional test layer');
