@@ -257,8 +257,9 @@ class AdvancedAccessControlTest extends TestCase
         ]);
 
         $route = new \Illuminate\Routing\Route('GET', '/resource-check', fn () => null);
-        $route->setParameter('resource', $resource);
         $request = \Illuminate\Http\Request::create('/resource-check');
+        $route->bind($request);
+        $route->setParameter('resource', $resource);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
