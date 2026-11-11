@@ -68,3 +68,16 @@ Iranian file storage protects file reads and writes only when the application ca
 ## Safety notes
 
 Do not delete source files until the destination upload, checksum validation, and database reference update have succeeded. Do not route critical files to foreign storage as a fallback. Provider capacity and object-count limits are enforced when the provider reports them.
+
+
+## یکپارچه‌سازی دارایی‌های محصول
+
+فایل دانلود محصول، PDFهای خوانشگر، نمونه PDF، پیش‌نمایش‌های بارگذاری‌شده و صوت خوانشگر باید از `StorageManager` عبور کنند. مسیرهای `disk/path` در رکوردهای محصول صرفاً ارجاع به فایل مدیریت‌شده هستند؛ مسیرهای محلی خصوصی فقط برای قرنطینه و staging استفاده می‌شوند. انتقال یک فایل باید ارجاع‌های آینه‌ای پیش‌نمایش را نیز به‌روزرسانی کند تا خوانشگر به مسیر قدیمی وابسته نماند.
+
+برای انتقال رکوردهای قدیمی که هنوز روی دیسک `private` یا `public` هستند، پس از استقرار نسخه جدید دستور زیر را اجرا کنید و تا صفر شدن تعداد انتقال‌ها تکرار کنید:
+
+```bash
+php artisan storage:migrate-legacy-product-assets --limit=100
+```
+
+این فرمان idempotent است: رکوردهایی که قبلاً به فایل مدیریت‌شده متصل شده‌اند دوباره کپی نمی‌شوند. ابتدا artifactهای سند و فایل‌های دانلود، سپس مسیرهای پیش‌نمایش و صوت، و در پایان کاورها و تصاویر گالری پردازش می‌شوند. اگر مقصد remote در دسترس نباشد، فایل در staging خصوصی مدیریت‌شده ثبت می‌شود و worker انتقال آن را بعداً به volume فعال منتقل می‌کند.
