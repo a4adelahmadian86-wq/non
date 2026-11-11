@@ -79,6 +79,30 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_authorization_cache_is_lifecycle_scoped_and_explicitly_invalidated(): void
+    {
+        $authorization = app(AuthorizationService::class);
+        $this->assertSame($authorization, app(AuthorizationService::class));
+
+        $employee = $this->user('09140000136');
+        $roleId = $this->role('cache-invalidation-role');
+        $this->grant($roleId, 'access.audit');
+        $this->assign($employee, $roleId);
+
+        $this->assertTrue($authorization->allows($employee, 'access.audit'));
+
+        DB::table('farast_user_roles')
+            ->where('user_id', $employee->id)
+            ->where('role_id', $roleId)
+            ->delete();
+
+        // The same request cache remains deterministic until the write path
+        // explicitly invalidates it; it must never survive into another lifecycle.
+        $this->assertTrue($authorization->allows($employee, 'access.audit'));
+        $authorization->forgetUser($employee->id);
+        $this->assertFalse($authorization->allows($employee, 'access.audit'));
+    }
+
     public function test_custom_role_grants_permission_with_organization_boundary(): void
     {
         $organizationA = Organization::create(['name' => 'Access A', 'slug' => 'access-a', 'status' => 'active']);
