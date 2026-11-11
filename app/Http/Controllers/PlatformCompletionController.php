@@ -416,7 +416,12 @@ class PlatformCompletionController extends Controller {
    ];
    DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->delete();
    if((int)$teamRecord->supervisor_id===$memberId){
-    $teamRecord->update(['supervisor_id'=>null]);
+    $nextSupervisorId=DB::table('team_user')
+     ->where('team_id',$teamRecord->id)
+     ->where('team_role','supervisor')
+     ->orderBy('user_id')
+     ->value('user_id');
+    $teamRecord->update(['supervisor_id'=>$nextSupervisorId]);
    }
    $teamRecord->refresh();
    $this->auditAccessChange($r,'team.member.removed',$memberId,$beforeState,[
