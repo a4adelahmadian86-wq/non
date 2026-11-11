@@ -219,6 +219,7 @@ class AdminStoreController extends Controller
         abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
         abort_unless($session->isUsable(), 410);
         abort_unless(in_array($session->status, [StoreProductIntakeSession::STATUS_SELECTING_FILES, StoreProductIntakeSession::STATUS_FILES_UPLOADED, 'details'], true), 409);
+        abort_if($session->files()->where('status', 'inspected')->exists(), 409, 'ابتدا همه فایل‌های بازرسی‌شده را تأیید یا لغو کنید.');
         $files = $session->files()->where('status', 'uploaded')->get();
         abort_if($files->isEmpty(), 409, 'ابتدا حداقل یک فایل را بازرسی و منتقل کنید.');
 
@@ -282,6 +283,7 @@ class AdminStoreController extends Controller
             $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSession->isUsable() && $lockedSession->status === 'details', 409, 'نشست ورود قبلاً مصرف شده یا مرحله مشخصات آن باز نیست.');
             abort_unless($lockedSession->product_id === null, 409, 'این نشست قبلاً به محصول متصل شده است.');
+            abort_unless(! $lockedSession->files()->where('status', 'inspected')->exists(), 409, 'فایل بازرسی‌شده تأییدنشده‌ای باقی مانده است.');
 
             $lockedFiles = StoreProductIntakeFile::query()->where('intake_session_id', $lockedSession->id)->where('status', 'uploaded')->lockForUpdate()->get();
             abort_if($lockedFiles->isEmpty(), 409, 'فایل تأییدشده‌ای برای ثبت محصول باقی نمانده است.');
