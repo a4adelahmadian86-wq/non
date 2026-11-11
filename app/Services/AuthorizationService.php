@@ -455,12 +455,15 @@ class AuthorizationService
                     ->where('permission_id', $accessPermissionId)
                     ->exists()
             );
-        $actorScope = $manageableAssignments->isNotEmpty()
-            ? $manageableAssignments->pluck('scope')->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
+        $directManagementGrants = $this->activeDirectGrants($actor, 'access.manage')
+            ->where('effect', 'allow');
+        $manageableScopes = $manageableAssignments->pluck('scope')
+            ->merge($directManagementGrants->pluck('scope'));
+        $actorScope = $manageableScopes->isNotEmpty()
+            ? $manageableScopes->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
             : ($this->activeAssignments($actor)->isEmpty() && ! $actor->access_control_managed ? $this->legacyScope($actor) : 'own');
-        $manageableTeamIds = $manageableAssignments
-            ->where('scope', 'team')
-            ->pluck('team_id')
+        $manageableTeamIds = $manageableAssignments->where('scope', 'team')->pluck('team_id')
+            ->merge($directManagementGrants->where('scope', 'team')->pluck('team_id'))
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
