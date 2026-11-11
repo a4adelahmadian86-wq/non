@@ -673,7 +673,8 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        $actor = $request->user();
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $actor) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -730,15 +731,15 @@ class AdminStoreController extends Controller
 
             if (($data['status'] ?? '') === 'published') {
                 if (data_get($lockedProduct->metadata, 'intake_security_review.status') === 'manual_review_required') {
-                    abort_unless(in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403, 'تأیید امنیتی نهایی فقط برای مدیران مجاز است.');
+                    abort_unless(in_array($actor->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403, 'تأیید امنیتی نهایی فقط برای مدیران مجاز است.');
                     $reviewMetadata = (array) ($data['metadata'] ?? $lockedProduct->metadata ?? []);
                     $reviewMetadata['intake_security_review'] = array_merge((array) data_get($lockedProduct->metadata, 'intake_security_review', []), [
                         'status' => 'approved',
-                        'reviewed_by' => $request->user()->id,
+                        'reviewed_by' => $actor->id,
                         'reviewed_at' => now()->toISOString(),
                     ]);
                     $data['metadata'] = $reviewMetadata;
-                    $this->audit('store.product.intake_security_review_approved', $lockedProduct, ['reviewed_by' => $request->user()->id]);
+                    $this->audit('store.product.intake_security_review_approved', $lockedProduct, ['reviewed_by' => $actor->id]);
                 }
                 $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', []);
                 if ((bool) data_get($supervisorSettings, 'enabled', false)
