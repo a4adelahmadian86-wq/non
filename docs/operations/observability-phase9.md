@@ -55,6 +55,14 @@ php artisan farast:audit-ledger:verify
 
 The command exits non-zero and emits a critical, secret-free log event when the chain is invalid or cannot be verified. It does not repair or rewrite the ledger. Every append is serialized through a stable row in Laravel's existing `migrations` table for the ledger-creation migration; SQLite uses a no-op update to acquire its database writer lock, while MySQL/PostgreSQL use a transaction-held row lock. The chain head is read only after that lock, preventing concurrent first writers and normal concurrent appends from forking the checksum chain without introducing another audit table. New appends use checksum version 2, covering the event UUID and creation/update timestamps as well as the event payload; records without a version marker remain verifiable with the legacy version 1 algorithm. Verification streams in chunks and retains at most 100 error samples while reporting the total failure count.
 
+### Cross-database checksum contract
+
+Checksum version 2 canonicalizes associative metadata keys recursively before hashing and again after database decoding; list order is preserved. This avoids database-specific JSON object key ordering (notably MySQL's native JSON representation). The exact `created_at` and `updated_at` values included in the checksum are persisted without Eloquent's automatic timestamp rewrite.
+
+Rows without a version marker retain the legacy version 1 byte-level verification path. Their checksums are never silently rewritten or "repaired" during verification. If a historical v1 row fails verification on a database that normalized JSON key order, it remains an integrity finding and requires a separately approved, evidence-preserving reconciliation; the v2 canonicalization is not retroactive.
+
+The Feedback Evidence schema reconciliation is additive and idempotent. `tests/Feature/FarastFeedbackEvidenceSchemaTest.php` checks its required columns and composite indexes, and the MySQL 8.4 CI job runs this contract test alongside the audit-ledger integrity tests.
+
 Operational daily logs retain the existing 14-day Monolog rotation policy. The audit ledger is not automatically pruned: no destructive retention period is assumed without an approved business/legal schedule. This phase does not claim physical secure erasure on SSDs, snapshots or backups. Any future deletion process must include the database, replicas, backups and encryption-key lifecycle and must be tested before activation.
 
 ## Incident response
