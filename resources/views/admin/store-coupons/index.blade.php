@@ -153,6 +153,46 @@
     @else
     <section class="coupon-panel"><p>مدیریت کدهای عمومی و تنظیمات سراسری فقط در دامنه مدیریتی سراسری فعال است؛ پیشنهادهای اختصاصی در محدوده مجاز شما نمایش داده می‌شوند.</p></section>
     @endif
+
+    <section class="coupon-panel">
+        <div class="coupon-panel-head">
+            <div>
+                <h2>تاریخچه تغییرات مدیریتی</h2>
+                <p>۳۰ عملیات اخیر مرتبط با موتور تخفیف، کدهای عمومی، سگمنت‌ها و کمپین‌ها؛ ثبت‌شده با عامل، زمان و جزئیات.</p>
+            </div>
+        </div>
+        @php
+            $couponAuditLabels = [
+                'store.smart_coupon.settings_updated' => 'تغییر قواعد موتور پیشنهاد هوشمند',
+                'store.smart_coupon.revoked' => 'ابطال پیشنهاد اختصاصی',
+                'store.coupon.created' => 'ایجاد کد تخفیف عمومی',
+                'store.coupon.status_changed' => 'تغییر وضعیت کد تخفیف عمومی',
+                'crm.segment.created' => 'ایجاد سگمنت مشتریان',
+                'crm.campaign.created' => 'ایجاد پیش‌نویس کمپین',
+                'crm.campaign.sent' => 'ارسال کمپین بازاریابی',
+            ];
+        @endphp
+        <div class="coupon-table-wrap">
+            <table class="coupon-table">
+                <thead>
+                    <tr><th>زمان</th><th>عامل اجرایی</th><th>عملیات</th><th>IP</th><th>جزئیات ثبت‌شده</th></tr>
+                </thead>
+                <tbody>
+                    @forelse($auditLogs as $log)
+                        <tr>
+                            <td>{{ \Illuminate\Support\Carbon::parse($log->created_at)->format('Y/m/d H:i:s') }}</td>
+                            <td>{{ $log->actor_name ?: $log->actor_mobile ?: 'کاربر حذف‌شده / سیستم' }}</td>
+                            <td>{{ $couponAuditLabels[$log->action] ?? $log->action }}</td>
+                            <td>{{ $log->ip ?: '—' }}</td>
+                            <td><code>{{ $log->meta ?: '—' }}</code></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="coupon-empty">هنوز عملیات مدیریتی مرتبطی ثبت نشده است.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
 </section>
 @endsection
 
