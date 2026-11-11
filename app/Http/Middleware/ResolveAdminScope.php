@@ -160,8 +160,11 @@ class ResolveAdminScope
         }
 
         $requestUser = request()->user();
-        $effectiveScope = $requestUser && (int) $requestUser->id === (int) $user->id
+        $requestScope = $requestUser && (int) $requestUser->id === (int) $user->id
             ? request()->attributes->get('farast.scope')
+            : null;
+        $effectiveScope = in_array($requestScope, [self::SCOPE_GLOBAL, self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
+            ? $requestScope
             : self::scopeFor($user);
 
         if ($effectiveScope !== $restriction->scope_type) {
