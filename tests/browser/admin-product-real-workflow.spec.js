@@ -99,6 +99,73 @@ test.describe('Real admin product workflow', () => {
     await expect(page.getByText(productTitle, { exact: true })).toBeVisible();
   });
 
+  test('creates, replies to, closes, and rates a real support ticket', async ({ page }) => {
+    test.setTimeout(90_000);
+    const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
+    const subject = `تیکت آزمون سرتاسری ${runId}`;
+    const firstMessage = 'برای بررسی چرخه واقعی پشتیبانی این پیام آزمایشی ثبت می‌شود.';
+    const reply = 'پاسخ آزمایشی برای تأیید ذخیره واقعی پیام در گفتگو.';
+
+    await signInAsSeededAdmin(page);
+    await page.goto('/support/create');
+    const form = page.locator('#createTicketForm');
+    await expect(form).toBeVisible();
+
+    await form.locator('select[name="department"]').selectOption('support');
+    await form.locator('select[name="priority"]').selectOption('normal');
+    await form.locator('input[name="topic_area"][value="services"]').check();
+    await form.locator('input[name="related_service"][value="typing"]').check();
+    await form.locator('input[name="subject"]').fill(subject);
+    await form.locator('textarea[name="body"]').fill(firstMessage);
+
+    const createResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/support/tickets') &&
+      response.request().method() === 'POST' &&
+      !/\/messages(?:\/|$)/.test(new URL(response.url()).pathname)
+    );
+    await form.getByRole('button', { name: 'ثبت تیکت' }).click();
+    const createResponse = await createResponsePromise;
+    expect(createResponse.status()).toBe(302);
+    await expect(page).toHaveURL(/\/support\/tickets\/\d+$/);
+    await expect(page.getByRole('heading', { name: subject })).toBeVisible();
+    await expect(page.locator('#chatMessages')).toContainText(firstMessage);
+
+    const ticketUrl = page.url();
+    await page.locator('#composerBody').fill(reply);
+    const replyResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/messages') && response.request().method() === 'POST'
+    );
+    await page.locator('#sendBtn').click();
+    const replyResponse = await replyResponsePromise;
+    expect(replyResponse.status()).toBe(302);
+    await expect(page.locator('#chatMessages')).toContainText(reply);
+
+    await page.locator('#openCloseDialog').click();
+    const closeDialog = page.locator('#closeTicketDialog');
+    await expect(closeDialog).toBeVisible();
+    const closeResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/close') && response.request().method() === 'POST'
+    );
+    await closeDialog.getByRole('button', { name: 'بستن تیکت' }).click();
+    const closeResponse = await closeResponsePromise;
+    expect(closeResponse.status()).toBe(302);
+    await expect(page).toHaveURL(ticketUrl);
+    await expect(page.locator('#replyBox')).toHaveCount(0);
+    await expect(page.locator('#csatForm')).toBeVisible();
+
+    await page.locator('.csat-star[data-score="5"]').click();
+    await expect(page.locator('#csatSubmit')).toBeEnabled();
+    await page.locator('#csatForm textarea[name="comment"]').fill('پاسخ‌گویی آزمایشی قابل قبول بود.');
+    const csatResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/csat') && response.request().method() === 'POST'
+    );
+    await page.locator('#csatSubmit').click();
+    const csatResponse = await csatResponsePromise;
+    expect(csatResponse.status()).toBe(302);
+    await expect(page.getByText('امتیاز شما: 5 از ۵')).toBeVisible();
+    await expect(page.getByText('پاسخ‌گویی آزمایشی قابل قبول بود.')).toBeVisible();
+  });
+
   test('mobile product editor fits the viewport and its primary fields are keyboard reachable', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
