@@ -31,6 +31,7 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         $course->load(['sections.lessons.resources']);
+        $product->load('files');
 
         return view('admin.store.course', compact('product', 'course'));
     }
