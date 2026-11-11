@@ -3,6 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductIntakeSession;
+use App\Models\StoreProductIntakeFile;
+use App\Services\Storage\StorageManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
