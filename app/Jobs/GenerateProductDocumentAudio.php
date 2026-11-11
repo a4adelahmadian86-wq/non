@@ -13,8 +13,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
@@ -78,9 +78,6 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
             $bytes = $generated['audio'];
             $sha256 = hash('sha256', $bytes);
-            $oldArtifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 3)->first();
-            $oldDisk = $oldArtifact?->disk ?: 'private';
-            $oldPath = $oldArtifact?->path;
             $managed = $storage->storeContents(
                 $bytes,
                 'audio-v3.wav',
@@ -92,32 +89,6 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 (int) $document->product_id,
                 'private'
             );
-
-            try {
-                $artifact = $document->artifacts()->updateOrCreate(
-                    ['artifact_type' => 'audio_full_wav', 'version' => 3],
-                    [
-                        'disk' => $managed['disk'],
-                        'path' => $managed['path'],
-                        'mime' => 'audio/wav',
-                        'size_bytes' => strlen($bytes),
-                        'sha256' => $sha256,
-                        'metadata_json' => [
-                            'voice_id' => $generated['voice_id'],
-                            'duration_ms' => $generated['duration_ms'],
-                            'segments' => $generated['segments'],
-                            'source_sha256' => $document->source_sha256,
-                            'generated_once' => true,
-                            'granularity' => 'phoneme_aligned_sentence_word',
-                        ],
-                    ]
-                );
-                $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $document->product_id);
-            } catch (Throwable $exception) {
-                $storage->delete($managed['disk'], $managed['path']);
-                throw $exception;
-            }
-            $path = $artifact->path;
 
             $chunkByIndex = collect($chunks)->keyBy('chunk_index');
             $readerTimings = collect($generated['segments'])->map(function (array $segment) use ($chunkByIndex) {
@@ -141,36 +112,81 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 ];
             })->filter()->values()->all();
 
-            $fullReaderPreviews = StoreProductPreview::query()
-                ->where('product_id', $document->product_id)
-                ->where('access_level', 'full')
-                ->where('is_active', true)
-                ->get();
+            try {
+                [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings): array {
+                    $lockedDocument = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+                    $oldArtifact = $lockedDocument->artifacts()
+                        ->where('artifact_type', 'audio_full_wav')
+                        ->where('version', 3)
+                        ->lockForUpdate()
+                        ->first();
+                    $oldDisk = $oldArtifact?->disk ?: 'private';
+                    $oldPath = $oldArtifact?->path;
 
-            foreach ($fullReaderPreviews as $fullReaderPreview) {
-                $timingsForPreview = $fullReaderPreview->kind === 'reader_document'
-                    ? array_values(array_filter(
-                        $readerTimings,
-                        static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $fullReaderPreview->page_number
-                    ))
-                    : $readerTimings;
+                    $artifact = $lockedDocument->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'audio_full_wav', 'version' => 3],
+                        [
+                            'disk' => $managed['disk'],
+                            'path' => $managed['path'],
+                            'mime' => 'audio/wav',
+                            'size_bytes' => strlen($bytes),
+                            'sha256' => $sha256,
+                            'metadata_json' => [
+                                'voice_id' => $generated['voice_id'],
+                                'duration_ms' => $generated['duration_ms'],
+                                'segments' => $generated['segments'],
+                                'source_sha256' => $lockedDocument->source_sha256,
+                                'generated_once' => true,
+                                'granularity' => 'phoneme_aligned_sentence_word',
+                            ],
+                        ]
+                    );
+                    $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $lockedDocument->product_id);
 
-                $fullReaderPreview->update([
-                    'audio_disk' => $artifact->disk,
-                    'audio_path' => $path,
-                    'audio_mime' => 'audio/wav',
-                    'audio_timing' => $timingsForPreview,
-                ]);
+                    $fullReaderPreviews = StoreProductPreview::query()
+                        ->where('product_id', $lockedDocument->product_id)
+                        ->where('access_level', 'full')
+                        ->where('is_active', true)
+                        ->lockForUpdate()
+                        ->get();
+                    foreach ($fullReaderPreviews as $fullReaderPreview) {
+                        $timingsForPreview = $fullReaderPreview->kind === 'reader_document'
+                            ? array_values(array_filter(
+                                $readerTimings,
+                                static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $fullReaderPreview->page_number
+                            ))
+                            : $readerTimings;
+
+                        $fullReaderPreview->update([
+                            'audio_disk' => $artifact->disk,
+                            'audio_path' => $artifact->path,
+                            'audio_mime' => 'audio/wav',
+                            'audio_timing' => $timingsForPreview,
+                        ]);
+                    }
+
+                    return [$artifact, $oldDisk, $oldPath];
+                });
+            } catch (Throwable $exception) {
+                $storage->delete($managed['disk'], $managed['path']);
+                throw $exception;
             }
 
             if ($oldPath && ($oldDisk !== $artifact->disk || $oldPath !== $artifact->path)) {
                 $otherArtifactUsesOldPath = StoreProductDocumentArtifact::query()
-                    ->where('disk', $oldDisk)
                     ->where('path', $oldPath)
+                    ->where(fn ($query) => $query->whereNull('disk')->orWhere('disk', $oldDisk))
                     ->where('id', '!=', $artifact->id)
                     ->exists();
-                if (! $otherArtifactUsesOldPath) {
-                    $storage->delete($oldDisk, $oldPath);
+                $previewStillUsesOldPath = StoreProductPreview::query()
+                    ->where(fn ($query) => $query->where('path', $oldPath)->orWhere('audio_path', $oldPath))
+                    ->get()
+                    ->contains(fn (StoreProductPreview $preview) =>
+                        ((string) $preview->path === $oldPath && ($preview->disk ?: 'private') === $oldDisk)
+                        || ((string) $preview->audio_path === $oldPath && ($preview->audio_disk ?: 'private') === $oldDisk)
+                    );
+                if (! $otherArtifactUsesOldPath && ! $previewStillUsesOldPath) {
+                    try { $storage->delete($oldDisk, $oldPath); } catch (Throwable $cleanupException) { report($cleanupException); }
                 }
             }
 
