@@ -138,14 +138,20 @@
     root.querySelector('[data-progress-reviewed]').textContent = String(progress.review_completed_count || 0);
     root.querySelector('[data-progress-pending]').textContent = String(progress.review_pending_count || 0);
     root.querySelector('[data-progress-attention]').textContent = String(progress.review_blocked_count || 0);
-    reviewList.innerHTML = (progress.files || []).map(file =>
+    const activeRows = (progress.files || []).map(file =>
       '<div><span>' + escapeHtml(file.name) + '</span><small>' + bytes(file.size_bytes) + ' · ' +
       escapeHtml(file.supervisor_status || file.status) + '</small>' +
       (state.type === 'digital_file'
         ? '<label><input type="radio" name="intake-primary-existing" data-primary-ingestion="' + escapeHtml(file.id) + '"' +
           (file.is_primary ? ' checked' : '') + '> فایل اصلی</label>'
         : '') + '</div>'
-    ).join('');
+    );
+    const cleanupRows = (progress.cleanup_pending_files || []).map(file =>
+      '<div class="product-ingestion-warning"><span>' + escapeHtml(file.name) +
+      '<small>لغو ثبت شده؛ پاک‌سازی فضای ذخیره‌سازی در انتظار تکمیل است.</small></span>' +
+      '<button type="button" class="store-outline-btn" data-retry-cancel="' + escapeHtml(file.id) + '">تلاش دوباره برای پاک‌سازی</button></div>'
+    );
+    reviewList.innerHTML = activeRows.concat(cleanupRows).join('');
     const allDone = progress.file_count > 0
       && progress.uploaded_count === progress.file_count
       && progress.review_completed_count === progress.file_count
@@ -158,6 +164,28 @@
       message.textContent = 'بازبینی همه فایل‌ها کامل شد. اکنون می‌توانید مشخصات واقعی محصول را وارد کنید.';
     }
   };
+
+  reviewList.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-retry-cancel]');
+    if (!button || !state.sessionId) return;
+
+    button.disabled = true;
+    try {
+      const target = url(
+        url(root.dataset.cancelUrlTemplate, '__SESSION__', state.sessionId),
+        '__INGESTION__',
+        button.dataset.retryCancel
+      );
+      await request(target, { method: 'DELETE' });
+      message.textContent = 'پاک‌سازی فایل لغوشده تکمیل شد.';
+      await pollProgress();
+    } catch (error) {
+      message.textContent = error.message || 'پاک‌سازی هنوز کامل نشده است؛ دوباره تلاش کنید.';
+      await pollProgress();
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   reviewList.addEventListener('change', async (event) => {
     const input = event.target.closest('[data-primary-ingestion]');
@@ -249,6 +277,7 @@
       pollProgress();
     } catch (error) {
       message.textContent = error.message || 'فرایند بررسی فایل متوقف شد.';
+      await pollProgress();
     } finally {
       state.processing = false;
       processButton.disabled = state.files.length === 0;
