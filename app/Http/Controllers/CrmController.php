@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreCourseEnrollment;
+use App\Models\TicketMessage;
 use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
@@ -100,6 +101,28 @@ class CrmController extends Controller
                 'created_at' => $ticket->created_at,
             ]);
 
+        $ticketMessages = TicketMessage::query()
+            ->with(['ticket:id,ticket_code,subject', 'user:id,name'])
+            ->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map(fn (TicketMessage $message) => [
+                'type' => 'ticket_message',
+                'id' => $message->id,
+                'ticket_id' => $message->ticket_id,
+                'ticket_code' => $message->ticket?->ticket_code,
+                'ticket_subject' => $message->ticket?->subject,
+                'title' => $message->is_internal
+                    ? 'یادداشت داخلی پشتیبانی'
+                    : ($message->is_staff ? 'پاسخ پشتیبانی' : 'پیام مشتری'),
+                'body' => mb_substr(trim(strip_tags((string) $message->body)), 0, 240),
+                'author' => $message->user?->name ?? 'سیستم',
+                'is_internal' => (bool) $message->is_internal,
+                'is_staff' => (bool) $message->is_staff,
+                'created_at' => $message->created_at,
+            ]);
+
         $documents = TypingDocument::query()->where('user_id', $user->id)->latest()->limit(30)->get()
             ->map(fn (TypingDocument $document) => [
                 'type' => 'typing_document',
@@ -189,7 +212,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)
+        $timeline = $orders->concat($tickets)->concat($ticketMessages)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($courseEnrollments)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -219,6 +242,17 @@ class CrmController extends Controller
             'metrics' => [
                 'orders_count' => $user->orders_count,
                 'tickets_count' => $user->tickets_count,
+                'ticket_messages_count' => TicketMessage::query()->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))->count(),
+                'customer_ticket_replies_count' => TicketMessage::query()
+                    ->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))
+                    ->where('is_staff', false)
+                    ->where('is_internal', false)
+                    ->count(),
+                'staff_ticket_replies_count' => TicketMessage::query()
+                    ->whereHas('ticket', fn ($query) => $query->where('user_id', $user->id))
+                    ->where('is_staff', true)
+                    ->where('is_internal', false)
+                    ->count(),
                 'typing_documents_count' => $user->documents_count,
                 'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
                 'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
