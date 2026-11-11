@@ -469,9 +469,23 @@ class EmailService
                 $attributes + ['idempotency_key' => $key],
             );
 
-            // A previously recorded event must not enqueue a second delivery.
+            // Existing queued/accepted events are already owned by the delivery pipeline.
+            // A terminally failed log may be claimed once for an explicit retry; the
+            // conditional update prevents concurrent duplicate dispatches.
             if (! $log->wasRecentlyCreated) {
-                return;
+                $claimed = EmailLog::query()
+                    ->whereKey($log->id)
+                    ->where('status', 'failed')
+                    ->update([
+                        'status' => 'queued',
+                        'queued_at' => now(),
+                        'error' => null,
+                        'last_attempt_at' => null,
+                    ]);
+
+                if ($claimed === 0) {
+                    return;
+                }
             }
         } else {
             $log = EmailLog::create($attributes);
