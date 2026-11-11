@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Services\FarastObservabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Tests\TestCase;
 
 class CheckObservabilityCommandTest extends TestCase
