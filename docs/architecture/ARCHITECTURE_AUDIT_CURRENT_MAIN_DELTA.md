@@ -17,6 +17,13 @@
 
 این شمارش‌ها تعداد فایل‌اند و نباید به‌عنوان تعداد قابلیت یا معیار کیفیت تعبیر شوند.
 
+### تغییرهای اصلی پس از snapshot تکمیلی قبلی
+
+- commit `68c61461d1065cf4e1a2a642defa959ac83d1ad3`: تکمیل stage 11 عملیاتی؛ release workflow، health/readiness، observability check، backup verification، restore کنترل‌شده و recovery ledger به main اضافه شد. checkهای `test` و `agent` روی همین commit موفق‌اند.
+- commit `18e79a8b5cf9c7b0d6e5a96f3f3de870b1fa3644`: `BusinessCommerceLifecycleTest` اضافه شد تا مسیر پرداخت تا entitlement و ثبت‌نام دوره و replay idempotency را end-to-end بررسی کند.
+- PR #379 و PR #365 بسته شدند اما `merged=false`؛ تغییرهای متناظر با commitهای مستقل فوق در main وجود دارند. نباید وضعیت PR بسته‌شده را با merge رسمی اشتباه گرفت.
+
+
 ### تغییر نسبت به snapshot ممیزی قبلی
 
 | حوزه | snapshot قبلی | main جاری | تغییر قابل ردیابی |
@@ -130,7 +137,7 @@ PR `feat(platform): scoped RBAC and transactional workflow core` همین سه �
 
 همچنین `AdminSectionScopeAuthorizationTest` آزمون منفی برای دسترسی employee به `/admin/store`، `/admin/store/operations` و `/admin/support-report` اضافه کرده است.
 
-**وضعیت:** اصلاح هنوز در main این snapshot نیست؛ PR #347 باز است. در بررسی مجدد، GitHub آن را `mergeable=false / dirty` گزارش کرد و check-run قابل اتکایی روی head فعلی وجود نداشت. شش فایل مشترک بین تغییرات main و PR عبارت‌اند از `.github/workflows/farast-ci.yml`، `.github/workflows/phase3-commerce.yml`، `bootstrap/app.php`، `routes/console.php`، `routes/web.php` و `routes/web_core_part2.php`؛ مورد آخر با اصلاح Route اعلان در PR #371 تداخل دارد و workflow/bootstrap/console نیز با stage 11 جدید main تغییر کرده‌اند. این تعارض‌ها به PR گزارش شده‌اند. فایل‌های Route و سرویس‌های Authorization در PR #347 تغییر می‌کنند، بنابراین اصلاح موازی همان فایل‌ها در شاخه دیگری انجام نمی‌شود. ادغام فقط پس از rebase روی main جاری، حل تعارض‌ها و CI کامل مجاز است.
+**وضعیت:** اصلاح هنوز در main این snapshot نیست؛ PR #347 باز است. در بررسی قبلی GitHub آن را `mergeable=false / dirty` گزارش کرد؛ پس از حرکت main، metadata فعلی PR برابر `mergeable=null / unknown` است و check-run قابل اتکایی روی head فعلی وجود ندارد. مقایسه از base مشترک نشان می‌دهد main و PR هر دو شش فایل را تغییر داده‌اند: `.github/workflows/farast-ci.yml`، `.github/workflows/phase3-commerce.yml`، `bootstrap/app.php`، `routes/console.php`، `routes/web.php` و `routes/web_core_part2.php`؛ مورد آخر با اصلاح Route اعلان در PR #371 تداخل دارد و workflow/bootstrap/console نیز با stage 11 جدید main تغییر کرده‌اند. این تعارض‌ها به PR گزارش شده‌اند. فایل‌های Route و سرویس‌های Authorization در PR #347 تغییر می‌کنند، بنابراین اصلاح موازی همان فایل‌ها در شاخه دیگری انجام نمی‌شود. ادغام فقط پس از rebase روی main جاری، حل تعارض‌ها و CI کامل مجاز است.
 
 
 ### نکته معماری پیش از ادغام PR #347: ورودی‌های چندگانه، یک evaluator
@@ -181,7 +188,7 @@ Scope نیز دو لایه دارد: محدودیت per-admin از `farast_user_
 - Browser regression تعداد 16 شکست داشت؛ بخش عمده خطاها timeout در تعامل Reader/toolbar و یک مورد hidden بودن `.farast-reader-studio-rail` بود. این‌ها صرفاً خطای تصادفی CI فرض نمی‌شوند؛ باید با trace و fixture مربوط بررسی شوند.
 - در همان اجرا 620 تست دیگر موفق بودند؛ این عدد جایگزین حل دو دسته شکست نیست.
 
-main اکنون پیاده‌سازی production release و disaster recovery را از commit `68c61461d1065cf4e1a2a642defa959ac83d1ad3` دارد: `StorageBackupService`, `RunStorageBackup`, `VerifyStorageBackup`, `RestoreStorageBackup`, `RecoverStaleBackupRuns`, `StorageBackupRecoveryTest`, قفل اجرای backup، readiness/health check، release workflow و runbook. checkهای `test` و `agent` همان commit موفق بودند. PR #379 در 2026-11-11 بسته شد اما `merged=false`؛ پیاده‌سازی آن به‌صورت commit مستقیم/مستقل در main جایگزین شده و branch آن `dirty` و diverged است. بنابراین تغییرات backup در PR #335 دیگر نباید روی main بازنویسی شوند؛ فقط بخش product artifact/storage reference آن پس از rebase باید جداگانه منتقل شود.
+main اکنون پیاده‌سازی production release و disaster recovery را از commit `68c61461d1065cf4e1a2a642defa959ac83d1ad3` دارد: `StorageBackupService`, `RunStorageBackup`, `VerifyStorageBackup`, `RestoreStorageBackup`, `RecoverStaleBackupRuns`, `StorageBackupRecoveryTest`, `CheckObservability`, قفل اجرای backup، readiness/health check، release workflow و runbook. checkهای `test` و `agent` همان commit موفق بودند. PR #379 در 2026-11-11 بسته شد اما `merged=false`؛ پیاده‌سازی آن به‌صورت commit مستقیم/مستقل در main جایگزین شده و branch آن `dirty` و diverged است. بنابراین تغییرات backup در PR #335 دیگر نباید روی main بازنویسی شوند؛ فقط بخش product artifact/storage reference آن پس از rebase باید جداگانه منتقل شود.
 
 **وضعیت checkها در آخرین snapshot:**
 - PR #335: `laravel`, `test` و `reader-browser-regression` ناموفق.
