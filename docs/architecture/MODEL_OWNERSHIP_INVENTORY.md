@@ -38,3 +38,19 @@
 | `FarastEntitlement` | `farast_entitlements` | explicit | `id` | `default` | — | `app/Models/FarastEntitlement.php` |
 | `FarastEvaluationCase` | `farast_evaluation_cases` | explicit | `id` | `default` | — | `app/Models/FarastEvaluationCase.php` |
 | `FarastEvaluationDataset` | `farast_evaluation_datasets` | explicit | `id` | `default` | — | `app/Models/FarastEvaluationDataset.php` |
+
+| `FarastFeedbackEvidence` | `farast_feedback_evidence` | explicit | `id` | `default` | — | `app/Models/FarastFeedbackEvidence.php` |
+| `FarastHumanTask` | `farast_human_tasks` | explicit | `id` | `default` | — | `app/Models/FarastHumanTask.php` |
+| `FarastInvoice` | `farast_invoices` | explicit | `id` | `default` | `items:hasMany(FarastInvoiceItem; 'invoice_id')` | `app/Models/FarastInvoice.php` |
+| `FarastInvoiceItem` | `farast_invoice_items` | explicit | `id` | `default` | — | `app/Models/FarastInvoiceItem.php` |
+| `FarastNotification` | `farast_notifications` | explicit | `id` | `default` | `user:belongsTo(User)` | `app/Models/FarastNotification.php` |
+| `FarastPriceQuote` | `farast_price_quotes` | explicit | `id` | `default` | — | `app/Models/FarastPriceQuote.php` |
+| `FarastPricingPolicy` | `farast_pricing_policies` | explicit | `id` | `default` | — | `app/Models/FarastPricingPolicy.php` |
+| `FarastPricingPolicyVersion` | `farast_pricing_policy_versions` | explicit | `id` | `default` | — | `app/Models/FarastPricingPolicyVersion.php` |
+| `FarastProject` | `farast_projects` | explicit | `id` | `default` | `user:belongsTo(User)`<br>`documents:hasMany(FarastDocument; 'project_id')`<br>`typingDocuments:hasMany(TypingDocument; 'project_id')` | `app/Models/FarastProject.php` |
+| `FarastPromotion` | `farast_promotions` | explicit | `id` | `default` | — | `app/Models/FarastPromotion.php` |
+| `FarastProvider` | `farast_providers` | explicit | `id` | `default` | — | `app/Models/FarastProvider.php` |
+| `FarastRefund` | `farast_refunds` | explicit | `id` | `default` | — | `app/Models/FarastRefund.php` |
+| `FarastReviewCase` | `farast_review_cases` | explicit | `id` | `default` | — | `app/Models/FarastReviewCase.php` |
+| `FarastStorageObject` | `farast_storage_objects` | explicit | `id` | `default` | — | `app/Models/FarastStorageObject.php` |
+| `FarastSubscription` | `farast_subscriptions` | explicit | `id` | `default` | — | `app/Models/FarastSubscription.php` |
