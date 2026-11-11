@@ -93,11 +93,20 @@ class StorageManager
         return $stored;
     }
 
-    public function bindReference(int $managedFileId, string $sourceType, int $sourceId, ?int $productId = null): void
-    {
+    public function bindReference(
+        int $managedFileId,
+        string $sourceType,
+        int $sourceId,
+        ?int $productId = null,
+        string $sourceField = 'path'
+    ): void {
+        if (! in_array($sourceField, ['path', 'audio_path'], true)) {
+            throw new RuntimeException('فیلد مرجع فایل در ماژول مبدأ پشتیبانی نمی‌شود.');
+        }
         $file = StorageManagedFile::findOrFail($managedFileId);
         $metadata = (array) $file->metadata;
         $metadata['reference_pending'] = false;
+        $metadata['source_field'] = $sourceField;
         $file->update([
             'source_type' => $sourceType,
             'source_id' => $sourceId,
