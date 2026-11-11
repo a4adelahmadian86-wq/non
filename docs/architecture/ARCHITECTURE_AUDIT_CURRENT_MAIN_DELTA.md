@@ -1,7 +1,7 @@
 # ممیزی تکمیلی معماری بر مبنای main جاری
 
 > این سند مکمل inventoryهای معماری ادغام‌شده در PR #371 است؛ آن inventoryها snapshot تاریخی `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf` را ثبت می‌کنند.  
-> خط مبنای این تکمیل: `main` در commit `7d68c678a8244578286958c4d54f5ad0194217bb`، تاریخ 2026-11-11.  
+> خط مبنای به‌روزشده این تکمیل: `main` در commit `29d643cca59af85a15071c94423e43ef8f22cc69`، تاریخ 2026-11-11 ساعت 16:48 UTC.  
 > این سند تغییرات بعد از snapshot، یافته‌های تازه و PRهای فعال مرتبط را جدا می‌کند؛ هیچ تغییری در دارایی‌های شاخه‌های همکاران اعمال نمی‌کند.
 
 ## 1. وضعیت فعلی مخزن
@@ -502,3 +502,76 @@ commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه 
 - تست‌های CI و migration upgrade روی commit نهایی سبز باشند.
 
 **وضعیت مرحله دوم: در حال انجام؛ نقشه‌های اصلی ثبت شده‌اند، اما سه شکاف امنیت، Storage و تطبیق مالی باید با PRهای فعال و شواهد runtime بسته شوند.**
+
+
+## 16. تطبیق نهایی با main در commit `29d643cca59af85a15071c94423e43ef8f22cc69`
+
+این بخش، وضعیت‌های قدیمی‌تر بخش‌های 12 و 13 را برای خط مبنای جدید جایگزین می‌کند. مقایسه Git از `7d68c678a8244578286958c4d54f5ad0194217bb` تا HEAD فعلی main سه commit و هشت فایل تغییر‌یافته را نشان می‌دهد. تغییرها شامل تکمیل readiness/recovery، اصلاحات release workflow و افزودن job مستقل MySQL برای آزمون Audit Ledger است. تعداد فایل‌های inventoryشده تغییر نکرده است: 1,188 ورودی Git tree، 116 Migration، 105 Model، 113 Service، 52 Controller و 123 فایل تست PHP.
+
+### 16.1 شواهد CI روی main جاری
+
+نتیجه Check Runها برای commit بالا:
+
+| Check | نتیجه | تفسیر |
+|---|---|---|
+| `agent` | موفق | بررسی Agent روی همین commit |
+| `voice-service-contract-tests` | موفق | قرارداد سرویس صوت |
+| `document-audio-smoke` | موفق | Smoke سرویس صوت سند |
+| `reader-browser-regression` | موفق | رگرسیون مرورگر Reader |
+| `voice-model-smoke` | skipped | این workflow برای شاخه دیگری شرطی است |
+| `laravel` | ناموفق | ۵ شکست در `AuditEventObservabilityTest`؛ 635 تست دیگر موفق |
+| `FARAST Phase 3 Commerce Tests` | ناموفق | همان ۵ شکست کلاس `AuditEventObservabilityTest`؛ شکست مستقل از سناریوهای Commerce گزارش نشده |
+| `audit-mysql-integrity` | ناموفق | اجرای Migration روی MySQL 8.4 پیش از رسیدن به تست‌ها متوقف شد |
+
+بنابراین CI خط مبنای جاری سبز نیست. موفقیت Browser، Agent و سرویس‌های صوتی، شکست‌های Laravel و MySQL را جبران نمی‌کند.
+
+### 16.2 شکست واقعی Migration در MySQL
+
+لاگ job `audit-mysql-integrity` نشان می‌دهد clean install روی MySQL 8.4 در Migration زیر متوقف می‌شود:
+
+`database/migrations/2026_09_30_000004_add_feedback_trust_and_audit_ledger.php`
+
+خطای دقیق:
+
+`SQLSTATE[42S22]: Column not found: 1054 Unknown column 'confidence' in 'farast_feedback_evidence'`
+
+Migration می‌خواهد ستون `frequency` را با `after('confidence')` اضافه کند؛ اما ساختار اولیه‌ای که Migration قبلی `2026_09_30_000003_create_farast_platform_registry.php` برای `farast_feedback_evidence` می‌سازد فقط این ستون‌ها را دارد: `id, user_id, source_type, source_id, kind, body, payload, created_at, updated_at`. ستون `confidence` در آن تعریف وجود ندارد.
+
+ناهماهنگی فقط به همین ستون محدود نیست. مدل `FarastFeedbackEvidence` فیلدهای `feedback_id`, `project_id`, `source`, `tool_id`, `tool_version_id`, `evidence_type`, `input_meta`, `output_meta`, `confidence`, `frequency`, `independent_confirmations`, `status`, `reviewer_notes` و `checksum` را قابل‌نوشتن اعلام می‌کند؛ اما Migrationهای بررسی‌شده همه این ستون‌ها را ایجاد نمی‌کنند. `FeedbackPipelineService` نیز همین قرارداد را در insertها مصرف می‌کند.
+
+همین الگوی drift در aggregateهای مرتبط هم دیده می‌شود:
+- `farast_review_cases` در Migration اولیه فقط `code/status/payload` دارد، درحالی‌که `FeedbackPipelineService` فیلدهای `evidence_id, reviewer_id, decision, reviewed_at, notes` را می‌نویسد.
+- `farast_approved_knowledge` در Migration اولیه `code/title/body/metadata` دارد، درحالی‌که سرویس فیلدهای `review_case_id, capability_code, knowledge_version, content, status, approved_by, approved_at, checksum` را می‌نویسد.
+- `farast_evaluation_datasets` و `farast_evaluation_cases` نیز در تعریف اولیه با فیلدهایی که سرویس برای version/status/input/expected/tool references مصرف می‌کند تطابق کامل ندارند.
+
+**نتیجه معماری:** برای این خوشه، منبع حقیقت Schema بین Migration، Model و Service هم‌راستا نیست. این نقص باید با Migration افزایشی و سازگار با دیتابیس‌های نصب‌شده اصلاح شود؛ تغییر کور Migration قدیمی به‌تنهایی برای محیط‌هایی که آن Migration را قبلاً اجرا کرده‌اند کافی نیست. تا زمانی که clean install و upgrade روی MySQL هر دو سبز نشده‌اند، مرحله دوم از منظر schema/runtime بسته نیست.
+
+### 16.3 شکست‌های Audit Observability روی main
+
+در همان HEAD، `laravel` و `Phase 3 Commerce Tests` پنج شکست از کلاس `AuditEventObservabilityTest` گزارش کرده‌اند:
+- شناسه‌های trace در metadata رخداد ممیزی ثبت نشده‌اند؛
+- کلاس‌های `FarastTraceContext` و `FarastObservabilityService` در main وجود ندارند؛
+- تست ترتیب قفل append پایدار دفترکل را پیدا نمی‌کند.
+
+این موارد در PR #353 پیاده‌سازی شده‌اند، اما تا زمان merge شدن PR، بخشی از main نیستند و نباید به‌عنوان قابلیت تکمیل‌شده main ثبت شوند.
+
+### 16.4 وضعیت فعلی PRهای اثرگذار
+
+| PR | وضعیت مشاهده‌شده | تصمیم |
+|---:|---|---|
+| #347 | باز، `mergeable=false` | هسته RBAC/Workflow هنوز با main جاری قابل ادغام مستقیم نیست؛ ابتدا تعارض‌ها و قرارداد grant/scope حل شوند. |
+| #335 | باز، `mergeable=false` | تغییرهای Storage/Product artifact با main همگام نیست؛ ادغام مستقل ممنوع تا قرارداد Storage و backup یکپارچه شود. |
+| #340 | باز، `mergeable=false` | تغییرهای مالی نیازمند rebase و آزمون upgrade/idempotency روی آخرین main هستند. |
+| #353 | باز، `mergeable=true`؛ head برابر `231b11138bb2ca5eb9fbd66db9b9c4b09597c666` | پیاده‌سازی observability و اصلاح Trace Context در شاخه موجود است؛ `agent` و `Phase 3 test` روی head مشاهده‌شده موفق‌اند، اما `laravel` و `audit-mysql-integrity` در حال اجرا هستند. تا پایان همه checkها merge نشود. |
+| #409 | همین addendum مستنداتی | باید با main در `29d643cca59af85a15071c94423e43ef8f22cc69` همگام شود؛ snapshot قبلی `7d68c678...` دیگر خط مبنای جاری نیست. |
+
+### 16.5 گیت‌های باقی‌مانده برای پذیرش مرحله دوم
+
+1. هم‌راستاسازی Schema خوشه Feedback/Review/Evaluation با Model و Service، با Migration افزایشی برای دیتابیس‌های موجود و اصلاح مسیر clean install.
+2. اجرای مجدد clean install و upgrade روی MySQL 8.4 و SQLite؛ آزمون باید ستون‌ها، indexها و Foreign Keyها را پس از Migration introspect کند، نه اینکه صرفاً exit code Migration را بسنجد.
+3. تکمیل CI روی head نهایی PR #353 و تعیین تکلیف شکست‌های Audit Observability؛ سپس ادغام کنترل‌شده آن.
+4. rebase و بازبینی مجدد PRهای #347، #335 و #340 روی main جاری؛ وضعیت قبلی آن‌ها قابل انتقال به head جدید نیست.
+5. اجرای `route:list` و تست یکتایی نام Routeها در CI حفظ شود؛ تست `NotificationRouteOwnershipTest` پس از PR #371 مالکیت هشت endpoint اعلان را کنترل می‌کند.
+6. inventory Storage و مالی فقط وقتی بسته شود که مسیرهای bypass و منبع داده موازی با تست‌های منفی/مثبت و آزمون reconciliation تعیین تکلیف شده باشند.
+
+**وضعیت مرحله دوم در خط مبنای `29d643c`:** inventoryهای ایستا و traceability ثبت شده‌اند و مالکیت Route اعلان با تست runtime تثبیت شده است؛ اما ناسازگاری Schema در clean install MySQL و چند شکاف اجرایی در RBAC، Storage، مالی و Audit هنوز باز هستند. این مرحله برای پذیرش نهایی بسته نیست.
