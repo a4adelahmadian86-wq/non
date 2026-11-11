@@ -219,6 +219,7 @@ class AdvancedAccessControlTest extends TestCase
         $authorization = app(AuthorizationService::class);
 
         $this->assertTrue($authorization->allows($employee, 'documents.view'));
+        $this->assertFalse($authorization->allowsFor($employee, 'documents.view', []));
         $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['status' => 'active']));
         $this->assertTrue($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id, 'status' => 'active']));
         $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id + 1, 'status' => 'active']));
