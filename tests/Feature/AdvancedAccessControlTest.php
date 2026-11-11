@@ -311,7 +311,7 @@ class AdvancedAccessControlTest extends TestCase
 
         $this->actingAs($manager);
         request()->attributes->set('farast.scope', 'organization');
-        $console = app(\\App\\Services\\AdminConsoleService::class);
+        $console = app(\App\Services\AdminConsoleService::class);
 
         // Read access to a customer remains available inside the organization.
         $console->authorizeAction($manager, 'users', $customer->id);
@@ -320,7 +320,7 @@ class AdvancedAccessControlTest extends TestCase
         // the action permission is checked against the target record's scope.
         $console->authorizeAction($manager, 'users', $manager->id, 'users.edit');
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         $console->authorizeAction($manager, 'users', $customer->id, 'users.edit');
     }
 
@@ -442,13 +442,13 @@ class AdvancedAccessControlTest extends TestCase
         $this->grant($roleId, 'access.audit', 'own');
         $this->assign($employee, $roleId, 'own');
 
-        $route = new \\Illuminate\\Routing\\Route('GET', '/team-resource-check', fn () => null);
+        $route = new \Illuminate\Routing\Route('GET', '/team-resource-check', fn () => null);
         $route->setParameter('resource', $team);
-        $request = \\Illuminate\\Http\\Request::create('/team-resource-check');
+        $request = \Illuminate\Http\Request::create('/team-resource-check');
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         app(\App\Http\Middleware\EnsureResourcePermission::class)->handle(
             $request,
             fn () => response('team supervisor is not the owner'),
@@ -459,7 +459,7 @@ class AdvancedAccessControlTest extends TestCase
     public function test_resource_creator_is_not_treated_as_the_current_owner(): void
     {
         $employee = $this->user('09140000135');
-        $resource = new class extends \\Illuminate\\Database\\Eloquent\\Model {
+        $resource = new class extends \Illuminate\Database\Eloquent\Model {
             protected $table = 'documents';
             public $timestamps = false;
         };
@@ -471,13 +471,13 @@ class AdvancedAccessControlTest extends TestCase
             'status' => 'active',
         ]);
 
-        $route = new \\Illuminate\\Routing\\Route('GET', '/resource-creator-check', fn () => null);
+        $route = new \Illuminate\Routing\Route('GET', '/resource-creator-check', fn () => null);
         $route->setParameter('resource', $resource);
-        $request = \\Illuminate\\Http\\Request::create('/resource-creator-check');
+        $request = \Illuminate\Http\Request::create('/resource-creator-check');
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         app(\App\Http\Middleware\EnsureResourcePermission::class)->handle(
             $request,
             fn () => response('creator must not receive owner access'),
