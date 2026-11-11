@@ -5,7 +5,7 @@ const baseURL = process.env.FARAST_E2E_URL || 'http://127.0.0.1:8000';
 test.describe('FARAST homepage discovery', () => {
   test('guest sees intent-first homepage and unknown-intent question', async ({ page }) => {
     await page.goto(baseURL + '/');
-    await expect(page.getByRole('heading', { name: 'چه کاری می‌خواهید انجام دهید؟' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'امروز چه کاری را پیش می‌برید؟' })).toBeVisible();
     await expect(page.getByRole('button', { name: /فایل دارم/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /از صفر شروع می‌کنم/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /دنبال یک سرویس هستم/ })).toBeVisible();
@@ -32,12 +32,12 @@ test.describe('FARAST homepage discovery', () => {
     await page.locator('#phoneForm button[type="submit"]').click();
     await page.waitForURL(/\/login\/password/);
     await page.locator('input[name="password"]').fill(process.env.GITHUB_RUN_ID + '-farast-e2e');
-    await page.locator('form button[type="submit"]').click();
+    await page.getByRole('button', { name: 'ورود به حساب' }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.goto(baseURL + '/');
 
     await page.getByRole('button', { name: /از صفر شروع می‌کنم/ }).click();
-    await page.getByRole('button', { name: /مقاله/ }).click();
+    await page.locator('#stepContent').getByRole('button', { name: /مقاله \/ پژوهش/ }).click();
     await page.waitForURL(/\/editor\?project=\d+|\/editor$/);
     await expect(page.locator('#farastWord')).toBeVisible();
     await expect(page.locator('#pagesViewport')).toBeVisible();
