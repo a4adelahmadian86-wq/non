@@ -194,6 +194,69 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 
 این دو سطح را نباید بدون تطبیق idempotency، callback، refund و ledger با هم ادغام کرد. PR #340 مسیر تقویت idempotency و retention مالی را دنبال می‌کند و باید به‌عنوان تغییر موازی بررسی شود؛ وضعیت آن هنوز ادغام‌شده نیست.
 
+
+## 8. تعارض معماری قطعی در خوشه توسعه محصول
+
+بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
+
+### 8.1 دو تعریف ناسازگار برای Publication Review
+
+| مورد | PR #262 | PR #333 |
+|---|---|---|
+| Migration | `2026_11_10_000010_create_store_product_publication_reviews.php` | `2026_11_11_000012_create_store_product_publication_reviews.php` |
+| جدول | `store_product_publication_reviews` | همان جدول |
+| مدل | `StoreProductPublicationReview` | همان نام کلاس |
+| مالک درخواست | `requested_by` | `submitted_by` |
+| وضعیت/نتیجه | `status, verdict, score` | `status, ai_verdict, ai_score` |
+| snapshot | `snapshot_hash, reviewed_snapshot_hash, snapshot_json, findings_json, corrections_json` | `intake_session_id, ai_review_json` |
+| تأیید مدیر | `manager_approved_by, manager_approved_at` | `manager_reviewed_by, manager_reviewed_at, manager_notes` |
+| cardinality محصول | index روی product/status؛ چند review برای محصول ممکن | `product_id` unique؛ یک review برای هر محصول |
+
+هر دو Migration با `Schema::create('store_product_publication_reviews')` شروع می‌شوند و هر دو همان نام مدل PHP را تعریف می‌کنند، اما schema و state machine آن‌ها متفاوت است. ادغام هر دو به‌صورت مستقل باعث شکست migration دوم و overwrite معنای مدل/فیلدها می‌شود.
+
+### 8.2 دو قرارداد intake و antivirus روی ingestion
+
+- PR #262 فایل‌محور است و `StoreProductIngestion` را با `product_id` nullable و `relative_path` گسترش می‌دهد.
+- PR #333 یک aggregate جدید `StoreProductIntakeSession` و `StoreProductIntakeFile` ایجاد می‌کند؛ این‌ها staging، نوع محصول، فایل‌های intake و supervisor review را نگه می‌دارند.
+- PR #265 Migration با نام `2026_11_10_235959_add_optional_antivirus_to_product_ingestions.php` را اضافه می‌کند.
+- PR #318 Migration با نام `2026_11_11_000001_add_optional_antivirus_to_product_ingestions.php` را اضافه می‌کند.
+
+دو Migration antivirus در هر دو، همین پنج ستون را به `store_product_ingestions` اضافه می‌کنند: `antivirus_requested`, `antivirus_status`, `antivirus_engine`, `antivirus_version`, `antivirus_scanned_at`. هر دو مجوز `store.security_scan` را نیز در کاتالوگ ثبت می‌کنند؛ PR #318 علاوه بر آن `store.publish_products` را اضافه می‌کند. اجرای هر دو Migration روی یک دیتابیس به افزودن مجدد ستون‌ها می‌رسد.
+
+### 8.3 هم‌پوشانی اجرایی
+
+| PR | نقش پیشنهادی در خوشه | فایل‌های مشترک/حساس |
+|---|---|---|
+| #262 | AI-supervised publication روی ingestion موجود | `AdminStoreController`, `StoreProduct`, `StoreProductIngestion`, `StoreProductPublicationReview`, `ProductSupervisorClient`, `routes/store_routes.php` |
+| #265 | پایه اسکن آنتی‌ویروس اختیاری | `AdminStoreController`, `StoreProductIngestion`, `OptionalAntivirusScanner`, `product-ingestion.js` |
+| #279 | مجوز و bypass اسکن در publication | `AdminStoreController`, `StoreController`, `ReviewProductForPublication`, `ProductPublicationReadiness`, `ProductSupervisorSnapshotBuilder`, `product-ingestion.js` |
+| #318 | file-first intake و review asset/publication | `AdminStoreController`, `ReviewProductForPublication`, `ProductPublicationReadiness`, `ProductSupervisorClient`, `store_routes.php`, scanner |
+| #333 | type-first intake با session/file aggregate جدید | `AdminStoreController`, `StoreProduct`, `StoreProductPublicationReview`, `store_routes.php`, `form/index/course.blade.php` |
+
+این خوشه در کنار PR #335 قرار می‌گیرد که همان `AdminStoreController` و `StoreController` را برای centralize کردن artifact storage تغییر می‌دهد. بنابراین انتخاب intake و publication state machine باید قبل از rebase نهایی storage انجام شود؛ در غیر این صورت یک کنترلر بزرگ با چند مسیر موازی upload/review/publish ساخته خواهد شد.
+
+### 8.4 تصمیم معماری لازم
+
+**منبع حقیقت فعلی در main:**
+- کاتالوگ و هویت محصول: `StoreProduct`.
+- ingest فایل فعلی: `StoreProductIngestion`.
+- پردازش محتوا و خروجی‌های مشتق‌شده: `StoreProductDocument` و artifact/page/chunk/factهای مرتبط.
+- آمادگی انتشار: `ProductPublicationReadiness`.
+- هماهنگی supervisor: `ProductSupervisorClient` و snapshot builder.
+- فایل‌های مدیریت‌شده: `StorageManagedFile + StorageManager`؛ با شکاف‌های ثبت‌شده در بخش Storage.
+
+**قاعده ادغام پیشنهادی:**
+1. فقط یک state machine برای intake انتخاب شود؛ اگر session چندمرحله‌ای لازم است، باید مالکیت آن نسبت به `StoreProductIngestion` روشن باشد و دو جدول staging موازی با status مستقل نسازند.
+2. فقط یک `StoreProductPublicationReview` با schema و lifecycle واحد باقی بماند.
+3. antivirus یک قرارداد مشترک و یک Migration idempotent داشته باشد؛ scanner اختیاری و policy bypass باید به همان نتیجه canonical وصل باشند.
+4. همه uploadهای اصلی، preview، audio، cover و image از StorageManager عبور کنند؛ staging/quarantine استثنای موقت با TTL و مالک مشخص است.
+5. publication فقط از یک سرویس readiness/review استفاده کند؛ کنترلرها صرفاً orchestrate کنند و state machine مستقل نسازند.
+6. Migrationها از روی دیتابیس خالی و دیتابیس upgradeشده اجرا شوند؛ تست باید اثبات کند هر table/column فقط یک‌بار ساخته می‌شود.
+7. `AdminStoreProductWorkflowTest` نباید به‌تنهایی پوشش چند PR را تضمین کند؛ تست قرارداد end-to-end باید یک مسیر واحد را از type selection تا secure upload، review، publish، entitlement و download طی کند.
+
+**وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
+
+
 ## 8. وضعیت CI خط مبنای جدید
 
 پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` در لحظه ثبت این سند هنوز در حال اجرا بودند:
