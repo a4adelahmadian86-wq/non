@@ -152,17 +152,22 @@ class AdminConsoleService
                 ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->map(fn ($id) => (int) $id)->all()
                 : [];
         } elseif ($scope === self::SCOPE_TEAM) {
-            $ids = Team::query()
-                ->where('supervisor_id', $user->id)
-                ->orWhereIn('id', function ($query) use ($user) {
-                    $query->select('team_id')
-                        ->from('team_user')
-                        ->where('user_id', $user->id)
-                        ->where('team_role', 'manager');
-                })
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+            $ids = $user->organization_id
+                ? Team::query()
+                    ->where('organization_id', $user->organization_id)
+                    ->where(function ($query) use ($user) {
+                        $query->where('supervisor_id', $user->id)
+                            ->orWhereIn('id', function ($subquery) use ($user) {
+                                $subquery->select('team_id')
+                                    ->from('team_user')
+                                    ->where('user_id', $user->id)
+                                    ->where('team_role', 'manager');
+                            });
+                    })
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
         } else {
             return [];
         }
