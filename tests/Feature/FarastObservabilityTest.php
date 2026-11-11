@@ -8,6 +8,7 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Contracts\Queue\Job;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -148,5 +149,45 @@ class FarastObservabilityTest extends TestCase
             'request_id' => null,
             'correlation_id' => null,
         ], app(\App\Services\FarastTraceContext::class)->current());
+    }
+
+    public function test_repeated_forbidden_requests_emit_privacy_safe_authorization_anomaly_thresholds(): void
+    {
+        Cache::flush();
+        Log::spy();
+
+        for ($attempt = 0; $attempt < 25; $attempt++) {
+            $request = Request::create(
+                '/admin/restricted',
+                'GET',
+                [],
+                [],
+                [],
+                ['REMOTE_ADDR' => '203.0.113.44']
+            );
+
+            (new FarastObservability())->handle(
+                $request,
+                fn () => response('forbidden', 403)
+            );
+        }
+
+        Log::shouldHaveReceived('log')->once()->with(
+            'warning',
+            'farast.security.authorization_anomaly',
+            \Mockery::on(function (array $context): bool {
+                $encoded = json_encode($context);
+
+                return ($context['denied_requests'] ?? null) === 10
+                    && ($context['threshold'] ?? null) === 10
+                    && ! str_contains((string) $encoded, '203.0.113.44');
+            })
+        );
+        Log::shouldHaveReceived('log')->once()->with(
+            'critical',
+            'farast.security.authorization_anomaly',
+            \Mockery::on(fn (array $context): bool => ($context['denied_requests'] ?? null) === 25
+                && ($context['threshold'] ?? null) === 25)
+        );
     }
 }
