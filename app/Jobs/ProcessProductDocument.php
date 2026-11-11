@@ -413,10 +413,23 @@ class ProcessProductDocument implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        StoreProductDocument::query()->whereKey($this->documentId)->update([
-            'processing_status' => 'failed',
-            'failure_code' => 'document_processing_failed',
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () {
+            $document = StoreProductDocument::query()->lockForUpdate()->find($this->documentId);
+            if (! $document) {
+                return;
+            }
+
+            $structure = (array) ($document->structure_json ?? []);
+            if (data_get($structure, 'audio.status') === 'pending') {
+                $structure['audio'] = ['status' => 'failed'];
+            }
+
+            $document->update([
+                'processing_status' => 'failed',
+                'failure_code' => 'document_processing_failed',
+                'structure_json' => $structure,
+                'updated_at' => now(),
+            ]);
+        });
     }
 }
