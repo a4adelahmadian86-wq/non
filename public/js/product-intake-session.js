@@ -117,8 +117,10 @@
         row.supervisorStatus = data.supervisor_status;
         row.securityGate = data.security_gate;
         if (data.supervisor_status === 'completed') {
-          status.textContent = data.security_gate === 'manual_scan_required'
-            ? 'بررسی هوشمند انجام شد؛ برای تأیید امنیتی به بررسی مدیر نیاز است.'
+          status.textContent = data.manual_reviewed
+            ? 'تأیید دستی مدیر ثبت شد؛ انتشار نهایی همچنان در صف تصمیم مدیر است.'
+            : data.security_gate === 'manual_scan_required'
+              ? 'بررسی هوشمند انجام شد؛ برای تأیید امنیتی به بررسی مدیر نیاز است.'
             : data.security_gate === 'blocked'
               ? 'ناظر هوشمند فایل را مسدود کرد؛ این فایل قابل ادامه نیست.'
               : 'بررسی ناظر هوشمند تکمیل شد.';
