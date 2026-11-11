@@ -48,6 +48,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ github.sha }}
+          VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -77,7 +78,6 @@ jobs:
             require_successful_push_run "$workflow" true
           done
 
-          VERSION="${{ inputs.version }}"
           if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
             echo "::error::Tag $VERSION already exists."
             exit 1
