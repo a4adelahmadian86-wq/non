@@ -18,6 +18,16 @@ The admin observability page reports bounded, read-only probes for database conn
 
 A missing optional table is reported as an incomplete capability, not silently treated as a healthy external service. Probe exceptions are reported to Laravel's existing exception handler and are not exposed to the dashboard.
 
+## Existing audit-ledger integrity
+
+The append-only `farast_audit_events` ledger and its existing `AuditIntegrityService` remain the integrity source; this phase does not create another audit store. The verification command is:
+
+```bash
+php artisan farast:audit-ledger:verify
+```
+
+It exits non-zero and emits a critical, secret-free application log event when verification fails. Scheduling this command should be enabled only after the production scheduler cadence and database load are validated.
+
 ## Operational security rules
 
 - Never put passwords, bearer tokens, cookies, session identifiers, API keys, recovery codes, raw request bodies or uploaded file contents in logs.
