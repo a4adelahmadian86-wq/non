@@ -1,0 +1,159 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\RolePermission;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class UnifiedAuthorizationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function record(array $attributes): Model
+    {
+        $record = new class extends Model {
+            protected $guarded = [];
+        };
+
+        foreach ($attributes as $key => $value) {
+            $record->setAttribute($key, $value);
+        }
+
+        return $record;
+    }
+
+    private function permission(string $key): Permission
+    {
+        return Permission::create(['key' => $key, 'label' => $key, 'group' => 'test']);
+    }
+
+    public function test_blocked_users_never_receive_permissions(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'is_blocked' => true]);
+        self::assertFalse(app(AuthorizationService::class)->allows($user, 'access.manage'));
+    }
+
+    public function test_direct_deny_overrides_legacy_role_permission(): void
+    {
+        $user = User::factory()->create(['role' => 'employee']);
+        $permission = $this->permission('documents.delete');
+        RolePermission::create(['role' => 'employee', 'permission_id' => $permission->id]);
+
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $user->id,
+            'permission_id' => $permission->id,
+            'effect' => 'deny',
+            'scope' => 'global',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        self::assertFalse(app(AuthorizationService::class)->allows($user, 'documents.delete'));
+    }
+
+    public function test_own_scope_rejects_another_users_record(): void
+    {
+        $owner = User::factory()->create(['role' => 'employee']);
+        $other = User::factory()->create(['role' => 'employee']);
+        $permission = $this->permission('documents.view');
+        RolePermission::create(['role' => 'employee', 'permission_id' => $permission->id]);
+        $record = $this->record(['user_id' => $other->id]);
+
+        self::assertFalse(app(AuthorizationService::class)->allowsRecord($owner, 'documents.view', $record));
+        self::assertTrue(app(AuthorizationService::class)->allowsRecord($other, 'documents.view', $record));
+    }
+
+    public function test_organization_scope_rejects_records_owned_by_another_organization(): void
+    {
+        $first = Organization::create(['name' => 'First', 'slug' => 'first', 'status' => 'active']);
+        $second = Organization::create(['name' => 'Second', 'slug' => 'second', 'status' => 'active']);
+        $manager = User::factory()->create(['role' => 'organization_manager', 'organization_id' => $first->id]);
+        $member = User::factory()->create(['role' => 'employee', 'organization_id' => $second->id]);
+        $permission = $this->permission('documents.view');
+        RolePermission::create(['role' => 'organization_manager', 'permission_id' => $permission->id]);
+
+        self::assertFalse(app(AuthorizationService::class)->allowsRecord(
+            $manager,
+            'documents.view',
+            $this->record(['user_id' => $member->id]),
+        ));
+    }
+
+    public function test_expired_direct_allow_does_not_grant_access(): void
+    {
+        $user = User::factory()->create(['role' => 'employee']);
+        $permission = $this->permission('reports.view');
+
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $user->id,
+            'permission_id' => $permission->id,
+            'effect' => 'allow',
+            'scope' => 'global',
+            'expires_at' => now()->subSecond(),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        self::assertFalse(app(AuthorizationService::class)->allows($user, 'reports.view'));
+    }
+
+    public function test_custom_role_assignment_is_resolved_and_expiry_is_enforced(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $permission = $this->permission('workflows.manage');
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => 'workflow_operator',
+            'name' => 'Workflow operator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::create(['role' => 'workflow_operator', 'permission_id' => $permission->id]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'scope' => 'own',
+            'starts_at' => now()->subMinute(),
+            'expires_at' => now()->addMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        self::assertTrue(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
+
+        DB::table('role_assignments')->where('user_id', $user->id)->update(['expires_at' => now()->subSecond()]);
+        self::assertFalse(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
+    }
+
+    public function test_security_audit_is_persisted_with_actor_and_subject(): void
+    {
+        $actor = User::factory()->create();
+        $subject = User::factory()->create();
+        $request = Request::create('/admin/access', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+
+        app(AuthorizationService::class)->audit(
+            'role.assignment.created',
+            $actor,
+            $subject,
+            null,
+            ['role' => 'employee'],
+            $request,
+        );
+
+        $this->assertDatabaseHas('access_audit_logs', [
+            'actor_id' => $actor->id,
+            'subject_id' => $subject->id,
+            'event' => 'role.assignment.created',
+            'ip_address' => '127.0.0.1',
+        ]);
+    }
+}
