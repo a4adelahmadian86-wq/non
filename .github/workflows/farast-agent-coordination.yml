@@ -14,7 +14,6 @@ concurrency:
 permissions:
   issues: write
   contents: read
-  administration: read
 
 jobs:
   coordinate:
@@ -113,16 +112,6 @@ jobs:
                 return;
               }
               if (context.payload.action === 'closed') {
-                const actor = context.payload.sender.login;
-                let permission = 'none';
-                try {
-                  const p = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: actor });
-                  permission = p.data.permission;
-                } catch (_) {}
-                if (!['admin', 'maintain', 'write', 'triage'].includes(permission)) {
-                  await publish('Close transition not accepted by coordinator: closing actor lacks collaborator triage permission.');
-                  return;
-                }
                 if (state.status !== 'review') {
                   await github.rest.issues.update({ owner, repo, issue_number, state: 'open' });
                   await publish('Closure rejected: task must reach review state through /farast review and pass independent acceptance before it can be closed. Issue has been reopened.');
@@ -154,13 +143,9 @@ jobs:
             const leaseMinutes = Math.max(5, Math.min(240, Number(args.lease || 60)));
             const reason = argsText.replace(/\b(chat|run|lease)=[^\s]+/gi, '').trim();
 
-            let permission = 'none';
-            try {
-              const p = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: actor });
-              permission = p.data.permission;
-            } catch (_) {}
-            if (!['admin', 'maintain', 'write', 'triage'].includes(permission)) {
-              await publish('Request rejected: @' + actor + ' lacks repository triage/write permission.');
+            const association = context.payload.comment.author_association || 'NONE';
+            if (!['OWNER', 'COLLABORATOR', 'MEMBER'].includes(association)) {
+              await publish('Request rejected: @' + actor + ' is not recognized by GitHub as an authorized repository collaborator/member. GitHub author_association: ' + association + '.');
               return;
             }
 
