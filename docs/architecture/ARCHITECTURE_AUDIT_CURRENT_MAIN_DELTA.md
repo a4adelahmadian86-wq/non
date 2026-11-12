@@ -722,7 +722,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 - `.github/workflows/product-ai-content.yml`
 - `.github/workflows/product-supervisor.yml`
 
-روی HEAD فعلی PR #475، jobهای مستقل زیر موفق شده‌اند: Document Audio Smoke، Product Supervisor Contract Tests، Admin Product E2E، MySQL Integrity، Voice Service Contract Tests، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service. Job اصلی `laravel` در زمان ثبت این بخش هنوز در حال اجرای Playwright E2E بود؛ نتیجه نهایی آن باید قبل از merge ثبت شود.
+روی HEAD نهایی PR #475 (`f0d2a12c9590b7450e098141233b1ee773801af5`) همه checkهای لازم موفق شدند؛ 9 check موفق و 3 check به‌صورت شرطی skipped بودند. در job لاراول، 67 Unit، 596 Feature و 117 Playwright browser test موفق شدند؛ clean-install SQLite، route inventory، و job مستقل MySQL 8.4 نیز موفق بودند. Document Audio Smoke، Product Supervisor Contract Tests، Admin Product E2E، Voice Service Contract Tests، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service نیز موفق شدند. PR #475 در 2026-11-12T16:01:34Z با commit `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` در main ادغام شد.
 
 این اصلاح به‌جای ارتقای بی‌دلیل Playwright یا تغییر نسخه Python، runner سازگار با toolchain قفل‌شده فعلی را انتخاب می‌کند. هیچ کد محصول، dependency، Migration یا داده‌ای در این PR تغییر نکرده است.
 
@@ -779,3 +779,14 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 **تست‌های جدید مرتبط:** `FarastStorageObjectIntegrityTest`, `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest`, `FarastFeedbackEvidenceSchemaTest`, `FeedbackPipelineSchemaTest`, `CrmCourseProgressTimelineTest`, `FarastObservabilityServiceTest`, `ReadinessCheckTest`, `NotificationRouteOwnershipTest` و `admin-product-real-workflow.spec.js`.
 
 فهرست کامل پنج Migration، مدل جدید، سه سرویس و دو Controller در inventoryهای مکمل همین پوشه ثبت شده است؛ این جدول فقط delta نسبت به snapshot قبلی را نشان می‌دهد.
+
+
+## 19. بازاجرای CI روی main پس از ادغام اصلاح runner
+
+- HEAD جدید main: `ed5d36d8f6dc6b6a6c6c5cdd283a987e57a7552651` (merge squash PR #475).
+- تغییر این commit فقط workflowهای CI است؛ کد برنامه و schema همان کد تأییدشده در PR #475 باقی مانده‌اند.
+- workflowهای push روی main برای FARAST CI، Phase 3 Commerce، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service آغاز شده‌اند. در لحظه این به‌روزرسانی هنوز در حال اجرا هستند؛ نتیجه نهایی باید از Check Runهای همین SHA خوانده شود، نه از PR head قبلی.
+- Route inventory runtime روی کد برنامه قبل از merge: 337 route ثبت‌شده، 336 نام‌گذاری‌شده و بدون نام تکراری؛ گام مذکور اکنون در FARAST CI اجباری است.
+- تنظیمات GitHub همچنان `main.protected=false` و Required Status Checks خاموش را گزارش می‌کند؛ تغییر این سیاست نیازمند تصمیم مالک مخزن است و در این PR انجام نشده است.
+
+**وضعیت پذیرش پس از PR #475:** مشکل ناسازگاری runner با Python 3.12.11 و Playwright 1.55 اصلاح و روی PR به‌طور کامل آزموده شد. پذیرش نهایی روی main منوط به سبز شدن بازاجرای Check Runهای SHA `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` است.
