@@ -112,7 +112,7 @@ This is a safe coordination mechanism for normal serialized requests, not a gene
 
 Each PR description and final Issue comment must report:
 
-- task key, issue URL, chat_id, run_id, lease/fencing token (do not expose token outside authorized repo);
+- task key, issue URL, chat_id, run_id, lease ID (public audit identifier; not a secret);
 - base commit SHA and final commit SHA;
 - UTC start, UTC finish, wall-clock duration, pause duration, and active duration only if measured;
 - files changed and summary of each change;
