@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   issues: write
+  pull-requests: read
   contents: read
 
 jobs:
@@ -122,6 +123,36 @@ jobs:
                 if (state.status !== 'review') {
                   await github.rest.issues.update({ owner, repo, issue_number, state: 'open' });
                   await publish('Closure rejected: task must reach review state through /farast review and pass independent acceptance before it can be closed. Issue has been reopened.');
+                  return;
+                }
+
+                // Require a merged PR explicitly linked to this Issue and an approval
+                // from someone other than the implementation worker on the current head.
+                const linkedPulls = await github.paginate(github.rest.pulls.list, {
+                  owner, repo, state: 'all', per_page: 100
+                });
+                const referencePattern = new RegExp('(?:Closes|Fixes|Resolves|Refs)\\s+#' + issue_number + '\\b', 'i');
+                let independentlyApprovedMerge = false;
+                for (const candidate of linkedPulls) {
+                  if (!candidate.merged_at || !referencePattern.test(candidate.body || '')) continue;
+                  const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                    owner, repo, pull_number: candidate.number, per_page: 100
+                  });
+                  const hasCurrentIndependentApproval = reviews.some(review =>
+                    review.state === 'APPROVED' &&
+                    review.commit_id === candidate.head.sha &&
+                    review.user?.login &&
+                    review.user.login !== candidate.user?.login &&
+                    review.user.login !== state.completed_by?.actor
+                  );
+                  if (hasCurrentIndependentApproval) {
+                    independentlyApprovedMerge = true;
+                    break;
+                  }
+                }
+                if (!independentlyApprovedMerge) {
+                  await github.rest.issues.update({ owner, repo, issue_number, state: 'open' });
+                  await publish('Closure rejected: no merged PR linked to this Issue has a current-head approval from an independent reviewer. The Issue was reopened; verify the PR review and merge evidence before closing again.');
                   return;
                 }
                 state.status = 'done';
