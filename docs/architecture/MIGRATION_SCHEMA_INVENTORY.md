@@ -140,3 +140,8 @@
 | `2026_11_11_230200_reconcile_feedback_review_evaluation_schema.php` | — | `farast_review_cases`, `farast_approved_knowledge`, `farast_evaluation_datasets`, `farast_evaluation_cases` | — | `evidence_id → farast_feedback_evidence`, `reviewer_id/approved_by → users`, `review_case_id → farast_review_cases`, `tool_id → farast_tools`, `tool_version_id → farast_tool_versions` | — | `farast_review_cases(evidence_id,status)`, `farast_approved_knowledge(capability_code,status)`, `farast_evaluation_cases(dataset_id,status)` | schema reconciliation افزایشی؛ ستون‌های version/status/metadata و input/expected payload را هم‌راستا می‌کند؛ down داده را حذف نمی‌کند |
 
 **اثر معماری:** این پنج Migration منبع داده جدید موازی برای محصول/فایل/Feedback ایجاد نمی‌کنند. آن‌ها به‌ترتیب idempotency ارسال، قرارداد Schema موجود Feedback، هویت یکتای storage object و قرارداد Review/Evaluation را تکمیل می‌کنند. آزمون‌های مرتبط: `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest`, `FarastFeedbackEvidenceSchemaTest`, `FarastStorageObjectIntegrityTest`, `FeedbackPipelineSchemaTest`.
+
+
+### مورد نیازمند تعیین تکلیف: `farast_backup_manifests`
+
+Migration `2026_10_02_000001_create_farast_commerce_engine.php` جدول `farast_backup_manifests` را ایجاد می‌کند، اما در tree فعلی Model هم‌نام و مصرف‌کننده مستقیم در سرویس/Job/Commandهای backup شناسایی نشد. مسیر backup فعال فعلی از `StorageBackupRun`, جدول `storage_backup_runs`, `StorageBackupService`, `RunStorageBackupJob` و commandهای `Run/Restore/VerifyStorageBackup` استفاده می‌کند. بنابراین `farast_backup_manifests` فعلاً **orphan/legacy candidate با مالکیت حل‌نشده** است؛ حذف آن بدون بررسی داده واقعی ممنوع، اما استفاده جدید از آن نیز تا تعیین مالکیت مجاز نیست.
