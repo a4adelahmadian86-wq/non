@@ -20,7 +20,7 @@
 - PR #371 ادغام شده است؛ دو تعریف تکراری اعلان از `web_core_part2.php` حذف شده و `routes/notifications.php` با `NotificationController` مالک یگانه مسیرهای اعلان شخصی است.
 - `NotificationRouteOwnershipTest` در CI، مالکیت `platform.notifications` و `platform.notifications.read` را به `NotificationController@index/read` assert می‌کند.
 - `bootstrap/app.php` علاوه بر health route داخلی Laravel در `/up`، مسیر `GET /ready` با نام `health.ready` را به `ReadinessController::__invoke` متصل می‌کند؛ این endpoint خارج از middleware گروه web ثبت شده است.
-- `routes/web_core_part2.php` مسیر `GET /admin/observability` با نام `admin.observability.index` را به `Admin\\ObservabilityController@index` متصل می‌کند؛ middleware گروه `auth, admin` و gate صریح `admin.section:audit` است.
+- `routes/web_core_part2.php` مسیر `GET /admin/observability` با نام `admin.observability.index` را به `Admin\ObservabilityController@index` متصل می‌کند؛ middleware گروه `auth, admin` و gate صریح `admin.section:audit` است.
 - `routes/console.php` مالک endpoint HTTP نیست، اما schedulerهای observability و storage recovery را ثبت می‌کند؛ آن‌ها در بخش 18 سند delta معماری فهرست شده‌اند.
 
 334 declaration در این inventory مربوط به snapshot ایستای فایل‌های domain route است. مسیرهای bootstrap و observability نیز در runtime ثبت می‌شوند؛ نتیجه نهایی `route:list --json` در CI برابر 337 route ثبت‌شده و 336 route نام‌گذاری‌شده است و هیچ نام تکراری گزارش نشده است.
@@ -402,7 +402,7 @@
 | Method | URI | Route name | Action | Middleware | Source |
 |---|---|---|---|---|---|
 | GET | `/ready` | `health.ready` | `ReadinessController::__invoke` | خارج از گروه web؛ پاسخ فقط وضعیت DB را می‌دهد | `bootstrap/app.php:18` |
-| GET | `/admin/observability` | `admin.observability.index` | `Admin\\ObservabilityController@index` | `auth`, `admin`, `admin.section:audit` | `routes/web_core_part2.php:117-121` |
+| GET | `/admin/observability` | `admin.observability.index` | `Admin\ObservabilityController@index` | `auth`, `admin`, `admin.section:audit` | `routes/web_core_part2.php:117-121` |
 | GET | `/up` | framework health route | Laravel framework health handler | health route تعریف‌شده در `withRouting` | `bootstrap/app.php:15` |
 
 
