@@ -4,7 +4,7 @@
 - Existing project TASK-ID (if any):
 - Chat ID:
 - Run ID:
-- Lease fencing token verified: yes/no
+- Lease ID recorded: yes/no
 - Base commit SHA:
 
 ## Outcome
