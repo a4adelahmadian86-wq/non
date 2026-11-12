@@ -147,8 +147,10 @@ jobs:
             const actor = context.payload.comment.user.login;
             const chatId = args.chat || '';
             const runId = args.run || '';
-            const requestedLease = Number(args.lease || 60);
-            const leaseMinutes = Number.isFinite(requestedLease) ? Math.max(5, Math.min(240, requestedLease)) : NaN;
+            const requestedLease = args.lease === undefined ? 60 : Number(args.lease);
+            const leaseMinutes = Number.isInteger(requestedLease) && requestedLease >= 5 && requestedLease <= 240
+              ? requestedLease
+              : NaN;
             const reason = argsText.replace(/\b(chat|run|lease)=[^\s]+/gi, '').trim();
 
             const association = context.payload.comment.author_association || 'NONE';
