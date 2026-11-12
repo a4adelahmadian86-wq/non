@@ -775,6 +775,8 @@ PR #475 runner پنج workflow وابسته به Python/Playwright را از `ub
 - `ReadinessController::__invoke` روی `GET /ready` فقط اتصال DB را با `SELECT 1` می‌سنجد؛ این endpoint readiness کامل queue/storage/provider نیست.
 - `StoreCourseProgressService` تنها محاسبه shared برای drip availability، progress summary و sync completion است؛ هم `StoreCourseLearningController` و هم `CrmController@show` از آن استفاده می‌کنند. داده مرجع همان `StoreCourseEnrollment` و `StoreCourseLessonProgress` باقی می‌ماند.
 
+**Storage backup ownership gap:** Migration `2026_10_02_000001_create_farast_commerce_engine.php` جدول `farast_backup_manifests` را ایجاد کرده، اما در tree فعلی Model و call-site مستقیم در سرویس‌ها/Job/Commandهای backup پیدا نشد. مسیر فعال backup از `StorageBackupRun`/`storage_backup_runs` و `StorageBackupService`/`RunStorageBackupJob` استفاده می‌کند. این جدول orphan/legacy candidate با مالکیت حل‌نشده است؛ حذف آن بدون بررسی داده واقعی ممنوع و استفاده جدید از آن تا تعیین مالکیت متوقف بماند.
+
 **Route و scheduler delta:**
 - `bootstrap/app.php` مسیر عمومی `/ready` را خارج از web middleware و health route داخلی `/up` را ثبت می‌کند.
 - `routes/web_core_part2.php` مسیر `/admin/observability` را در admin group و با gate بخش audit ثبت می‌کند.
