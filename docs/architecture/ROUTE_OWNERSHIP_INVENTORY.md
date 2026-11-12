@@ -404,3 +404,15 @@
 | GET | `/ready` | `health.ready` | `ReadinessController::__invoke` | خارج از گروه web؛ پاسخ فقط وضعیت DB را می‌دهد | `bootstrap/app.php:18` |
 | GET | `/admin/observability` | `admin.observability.index` | `Admin\\ObservabilityController@index` | `auth`, `admin`, `admin.section:audit` | `routes/web_core_part2.php:117-121` |
 | GET | `/up` | framework health route | Laravel framework health handler | health route تعریف‌شده در `withRouting` | `bootstrap/app.php:15` |
+
+
+### نتیجه runtime route:list در CI
+
+روی همان کد برنامه main در commit `d6050242449e4d0869cf39daff0d5ada69e258ba`، job لاراول PR #475 فرمان `php artisan route:list --json` را اجرا کرد و نتیجه را چنین ثبت کرد:
+
+- Routeهای ثبت‌شده در Laravel: **337**
+- Routeهای دارای نام: **336**
+- نام تکراری در Route collection: **صفر**
+- گام CI: موفق؛ check route name uniqueness بدون خطا تمام شد.
+
+این شمارش runtime شامل health route چارچوب و routeهای ثبت‌شده در bootstrap است؛ بنابراین با 334 declaration فایل‌های domain route در snapshot ایستا قابل قیاس مستقیم نیست. اجرای همین check پس از merge روی main نیز در حال تکرار است.
