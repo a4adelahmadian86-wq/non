@@ -88,7 +88,9 @@ jobs:
                 lock: null,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-                last_run: null
+                last_run: null,
+                runs: [],
+                metrics: { runs_total: 0, retries_total: 0, completed_runs: 0, average_wall_seconds: null }
               };
             }
 
@@ -158,6 +160,32 @@ jobs:
 
             const active = !!(state.lock && state.lock.expires_at &&
               new Date(state.lock.expires_at).getTime() > now.getTime());
+            state.runs = state.runs || [];
+            const finishRun = status => {
+              const run = state.runs.findLast ? state.runs.findLast(x => x.run_id === state.lock?.run_id) :
+                [...state.runs].reverse().find(x => x.run_id === state.lock?.run_id);
+              if (run && !run.finished_at) {
+                run.finished_at = nowIso;
+                run.status = status;
+                run.wall_seconds = Math.max(0, Math.floor((now.getTime() - new Date(run.started_at).getTime()) / 1000));
+              }
+              if (state.last_run && state.last_run.run_id === state.lock?.run_id && !state.last_run.finished_at) {
+                state.last_run.finished_at = nowIso;
+                state.last_run.status = status;
+                state.last_run.wall_seconds = run?.wall_seconds ?? null;
+              }
+            };
+            const refreshMetrics = () => {
+              const completed = state.runs.filter(x => x.finished_at && Number.isFinite(x.wall_seconds));
+              state.metrics = {
+                runs_total: state.runs.length,
+                retries_total: Math.max(0, state.runs.length - 1),
+                completed_runs: completed.length,
+                average_wall_seconds: completed.length
+                  ? Math.round(completed.reduce((sum, x) => sum + x.wall_seconds, 0) / completed.length)
+                  : null
+              };
+            };
 
             if (command === 'status') {
               const lockText = active
@@ -179,14 +207,20 @@ jobs:
                   ') until ' + state.lock.expires_at + '. Do not start this task.');
                 return;
               }
+              if (state.lock && !active) finishRun('lease_expired');
               const token = require('crypto').randomUUID();
+              const attemptNo = state.runs.length + 1;
               const expires = new Date(now.getTime() + leaseMinutes * 60000).toISOString();
               state.status = 'in_progress';
               state.lock = {
                 actor, chat_id: chatId, run_id: runId, fencing_token: token,
                 claimed_at: nowIso, heartbeat_at: nowIso, expires_at: expires
               };
-              state.last_run = { run_id: runId, chat_id: chatId, actor, started_at: nowIso };
+              const runRecord = { run_id: runId, chat_id: chatId, actor, attempt_no: attemptNo,
+                started_at: nowIso, finished_at: null, status: 'in_progress', wall_seconds: null };
+              state.runs.push(runRecord);
+              state.last_run = runRecord;
+              refreshMetrics();
               await addLabel('agent:locked');
               await removeLabel('agent:ready');
               await removeLabel('agent:blocked');
@@ -214,6 +248,8 @@ jobs:
               return;
             }
             if (command === 'release') {
+              finishRun('released');
+              refreshMetrics();
               state.status = 'ready';
               state.lock = null;
               await removeLabel('agent:locked');
@@ -222,6 +258,8 @@ jobs:
               return;
             }
             if (command === 'block') {
+              finishRun('blocked');
+              refreshMetrics();
               state.status = 'blocked';
               state.blocker = { reason: reason || 'No reason supplied', reported_by: actor, at: nowIso };
               state.lock = null;
@@ -232,6 +270,8 @@ jobs:
               return;
             }
             if (command === 'review') {
+              finishRun('review');
+              refreshMetrics();
               state.status = 'review';
               state.completed_by = { actor, chat_id: chatId, run_id: runId, at: nowIso };
               state.lock = null;
