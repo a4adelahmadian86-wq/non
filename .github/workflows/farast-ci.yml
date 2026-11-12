@@ -11,7 +11,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 jobs:
   laravel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -103,7 +103,7 @@ jobs:
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
   audit-mysql-integrity:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mysql:
         image: mysql:8.4
@@ -148,7 +148,7 @@ jobs:
   reader-browser-regression:
     if: ${{ always() && needs.laravel.result == 'failure' }}
     needs: [laravel]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -190,7 +190,7 @@ jobs:
         run: test -f /tmp/farast-reader-server.log && cat /tmp/farast-reader-server.log || true
 
   document-audio-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -203,7 +203,7 @@ jobs:
 
   voice-model-smoke:
     if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -240,7 +240,7 @@ jobs:
           cat /tmp/farast-sherpa.log
 
   product-supervisor-contract-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -263,7 +263,7 @@ jobs:
         working-directory: services/product-supervisor
 
   voice-service-contract-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -281,7 +281,7 @@ jobs:
           FARAST_VOICE_TOKEN: 'test-token-for-contract-tests'
 
   admin-product-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
