@@ -31,7 +31,7 @@ Check whether this conversation has a usable GitHub connection with permission t
 - create a branch and push commits;
 - open a Pull Request.
 
-The GitHub account used by this conversation must be a collaborator with at least Triage permission for task coordination and Write permission for branches/PRs. A different ChatGPT account must independently connect an authorized GitHub identity; this prompt does not transfer credentials or permissions.
+The GitHub account used by this conversation must be recognized by GitHub as OWNER, COLLABORATOR, or MEMBER to issue coordinator commands, and must have sufficient repository permission for the requested action: at least Triage for Issue coordination and Write for branches/PRs. A different ChatGPT account must independently connect an authorized GitHub identity; this prompt does not transfer credentials or permissions.
 
 If no GitHub connector is available, do not pretend you can coordinate or write. Ask the user to connect an authorized GitHub account, or provide a precise manual GitHub UI / git command sequence. You may explain or draft code offline, but mark it as uncommitted and do not claim task ownership.
 
