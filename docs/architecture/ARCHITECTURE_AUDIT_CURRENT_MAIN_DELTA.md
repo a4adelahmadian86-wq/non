@@ -774,7 +774,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 - `bootstrap/app.php` مسیر عمومی `/ready` را خارج از web middleware و health route داخلی `/up` را ثبت می‌کند.
 - `routes/web_core_part2.php` مسیر `/admin/observability` را در admin group و با gate بخش audit ثبت می‌کند.
 - `routes/console.php` پایش `farast:observability:check` و بازیابی `storage:recover-stale-backup-runs` را به scheduler اضافه کرده است.
-- Route file inventory پایه 334 declaration را پوشش می‌داد؛ routeهای bootstrap و observability بعداً اضافه شده‌اند. PR #475 یک گام runtime `route:list --json` و assertion یکتایی route name اضافه می‌کند تا شمار دقیق routeهای ثبت‌شده از خود Laravel استخراج شود.
+- Route file inventory پایه 334 declaration را پوشش می‌داد؛ routeهای bootstrap و observability بعداً اضافه شده‌اند. PR #475 این گام را به CI اضافه و در اجرای موفق آن روی همان کد برنامه ثبت کرد: `route:list --json` تعداد 337 route، 336 route نام‌گذاری‌شده و صفر نام تکراری گزارش کرد.
 
 **تست‌های جدید مرتبط:** `FarastStorageObjectIntegrityTest`, `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest`, `FarastFeedbackEvidenceSchemaTest`, `FeedbackPipelineSchemaTest`, `CrmCourseProgressTimelineTest`, `FarastObservabilityServiceTest`, `ReadinessCheckTest`, `NotificationRouteOwnershipTest` و `admin-product-real-workflow.spec.js`.
 
