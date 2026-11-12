@@ -800,3 +800,10 @@ PR #475 runner پنج workflow وابسته به Python/Playwright را از `ub
 - تنظیمات GitHub همچنان `main.protected=false` و Required Status Checks خاموش را گزارش می‌کند؛ فعال‌سازی Branch Protection/Ruleset اقدام عملیاتی جداگانه‌ای است و در این مرحله تغییر داده نشده است.
 
 **وضعیت پذیرش پس از PR #475:** ناسازگاری runner با Python 3.12.11 و Playwright 1.55 اصلاح شد؛ PR و بازاجرای کامل روی main سبز هستند. مرحله دوم از نظر inventory، traceability، runtime route ownership و شواهد CI تکمیل‌شده است. محدودیت باقیمانده فقط تأیید upgrade/reconciliation روی clone واقعی دیتابیس Production است که در دسترس این ممیزی نبوده است.
+
+
+## 20. مورد باز در مالکیت Backup Manifest
+
+Migration `2026_10_02_000001_create_farast_commerce_engine.php` جدول `farast_backup_manifests` را ایجاد می‌کند، اما در tree فعلی Model هم‌نام یا call-site مستقیم در سرویس‌ها، Jobها و Commandهای backup پیدا نشد. مسیر فعال backup از `StorageBackupRun`/`storage_backup_runs` و `StorageBackupService`/`RunStorageBackupJob` به‌همراه commandهای `RunStorageBackup`, `RestoreStorageBackup`, `VerifyStorageBackup` استفاده می‌کند.
+
+این جدول فعلاً **orphan/legacy candidate با مالکیت حل‌نشده** است. حذف آن بدون بررسی داده واقعی و نسخه‌های نصب‌شده ممنوع است؛ ایجاد قابلیت جدید روی آن نیز تا تعیین مالکیت و قرارداد migration ممنوع بماند. پیش از پاکسازی باید usage واقعی در دیتابیس‌های نصب‌شده و همه queryهای مستقیم مخزن بررسی شود.
