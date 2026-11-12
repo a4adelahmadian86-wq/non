@@ -23,7 +23,7 @@
 - `routes/web_core_part2.php` مسیر `GET /admin/observability` با نام `admin.observability.index` را به `Admin\\ObservabilityController@index` متصل می‌کند؛ middleware گروه `auth, admin` و gate صریح `admin.section:audit` است.
 - `routes/console.php` مالک endpoint HTTP نیست، اما schedulerهای observability و storage recovery را ثبت می‌کند؛ آن‌ها در بخش 18 سند delta معماری فهرست شده‌اند.
 
-334 declaration در این inventory مربوط به snapshot ایستای فایل‌های domain route است. مسیرهای bootstrap و دو route افزوده‌شده در main باید در شمارش runtime لحاظ شوند؛ شمار نهایی ثبت‌شده در Laravel عمداً تا اجرای گام کامل `route:list --json` اعلام نمی‌شود.
+334 declaration در این inventory مربوط به snapshot ایستای فایل‌های domain route است. مسیرهای bootstrap و observability نیز در runtime ثبت می‌شوند؛ نتیجه نهایی `route:list --json` در CI برابر 337 route ثبت‌شده و 336 route نام‌گذاری‌شده است و هیچ نام تکراری گزارش نشده است.
 
 ## Routeها به تفکیک فایل
 
