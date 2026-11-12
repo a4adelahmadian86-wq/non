@@ -29,4 +29,6 @@
 
 ## وضعیت پوشش
 
+Runtime `php artisan route:list --json` روی کد برنامه main در PR #475، **337 Route ثبت‌شده، 336 Route نام‌گذاری‌شده و صفر نام تکراری** گزارش کرد. این assertion اکنون در FARAST CI قرار گرفته است.
+
 این ماتریس ۱۳ حوزه دامنه‌ای را به منبع داده، سرویس، کنترلر/Route، gate و آزمون‌های موجود متصل می‌کند. این نقشه traceability است، نه ادعای پوشش ۱۰۰٪ تمام routeهای runtime؛ فهرست ایستای پایه ۳۳۴ declaration داشت و routeهای bootstrap و observability بعداً به main افزوده شدند. برای پذیرش هر mutation حساس، assertion route/action-level با نقش مجاز/غیرمجاز و مالک/غیرمالک لازم است.
