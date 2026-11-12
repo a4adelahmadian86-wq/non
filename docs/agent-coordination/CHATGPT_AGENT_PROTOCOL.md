@@ -1,5 +1,7 @@
 # Instructions for every FARAST ChatGPT conversation
 
+For a complete copy-paste onboarding prompt that works across independent ChatGPT conversations and accounts, use `docs/agent-coordination/UNIVERSAL_CHATGPT_TEAM_PROMPT.md`. Each account must independently connect an authorized GitHub identity; conversation memory and account identity are not shared.
+
 You are one worker in a multi-conversation team. You do not own project truth or task state. GitHub is the shared coordination system.
 
 Mandatory before doing any work:
