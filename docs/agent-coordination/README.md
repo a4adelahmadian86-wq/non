@@ -130,7 +130,7 @@ GitHub timestamps, Actions run timestamps, commits, PR reviews, and CI runs are 
 
 `ready → in_progress → review → done`
 
-Other states: `blocked`. A lease expiry does not mean task completion. Issue closure sets the coordinator state to `done`; only an authorized human/reviewer should close after acceptance.
+Other states: `blocked`. Use `/farast unblock` to return a blocked task to ready, and `/farast reopen` (or reopen the Issue) to return a review/done task to ready for rework. A lease expiry does not mean task completion. Issue closure sets the coordinator state to `done`; only an authorized human/reviewer should close after acceptance.
 
 The latest hidden `FARAST_AGENT_STATE_V1` comment is the current machine state. Earlier state comments are an append-only audit trail. The machine state also stores run history (`attempt_no`, actor, chat/run IDs, UTC start/end, wall_seconds, terminal run status) and derived metrics (`runs_total`, `retries_total`, `completed_runs`, `average_wall_seconds`). Active work time is not inferred from wall time and remains unmeasured unless a reliable measurement source is added. Do not edit or delete them manually. If state is malformed or contradictory, stop and request maintainer repair.
 
