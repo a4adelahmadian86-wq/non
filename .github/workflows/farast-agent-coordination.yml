@@ -105,6 +105,13 @@ jobs:
             const event = context.eventName;
             if (event === 'issues') {
               if (context.payload.action === 'opened' || context.payload.action === 'reopened') {
+                if (context.payload.action === 'reopened' && ['review', 'done'].includes(state.status)) {
+                  state.status = 'ready';
+                  state.lock = null;
+                  await removeLabel('agent:review');
+                  await removeLabel('agent:done');
+                  await addLabel('agent:ready');
+                }
                 await addLabel('agent:task');
                 if (state.status === 'ready' && !state.lock) await addLabel('agent:ready');
                 await publish('FARAST coordinator initialized this task. Canonical key: GH-' + issue_number +
@@ -130,7 +137,7 @@ jobs:
             }
 
             const body = (context.payload.comment.body || '').trim();
-            const match = body.match(/^\/farast\s+(claim|heartbeat|release|status|block|review)\b([\s\S]*)$/i);
+            const match = body.match(/^\/farast\s+(claim|heartbeat|release|status|block|unblock|review|reopen)\b([\s\S]*)$/i);
             if (!match) return;
 
             const command = match[1].toLowerCase();
@@ -196,9 +203,48 @@ jobs:
               return;
             }
 
+            if (command === 'unblock') {
+              if (active) {
+                await publish('Unblock rejected: an active lease exists. The current owner must release or finish first.');
+                return;
+              }
+              if (state.status !== 'blocked') {
+                await publish('Unblock rejected: task is not blocked.');
+                return;
+              }
+              state.status = 'ready';
+              state.blocker = null;
+              await removeLabel('agent:blocked');
+              await addLabel('agent:ready');
+              await publish('Task unblocked and returned to ready. A worker must claim it before implementation.', state);
+              return;
+            }
+
+            if (command === 'reopen') {
+              if (active) {
+                await publish('Reopen rejected: an active lease exists.');
+                return;
+              }
+              if (!['review', 'done'].includes(state.status)) {
+                await publish('Reopen rejected: only review/done tasks can be reopened for rework.');
+                return;
+              }
+              state.status = 'ready';
+              state.completed_by = null;
+              await removeLabel('agent:review');
+              await removeLabel('agent:done');
+              await addLabel('agent:ready');
+              await publish('Task reopened for rework and returned to ready. Claim is required before implementation.', state);
+              return;
+            }
+
             if (command === 'claim') {
               if (!chatId || !runId || !Number.isFinite(leaseMinutes)) {
                 await publish('Claim rejected. Required: /farast claim chat=UNIQUE_CHAT_ID run=UNIQUE_RUN_ID lease=60 (5–240 minutes).');
+                return;
+              }
+              if (['blocked', 'review', 'done'].includes(state.status)) {
+                await publish('Claim denied: task state is ' + state.status + '. Use /farast unblock for blocked tasks or /farast reopen for review/done tasks after the appropriate decision.');
                 return;
               }
               if (active) {
