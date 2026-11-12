@@ -137,6 +137,6 @@
 
 ### قرارداد و مصرف‌کنندگان افزوده‌شده
 
-- `FarastTraceContext` در `AppServiceProvider` به‌صورت singleton ثبت شده؛ middleware درخواست، request/correlation id را set می‌کند و در پایان درخواست context را clear می‌کند. این سرویس منبع شناسه هم‌بستگی است، نه دفتر audit.
+- `FarastTraceContext` در `AppServiceProvider` به‌صورت singleton ثبت شده؛ middleware `FarastObservability` request/correlation id را set و در `finally` پاک می‌کند. `Queue::createPayloadUsing` شناسه را به job منتقل می‌کند و listenerهای `JobProcessing/JobProcessed/JobExceptionOccurred/JobFailed` context را set/clear می‌کنند. این سرویس منبع شناسه هم‌بستگی است، نه دفتر audit.
 - `FarastObservabilityService` incident history و trend را از همان `farast_audit_events` می‌خواند و برای سلامت Storage از `storage_volumes` و `storage_managed_files` استفاده می‌کند؛ جدول incident موازی ایجاد نشده است.
 - `StoreCourseProgressService` منطق drip availability، محاسبه progress و همگام‌سازی `completed_at` را مشترک می‌کند؛ مصرف‌کنندگان: `StoreCourseLearningController` و `CrmController`. مرجع داده همچنان `StoreCourseEnrollment` و `StoreCourseLessonProgress` است.
