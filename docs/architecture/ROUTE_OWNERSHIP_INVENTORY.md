@@ -1,6 +1,6 @@
 # فهرست اجرایی مالکیت Routeها
 
-> آخرین تطبیق فایل‌های منبع: `main` در commit `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
+> مبنای فهرست فایل‌های Route: snapshot `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ deltaهای main تا `d6050242449e4d0869cf39daff0d5ada69e258ba` در انتهای این سند ثبت شده‌اند. برای وضعیت جاری، `ARCHITECTURE_AUDIT_CURRENT_MAIN_DELTA.md` بخش 18 مرجع تکمیلی است.
 
 مبنای این نسخه: شاخه ممیزی پس از حذف Routeهای اعلان تکراری؛ فایل‌های فعال requireشده از `routes/web.php`. فهرست ایستا است و باید پس از اجرای runtime `php artisan route:list` با آن تطبیق داده شود.
 
@@ -15,8 +15,15 @@
 
 در اسکن ایستا این شاخه، نام تکراری یا Method/URI تکراری یافت نشد.
 
-## تغییر نسبت به main
-در main دو تعارض واقعی وجود داشت: `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` در `web_core_part2.php` و `notifications.php`. شاخه ممیزی دو تعریف متعلق به `PlatformCompletionController` را حذف کرده و `NotificationController` را مالک یگانه کرده است؛ تست `NotificationRouteOwnershipTest` این مالکیت را assert می‌کند.
+## وضعیت Route ownership در main جاری
+
+- PR #371 ادغام شده است؛ دو تعریف تکراری اعلان از `web_core_part2.php` حذف شده و `routes/notifications.php` با `NotificationController` مالک یگانه مسیرهای اعلان شخصی است.
+- `NotificationRouteOwnershipTest` در CI، مالکیت `platform.notifications` و `platform.notifications.read` را به `NotificationController@index/read` assert می‌کند.
+- `bootstrap/app.php` علاوه بر health route داخلی Laravel در `/up`، مسیر `GET /ready` با نام `health.ready` را به `ReadinessController::__invoke` متصل می‌کند؛ این endpoint خارج از middleware گروه web ثبت شده است.
+- `routes/web_core_part2.php` مسیر `GET /admin/observability` با نام `admin.observability.index` را به `Admin\\ObservabilityController@index` متصل می‌کند؛ middleware گروه `auth, admin` و gate صریح `admin.section:audit` است.
+- `routes/console.php` مالک endpoint HTTP نیست، اما schedulerهای observability و storage recovery را ثبت می‌کند؛ آن‌ها در بخش 18 سند delta معماری فهرست شده‌اند.
+
+334 declaration در این inventory مربوط به snapshot ایستای فایل‌های domain route است. مسیرهای bootstrap و دو route افزوده‌شده در main باید در شمارش runtime لحاظ شوند؛ شمار نهایی ثبت‌شده در Laravel عمداً تا اجرای گام کامل `route:list --json` اعلام نمی‌شود.
 
 ## Routeها به تفکیک فایل
 
@@ -388,3 +395,12 @@
 |---|---|---|---|---|---|---|
 | GET | `/admin/store/operations` | `admin.store.operations` | `AdminProductOperationsController@index` | auth, admin | — | `routes/product_operations.php:7` |
 | POST | `/admin/store/operations/documents/{document}/retry` | `admin.store.operations.documents.retry` | `AdminProductOperationsController@retry` | auth, admin | throttle:10,10 | `routes/product_operations.php:8` |
+
+
+## Routeهای افزوده‌شده در main پس از snapshot inventory
+
+| Method | URI | Route name | Action | Middleware | Source |
+|---|---|---|---|---|---|
+| GET | `/ready` | `health.ready` | `ReadinessController::__invoke` | خارج از گروه web؛ پاسخ فقط وضعیت DB را می‌دهد | `bootstrap/app.php:18` |
+| GET | `/admin/observability` | `admin.observability.index` | `Admin\\ObservabilityController@index` | `auth`, `admin`, `admin.section:audit` | `routes/web_core_part2.php:117-121` |
+| GET | `/up` | framework health route | Laravel framework health handler | health route تعریف‌شده در `withRouting` | `bootstrap/app.php:15` |
