@@ -203,7 +203,7 @@ class AdminStoreController extends Controller
         $aiContentReadiness = $contentGenerator->readiness($product);
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
-            && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+            && $file->is_active && $file->is_primary && in_array($file->scan_status, ['clean', 'structural'], true));
         $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
             && $publicationReadiness->hasReadyPrimaryReader($product);
         $contentReady = $product->type === 'course'
@@ -231,8 +231,10 @@ class AdminStoreController extends Controller
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
+        $canSkipSecurityScan = auth()->user()?->isAdmin()
+            || app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan_bypass');
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canSkipSecurityScan'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
@@ -370,7 +372,7 @@ class AdminStoreController extends Controller
                         ->where('purpose', 'product_download')
                         ->where('is_active', true)
                         ->where('is_primary', true)
-                        ->where('scan_status', 'clean')
+                        ->whereIn('scan_status', ['clean', 'structural'])
                         ->exists();
                     if (! $hasSafePrimaryFile) {
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
@@ -464,7 +466,10 @@ class AdminStoreController extends Controller
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
-        $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
+        $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean', 'security_scan' => 'nullable|boolean']);
+        $canSkipSecurityScan = auth()->user()?->isAdmin()
+            || app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan_bypass');
+        $securityScanRequested = ! $canSkipSecurityScan || $request->boolean('security_scan', false);
 
         $upload = $request->file('file');
         $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
@@ -497,7 +502,7 @@ class AdminStoreController extends Controller
         }
 
         try {
-            $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024);
+            $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024, null, $securityScanRequested);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ایستای داخلی عبور نکرده است.');
             $ingestion = StoreProductIngestion::create([
                 'id' => (string) Str::uuid(),
@@ -553,7 +558,8 @@ class AdminStoreController extends Controller
         $disk = Storage::disk($ingestion->staging_disk ?: 'private');
         abort_unless($disk->exists($ingestion->staging_path), 410, 'مهلت نگهداری فایل موقت تمام شده است؛ فایل را دوباره انتخاب کنید.');
 
-        $inspection = $security->inspect($ingestion->staging_path, $ingestion->mime, 50 * 1024 * 1024);
+        $securityScanRequested = (bool) data_get($ingestion->inspection_json, 'security_scan_requested', true);
+        $inspection = $security->inspect($ingestion->staging_path, $ingestion->mime, 50 * 1024 * 1024, null, $securityScanRequested);
         abort_unless(hash_equals((string) $ingestion->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بررسی اولیه تغییر کرده است؛ دوباره آن را بارگذاری کنید.');
 
         $originalNameLower = strtolower($ingestion->original_name);
@@ -633,8 +639,8 @@ class AdminStoreController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
-                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
-                    'scan_engine' => 'farast_static_v1',
+                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : ($securityScanRequested ? 'clean' : 'structural'),
+                    'scan_engine' => $securityScanRequested ? 'farast_static_v1' : 'farast_structural_v1',
                     'scanned_at' => now(),
                 ]);
 
@@ -658,7 +664,8 @@ class AdminStoreController extends Controller
                     'mime' => $record->mime,
                     'size_bytes' => $record->size_bytes,
                     'sha256' => $record->sha256,
-                    'security_engine' => 'farast_static_v1',
+                    'security_engine' => $securityScanRequested ? 'farast_static_v1' : 'farast_structural_v1',
+                    'security_scan_requested' => $securityScanRequested,
                 ]);
                 if ($productRequiresRepublish) {
                     $this->audit('store.product.unpublished_for_primary_file_replacement', $lockedProduct, [
@@ -816,7 +823,7 @@ class AdminStoreController extends Controller
                     ->where('id', '!=', $lockedFile->id)
                     ->where('is_active', true)
                     ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
+                    ->whereIn('scan_status', ['clean', 'structural'])
                     ->exists();
                 if (! $hasReplacement) {
                     throw ValidationException::withMessages([

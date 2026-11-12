@@ -85,7 +85,7 @@ class ProductSupervisorSnapshotBuilder
                 ->where('purpose', 'product_download')
                 ->where('is_active', true)
                 ->where('is_primary', true)
-                ->where('scan_status', 'clean')
+                ->whereIn('scan_status', ['clean', 'structural'])
                 ->exists(),
             'publishable_lesson_count' => $publishableLessons,
             'checks' => $checks,
