@@ -1,6 +1,6 @@
 # فهرست Call-site کنترلرها
 
-> آخرین تطبیق فایل‌های منبع: `main` در commit `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
+> مبنای inventory پایه: `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ دو Controller افزوده‌شده در main تا `d6050242449e4d0869cf39daff0d5ada69e258ba` و اصلاح dependencyهای مصرف‌کننده در انتهای سند ثبت شده‌اند.
 
 > مبنا: فایل‌های `app/Http/Controllers/**/*.php` در `main`. سرویس‌ها از import و `app()/resolve()`، مدل‌ها از import، جدول‌ها از `DB::table` و عملیات دسترسی از الگوهای متداول کد استخراج شده‌اند. این استخراج ایستا است؛ متدهای ارث‌رسیده، dependencyهای dynamic، policy resolution و middleware گروه Route باید با runtime route:list و تست تکمیل شوند.
 
@@ -27,7 +27,7 @@
 | `ContentDiscussionController` | `app/Http/Controllers/ContentDiscussionController.php` | `NotificationService` | `ContentDiscussion`, `DiscussionReport`, `DiscussionSubscription`, `StoreProduct`, `User` | `discussion_reactions` | — | `store()`, `react()`, `report()`, `toggleFollow()`, `publicReply()`, `myDiscussions()`, `updateOwn()`, `withdrawOwn()`, `communityIndex()`, `member()`, `adminReports()`, `moderateReport()`, `adminIndex()`, `moderate()`, `reply()` | 8 | 0 |
 | `Controller` | `app/Http/Controllers/Controller.php` | — | — | — | — | — | 0 | 0 |
 | `CrmAnalyticsController` | `app/Http/Controllers/CrmAnalyticsController.php` | `AdminConsoleService` | `Order`, `Ticket`, `User` | `orders`, `crm_follow_up_tasks`, `crm_campaign_recipients` | — | `__invoke()` | 5 | 0 |
-| `CrmController` | `app/Http/Controllers/CrmController.php` | `AdminConsoleService`, `AuditLogService` | `Order`, `Payment`, `StoreDownload`, `StoreLibraryItem`, `WalletTransaction`, `Ticket`, `TypingDocument`, `User` | `crm_customer_notes`, `crm_follow_up_tasks` | — | `customers()`, `show()`, `storeNote()`, `storeFollowUp()`, `followUps()`, `updateFollowUp()` | 7 | 0 |
+| `CrmController` | `app/Http/Controllers/CrmController.php` | `AdminConsoleService`, `AuditLogService`, `StoreCourseProgressService` | `Order`, `Payment`, `StoreDownload`, `StoreLibraryItem`, `WalletTransaction`, `Ticket`, `TypingDocument`, `User` | `crm_customer_notes`, `crm_follow_up_tasks` | — | `customers()`, `show()`, `storeNote()`, `storeFollowUp()`, `followUps()`, `updateFollowUp()` | 7 | 0 |
 | `CrmMarketingController` | `app/Http/Controllers/CrmMarketingController.php` | `AdminConsoleService`, `AuditLogService`, `CrmAudienceService`, `NotificationService`, `StoreCouponMarginPolicy`, `StoreCouponBudgetPolicy`, `SmartDiscountMarketingService` | `Order`, `StoreCoupon`, `StoreCouponAssignment`, `StoreProduct`, `User` | `crm_customer_segments`, `crm_marketing_campaigns`, `store_coupon_assignments`, `store_coupon_assignments as assignments`, `farast_workflow_events`, `crm_campaign_recipients` | `empty` | `dashboard()`, `segments()`, `storeSegment()`, `previewAudience()`, `campaigns()`, `storeCampaign()`, `sendCampaign()` | 21 | 0 |
 | `CrmProjectController` | `app/Http/Controllers/CrmProjectController.php` | `AdminConsoleService`, `AuditLogService` | `FarastProject`, `Order`, `User` | `farast_human_tasks` | — | `index()`, `assignHumanTask()`, `show()` | 4 | 0 |
 | `EditorAgentController` | `app/Http/Controllers/EditorAgentController.php` | — | — | — | — | `plan()`, `approve()`, `undo()`, `commit()` | 0 | 0 |
@@ -49,7 +49,7 @@
 | `SocialController` | `app/Http/Controllers/SocialController.php` | — | `SiteSetting` | — | — | `index()`, `admin()`, `update()` | 0 | 0 |
 | `StoreCartController` | `app/Http/Controllers/StoreCartController.php` | `StoreCartService`, `StoreCourseEnrollmentService`, `MarketingSignalService`, `StoreCouponRedemptionService` | `Order`, `Payment`, `SiteSetting`, `StoreLibraryItem`, `StoreOrderItem`, `StoreProduct` | — | `empty` | `index()`, `summary()`, `add()`, `update()`, `remove()`, `applyCoupon()`, `clearCoupon()`, `checkout()` | 1 | 0 |
 | `StoreController` | `app/Http/Controllers/StoreController.php` | `MarketingSignalService` | `ContentDiscussion`, `StoreCategory`, `StoreCourseLesson`, `StoreProduct`, `StoreProductFile`, `StoreProductDocument`, `StoreProductPreview`, `StoreLibraryItem`, `StoreWishlist`, `StoreCouponAssignment` | — | `StoreLibraryItem::query`, `is_string`, `hash_equals`, `is_resource`, `class_exists` | `index()`, `product()`, `trackSmartOfferInteraction()`, `coursePreview()`, `category()`, `preview()`, `previewAudio()`, `reader()`, `readerPage()`, `readerAudio()`, `prepareDocxPreview()` | 0 | 3 |
-| `StoreCourseLearningController` | `app/Http/Controllers/StoreCourseLearningController.php` | `StoreCourseEnrollmentService` | `StoreCourseEnrollment`, `StoreCourseLesson`, `StoreCourseLessonProgress`, `StoreLibraryItem`, `StoreProduct`, `StoreProductFile` | — | `is_string` | `show()`, `lesson()`, `progress()`, `resource()` | 0 | 0 |
+| `StoreCourseLearningController` | `app/Http/Controllers/StoreCourseLearningController.php` | `StoreCourseEnrollmentService`, `StoreCourseProgressService`, `StorageManager` | `StoreCourseEnrollment`, `StoreCourseLesson`, `StoreCourseLessonProgress`, `StoreLibraryItem`, `StoreProduct`, `StoreProductFile` | — | `is_string` | `show()`, `lesson()`, `progress()`, `resource()` | 0 | 0 |
 | `StoreLibraryController` | `app/Http/Controllers/StoreLibraryController.php` | — | `StoreDownload`, `StoreLibraryItem`, `StoreProductFile`, `StoreProduct` | — | `hash_equals`, `is_string` | `index()`, `issue()`, `stream()` | 1 | 0 |
 | `StoreReaderStateController` | `app/Http/Controllers/StoreReaderStateController.php` | — | `StoreProduct`, `StoreReaderState` | — | — | `show()`, `update()` | 0 | 0 |
 | `StoreWishlistController` | `app/Http/Controllers/StoreWishlistController.php` | `MarketingSignalService` | `StoreProduct`, `StoreWishlist` | — | — | `index()`, `toggle()`, `destroy()` | 0 | 0 |
@@ -60,3 +60,17 @@
 | `UserFileController` | `app/Http/Controllers/UserFileController.php` | `CapabilityService`, `PricingService` | `UserFile` | — | — | `index()`, `upload()`, `select()`, `destroy()` | 1 | 1 |
 | `VoiceController` | `app/Http/Controllers/VoiceController.php` | `ToolExecutionService`, `GoogleSpeechToTextService`, `VoiceCorrectionService`, `VoiceProviderRouter`, `VoiceQuotaManager`, `VoiceTranscriptionService` | `VoiceProviderAccount`, `TypingDocument` | — | `hash_equals` | `voiceStatus()`, `streamToken()`, `streamConfig()`, `streamProviderConfig()`, `streamUsage()`, `transcribe()`, `insertTranscript()` | 0 | 0 |
 | `WalletController` | `app/Http/Controllers/WalletController.php` | `ZarinpalService`, `NotificationService` | `Order`, `Payment`, `Wallet`, `WalletTransaction` | — | — | `index()`, `topUp()`, `topUpCallback()` | 1 | 0 |
+
+
+## Controllerهای افزوده‌شده و dependencyهای به‌روزشده در main جاری
+
+| Controller | Source | Service references | Model imports | Direct DB tables | Authorization tokens (static) | Public actions | DB calls | Storage calls |
+|---|---|---|---|---|---|---|---:|---:|
+| `Admin\ObservabilityController` | `app/Http/Controllers/Admin/ObservabilityController.php` | `FarastObservabilityService` | — | — | — | `index()` | 0 | 0 |
+| `ReadinessController` | `app/Http/Controllers/ReadinessController.php` | — | — | connection health probe (dynamic) | `DB::connection()->select('SELECT 1')` | `__invoke()` | 1 | 0 |
+
+### تغییر dependency مصرف‌کنندگان موجود
+
+- `CrmController@show` اکنون `StoreCourseProgressService` را برای خلاصه پیشرفت enrollment فراخوانی می‌کند؛ مسیر CRM از همان محاسبه‌ای استفاده می‌کند که workspace یادگیری مصرف می‌کند.
+- `StoreCourseLearningController` در `show/lesson/progress/resource` از `StoreCourseProgressService` برای release/drip/progress و از `StorageManager` برای بازیابی منبع درس استفاده می‌کند.
+- Routeهای این Controllerها در `ROUTE_OWNERSHIP_INVENTORY.md` و بخش 18 سند delta معماری ثبت شده‌اند.

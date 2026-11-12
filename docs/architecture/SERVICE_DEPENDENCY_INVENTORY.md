@@ -1,8 +1,8 @@
 # فهرست وابستگی سرویس‌های برنامه
 
-> آخرین تطبیق فایل‌های منبع: `main` در commit `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
+> مبنای inventory پایه: `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ سه Service افزوده‌شده در main تا `d6050242449e4d0869cf39daff0d5ada69e258ba` در انتهای سند ثبت شده‌اند.
 
-> مبنا: ۱۱۲ فایل PHP در `app/Services/` در `main` (۱۱۸ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
+> مبنا: ۱۱۵ فایل PHP در `app/Services/` در `main` (۱۲۱ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
 
 | Service | Source | Service dependencies | Model imports | Direct table references | Storage disk names | Public methods | DB call count | Storage call count |
 |---|---|---|---|---|---|---|---:|---:|
@@ -125,3 +125,18 @@
 | `WorkflowEngine` | `app/Services/WorkflowEngine.php` | `NotificationService` | — | `farast_workflows`, `farast_workflow_runs`, `farast_workflow_event_workflows`, `farast_workflow_events`, `crm_follow_up_tasks` | — | `run()`, `dispatch()`, `retryFailedEvents()` | 28 | 0 |
 | `ZarinpalService` | `app/Services/ZarinpalService.php` | — | `SiteSetting` | — | — | `enabled()`, `merchantId()`, `sandbox()`, `request()`, `verify()` | 0 | 0 |
 | `ProductInfrastructureHealthService` | `app/Services/ProductInfrastructureHealthService.php` | — | — | — | — | `snapshot()` | 0 | 0 |
+
+
+## سه Service افزوده‌شده در main جاری
+
+| Service | Source | Service dependencies | Model imports | Direct table references | Storage disk names | Public methods | DB call count | Storage call count |
+|---|---|---|---|---|---|---|---:|---:|
+| `FarastObservabilityService` | `app/Services/FarastObservabilityService.php` | `ProductInfrastructureHealthService` (از طریق `app()`) | — | `farast_audit_events`, `storage_volumes`, `storage_managed_files`; queue/failed-job tables از config اتصال انتخاب می‌شوند | — | `snapshot()` | 7 | 0 |
+| `FarastTraceContext` | `app/Services/FarastTraceContext.php` | — | — | — | — | `set()`, `current()`, `clear()` | 0 | 0 |
+| `StoreCourseProgressService` | `app/Services/StoreCourseProgressService.php` | — | `StoreCourseEnrollment`, `StoreCourseLesson`, `Collection` | — (Eloquent relations) | — | `lessonAvailable()`, `availableLessons()`, `summarize()`, `syncCompletion()` | 0 | 0 |
+
+### قرارداد و مصرف‌کنندگان افزوده‌شده
+
+- `FarastTraceContext` در `AppServiceProvider` به‌صورت singleton ثبت شده؛ middleware `FarastObservability` request/correlation id را set و در `finally` پاک می‌کند. `Queue::createPayloadUsing` شناسه را به job منتقل می‌کند و listenerهای `JobProcessing/JobProcessed/JobExceptionOccurred/JobFailed` context را set/clear می‌کنند. این سرویس منبع شناسه هم‌بستگی است، نه دفتر audit.
+- `FarastObservabilityService` incident history و trend را از همان `farast_audit_events` می‌خواند و برای سلامت Storage از `storage_volumes` و `storage_managed_files` استفاده می‌کند؛ جدول incident موازی ایجاد نشده است.
+- `StoreCourseProgressService` منطق drip availability، محاسبه progress و همگام‌سازی `completed_at` را مشترک می‌کند؛ مصرف‌کنندگان: `StoreCourseLearningController` و `CrmController`. مرجع داده همچنان `StoreCourseEnrollment` و `StoreCourseLessonProgress` است.
