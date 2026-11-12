@@ -8,7 +8,7 @@ on:
 
 # Serialize all commands for the same canonical task Issue.
 concurrency:
-  group: farast-task-issue-\${{ github.event.issue.number }}
+  group: farast-task-issue-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 permissions:
