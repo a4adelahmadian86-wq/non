@@ -213,7 +213,7 @@ jobs:
               const expires = new Date(now.getTime() + leaseMinutes * 60000).toISOString();
               state.status = 'in_progress';
               state.lock = {
-                actor, chat_id: chatId, run_id: runId, fencing_token: token,
+                actor, chat_id: chatId, run_id: runId, lease_id: token,
                 claimed_at: nowIso, heartbeat_at: nowIso, expires_at: expires
               };
               const runRecord = { run_id: runId, chat_id: chatId, actor, attempt_no: attemptNo,
@@ -225,7 +225,7 @@ jobs:
               await removeLabel('agent:ready');
               await removeLabel('agent:blocked');
               await publish('CLAIM GRANTED to @' + actor + '. Task GH-' + issue_number +
-                '. Chat: ' + chatId + '. Run: ' + runId + '. Fencing token: ' + token +
+                '. Chat: ' + chatId + '. Run: ' + runId + '. Lease ID: ' + token +
                 '. Lease expires: ' + expires + ' UTC. Only this chat/run may work. Renew with /farast heartbeat chat=' +
                 chatId + ' run=' + runId + ' lease=' + leaseMinutes + '.', state);
               return;
