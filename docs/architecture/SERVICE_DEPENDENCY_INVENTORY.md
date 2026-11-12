@@ -2,7 +2,7 @@
 
 > مبنای inventory پایه: `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ سه Service افزوده‌شده در main تا `d6050242449e4d0869cf39daff0d5ada69e258ba` در انتهای سند ثبت شده‌اند.
 
-> مبنا: ۱۱۵ فایل PHP در `app/Services/` در `main` (۱۱۸ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
+> مبنا: ۱۱۵ فایل PHP در `app/Services/` در `main` (۱۲۱ ورودی درخت شامل ۶ دایرکتوری). وابستگی‌ها از import، constructor injection و `app()/resolve()` استخراج شده‌اند؛ این یک dependency inventory ایستا است و جایگزین call graph runtime نیست. جدول‌ها فقط `DB::table` و `Schema::table/hasTable/hasColumn`های literal را نشان می‌دهند؛ queryهای Eloquent و نام‌های dynamic در آن نیستند.
 
 | Service | Source | Service dependencies | Model imports | Direct table references | Storage disk names | Public methods | DB call count | Storage call count |
 |---|---|---|---|---|---|---|---:|---:|
