@@ -82,7 +82,7 @@ Wait for the coordinator's explicit `CLAIM GRANTED` comment and inspect the late
 - the lease has not expired;
 - the latest state records this run as active.
 
-Only then may you start. If the request is denied, no response arrives, Actions fail, state is malformed, or another owner has a live lease, do not implement. Check `/farast status`, inspect the Actions run, and report the exact blocker.
+Only then may you start. If the request is denied, no response arrives, Actions fail, state is malformed, or another owner has a live lease, do not implement. Check `/farast status`, inspect the Actions run, and report the exact blocker. Send one coordinator command at a time and wait for its response. GitHub Actions concurrency is per Issue but is not a FIFO queue: only one run can be pending, and a newer pending run may replace an older one. A missing response is never a grant; inspect Actions and current status before retrying.
 
 A chat_id/run_id is caller-supplied metadata; GitHub authenticates the account, not the identity of a particular ChatGPT conversation. Do not represent it as cryptographic proof of conversation identity.
 
