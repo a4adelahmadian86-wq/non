@@ -1,0 +1,63 @@
+name: FARAST task
+description: Create one canonical, traceable work item for the multi-chat agent team.
+title: "[FARAST-TASK] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one issue per distinct task. Search existing issues before creating a duplicate. This issue becomes the shared source of truth for all ChatGPT conversations.
+  - type: input
+    id: task_id
+    attributes:
+      label: Project task ID (if already defined)
+      description: Existing TASK-ID only. Leave blank if none has been formally assigned.
+      placeholder: TASK-XX
+    validations:
+      required: false
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and problem
+      description: State the required outcome, current context, and why the work is needed.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and constraints
+      description: Include in-scope, out-of-scope, existing capabilities that must be preserved, and constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related work
+      description: Link related Issues, PRs, documents, services, and prerequisite tasks. Use UNKNOWN where not yet verified.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable conditions required for acceptance.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Source material and evidence
+      description: Link authoritative project documents, files, test results, and decisions. Separate facts from assumptions.
+    validations:
+      required: false
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
