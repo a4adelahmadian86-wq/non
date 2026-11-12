@@ -140,7 +140,8 @@ jobs:
             const actor = context.payload.comment.user.login;
             const chatId = args.chat || '';
             const runId = args.run || '';
-            const leaseMinutes = Math.max(5, Math.min(240, Number(args.lease || 60)));
+            const requestedLease = Number(args.lease || 60);
+            const leaseMinutes = Number.isFinite(requestedLease) ? Math.max(5, Math.min(240, requestedLease)) : NaN;
             const reason = argsText.replace(/\b(chat|run|lease)=[^\s]+/gi, '').trim();
 
             const association = context.payload.comment.author_association || 'NONE';
@@ -179,11 +180,19 @@ jobs:
             };
 
             if (command === 'status') {
+              if (state.lock && !active) {
+                finishRun('lease_expired');
+                refreshMetrics();
+                state.status = 'ready';
+                state.lock = null;
+                await removeLabel('agent:locked');
+                await addLabel('agent:ready');
+              }
               const lockText = active
                 ? 'Active lock: @' + state.lock.actor + ', chat ' + state.lock.chat_id +
                   ', run ' + state.lock.run_id + ', expires ' + state.lock.expires_at + '.'
                 : 'No active lease.';
-              await publish('Coordinator status: ' + state.status + '. ' + lockText);
+              await publish('Coordinator status: ' + state.status + '. ' + lockText, state);
               return;
             }
 
@@ -233,6 +242,10 @@ jobs:
             }
 
             if (command === 'heartbeat') {
+              if (!Number.isFinite(leaseMinutes)) {
+                await publish('Heartbeat rejected. Lease must be a number from 5 to 240 minutes.');
+                return;
+              }
               state.lock.heartbeat_at = nowIso;
               state.lock.expires_at = new Date(now.getTime() + leaseMinutes * 60000).toISOString();
               await publish('Lease renewed for ' + chatId + ' until ' + state.lock.expires_at + ' UTC.', state);
