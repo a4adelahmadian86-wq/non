@@ -84,7 +84,7 @@ Use UTC ISO-8601 timestamps in all reports. Record actual start/end times; never
 | `/farast block chat=… run=… reason=…` | Marks blocked and releases lease | Exact owner |
 | `/farast review chat=… run=…` | Marks ready for independent review and releases lease | Exact owner |
 
-The workflow enforces a fencing token per granted lease. A conversation whose lease expired or was replaced must stop; it must not continue merely because its local context says it owns the task.
+The workflow records a unique lease token for each granted lease and checks the authenticated actor, chat_id, and run_id on every owner command. This token is an audit/fencing identifier inside the coordinator state; GitHub does not cryptographically prevent a stale ChatGPT conversation from continuing to draft locally. The operational fence is: stop immediately when the lease expires or is replaced, use a unique branch per run, and require independent PR review plus protected main before integration.
 
 ## Concurrency and its boundary
 
@@ -130,7 +130,7 @@ GitHub timestamps, Actions run timestamps, commits, PR reviews, and CI runs are 
 
 Other states: `blocked`. A lease expiry does not mean task completion. Issue closure sets the coordinator state to `done`; only an authorized human/reviewer should close after acceptance.
 
-The latest hidden `FARAST_AGENT_STATE_V1` comment is the current machine state. Earlier state comments are an append-only audit trail. Do not edit or delete them manually. If state is malformed or contradictory, stop and request maintainer repair.
+The latest hidden `FARAST_AGENT_STATE_V1` comment is the current machine state. Earlier state comments are an append-only audit trail. The machine state also stores run history (`attempt_no`, actor, chat/run IDs, UTC start/end, wall_seconds, terminal run status) and derived metrics (`runs_total`, `retries_total`, `completed_runs`, `average_wall_seconds`). Active work time is not inferred from wall time and remains unmeasured unless a reliable measurement source is added. Do not edit or delete them manually. If state is malformed or contradictory, stop and request maintainer repair.
 
 ## Failure and recovery
 
