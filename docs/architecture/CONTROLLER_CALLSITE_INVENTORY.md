@@ -66,7 +66,7 @@
 
 | Controller | Source | Service references | Model imports | Direct DB tables | Authorization tokens (static) | Public actions | DB calls | Storage calls |
 |---|---|---|---|---|---|---|---:|---:|
-| `Admin\\ObservabilityController` | `app/Http/Controllers/Admin/ObservabilityController.php` | `FarastObservabilityService` | — | — | — | `index()` | 0 | 0 |
+| `Admin\ObservabilityController` | `app/Http/Controllers/Admin/ObservabilityController.php` | `FarastObservabilityService` | — | — | — | `index()` | 0 | 0 |
 | `ReadinessController` | `app/Http/Controllers/ReadinessController.php` | — | — | connection health probe (dynamic) | `DB::connection()->select('SELECT 1')` | `__invoke()` | 1 | 0 |
 
 ### تغییر dependency مصرف‌کنندگان موجود
