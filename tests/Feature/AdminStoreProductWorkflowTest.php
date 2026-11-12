@@ -6,6 +6,8 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
+use App\Jobs\RunProductPublicationReview;
+use App\Models\StoreProductPublicationReview;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
 use App\Models\StoreProductDocumentPage;
@@ -99,6 +101,42 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-selected', false)
             ->assertSee('بررسی امن فایل')
             ->assertSee('بررسی ساختار و امنیت');
+    }
+
+
+    public function test_final_submission_enters_the_private_ai_publication_queue_without_publishing(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول در صف بررسی',
+            'slug' => 'product-pending-supervisor',
+            'sku' => 'PRODUCT-PENDING-SUPERVISOR-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->from(route('admin.store.edit', $product))
+            ->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'sku' => $product->sku,
+                'submit_for_publication' => '1',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $product->refresh();
+        $this->assertSame('pending_review', $product->status);
+        $this->assertNull($product->published_at);
+        $this->assertTrue((bool) data_get($product->metadata, 'ai_supervisor.enabled'));
+        $this->assertDatabaseHas('store_product_publication_reviews', [
+            'product_id' => $product->id,
+            'status' => 'queued',
+            'auto_publish' => false,
+        ]);
+        Queue::assertPushed(RunProductPublicationReview::class);
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void

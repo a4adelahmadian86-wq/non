@@ -58,6 +58,9 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
     Route::post('/store/{product}/images',[AdminStoreController::class,'uploadImage'])->middleware('throttle:20,10')->name('store.images.upload');
     Route::delete('/store/{product}/images/{image}',[AdminStoreController::class,'deleteImage'])->name('store.images.delete');
+    Route::post('/store/intake/preflight', [AdminStoreController::class, 'preflightNewProductFile'])->middleware('throttle:10,10')->name('store.intake.preflight');
+    Route::post('/store/intake/{ingestionId}/confirm', [AdminStoreController::class, 'confirmNewProductIntake'])->middleware('throttle:10,10')->name('store.intake.confirm');
+    Route::delete('/store/intake/{ingestionId}', [AdminStoreController::class, 'cancelNewProductIntake'])->middleware('throttle:20,10')->name('store.intake.cancel');
     Route::post('/store/{product}/files/preflight',[AdminStoreController::class,'preflightFile'])->middleware('throttle:120,10')->name('store.files.preflight');
     Route::get('/store/{product}/files/{file}/processing',[AdminStoreController::class,'fileProcessingStatus'])->middleware('throttle:60,10')->name('store.files.processing');
     Route::post('/store/{product}/files/{ingestionId}/confirm',[AdminStoreController::class,'confirmFileUpload'])->middleware('throttle:120,10')->name('store.files.confirm');
@@ -82,4 +85,9 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
 
     Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
     Route::post('/store/tags',[AdminStoreController::class,'storeTag'])->name('store.tags.store');
+});
+
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('/store/{product}/publication/approve', [AdminStoreController::class, 'approvePublication'])->middleware('throttle:10,10')->name('store.publication.approve');
+    Route::post('/store/{product}/publication/retry', [AdminStoreController::class, 'retryPublicationReview'])->middleware('throttle:5,10')->name('store.publication.retry');
 });

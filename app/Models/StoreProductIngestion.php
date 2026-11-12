@@ -12,7 +12,7 @@ class StoreProductIngestion extends Model
 
     protected $fillable = [
         'id','product_id','user_id','status','staging_disk','staging_path','original_name',
-        'mime','size_bytes','sha256','inspection_json','is_primary','expires_at','confirmed_at',
+        'mime','relative_path','size_bytes','sha256','inspection_json','is_primary','expires_at','confirmed_at',
     ];
 
     protected $casts = [

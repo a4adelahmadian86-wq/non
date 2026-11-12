@@ -13,6 +13,7 @@
     <div class="product-center-stats">
       <div><span>همه محصولات</span><b>{{ number_format($stats['total']) }}</b></div>
       <div><span>منتشرشده</span><b>{{ number_format($stats['published']) }}</b></div>
+      <div><span>در صف انتشار</span><b>{{ number_format($stats['pending_review']) }}</b></div>
       <div><span>پیش‌نویس</span><b>{{ number_format($stats['drafts']) }}</b></div>
       <div><span>بایگانی‌شده</span><b>{{ number_format($stats['archived']) }}</b></div>
       <div><span>دوره آموزشی</span><b>{{ number_format($stats['courses']) }}</b></div>
@@ -54,7 +55,7 @@
     <form method="get" class="product-center-filters" aria-label="فیلتر و مرتب‌سازی محصولات">
       <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، شناسه یا برچسب محصول" aria-label="جستجوی محصول">
       <select name="type" aria-label="نوع محصول"><option value="">همه نوع‌ها</option><option value="digital_file" @selected($type==='digital_file')>فایل دانلودی</option><option value="course" @selected($type==='course')>دوره آموزشی</option></select>
-      <select name="status" aria-label="وضعیت محصول"><option value="">همه وضعیت‌ها</option><option value="draft" @selected($status==='draft')>پیش‌نویس</option><option value="published" @selected($status==='published')>منتشرشده</option><option value="archived" @selected($status==='archived')>بایگانی</option></select>
+      <select name="status" aria-label="وضعیت محصول"><option value="">همه وضعیت‌ها</option><option value="draft" @selected($status==='draft')>پیش‌نویس</option><option value="pending_review" @selected($status==='pending_review')>در صف انتشار</option><option value="published" @selected($status==='published')>منتشرشده</option><option value="archived" @selected($status==='archived')>بایگانی</option></select>
       <select name="category_id" aria-label="دسته‌بندی"><option value="">همه دسته‌ها</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected($categoryId===$category->id)>{{ $category->name }}{{ $category->is_active ? '' : ' (غیرفعال)' }}</option>@endforeach</select>
       <select name="sort" aria-label="مرتب‌سازی"><option value="newest" @selected($sort==='newest')>جدیدترین</option><option value="oldest" @selected($sort==='oldest')>قدیمی‌ترین</option><option value="updated" @selected($sort==='updated')>آخرین ویرایش</option><option value="title_asc" @selected($sort==='title_asc')>عنوان: الف تا ی</option><option value="price_asc" @selected($sort==='price_asc')>ارزان‌ترین</option><option value="price_desc" @selected($sort==='price_desc')>گران‌ترین</option></select>
       <button type="submit" class="store-primary-btn">اعمال</button>
@@ -76,7 +77,7 @@
             @php($thumb = $p->cover_path ?: $p->images->where('is_active', true)->first()?->path)
             @if($thumb)<img src="{{ asset($thumb) }}" alt="" loading="lazy">@else<span class="product-index-placeholder"><i class="fa-solid fa-box"></i></span>@endif
             <span><strong>{{ $p->title }}</strong>
-              <small>{{ $p->type === 'course' ? 'دوره آموزشی' : ((($p->download_policy ?? 'signed') === 'reader_only') ? 'فایل · فقط مطالعه آنلاین' : 'فایل دانلودی') }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
+              <small>{{ $p->type === 'course' ? 'دوره آموزشی' : ((($p->download_policy ?? 'signed') === 'reader_only') ? 'فایل · فقط مطالعه آنلاین' : 'فایل دانلودی') }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ ['draft'=>'پیش‌نویس','pending_review'=>'در صف انتشار','published'=>'منتشرشده','archived'=>'بایگانی'][$p->status] ?? $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
               @if($p->tags->isNotEmpty())<small class="product-index-tags">{{ $p->tags->pluck('name')->take(4)->implode('، ') }}</small>@endif
             </span>
           </div>

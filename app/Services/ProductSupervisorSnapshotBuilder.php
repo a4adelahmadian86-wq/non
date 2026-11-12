@@ -16,6 +16,9 @@ class ProductSupervisorSnapshotBuilder
             ->filter(fn ($key) => in_array($key, ['content', 'pricing', 'seo', 'media', 'policy', 'course'], true))
             ->values()
             ->all();
+        if ($checks === []) {
+            $checks = ['content', 'pricing', 'seo', 'media', 'policy', 'course'];
+        }
 
         $mediaParts = [
             'cover' => $product->cover_path,

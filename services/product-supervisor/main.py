@@ -40,6 +40,7 @@ class ProductSnapshot(BaseModel):
     description_truncated: bool = False
     price_rials: int = Field(ge=0, le=999999999999)
     compare_at_price_rials: int | None = Field(default=None, ge=0, le=999999999999)
+    download_policy: Literal['signed', 'reader_only'] = 'signed'
     seo_title: str | None = Field(default=None, max_length=220)
     seo_description: str | None = Field(default=None, max_length=320)
     category_name: str | None = Field(default=None, max_length=160)
@@ -78,6 +79,7 @@ class ReviewResponse(BaseModel):
     score: int = Field(ge=0, le=100)
     summary: str
     findings: list[Finding]
+    corrections: dict[str, str] = Field(default_factory=dict)
     model: str
     generated_at: str
     automated_publication: Literal[False] = False
@@ -682,6 +684,13 @@ async def review_product(snapshot: ProductSnapshot):
                     "recommendation": "Persian next action",
                 }
             ],
+            "corrections": {
+                "title": "optional minimal corrected title",
+                "short_description": "optional minimal corrected short description",
+                "description": "optional minimal corrected description",
+                "seo_title": "optional corrected SEO title",
+                "seo_description": "optional corrected SEO description",
+            },
         },
     }
 
@@ -764,6 +773,25 @@ async def review_product(snapshot: ProductSnapshot):
         verdict = "blocked"
         score = min(score, 35)
 
+    correction_limits = {
+        "title": 220,
+        "short_description": 2000,
+        "description": 8000,
+        "seo_title": 220,
+        "seo_description": 320,
+    }
+    raw_corrections = result.get("corrections", {})
+    if not isinstance(raw_corrections, dict):
+        raw_corrections = {}
+    corrections: dict[str, str] = {}
+    if verdict != "approved":
+        for field, limit in correction_limits.items():
+            value = raw_corrections.get(field)
+            if isinstance(value, str):
+                clean_value = value.strip()[:limit]
+                if clean_value:
+                    corrections[field] = clean_value
+
     summary = str(result.get("summary") or "بررسی انجام شد؛ نتیجه را با بازبینی انسانی نهایی کنید.")[:700]
     if blockers:
         summary = "انتشار محصول به دلیل یک یا چند الزام قطعی متوقف است. " + summary
@@ -774,6 +802,7 @@ async def review_product(snapshot: ProductSnapshot):
         score=score,
         summary=summary,
         findings=findings,
+        corrections=corrections,
         model=model,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
