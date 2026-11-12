@@ -59,6 +59,27 @@ jobs:
       - run: php -l app/Services/StoreXlsxPreviewRenderer.php && php -l app/Services/StorePdfPreviewPreparer.php && php -l database/migrations/2026_11_08_000025_add_page_counts_to_store_product_previews.php && php -l app/Http/Controllers/StoreReaderStateController.php && php -l app/Models/StoreReaderState.php && php -l database/migrations/2026_11_08_000024_create_store_reader_states_table.php && php -l routes/store_routes.php && php -l app/Http/Controllers/AdminCourseController.php && php -l app/Http/Controllers/StoreCourseLearningController.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/StoreController.php && php -l app/Models/StoreProductPreview.php && php -l database/migrations/2026_11_08_000023_add_synchronized_audio_to_reader_previews.php && php -l tests/Feature/StoreReaderAccessTest.php && php -l app/Http/Controllers/StoreCartController.php && php -l app/Http/Controllers/PaymentController.php && php -l app/Http/Controllers/Concerns/PaysWithZarinpal.php && php -l app/Services/UploadSecurityService.php && php -l app/Services/StoreCourseEnrollmentService.php && php -l app/Models/StoreCourse.php && php -l app/Models/StoreCourseSection.php && php -l app/Models/StoreCourseLesson.php && php -l app/Models/StoreCourseEnrollment.php && php -l app/Models/StoreCourseLessonProgress.php && php -l tests/Feature/StoreCourseLearningTest.php && php -l database/migrations/2026_11_07_000010_create_store_course_catalog.php && php -l database/migrations/2026_11_07_000011_create_store_course_enrollments.php && php -l database/migrations/2026_11_07_000012_register_store_management_permission.php
       - run: php -l app/Http/Controllers/MessengerController.php && php -l app/Http/Controllers/CommunicationCenterController.php && php -l app/Services/MessengerAccessService.php && php -l app/Services/DashboardNavigationService.php && php -l app/Services/NotificationService.php && php -l app/Models/Conversation.php && php -l app/Models/ConversationMessage.php && php -l database/migrations/2026_11_10_000006_create_internal_messaging_tables.php && php -l routes/messenger.php && php -l tests/Feature/InternalMessengerTest.php
       - run: node --check public/js/messenger.js
+      - name: Capture runtime route inventory and verify unique route names
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan route:list --json > /tmp/farast-route-list.json
+          php <<'PHP'
+          <?php
+          $routes = json_decode(file_get_contents('/tmp/farast-route-list.json'), true, 512, JSON_THROW_ON_ERROR);
+          $names = array_values(array_filter(array_map(
+              static fn (array $route): ?string => ($name = $route['name'] ?? null) !== null && $name !== '' ? (string) $name : null,
+              $routes
+          )));
+          $duplicates = array_filter(array_count_values($names), static fn (int $count): bool => $count > 1);
+          printf("Registered runtime routes: %d\\n", count($routes));
+          printf("Named runtime routes: %d\\n", count($names));
+          if ($duplicates !== []) {
+              fwrite(STDERR, 'Duplicate route names: '.json_encode($duplicates, JSON_UNESCAPED_SLASHES)."\\n");
+              exit(1);
+          }
+          echo "Duplicate route names: none\\n";
+          PHP
       - run: php artisan route:list --path=messenger && php artisan route:list --path=communications && php artisan route:list --path=admin/storage && php artisan route:list --path=storage/managed
       - run: php artisan route:list --path=admin/store && php artisan route:list --path=store/preview && php artisan route:list --path=my-courses
       - run: php artisan view:cache
