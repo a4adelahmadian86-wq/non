@@ -728,11 +728,16 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 
 ### 18.6 وضعیت شاخه و Pull Requestهای اثرگذار
 
-- PR #310 در 2026-11-11 ادغام شد؛ اصلاحات چرخه Storage آن در main هستند.
-- PR #311 بسته شد و merge نشد؛ قابلیت RBAC/Workflow پیشنهادی آن را نباید جزو main محسوب کرد.
-- PR #347 همچنان شاخه کاندید scoped RBAC/Workflow است و هنوز main نیست.
-- PR #351، #358، #371، #412، #442 و #473 ادغام شده‌اند؛ قراردادهای کسب‌وکار، اعلان، Route ownership، Audit/Observability، schema Feedback/Review/Evaluation و assetهای PDF.js در main قرار دارند.
-- PR #475 ادغام شده است؛ runner pin و route-list uniqueness gate اکنون در main قرار دارند. نتیجه بازاجرای main در بخش 19 ثبت می‌شود.
+**ادغام‌شده در main:**
+- PR #310 (Storage lifecycle), #351 (business module contracts), #358 (support notification identity), #368 (CRM history), #371 (Route ownership), #412 (Audit/Observability), #442 (Feedback/Review/Evaluation schema), #473 (PDF.js assets) و #475 (runner pin + runtime route-name gate).
+- PR #311 بسته شد و merge نشد؛ پیاده‌سازی RBAC/Workflow آن جزو main نیست.
+
+**شاخه‌های باز و هم‌پوشان که نباید کورکورانه ادغام شوند:**
+- PR #318 و #333 هر دو برای product intake/publication workflow باز هستند و `mergeable=false` دارند؛ دو قرارداد رقیب‌اند و باید قبل از هر ادغام یک state machine canonical انتخاب شود.
+- PR #335 (storage/product artifacts) باز، draft و `mergeable=false` است. PR #310 بخش مهمی از چرخه Storage را قبلاً به main آورده؛ PR #335 باید فقط از نظر delta واقعی و تست‌های باقی‌مانده با main تطبیق داده شود.
+- PR #340 (financial idempotency/retention) باز، draft و `mergeable=false` است؛ ledgerهای Order/Payment/Wallet/Charge/Refund باید قبل از ادغام با منبع مالی canonical reconciliation شوند.
+- PR #347 (scoped RBAC/workflow) باز و `mergeable=false` است؛ تا ادغام کنترل‌شده، نقش/Scopeهای پیشنهادی آن main محسوب نمی‌شوند.
+- PR #361 (CRM course progress) باز و `mergeable=false` است. مقایسه فایل‌ها نشان می‌دهد `StoreCourseProgressService` و `StoreCourseLearningController` آن با main یکسان‌اند؛ `CrmController` و `CrmCustomerWorkspaceTest` هنوز تفاوت دارند. بخش‌های یکتای آن باید با مسیر جاری CRM reconciliation شوند؛ افزودن مجدد سرویس/محاسبه progress موازی ممنوع است.
 
 در لحظه این تطبیق، API شاخه `main` مقدار `protected=false` و Required Status Checks خاموش را گزارش می‌کند. بنابراین سبز شدن workflowها به‌تنهایی gate اجباری سمت GitHub ایجاد نمی‌کند؛ فعال‌سازی Branch Protection/Ruleset باید به‌عنوان اقدام عملیاتی مستقل انجام شود و در این ممیزی بدون مجوز مالک مخزن تغییر داده نشده است.
 
