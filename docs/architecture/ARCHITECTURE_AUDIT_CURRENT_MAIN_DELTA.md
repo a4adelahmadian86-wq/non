@@ -753,7 +753,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 | Model | 104 | 105 | `SmsLog` |
 | Service | 112 | 115 | `FarastObservabilityService`, `FarastTraceContext`, `StoreCourseProgressService` |
 | Controller | 51 | 53 | `Admin\\ObservabilityController`, `ReadinessController` |
-| تست PHP و Browser | 110 PHP + 18 Browser در snapshot قبلی | 133 فایل PHP + تست E2E محصول | 23 فایل تست جدید در مقایسه درختی |
+| تست PHP و Browser | 111 PHP + 17 Browser در snapshot قبلی | 133 فایل PHP + تست E2E محصول | 23 فایل تست جدید در مقایسه درختی |
 
 **Migrationهای جدید و مالکیت داده:**
 - `2026_11_11_000020_add_email_log_idempotency_key.php`: کلید یکتای nullable روی `email_logs` برای جلوگیری از ارسال تکراری همان رخداد.
