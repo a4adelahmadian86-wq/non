@@ -14,6 +14,7 @@ concurrency:
 permissions:
   issues: write
   contents: read
+  administration: read
 
 jobs:
   coordinate:
@@ -122,6 +123,11 @@ jobs:
                   await publish('Close transition not accepted by coordinator: closing actor lacks collaborator triage permission.');
                   return;
                 }
+                if (state.status !== 'review') {
+                  await github.rest.issues.update({ owner, repo, issue_number, state: 'open' });
+                  await publish('Closure rejected: task must reach review state through /farast review and pass independent acceptance before it can be closed. Issue has been reopened.');
+                  return;
+                }
                 state.status = 'done';
                 state.lock = null;
                 await removeLabel('agent:locked');
@@ -129,7 +135,7 @@ jobs:
                 await removeLabel('agent:review');
                 await removeLabel('agent:blocked');
                 await addLabel('agent:done');
-                await publish('Task issue closed by an authorized collaborator. State is done.', state);
+                await publish('Task issue closed by an authorized collaborator after review state. State is done.', state);
                 return;
               }
             }
