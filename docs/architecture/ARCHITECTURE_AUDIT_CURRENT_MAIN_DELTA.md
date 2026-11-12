@@ -757,7 +757,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 | Migration | 114 | 119 | 5 فایل |
 | Model | 104 | 105 | `SmsLog` |
 | Service | 112 | 115 | `FarastObservabilityService`, `FarastTraceContext`, `StoreCourseProgressService` |
-| Controller | 51 | 53 | `Admin\\ObservabilityController`, `ReadinessController` |
+| Controller | 51 | 53 | `Admin\ObservabilityController`, `ReadinessController` |
 | تست PHP و Browser | 111 PHP + 17 Browser در snapshot قبلی | 133 فایل PHP + تست E2E محصول | 23 فایل تست جدید در مقایسه درختی |
 
 **Migrationهای جدید و مالکیت داده:**
@@ -771,7 +771,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 - `SmsLog` مدل جدول `sms_logs` است؛ `SmsService::sendEvent` با idempotency key پایدار رکورد تلاش را claim/retry می‌کند. `EmailService` نیز `email_logs.idempotency_key` را برای dedupe همان event مصرف می‌کند.
 - `FarastTraceContext` در `AppServiceProvider` به‌صورت singleton ثبت شده و request/correlation id را برای هم‌بستگی رخدادها نگه می‌دارد؛ خودش ledger نیست.
 - `FarastObservabilityService` منبع تاریخچه incident را `farast_audit_events` قرار می‌دهد و health snapshot را از DB/queue/storage/product services می‌سازد؛ جدول incident موازی ندارد.
-- `Admin\\ObservabilityController@index` از route `admin.observability.index` با middlewareهای `auth`, `admin`, `admin.section:audit` استفاده می‌کند.
+- `Admin\ObservabilityController@index` از route `admin.observability.index` با middlewareهای `auth`, `admin`, `admin.section:audit` استفاده می‌کند.
 - `ReadinessController::__invoke` روی `GET /ready` فقط اتصال DB را با `SELECT 1` می‌سنجد؛ این endpoint readiness کامل queue/storage/provider نیست.
 - `StoreCourseProgressService` تنها محاسبه shared برای drip availability، progress summary و sync completion است؛ هم `StoreCourseLearningController` و هم `CrmController@show` از آن استفاده می‌کنند. داده مرجع همان `StoreCourseEnrollment` و `StoreCourseLessonProgress` باقی می‌ماند.
 
