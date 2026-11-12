@@ -40,7 +40,10 @@ class SmartDiscountMarketingService
             return null;
         }
 
-        $signals = DB::table('farast_workflow_events')
+        // Aggregate only events for this product in SQL. The previous approach
+        // loaded every marketing event for the customer and filtered JSON in PHP,
+        // making every product interaction increasingly expensive as history grew.
+        $eventCounts = DB::table('farast_workflow_events')
             ->where('user_id', $user->id)
             ->whereIn('event_type', [
                 'marketing.product_viewed',
@@ -50,22 +53,19 @@ class SmartDiscountMarketingService
                 'marketing.cart_abandoned',
             ])
             ->where('created_at', '>=', now()->subDays($signalWindowDays))
-            ->get(['event_type', 'context']);
+            ->whereJsonContains('context->product_id', $productId)
+            ->select('event_type')
+            ->selectRaw('COUNT(*) as aggregate')
+            ->groupBy('event_type')
+            ->pluck('aggregate', 'event_type');
 
         $counts = [
-            'marketing.product_viewed' => 0,
-            'marketing.wishlist_added' => 0,
-            'marketing.cart_added' => 0,
-            'marketing.coupon_attempted' => 0,
-            'marketing.cart_abandoned' => 0,
+            'marketing.product_viewed' => (int) ($eventCounts['marketing.product_viewed'] ?? 0),
+            'marketing.wishlist_added' => (int) ($eventCounts['marketing.wishlist_added'] ?? 0),
+            'marketing.cart_added' => (int) ($eventCounts['marketing.cart_added'] ?? 0),
+            'marketing.coupon_attempted' => (int) ($eventCounts['marketing.coupon_attempted'] ?? 0),
+            'marketing.cart_abandoned' => (int) ($eventCounts['marketing.cart_abandoned'] ?? 0),
         ];
-
-        foreach ($signals as $signal) {
-            $context = is_array($signal->context) ? $signal->context : json_decode((string) $signal->context, true);
-            if ((int) ($context['product_id'] ?? 0) === $productId && array_key_exists($signal->event_type, $counts)) {
-                $counts[$signal->event_type]++;
-            }
-        }
 
         $score = min(3, $counts['marketing.product_viewed']);
         $reasons = [];
