@@ -732,7 +732,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 - PR #311 بسته شد و merge نشد؛ قابلیت RBAC/Workflow پیشنهادی آن را نباید جزو main محسوب کرد.
 - PR #347 همچنان شاخه کاندید scoped RBAC/Workflow است و هنوز main نیست.
 - PR #351، #358، #371، #412، #442 و #473 ادغام شده‌اند؛ قراردادهای کسب‌وکار، اعلان، Route ownership، Audit/Observability، schema Feedback/Review/Evaluation و assetهای PDF.js در main قرار دارند.
-- PR #475 اصلاح runnerهای CI است و تا تأیید تمام checkهای همان HEAD نباید merge شود.
+- PR #475 ادغام شده است؛ runner pin و route-list uniqueness gate اکنون در main قرار دارند. نتیجه بازاجرای main در بخش 19 ثبت می‌شود.
 
 در لحظه این تطبیق، API شاخه `main` مقدار `protected=false` و Required Status Checks خاموش را گزارش می‌کند. بنابراین سبز شدن workflowها به‌تنهایی gate اجباری سمت GitHub ایجاد نمی‌کند؛ فعال‌سازی Branch Protection/Ruleset باید به‌عنوان اقدام عملیاتی مستقل انجام شود و در این ممیزی بدون مجوز مالک مخزن تغییر داده نشده است.
 
@@ -783,7 +783,7 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 
 ## 19. بازاجرای CI روی main پس از ادغام اصلاح runner
 
-- HEAD جدید main: `ed5d36d8f6dc6b6a6c6c5cdd283a987e57a7552651` (merge squash PR #475).
+- HEAD جدید main: `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` (merge squash PR #475).
 - تغییر این commit فقط workflowهای CI است؛ کد برنامه و schema همان کد تأییدشده در PR #475 باقی مانده‌اند.
 - workflowهای push روی main برای FARAST CI، Phase 3 Commerce، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service آغاز شده‌اند. در لحظه این به‌روزرسانی هنوز در حال اجرا هستند؛ نتیجه نهایی باید از Check Runهای همین SHA خوانده شود، نه از PR head قبلی.
 - Route inventory runtime روی کد برنامه قبل از merge: 337 route ثبت‌شده، 336 نام‌گذاری‌شده و بدون نام تکراری؛ گام مذکور اکنون در FARAST CI اجباری است.
