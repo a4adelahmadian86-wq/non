@@ -790,8 +790,13 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 
 - HEAD جدید main: `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` (merge squash PR #475).
 - تغییر این commit فقط workflowهای CI است؛ کد برنامه و schema همان کد تأییدشده در PR #475 باقی مانده‌اند.
-- workflowهای push روی main برای FARAST CI، Phase 3 Commerce، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service آغاز شده‌اند. در لحظه این به‌روزرسانی هنوز در حال اجرا هستند؛ نتیجه نهایی باید از Check Runهای همین SHA خوانده شود، نه از PR head قبلی.
-- Route inventory runtime روی کد برنامه قبل از merge: 337 route ثبت‌شده، 336 نام‌گذاری‌شده و بدون نام تکراری؛ گام مذکور اکنون در FARAST CI اجباری است.
-- تنظیمات GitHub همچنان `main.protected=false` و Required Status Checks خاموش را گزارش می‌کند؛ تغییر این سیاست نیازمند تصمیم مالک مخزن است و در این PR انجام نشده است.
+- بازاجرای push روی main برای FARAST CI، Phase 3 Commerce، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service کامل شد.
+- همه checkهای اجرایی روی SHA `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` موفق‌اند؛ فقط `voice-model-smoke` و `reader-browser-regression` به‌صورت شرطی skipped شدند.
+- job لاراول: 67 Unit و 596 Feature test موفق؛ 117 Playwright browser test نیز موفق.
+- Phase 3 Commerce: 663 test و 3,668 assertion موفق.
+- MySQL 8.4 audit integrity: 12 test و 106 assertion موفق.
+- Document Audio Smoke، Product Supervisor Contract Tests، Admin Product E2E، Voice Service Contract Tests، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service همگی موفق‌اند.
+- Route inventory runtime: 337 route ثبت‌شده، 336 route نام‌گذاری‌شده و بدون نام تکراری؛ این گام اکنون در FARAST CI اجرا می‌شود.
+- تنظیمات GitHub همچنان `main.protected=false` و Required Status Checks خاموش را گزارش می‌کند؛ فعال‌سازی Branch Protection/Ruleset اقدام عملیاتی جداگانه‌ای است و در این مرحله تغییر داده نشده است.
 
-**وضعیت پذیرش پس از PR #475:** مشکل ناسازگاری runner با Python 3.12.11 و Playwright 1.55 اصلاح و روی PR به‌طور کامل آزموده شد. پذیرش نهایی روی main منوط به سبز شدن بازاجرای Check Runهای SHA `ed5d36d8f6dc6b6a6c5cdd283a987e57a7552651` است.
+**وضعیت پذیرش پس از PR #475:** ناسازگاری runner با Python 3.12.11 و Playwright 1.55 اصلاح شد؛ PR و بازاجرای کامل روی main سبز هستند. مرحله دوم از نظر inventory، traceability، runtime route ownership و شواهد CI تکمیل‌شده است. محدودیت باقیمانده فقط تأیید upgrade/reconciliation روی clone واقعی دیتابیس Production است که در دسترس این ممیزی نبوده است.
