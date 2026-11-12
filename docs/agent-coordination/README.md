@@ -9,7 +9,7 @@ This repository is the shared coordination plane for multiple ChatGPT conversati
 **Canonical task record:** one GitHub Issue per work item.  
 **Exclusive ownership:** a lease granted by the `FARAST multi-chat task coordinator` GitHub Actions workflow.  
 **Change integration:** one isolated branch and pull request per task/chat execution.  
-**Acceptance:** independent review + required CI + issue closure. A chat cannot self-accept its own work.
+**Acceptance:** a merged PR linked to the Issue, a current-head approval from an independent reviewer, required CI enforced by the main ruleset, and then Issue closure. The coordinator rejects closure without the linked merged PR and independent approval. A chat cannot self-accept its own work.
 
 ## Repository facts verified while adding this infrastructure
 
@@ -39,6 +39,21 @@ These are point-in-time observations, not promises about future repository setti
 5. Keep secrets out of Issues, comments, prompts, workflow logs, and commits.
 
 Branch protection cannot be activated by this file alone; it is a repository setting and must be enabled in GitHub settings by an administrator.
+
+## Post-merge smoke test (required before operational use)
+
+The coordinator workflow is stored on the feature branch and will not process repository Issue events until the PR is merged into the default branch. After merge and after the main ruleset is active, run this test on a disposable `[FARAST-TASK]` Issue; do not use a production task:
+
+1. Open the test Issue and wait for the initialization comment and `agent:ready` label.
+2. From two independently authorized GitHub accounts / ChatGPT conversations, submit distinct claim commands for the same Issue. Wait for both Actions outcomes. Exactly one active lease may exist. A missing response is not a denial or a grant; inspect Actions and `/farast status`.
+3. Verify the owner can heartbeat; a different actor, chat ID, or run ID cannot heartbeat/release/block/review.
+4. Verify lease values below 5, above 240, and non-integer values are rejected; valid values from 5 through 240 are accepted.
+5. Verify release permits a fresh claim; block prevents claim; `/farast unblock` returns the task to ready; review releases the lease; `/farast reopen` returns it to ready.
+6. Attempt to close the Issue without a merged linked PR and independent current-head approval. The coordinator must reopen it and must not mark it done.
+7. Merge a test PR that references the Issue and has a current-head approval from a reviewer other than the PR author and implementation worker. Then close the Issue; the coordinator should mark it done.
+8. Archive the test Issue and record the run URLs, actors, lease IDs, and observed outcomes in a validation report.
+
+Do not declare the coordinator production-ready until every step passes. This smoke test verifies the live GitHub Actions integration; repository CI alone does not exercise the Issue-comment command lifecycle.
 
 ## Creating a task
 
