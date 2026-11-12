@@ -741,3 +741,41 @@ PR #475 فقط runner پنج workflow وابسته به Python/Playwright را �
 تغییرهای شش commit پس از `638bf5f` منبع حقیقت سرور را در دامنه‌های اصلی تغییر نداده‌اند؛ آن‌ها عمدتاً چرخه Reader، مصرف StorageManager و کیفیت آزمون را تقویت کرده‌اند. نقشه Route، Model، Migration، Service، Controller، ERD و traceability ثبت‌شده در بخش 17 همچنان معتبر است و جریان صوت Reader اکنون به آن اضافه شده است.
 
 **مرحله دوم از نظر ممیزی کد، تعیین مالکیت و ثبت نقشه وابستگی‌ها تکمیل‌شده باقی می‌ماند.** گیت باز این snapshot، سبزشدن CI پس از pin کردن runner و سپس اجرای مجدد checkها روی main است. محدودیت قبلی نیز برقرار است: دیتابیس Production یا snapshot قابل‌بازیابی آن در دسترس ممیزی نبوده؛ بنابراین نتیجه CI، جایگزین upgrade و reconciliation روی clone واقعی Production نیست.
+
+
+### 18.8 به‌روزرسانی inventoryهای مکمل تا HEAD جاری
+
+مقایسه درخت Git از snapshot فایل‌های inventory در `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf` تا main جاری، این deltaهای واقعی را نشان می‌دهد:
+
+| حوزه | snapshot قبلی | main جاری | افزوده‌شده |
+|---|---:|---:|---|
+| Migration | 114 | 119 | 5 فایل |
+| Model | 104 | 105 | `SmsLog` |
+| Service | 112 | 115 | `FarastObservabilityService`, `FarastTraceContext`, `StoreCourseProgressService` |
+| Controller | 51 | 53 | `Admin\\ObservabilityController`, `ReadinessController` |
+| تست PHP و Browser | 110 PHP + 18 Browser در snapshot قبلی | 133 فایل PHP + تست E2E محصول | 23 فایل تست جدید در مقایسه درختی |
+
+**Migrationهای جدید و مالکیت داده:**
+- `2026_11_11_000020_add_email_log_idempotency_key.php`: کلید یکتای nullable روی `email_logs` برای جلوگیری از ارسال تکراری همان رخداد.
+- `2026_11_11_000021_create_sms_logs_table.php`: جدول `sms_logs` با idempotency key یکتا، event/status، hash شماره مقصد و شمار تلاش؛ شماره خام مقصد در log ذخیره نمی‌شود.
+- `2026_11_11_230000_reconcile_farast_feedback_evidence_schema.php`: تکمیل افزایشی ستون‌ها، FKهای nullable و indexهای `farast_feedback_evidence`.
+- `2026_11_11_230100_add_farast_storage_object_path_hash.php`: backfill مقدار SHA-256 و قید یکتایی `(disk,path_hash)` در `farast_storage_objects`.
+- `2026_11_11_230200_reconcile_feedback_review_evaluation_schema.php`: هم‌راستاسازی schema برای review cases، approved knowledge و evaluation datasets/cases.
+
+**مالکیت سرویس/کنترلر جدید:**
+- `SmsLog` مدل جدول `sms_logs` است؛ `SmsService::sendEvent` با idempotency key پایدار رکورد تلاش را claim/retry می‌کند. `EmailService` نیز `email_logs.idempotency_key` را برای dedupe همان event مصرف می‌کند.
+- `FarastTraceContext` در `AppServiceProvider` به‌صورت singleton ثبت شده و request/correlation id را برای هم‌بستگی رخدادها نگه می‌دارد؛ خودش ledger نیست.
+- `FarastObservabilityService` منبع تاریخچه incident را `farast_audit_events` قرار می‌دهد و health snapshot را از DB/queue/storage/product services می‌سازد؛ جدول incident موازی ندارد.
+- `Admin\\ObservabilityController@index` از route `admin.observability.index` با middlewareهای `auth`, `admin`, `admin.section:audit` استفاده می‌کند.
+- `ReadinessController::__invoke` روی `GET /ready` فقط اتصال DB را با `SELECT 1` می‌سنجد؛ این endpoint readiness کامل queue/storage/provider نیست.
+- `StoreCourseProgressService` تنها محاسبه shared برای drip availability، progress summary و sync completion است؛ هم `StoreCourseLearningController` و هم `CrmController@show` از آن استفاده می‌کنند. داده مرجع همان `StoreCourseEnrollment` و `StoreCourseLessonProgress` باقی می‌ماند.
+
+**Route و scheduler delta:**
+- `bootstrap/app.php` مسیر عمومی `/ready` را خارج از web middleware و health route داخلی `/up` را ثبت می‌کند.
+- `routes/web_core_part2.php` مسیر `/admin/observability` را در admin group و با gate بخش audit ثبت می‌کند.
+- `routes/console.php` پایش `farast:observability:check` و بازیابی `storage:recover-stale-backup-runs` را به scheduler اضافه کرده است.
+- Route file inventory پایه 334 declaration را پوشش می‌داد؛ routeهای bootstrap و observability بعداً اضافه شده‌اند. PR #475 یک گام runtime `route:list --json` و assertion یکتایی route name اضافه می‌کند تا شمار دقیق routeهای ثبت‌شده از خود Laravel استخراج شود.
+
+**تست‌های جدید مرتبط:** `FarastStorageObjectIntegrityTest`, `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest`, `FarastFeedbackEvidenceSchemaTest`, `FeedbackPipelineSchemaTest`, `CrmCourseProgressTimelineTest`, `FarastObservabilityServiceTest`, `ReadinessCheckTest`, `NotificationRouteOwnershipTest` و `admin-product-real-workflow.spec.js`.
+
+فهرست کامل پنج Migration، مدل جدید، سه سرویس و دو Controller در inventoryهای مکمل همین پوشه ثبت شده است؛ این جدول فقط delta نسبت به snapshot قبلی را نشان می‌دهد.
