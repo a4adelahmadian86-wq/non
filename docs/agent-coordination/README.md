@@ -61,7 +61,7 @@ Every conversation must do these steps in order:
    /farast claim chat=<unique-chat-id> run=<unique-run-id> lease=60
    ```
 
-5. Wait for the coordinator's explicit **Claim granted** response. The response includes a fencing token and UTC expiry. If denied, do not work on the task.
+5. Wait for the coordinator's explicit **Claim granted** response. The response includes a lease ID (an audit identifier, not a cryptographic fencing token) and UTC expiry. If denied, do not work on the task.
 6. Create a dedicated branch from the latest `main`, for example:
    `agent/GH-123/chat-<short-id>`.
 7. Before each substantial unit of work, re-read the Issue state and confirm the same lease is active. Never work from an old copied ledger.
@@ -90,7 +90,7 @@ The workflow records a unique lease token for each granted lease and checks the 
 
 ## Concurrency and its boundary
 
-The GitHub Actions workflow uses a repository-wide concurrency group keyed by Issue number, with cancellation disabled. This serializes coordinator executions for the same task Issue. The workflow then reads the latest machine state comment and checks the lease before changing it.
+The GitHub Actions workflow uses a concurrency group scoped to this repository and keyed by Issue number, with cancellation disabled. This serializes coordinator executions for the same task Issue. The workflow then reads the latest machine state comment and checks the lease before changing it.
 
 GitHub Actions concurrency keeps at most one running and one pending run in a group; a newer pending run can replace an older pending run. Therefore:
 - submit one command and wait for its coordinator response before sending another;
@@ -98,7 +98,7 @@ GitHub Actions concurrency keeps at most one running and one pending run in a gr
 - do not interpret a missing response as a granted lease;
 - different task Issues can proceed in parallel, while one Issue has one active lease.
 
-This is a safe coordination mechanism for normal serialized requests, not a general-purpose transactional database or a guaranteed FIFO queue. For very high-frequency automated agents, replace the comment-state backend with a transactional database/queue and retain GitHub Issues/PRs as the human audit surface.
+GitHub Actions permits one running and one pending run per concurrency group; a newer pending run can replace an older pending run. Therefore this is not a guaranteed FIFO queue or a transactional database. For reliable use, send one command at a time and wait for its response; after a missing response, inspect Actions and run status before retrying. Never infer a grant from a missing response. For very high-frequency automated agents, replace the comment-state backend with a transactional database/queue and retain GitHub Issues/PRs as the human audit surface.
 
 ## Branch and PR rules
 
