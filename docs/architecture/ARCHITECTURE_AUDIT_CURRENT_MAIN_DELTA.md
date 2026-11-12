@@ -714,7 +714,7 @@ Check Runهای همان SHA چنین بودند:
 
 ### 18.5 اصلاح محیط اجرای CI
 
-PR #475 فقط runner پنج workflow وابسته به Python/Playwright را از `ubuntu-latest` به `ubuntu-24.04` pin می‌کند:
+PR #475 runner پنج workflow وابسته به Python/Playwright را از `ubuntu-latest` به `ubuntu-24.04` pin کرد و یک گام runtime route inventory/unique-name assertion به FARAST CI افزود:
 
 - `.github/workflows/farast-ci.yml`
 - `.github/workflows/phase4-agent.yml`
