@@ -1,10 +1,10 @@
 # فهرست مدل‌ها و روابط Eloquent
 
-> آخرین تطبیق فایل‌های منبع: `main` در commit `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
+> مبنای inventory پایه: `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ مدل‌های افزوده‌شده در main تا `d6050242449e4d0869cf39daff0d5ada69e258ba` در بخش delta انتهایی ثبت شده‌اند.
 
 > مبنا: شاخه `main`، فایل‌های `app/Models/*.php`. جدول صریح فقط در صورت وجود `$table` ثبت شده؛ در غیر این صورت نام جدول از قرارداد Eloquent در runtime مشتق می‌شود و در این فهرست به‌عنوان حدس قطعی ثبت نشده است. روابطی که با الگوی استاتیک قابل استخراج نبوده‌اند باید با `Model::getRelations()`/تست runtime تکمیل شوند.
 
-- مدل‌های فایل‌محور شناسایی‌شده: **104**
+- مدل‌های فایل‌محور شناسایی‌شده: **105**
 - این فهرست مالکیت فایل مدل، table override، primary key، connection و روابط مستقیم قابل استخراج را ثبت می‌کند.
 
 | Model | Explicit table | Table basis | Primary key | Connection | Relations | Source |
@@ -119,3 +119,14 @@
 | `Wallet` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `user:belongsTo(User)`<br>`transactions:hasMany(WalletTransaction)` | `app/Models/Wallet.php` |
 | `WalletTransaction` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `wallet:belongsTo(Wallet)` | `app/Models/WalletTransaction.php` |
 | `WeeklyFreePage` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/WeeklyFreePage.php` |
+
+
+## Delta مدل‌ها در main جاری
+
+| Model | Explicit table | Table basis | Primary key | Connection | Relations | Source |
+|---|---|---|---|---|---|---|
+| `SmsLog` | — | Eloquent convention: `sms_logs` | `id` | `default` | — | `app/Models/SmsLog.php` |
+
+### تکامل مدل موجود FarastStorageObject
+
+`FarastStorageObject` مدل جدیدی نیست، اما Migration `2026_11_11_230100_add_farast_storage_object_path_hash.php` قرارداد هویت مسیر آن را تغییر داده است: `path_hash` از SHA-256 مسیر در رویداد `saving` محاسبه می‌شود و قید یکتایی نهایی `(disk, path_hash)` است. مسیر خام همچنان در رکورد دامنه‌ای باقی می‌ماند؛ این hash برای کلید یکتای ثابت و سازگار با محدودیت طول index استفاده می‌شود. آزمون `FarastStorageObjectIntegrityTest` این قرارداد را پوشش می‌دهد.
