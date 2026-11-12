@@ -68,7 +68,7 @@ permissions:
 jobs:
   regression:
     if: startsWith(github.ref_name, 'work/product-ai-content-') || startsWith(github.head_ref, 'work/product-ai-content-')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source
         uses: actions/checkout@v4
