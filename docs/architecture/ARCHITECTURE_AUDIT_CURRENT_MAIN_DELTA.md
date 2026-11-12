@@ -637,3 +637,107 @@ Migration می‌خواهد ستون `frequency` را با `after('confidence')`
 **محدودیت شواهد:** دسترسی مستقیم به دیتابیس Production یا snapshot قابل‌بازیابی آن در این ممیزی وجود نداشت. بنابراین clean install و قراردادهای Schema در CI روی SQLite و MySQL 8.4 اثبات شده‌اند؛ اما upgrade روی clone واقعی Production، تطبیق داده‌های موجود، و آزمون restore عملیاتی باید در مرحله استقرار انجام شوند.
 
 **تصمیم نهایی مرحله دوم:** ممیزی منبع حقیقت در سطح کد و CI بسته شد؛ موارد باقی‌مانده به مراحل اجرایی مربوط خود منتقل شدند. هیچ قابلیت جدید یا زیرسیستم موازی برای بستن این مرحله ساخته نشد.
+
+
+## 18. تطبیق تغییرات پس از بسته‌شدن ممیزی مرحله دوم؛ main در 2026-11-12
+
+> خط مبنای این تطبیق: `main` در commit `d6050242449e4d0869cf39daff0d5ada69e258ba`.  
+> این بخش وضعیت‌های CI و مصرف‌کنندگان را که در snapshot بخش 17 قدیمی شده‌اند به‌روزرسانی می‌کند. بخش 17 همچنان نتیجه ممیزی مرحله دوم روی commit `638bf5fc6ed2709ad7f0cd072aff6ad826499f6c` را ثبت می‌کند.
+
+### 18.1 تغییرات main پس از snapshot مرحله دوم
+
+مقایسه Git از `638bf5fc6ed2709ad7f0cd072aff6ad826499f6c` تا HEAD فعلی main شش commit و 17 فایل تغییر‌یافته را نشان می‌دهد:
+
+| Commit | تغییر | اثر بر منبع حقیقت |
+|---|---|---|
+| `c006cddf84fc9cf6c3a8c7df304cbc41595df087` | نهایی‌سازی سند ممیزی منابع حقیقت | مستندات؛ بدون تغییر runtime |
+| `df4538644072e750d6ef027f4e0101151b4f722c` | بازیابی اتصال IndexedDB و پایداری ذخیره‌سازی Reader | فقط ذخیره‌سازی client-side؛ منبع داده و مجوز سمت سرور را تغییر نمی‌دهد |
+| `ceb9d332aa0c942433d6d021397241edfbdc757b` | انتقال صوت preview با stream/range از StorageManager | مصرف‌کننده فایل به هسته Storage متصل‌تر شده؛ جدول/مالک فایل جدیدی ایجاد نشده |
+| `a60e7091af315a04773a13ea4c13986bd53b3931` | تکمیل تست‌های Reader، وضعیت‌های صوت، E2E محصول و support | افزایش شواهد و تست؛ تغییر محدود در StoreController و ProcessProductDocument |
+| `acc4e893733425c09d62f383b45194e2dff5f6b2` | تفکیک تست‌های PHP و قراردادهای Product Supervisor در Composer/CI | زیرساخت تست؛ بدون تغییر schema یا مالکیت دامنه |
+| `d6050242449e4d0869cf39daff0d5ada69e258ba` | self-host و اعتبارسنجی کامل assetهای PDF.js | دارایی‌های viewer؛ بدون تغییر منبع داده محصول یا فایل |
+
+در این بازه هیچ Migration، Model، Service یا فایل Route جدیدی به main اضافه نشده است. تغییرهای backend محدود به `StoreController` و `ProcessProductDocument` بوده‌اند؛ بنابراین ERD، Route ownership و دفتر مالکیت دامنه در بخش 17 همچنان مبنای معتبرند، با تکمیل جریان Reader در ادامه.
+
+### 18.2 منبع حقیقت Reader و چرخه صوت سند
+
+| موضوع | منبع/مالک جاری | مصرف‌کننده |
+|---|---|---|
+| محصول و مجوز Reader | `StoreProduct`, `StoreLibraryItem`, سفارش پرداخت‌شده و entitlement فروشگاه | `StoreController` |
+| سند پردازش‌شده | `StoreProductDocument` و وضعیت `processing_status` | `ProcessProductDocument`, `StoreController` |
+| خروجی واقعی صوت | `StoreProductDocumentArtifact` با `artifact_type=audio_full_wav`، نسخه، مسیر، اندازه و checksum | `GenerateProductDocumentAudio`, `StoreController::readerAudio` |
+| وضعیت آماده‌سازی صوت | `StoreProductDocument.structure_json.audio.status` | Job پردازش، صفحه Reader و polling client |
+| فایل preview محصول | `StoreProductPreview` و فیلدهای `disk/path` و `audio_disk/audio_path` | `StoreController::preview/previewAudio` با `StorageManager` |
+| ذخیره‌سازی آفلاین مرورگر | IndexedDB در `farast-reader-storage.js` | فقط client Reader؛ نه مرجع مجوز، مالکیت یا بایت canonical سرور |
+
+**تغییر مهم مصرف‌کننده Storage:** `StoreController::previewAudio()` اکنون از `StorageManager::exists/size/streamRange` برای پاسخ range و stream استفاده می‌کند؛ بنابراین مسیر صوت preview دیگر مستقیماً فایل را در حافظه PHP materialize نمی‌کند. این تغییر، PR/commit stream صوت را در main تثبیت کرده و شکاف مصرف‌کننده‌ای را که در inventory قبلی ثبت شده بود می‌بندد.
+
+**مسیر منبع سند در Job:** `ProcessProductDocument` برای فایل‌هایی که disk آن‌ها به Volume مدیریت‌شده اشاره می‌کند از `StorageManager::downloadTo()` استفاده می‌کند. برای diskهای legacy، مسیر fallback از adapter دیسک موجود و `readStream()` استفاده می‌کند. این fallback را نباید به‌عنوان StorageManager دوم تعبیر کرد؛ آن یک سازگاری legacy است که باید با مهاجرت رکوردهای قدیمی و تست باقی بماند.
+
+**قرارداد وضعیت صوت:** وضعیت‌های `pending/queued/processing/upgrading/failed/awaiting_provider/not_applicable` در metadata سند ثبت می‌شوند؛ وجود artifact معتبر مرجع آماده‌بودن خروجی است. Reader با endpoint واحد `store.reader.audio` وضعیت را poll می‌کند: 202 برای انتظار، 200/206 برای محتوای آماده، 409 برای شکست آماده‌سازی و 410 برای غیرقابل‌اعمال/عدم پیکربندی. client فقط این قرارداد را نمایش می‌دهد و حق صدور مجوز یا تغییر وضعیت canonical را ندارد.
+
+### 18.3 شواهد جدید E2E و مرز آن‌ها
+
+فایل `tests/browser/admin-product-real-workflow.spec.js` اکنون سناریوهای واقعی زیر را پوشش می‌دهد:
+
+- ایجاد محصول از UI واقعی، مشاهده خطای validation و ذخیره پیش‌نویس خصوصی؛
+- ایجاد تیکت، ارسال پاسخ، بستن و ثبت CSAT؛
+- تغییر permission نقش از کنسول و بررسی ماندگاری؛
+- بازشدن مقصدهای sidebar مدیریت بدون خطای قابل مشاهده؛
+- رد دسترسی employee، organization manager و team supervisor به کنسول نقش؛
+- خرید رایگان storefront و ایجاد entitlement کتابخانه/دانلود کنترل‌شده؛
+- تبادل پیام واقعی بین مدیر و کارمند در پیام‌رسان داخلی؛
+- رفتار editor محصول در viewport موبایل و دسترسی صفحه‌کلید.
+
+`BrowserE2ESeeder` حساب‌ها و سازمان مخصوص E2E را با رمز متغیر مبتنی بر `GITHUB_RUN_ID` می‌سازد. این داده‌ها فقط در دیتابیس آزمون seed می‌شوند و منبع داده production نیستند.
+
+این تست‌ها شواهد سرتاسری ارزشمندند، اما آزمون کامل RBAC مرحله سوم محسوب نمی‌شوند: سناریوی کنسول نقش، رفتار فعلی main را می‌آزماید؛ ماتریس کامل permission × scope × owner/non-owner و همه mutationهای حساس هنوز باید با هسته RBAC canonical و تست‌های منفی آن تکمیل شود.
+
+### 18.4 وضعیت CI روی main در commit d605
+
+Check Runهای همان SHA چنین بودند:
+
+| Check | نتیجه | علت/تفسیر |
+|---|---|---|
+| `test` / FARAST Phase 3 | موفق | 663 تست موفق و 3,668 assertion |
+| `audit-mysql-integrity` | موفق | اجرای job یکپارچگی MySQL 8.4 موفق |
+| `laravel` | ناموفق | 67 Unit و 596 Feature موفق؛ سپس Playwright 1.55 نصب Chromium را برای Ubuntu 26.04 پشتیبانی نکرد |
+| `admin-product-e2e` | ناموفق | Playwright 1.55 روی `ubuntu26.04-x64` پشتیبانی نشده |
+| `reader-browser-regression` | ناموفق | همان ناسازگاری Playwright با Ubuntu 26.04 |
+| `phase4-agent` | ناموفق | همان ناسازگاری Playwright با Ubuntu 26.04 |
+| `document-audio-smoke` | ناموفق | `actions/setup-python` نسخه 3.12.11 را برای Ubuntu 26.04 x64 پیدا نکرد |
+| `product-supervisor-contract-tests` | ناموفق | همان خطای نبود Python 3.12.11 |
+| `voice-service-contract-tests` | ناموفق | همان خطای نبود Python 3.12.11 |
+| `voice-model-smoke` | skipped | شرط اجرای workflow برقرار نبود |
+
+در job لاراول، clean-install Migration روی SQLite و دو دسته تست PHP کامل شده بودند؛ همچنین route:list برای مسیرهای messenger، communications، admin/storage، storage/managed، admin/store، store/preview و my-courses اجرا و موفق شد. شکست این job بعد از این گام‌ها و در نصب Chromium رخ داد؛ بنابراین نباید آن را به‌عنوان شکست تست‌های PHP یا Migration گزارش کرد.
+
+### 18.5 اصلاح محیط اجرای CI
+
+PR #475 فقط runner پنج workflow وابسته به Python/Playwright را از `ubuntu-latest` به `ubuntu-24.04` pin می‌کند:
+
+- `.github/workflows/farast-ci.yml`
+- `.github/workflows/phase4-agent.yml`
+- `.github/workflows/assistant-browser-tests.yml`
+- `.github/workflows/product-ai-content.yml`
+- `.github/workflows/product-supervisor.yml`
+
+روی HEAD فعلی PR #475، jobهای مستقل زیر موفق شده‌اند: Document Audio Smoke، Product Supervisor Contract Tests، Admin Product E2E، MySQL Integrity، Voice Service Contract Tests، Phase 4 Agent، Assistant Browser Regression و Product Supervisor Service. Job اصلی `laravel` در زمان ثبت این بخش هنوز در حال اجرای Playwright E2E بود؛ نتیجه نهایی آن باید قبل از merge ثبت شود.
+
+این اصلاح به‌جای ارتقای بی‌دلیل Playwright یا تغییر نسخه Python، runner سازگار با toolchain قفل‌شده فعلی را انتخاب می‌کند. هیچ کد محصول، dependency، Migration یا داده‌ای در این PR تغییر نکرده است.
+
+### 18.6 وضعیت شاخه و Pull Requestهای اثرگذار
+
+- PR #310 در 2026-11-11 ادغام شد؛ اصلاحات چرخه Storage آن در main هستند.
+- PR #311 بسته شد و merge نشد؛ قابلیت RBAC/Workflow پیشنهادی آن را نباید جزو main محسوب کرد.
+- PR #347 همچنان شاخه کاندید scoped RBAC/Workflow است و هنوز main نیست.
+- PR #351، #358، #371، #412، #442 و #473 ادغام شده‌اند؛ قراردادهای کسب‌وکار، اعلان، Route ownership، Audit/Observability، schema Feedback/Review/Evaluation و assetهای PDF.js در main قرار دارند.
+- PR #475 اصلاح runnerهای CI است و تا تأیید تمام checkهای همان HEAD نباید merge شود.
+
+در لحظه این تطبیق، API شاخه `main` مقدار `protected=false` و Required Status Checks خاموش را گزارش می‌کند. بنابراین سبز شدن workflowها به‌تنهایی gate اجباری سمت GitHub ایجاد نمی‌کند؛ فعال‌سازی Branch Protection/Ruleset باید به‌عنوان اقدام عملیاتی مستقل انجام شود و در این ممیزی بدون مجوز مالک مخزن تغییر داده نشده است.
+
+### 18.7 نتیجه مرحله دوم پس از تطبیق آخرین main
+
+تغییرهای شش commit پس از `638bf5f` منبع حقیقت سرور را در دامنه‌های اصلی تغییر نداده‌اند؛ آن‌ها عمدتاً چرخه Reader، مصرف StorageManager و کیفیت آزمون را تقویت کرده‌اند. نقشه Route، Model، Migration، Service، Controller، ERD و traceability ثبت‌شده در بخش 17 همچنان معتبر است و جریان صوت Reader اکنون به آن اضافه شده است.
+
+**مرحله دوم از نظر ممیزی کد، تعیین مالکیت و ثبت نقشه وابستگی‌ها تکمیل‌شده باقی می‌ماند.** گیت باز این snapshot، سبزشدن CI پس از pin کردن runner و سپس اجرای مجدد checkها روی main است. محدودیت قبلی نیز برقرار است: دیتابیس Production یا snapshot قابل‌بازیابی آن در دسترس ممیزی نبوده؛ بنابراین نتیجه CI، جایگزین upgrade و reconciliation روی clone واقعی Production نیست.
