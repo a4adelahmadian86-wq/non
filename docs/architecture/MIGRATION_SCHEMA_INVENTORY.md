@@ -1,8 +1,8 @@
 # فهرست Migration و مالکیت Schema
 
-> آخرین تطبیق فایل‌های منبع: `main` در commit `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
+> مبنای inventory پایه: `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`؛ پنج Migration افزوده‌شده تا main در `d6050242449e4d0869cf39daff0d5ada69e258ba` در انتهای جدول ثبت شده‌اند.
 
-> مبنا: ۱۱۴ فایل `database/migrations/*.php` در `main`؛ ترتیب مطابق نام فایل‌ها. این استخراج ایستا است و فقط عملیات قابل تشخیص `Schema::create/table/rename` و FK/indexهای صریح را نشان می‌دهد. عملیات شرطی، raw SQL، morph/polymorphic و وضعیت واقعی دیتابیس باید جداگانه runtime-verify شوند.
+> مبنا: ۱۱۹ فایل `database/migrations/*.php` در `main`؛ ترتیب مطابق نام فایل‌ها. این استخراج ایستا است و فقط عملیات قابل تشخیص `Schema::create/table/rename` و FK/indexهای صریح را نشان می‌دهد. عملیات شرطی، raw SQL، morph/polymorphic و وضعیت واقعی دیتابیس باید جداگانه runtime-verify شوند.
 
 | Migration | Creates | Alters | Renames | Explicit FK columns | Unique declarations | Index declarations | Guard/notes |
 |---|---|---|---|---|---|---|
@@ -127,3 +127,16 @@
 | `2026_11_10_000011_add_storage_file_key_hash.php` | — | `storage_managed_files`, `storage_managed_files`, `storage_managed_files` | — | — | `'file_key_hash'` | — | — |
 | `2026_11_10_000011_extend_crm_campaigns_with_store_incentives.php` | — | `crm_marketing_campaigns`, `store_coupon_assignments`, `store_coupon_assignments`, `crm_marketing_campaigns` | — | `incentive_product_id → store_products`<br>`campaign_id → crm_marketing_campaigns` | — | `['campaign_id', 'status', 'expires_at']` | — |
 | `2026_11_10_000012_repair_farast_account_security_schema.php` | `farast_account_sessions`, `farast_security_events`, `farast_blocked_devices` | `farast_account_sessions` | — | `user_id → Laravel convention`<br>`user_id → Laravel convention`<br>`user_id → Laravel convention` | `farast_account_sessions.session_key`<br>`farast_blocked_devices(user_id, device_key_hash)` | `farast_account_sessions.device_key_hash`<br>`farast_account_sessions.last_activity`<br>`farast_account_sessions.revoked_at`<br>`farast_account_sessions(user_id, revoked_at, last_activity)`<br>`farast_account_sessions.device_key_hash`<br>`farast_security_events(user_id, created_at)`<br>`farast_blocked_devices(user_id, unblocked_at)` | guarded: farast_account_sessions, farast_security_events, farast_blocked_devices |
+
+
+## پنج Migration افزوده‌شده در main پس از snapshot پایه
+
+| Migration | Creates | Alters | Renames | Explicit FK columns | Unique declarations | Index declarations | Guard/notes |
+|---|---|---|---|---|---|---|---|
+| `2026_11_11_000020_add_email_log_idempotency_key.php` | — | `email_logs` | — | — | `email_logs.idempotency_key` | — | nullable unique برای dedupe رخداد ایمیل؛ رکوردهای legacy حفظ می‌شوند |
+| `2026_11_11_000021_create_sms_logs_table.php` | `sms_logs` | — | — | — | `sms_logs.idempotency_key` | `sms_logs(event,status)`, `sms_logs.mobile_hash` | دفتر تلاش ارسال SMS؛ شماره خام ذخیره نمی‌شود، فقط hash مقصد ثبت می‌شود |
+| `2026_11_11_230000_reconcile_farast_feedback_evidence_schema.php` | — | `farast_feedback_evidence` | — | `user_id → users`, `project_id → farast_projects`, `feedback_id → ai_feedback`, `tool_id → farast_tools`, `tool_version_id → farast_tool_versions` | — | `(project_id,status)`, `(tool_id,tool_version_id,status)`, `(feedback_id,status)` | additive reconciliation؛ FKها nullable و nullOnDelete؛ down عمداً داده review را حذف نمی‌کند |
+| `2026_11_11_230100_add_farast_storage_object_path_hash.php` | — | `farast_storage_objects` | — | — | `(disk,path_hash)` | — | path_hash برای رکوردهای موجود با SHA-256 backfill می‌شود؛ unique قدیمی `(disk,path)` حذف و unique ثابت جایگزین می‌شود؛ forward-only |
+| `2026_11_11_230200_reconcile_feedback_review_evaluation_schema.php` | — | `farast_review_cases`, `farast_approved_knowledge`, `farast_evaluation_datasets`, `farast_evaluation_cases` | — | `evidence_id → farast_feedback_evidence`, `reviewer_id/approved_by → users`, `review_case_id → farast_review_cases`, `tool_id → farast_tools`, `tool_version_id → farast_tool_versions` | — | `farast_review_cases(evidence_id,status)`, `farast_approved_knowledge(capability_code,status)`, `farast_evaluation_cases(dataset_id,status)` | schema reconciliation افزایشی؛ ستون‌های version/status/metadata و input/expected payload را هم‌راستا می‌کند؛ down داده را حذف نمی‌کند |
+
+**اثر معماری:** این پنج Migration منبع داده جدید موازی برای محصول/فایل/Feedback ایجاد نمی‌کنند. آن‌ها به‌ترتیب idempotency ارسال، قرارداد Schema موجود Feedback، هویت یکتای storage object و قرارداد Review/Evaluation را تکمیل می‌کنند. آزمون‌های مرتبط: `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest`, `FarastFeedbackEvidenceSchemaTest`, `FarastStorageObjectIntegrityTest`, `FeedbackPipelineSchemaTest`.
