@@ -84,7 +84,27 @@
                       <form method="post" action="{{ route('admin.store.course.resources.delete',[$product,$lesson,$resource]) }}" onsubmit="return confirm('منبع حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف</button></form>
                     </div>
                   @empty <p>هنوز منبعی برای این جلسه ثبت نشده است.</p> @endforelse
-                  <form method="post" action="{{ route('admin.store.course.resources.upload',[$product,$lesson]) }}" enctype="multipart/form-data" class="course-resource-upload">@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mp3,.m4a,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"><button type="submit" class="store-outline-btn">بارگذاری منبع امن</button></form>
+                  <form method="post" enctype="multipart/form-data" class="course-resource-upload" data-course-resource-ingestion
+                    data-preflight-url="{{ route('admin.store.course.resources.preflight',[$product,$lesson]) }}"
+                    data-confirm-url-template="{{ route('admin.store.course.resources.confirm',[$product,$lesson,'__INGESTION__']) }}"
+                    data-cancel-url-template="{{ route('admin.store.course.resources.cancel',[$product,$lesson,'__INGESTION__']) }}">
+                    @csrf
+                    <input type="file" name="file" required data-course-ingestion-input accept=".pdf,.zip,.tar,.tar.gz,.tar.bz2,.docx,.xlsx,.pptx,.txt,.csv,.md,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+                    <button type="submit" class="store-outline-btn">بررسی و بارگذاری منبع</button>
+                    <p class="course-ingestion-status" data-course-ingestion-status role="status" aria-live="polite"></p>
+                    <div class="course-ingestion-progress" data-course-ingestion-progress hidden><span data-course-ingestion-progress-bar></span></div>
+                    <div class="course-ingestion-modal" data-course-ingestion-modal hidden>
+                      <div class="course-ingestion-dialog" role="dialog" aria-modal="true" aria-label="بررسی منبع آموزشی">
+                        <h3>گزارش بررسی اولیه منبع</h3>
+                        <p>فایل هنوز در قرنطینه خصوصی است. جزئیات را بررسی کنید و سپس ذخیره نهایی را تأیید یا لغو کنید.</p>
+                        <div data-course-ingestion-report></div>
+                        <div class="course-ingestion-actions">
+                          <button type="button" class="store-outline-btn" data-course-ingestion-cancel>لغو و پاک‌سازی</button>
+                          <button type="button" class="store-primary-btn" data-course-ingestion-confirm disabled>تأیید و ذخیره منبع</button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
                   <small>حداکثر بارگذاری ۲۵۶ مگابایت؛ بررسی هوشمند هر منبع تا ۲۵ مگابایت. فایل پس از اسکن اصلی در فضای خصوصی ثبت می‌شود.</small>
                 </div>
                 <form method="post" action="{{ route('admin.store.course.lessons.delete',[$product,$lesson]) }}" onsubmit="return confirm('جلسه و تمام منابع آن حذف شوند؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف جلسه</button></form>

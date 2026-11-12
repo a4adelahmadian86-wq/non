@@ -76,7 +76,6 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/course/sections/{section}/lessons',[AdminCourseController::class,'storeLesson'])->name('store.course.lessons.store');
     Route::put('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'updateLesson'])->name('store.course.lessons.update');
     Route::delete('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'deleteLesson'])->name('store.course.lessons.delete');
-    Route::post('/store/{product}/course/lessons/{lesson}/resources',[AdminCourseController::class,'uploadResource'])->middleware('throttle:10,10')->name('store.course.resources.upload');
     Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
     Route::post('/store/{product}/course/lessons/{lesson}/resources/{file}/review',[AdminProductSupervisorController::class,'reviewCourseResource'])->middleware('throttle:5,10')->name('store.course.resources.review');
 

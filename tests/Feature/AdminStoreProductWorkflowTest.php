@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreCourse;
+use App\Models\StoreCourseSection;
+use App\Models\StoreCourseLesson;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
@@ -1093,7 +1096,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('saved-product-fingerprint', data_get($metadata, 'ai_content.source_fingerprints.product:content'));
     }
 
-    public function test_course_lesson_resource_is_saved_with_product_document_and_queued_for_knowledge_processing(): void
+    public function test_course_lesson_resource_is_saved_only_after_quarantine_confirmation(): void
     {
         $admin = $this->admin();
         $category = $this->category();
@@ -1106,13 +1109,13 @@ class AdminStoreProductWorkflowTest extends TestCase
             'price_rials' => 100000,
             'status' => 'draft',
         ]);
-        $course = \App\Models\StoreCourse::create(['product_id' => $product->id]);
-        $section = \App\Models\StoreCourseSection::create([
+        $course = StoreCourse::create(['product_id' => $product->id]);
+        $section = StoreCourseSection::create([
             'course_id' => $course->id,
             'title' => 'بخش نخست',
             'sort_order' => 1,
         ]);
-        $lesson = \App\Models\StoreCourseLesson::create([
+        $lesson = StoreCourseLesson::create([
             'section_id' => $section->id,
             'title' => 'درس راهنما',
             'slug' => 'lesson-guide',
@@ -1125,7 +1128,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::fake();
         $checksum = hash('sha256', 'course-resource-pdf');
         $this->mock(UploadSecurityService::class, function ($mock) use ($checksum) {
-            $mock->shouldReceive('inspect')->once()->andReturn([
+            $mock->shouldReceive('inspect')->twice()->andReturn([
                 'safe' => true,
                 'mime' => 'application/pdf',
                 'size' => 1024,
@@ -1134,11 +1137,22 @@ class AdminStoreProductWorkflowTest extends TestCase
             ]);
         });
 
-        $this->actingAs($admin)
-            ->post(route('admin.store.course.resources.upload', [$product, $lesson]), [
-                'file' => UploadedFile::fake()->create('lesson-guide.pdf', 1024, 'application/pdf'),
+        $preflight = $this->actingAs($admin)
+            ->postJson(route('admin.store.course.resources.preflight', [$product, $lesson]), [
+                'file' => UploadedFile::fake()->create('lesson-guide.pdf', 1, 'application/pdf'),
             ])
-            ->assertRedirect();
+            ->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $ingestionId = $preflight->json('ingestion_id');
+        $this->assertNotEmpty($ingestionId);
+        $this->assertSame(0, StoreProductFile::query()->where('product_id', $product->id)->count());
+        Queue::assertNothingPushed();
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.store.course.resources.confirm', [$product, $lesson, $ingestionId]))
+            ->assertOk()
+            ->assertJsonPath('processing_status', 'pending');
 
         $file = StoreProductFile::query()
             ->where('product_id', $product->id)
@@ -1147,9 +1161,9 @@ class AdminStoreProductWorkflowTest extends TestCase
         $document = StoreProductDocument::query()->where('product_file_id', $file->id)->firstOrFail();
 
         $this->assertSame($product->id, $document->product_id);
+        $this->assertSame($lesson->id, (int) $file->course_lesson_id);
         $this->assertSame($file->sha256, $document->source_sha256);
-        $this->assertSame('queued', $document->processing_status);
+        $this->assertSame('pending', $document->processing_status);
         Queue::assertPushed(ProcessProductDocument::class, fn ($job) => $job->documentId === $document->id);
     }
-
 }
