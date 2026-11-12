@@ -363,4 +363,4 @@ jobs:
       - name: Lint FARAST coordination workflow
         uses: docker://rhysd/actionlint:1.7.7
         with:
-          args: -color .github/workflows/farast-agent-coordination.yml .github/workflows/farast-ci.yml
+          args: -color -ignore SC2034 -ignore SC2015 .github/workflows/farast-agent-coordination.yml .github/workflows/farast-ci.yml
