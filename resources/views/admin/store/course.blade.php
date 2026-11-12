@@ -29,6 +29,34 @@
       <button class="store-primary-btn" type="submit">ذخیره تنظیمات دوره</button>
     </form>
 
+    @if($courseLevelResources->isNotEmpty())
+      <section class="store-panel course-resources" aria-labelledby="course-unassigned-assets-title">
+        <div class="course-panel-title"><div><span>دارایی‌های اولیه دوره</span><h2 id="course-unassigned-assets-title">فایل‌های ذخیره‌شده در سطح دوره</h2></div><span class="course-pill">{{ $courseLevelResources->count() }} فایل</span></div>
+        <p>این فایل‌ها در مرحله ثبت اولیه دوره و بدون ساخت جلسه بارگذاری شده‌اند. برای استفاده آموزشی، هر فایل را به جلسه مناسب متصل کنید؛ فایل دوباره بارگذاری یا کپی نمی‌شود.</p>
+        @foreach($courseLevelResources as $resource)
+          <div class="course-resource-row">
+            <span><i class="fa-solid fa-paperclip"></i> {{ $resource->original_name }} <small>{{ number_format($resource->size_bytes/1024,1) }} KB · {{ $resource->scan_status === 'clean' ? 'آنتی‌ویروس تأیید کرده' : 'بررسی ساختاری تکمیل شده' }}</small></span>
+            @if($course->sections->sum(fn($section) => $section->lessons->count()) > 0)
+              <form method="post" action="#" data-intake-resource-attach data-action-template="{{ route('admin.store.course.resources.attach-intake', [$product, '__LESSON__', $resource]) }}" class="course-resource-upload">
+                @csrf
+                <select name="lesson_id" required>
+                  <option value="">انتخاب فصل و جلسه</option>
+                  @foreach($course->sections as $section)
+                    @foreach($section->lessons as $lesson)
+                      <option value="{{ $lesson->id }}">{{ $section->title }} / {{ $lesson->title }}</option>
+                    @endforeach
+                  @endforeach
+                </select>
+                <button type="submit" class="store-outline-btn">اتصال به جلسه</button>
+              </form>
+            @else
+              <small>پس از ساخت اولین فصل و جلسه، امکان تخصیص این فایل فعال می‌شود.</small>
+            @endif
+          </div>
+        @endforeach
+      </section>
+    @endif
+
     <div class="course-curriculum-head"><div><span class="eyebrow">CURRICULUM BUILDER</span><h2>برنامه آموزشی</h2><p>هر فصل می‌تواند چندین جلسه و هر جلسه منابع مستقل داشته باشد.</p></div><div class="course-counts"><b>{{ $course->sections->count() }}</b><span>فصل</span><b>{{ $course->sections->sum(fn($s)=>$s->lessons->count()) }}</b><span>جلسه</span></div></div>
 
     <form method="post" action="{{ route('admin.store.course.sections.store',$product) }}" class="store-panel course-add-section">
@@ -111,6 +139,15 @@
     @endforelse
   </div>
 </section>
+<script>
+document.querySelectorAll('[data-intake-resource-attach]').forEach((form) => {
+  form.addEventListener('submit', () => {
+    const lessonId = form.querySelector('[name="lesson_id"]')?.value;
+    if (!lessonId) return;
+    form.action = form.dataset.actionTemplate.replace('__LESSON__', encodeURIComponent(lessonId));
+  });
+});
+</script>
 @endsection
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107course1">

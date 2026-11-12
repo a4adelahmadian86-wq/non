@@ -31,8 +31,14 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         $course->load(['sections.lessons.resources']);
+        $courseLevelResources = $product->files()
+            ->where('purpose', 'course_resource')
+            ->whereNull('course_lesson_id')
+            ->where('is_active', true)
+            ->orderBy('created_at')
+            ->get();
 
-        return view('admin.store.course', compact('product', 'course'));
+        return view('admin.store.course', compact('product', 'course', 'courseLevelResources'));
     }
 
     public function update(Request $request, StoreProduct $product)
@@ -187,7 +193,7 @@ class AdminCourseController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => false,
                     'is_active' => true,
-                    'scan_status' => 'clean',
+                    'scan_status' => 'structural',
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
@@ -249,6 +255,32 @@ class AdminCourseController extends Controller
             : ($processingStatus === 'queued'
                 ? 'منبع آموزشی پس از اسکن امنیتی ذخیره شد و پردازش دانش آن در صف قرار گرفت.'
                 : 'منبع آموزشی ذخیره شد؛ به دلیل عبور از سقف پردازش فعلی، تحلیل کامل تا فراهم‌شدن مسیر مناسب فعال نیست.'));
+    }
+
+    public function attachIntakeResource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
+    {
+        $course = $this->assertCourse($product);
+        abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
+
+        DB::transaction(function () use ($product, $lesson, $file) {
+            $lockedFile = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                (int) $lockedFile->product_id === (int) $product->id
+                    && $lockedFile->purpose === 'course_resource'
+                    && $lockedFile->course_lesson_id === null
+                    && $lockedFile->is_active
+                    && in_array($lockedFile->scan_status, ['clean', 'structural'], true),
+                409,
+                'این فایل، منبع آزاد و قابل تخصیص این دوره نیست.'
+            );
+
+            $lockedFile->update([
+                'purpose' => 'lesson_resource',
+                'course_lesson_id' => $lesson->id,
+            ]);
+        }, 3);
+
+        return back()->with('status', 'منبع اولیه دوره به جلسه انتخاب‌شده متصل شد؛ فایل دوباره بارگذاری یا کپی نشد.');
     }
 
     public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file, StorageManager $storage)
