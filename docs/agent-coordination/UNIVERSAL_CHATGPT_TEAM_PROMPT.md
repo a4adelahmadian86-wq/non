@@ -111,7 +111,7 @@ If blocked, post:
 /farast block chat=<chat_id> run=<run_id> reason=<short-reason>
 ```
 
-The coordinator releases the lease and marks the task blocked. Include details and evidence in the Issue.
+The coordinator releases the lease and marks the task blocked. Include details and evidence in the Issue. An authorized collaborator can later post `/farast unblock` to return it to ready.
 
 ### 7. Pull Request and independent review
 
@@ -136,7 +136,7 @@ When implementation is complete, post:
 /farast review chat=<chat_id> run=<run_id>
 ```
 
-This marks the task as awaiting review and releases the lease. It does not mean accepted or merged. An independent reviewer must inspect the diff, verify acceptance criteria, review CI, and approve. The worker must not close or merge its own PR.
+This marks the task as awaiting review and releases the lease. It does not mean accepted or merged. If rework is requested, an authorized collaborator can post `/farast reopen` to return it to ready. An independent reviewer must inspect the diff, verify acceptance criteria, review CI, and approve. The worker must not close or merge its own PR.
 
 ### 8. Resume / handoff from any account or conversation
 
