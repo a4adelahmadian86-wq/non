@@ -26,7 +26,7 @@ These are point-in-time observations, not promises about future repository setti
 1. Merge this infrastructure PR after review.
 2. In GitHub, create a branch ruleset for `main`:
    - require pull requests before merging;
-   - require the existing `FARAST CI / laravel` check and the agent audit check (once enabled);
+   - require the relevant existing `FARAST CI` checks; add a dedicated workflow/YAML validation check if one is introduced later;
    - require at least one approval for changes to application/runtime code;
    - dismiss stale approvals after new commits;
    - require conversation resolution;
