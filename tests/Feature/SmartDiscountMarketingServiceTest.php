@@ -82,6 +82,52 @@ class SmartDiscountMarketingServiceTest extends TestCase
         $this->assertDatabaseCount('store_coupon_assignments', 0);
     }
 
+    public function test_interest_signals_for_other_products_do_not_inflate_the_target_product_score(): void
+    {
+        $user = $this->user();
+        $target = $this->product();
+        $other = $this->product();
+
+        DB::table('farast_workflow_events')->insert([
+            [
+                'event_type' => 'marketing.product_viewed',
+                'idempotency_key' => 'other-product-view-1-'.$user->id,
+                'user_id' => $user->id,
+                'context' => json_encode(['product_id' => $other->id]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'event_type' => 'marketing.product_viewed',
+                'idempotency_key' => 'other-product-view-2-'.$user->id,
+                'user_id' => $user->id,
+                'context' => json_encode(['product_id' => $other->id]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'event_type' => 'marketing.wishlist_added',
+                'idempotency_key' => 'target-product-wishlist-'.$user->id,
+                'user_id' => $user->id,
+                'context' => json_encode(['product_id' => $target->id]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        app(SmartDiscountMarketingService::class)->evaluate($user, $target->id);
+
+        // A wishlist alone scores 3. Views of a different product must not
+        // combine with it to cross the default threshold of 5.
+        $this->assertDatabaseCount('store_coupon_assignments', 0);
+    }
+
     public function test_a_single_product_view_never_generates_a_discount_offer(): void
     {
         $user = $this->user();
