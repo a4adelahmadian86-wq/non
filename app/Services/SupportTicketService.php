@@ -448,52 +448,52 @@ class SupportTicketService
      */
     public function updateMeta(Ticket $ticket, array $data, ?User $actor = null): Ticket
     {
-        $update = [];
-        $notes = [];
+        return DB::transaction(function () use ($ticket, $data, $actor): Ticket {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            $update = [];
+            $notes = [];
 
-        if (array_key_exists('priority', $data) && in_array($data['priority'], self::PRIORITIES, true)
-            && $data['priority'] !== $ticket->priority) {
-            $update['priority'] = $data['priority'];
-            $notes[] = 'اولویت به «'.(match ($data['priority']) {
-                'high' => 'زیاد',
-                'low' => 'کم',
-                default => 'متوسط',
-            }).'»';
-        }
+            if (array_key_exists('priority', $data) && in_array($data['priority'], self::PRIORITIES, true)
+                && $data['priority'] !== $locked->priority) {
+                $update['priority'] = $data['priority'];
+                $notes[] = 'اولویت به «'.(match ($data['priority']) {
+                    'high' => 'زیاد',
+                    'low' => 'کم',
+                    default => 'متوسط',
+                }).'»';
+            }
 
-        if (array_key_exists('department', $data) && in_array($data['department'], self::DEPARTMENTS, true)
-            && $data['department'] !== $ticket->department) {
-            $update['department'] = $data['department'];
-            $notes[] = 'دپارتمان به «'.(match ($data['department']) {
-                'sales' => 'فروش',
-                'billing' => 'مالی',
-                'complaint' => 'شکایات',
-                default => 'پشتیبانی',
-            }).'»';
-        }
+            if (array_key_exists('department', $data) && in_array($data['department'], self::DEPARTMENTS, true)
+                && $data['department'] !== $locked->department) {
+                $update['department'] = $data['department'];
+                $notes[] = 'دپارتمان به «'.(match ($data['department']) {
+                    'sales' => 'فروش',
+                    'billing' => 'مالی',
+                    'complaint' => 'شکایات',
+                    default => 'پشتیبانی',
+                }).'»';
+            }
 
-        if ($update === []) {
-            return $ticket;
-        }
+            if ($update === []) {
+                return $locked->fresh(['assignee', 'user']);
+            }
 
-        $ticket->update($update);
-        $ticket = $ticket->fresh();
+            $locked->update($update);
+            if (isset($update['priority'])) {
+                $this->sla->applyTargets($locked);
+            }
 
-        if (isset($update['priority'])) {
-            $this->sla->applyTargets($ticket);
-            $ticket = $ticket->fresh();
-        }
+            if ($actor && $notes) {
+                $this->addMessage($locked, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
 
-        if ($actor && $notes) {
-            $this->addMessage($ticket, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
-        }
-
-        return $ticket->fresh(['assignee', 'user']);
+            return $locked->fresh(['assignee', 'user']);
+        });
     }
 
     /**
