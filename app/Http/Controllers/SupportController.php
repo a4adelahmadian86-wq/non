@@ -290,8 +290,7 @@ class SupportController extends Controller
         if ($request->filled('sla') && $request->sla === 'at_risk') {
             $warn = (int) config('support.warn_before_minutes', 30);
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
-                $query->whereNotIn('status', ['closed', 'pending'])
-                    ->where(function ($q) use ($warn) {
+                $query->where(function ($q) use ($warn) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                             $q->where(function ($w) use ($warn) {
                                 $w->whereNull('first_response_at')
@@ -302,7 +301,8 @@ class SupportController extends Controller
                         }
                         if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                             $q->orWhere(function ($w) use ($warn) {
-                                $w->whereNotNull('sla_resolve_due_at')
+                                $w->whereNotIn('status', ['closed', 'pending'])
+                                    ->whereNotNull('sla_resolve_due_at')
                                     ->where('sla_resolve_due_at', '>', now())
                                     ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
                             });
@@ -360,7 +360,7 @@ class SupportController extends Controller
         
             'sla_breached' => Ticket::query()->slaBreached()->count(),
             'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
-                ? Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
+                ? Ticket::query()->where(function ($q) {
                     $warn = (int) config('support.warn_before_minutes', 30);
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                         $q->where(function ($w) use ($warn) {
@@ -369,14 +369,14 @@ class SupportController extends Controller
                     }
                     if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                         $q->orWhere(function ($w) use ($warn) {
-                            $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                            $w->whereNotIn('status', ['closed', 'pending'])->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
                         });
                     }
                 })->count()
                 : 0,
         ];
 
-        $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
+        $agents = $active ? $this->tickets->eligibleAgentsFor($active) : collect();
 
         $canned = config('support.canned_replies', [
             'سلام، پیام شما دریافت شد. در حال بررسی هستیم و به‌زودی پاسخ می‌دهیم.',
