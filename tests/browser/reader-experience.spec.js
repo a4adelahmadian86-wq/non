@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const PDF_OPTIONAL_CONTENT_FIXTURE_BASE64 = 'JVBERi0xLjcKJcK1wrYKCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDIgMCBSL09DUHJvcGVydGllczw8L09DR3NbNSAwIFJdL0Q8PC9PTls1IDAgUl0vT0ZGW10vT3JkZXJbNSAwIFJdL1JCR3JvdXBzW10+Pj4+Pj4KZW5kb2JqCgoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvQ291bnQgMS9LaWRzWzQgMCBSXT4+CmVuZG9iagoKMyAwIG9iago8PC9Gb250PDwvaGVsdiA2IDAgUj4+L1Byb3BlcnRpZXM8PC9NQzAgNSAwIFI+Pj4+CmVuZG9iagoKNCAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1JvdGF0ZSAwL1Jlc291cmNlcyAzIDAgUi9QYXJlbnQgMiAwIFIvQ29udGVudHNbNyAwIFIgOCAwIFJdPj4KZW5kb2JqCgo1IDAgb2JqCjw8L1R5cGUvT0NHL05hbWUoT3B0aW9uYWwgdGVzdCBsYXllcikvSW50ZW50Wy9WaWV3XS9Vc2FnZTw8L0NyZWF0b3JJbmZvPDwvQ3JlYXRvcihQeU11UERGKS9TdWJ0eXBlL0FydHdvcms+Pj4+Pj4KZW5kb2JqCgo2IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYS9FbmNvZGluZy9XaW5BbnNpRW5jb2Rpbmc+PgplbmRvYmoKCjcgMCBvYmoKPDwvTGVuZ3RoIDEwMy9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeJwVyTEKg0AQBdD+n2JusDPLH1YhpHBjExARphMrcbEwRZqcPwmvfHgjzVXSVFWGR8UQMNEfk5KlFJV4IZ3H9RHrJJqsNzZXJ3s2HjTuWbnTvKd7zv9x75z3LZ4YA+NUseALmfMW/wplbmRzdHJlYW0KZW5kb2JqCgo4IDAgb2JqCjw8L0xlbmd0aCA4Mi9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeJzjKuRyCuEyVDAAQkMFcyMgMlIIyeXSz0jNKVMwMlEISVOItjExMzE0NQJiY1MTIwNTAxMTEzMwbWhibnJqZGBsaBcb4sXlGsIVyAUAz70ReAplbmRzdHJlYW0KZW5kb2JqCgp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTYgMDAwMDAgbiAKMDAwMDAwMDEzNyAwMDAwMCBuIAowMDAwMDAwMTg5IDAwMDAwIG4gCjAwMDAwMDAyNTUgMDAwMDAgbiAKMDAwMDAwMDM2OCAwMDAwMCBuIAowMDAwMDAwNDk3IDAwMDAwIG4gCjAwMDAwMDA1ODYgMDAwMDAgbiAKMDAwMDAwMDc1OCAwMDAwMCBuIAoKdHJhaWxlcgo8PC9TaXplIDkvUm9vdCAxIDAgUi9JRFs8MzBDMjkxQzM5MTE1M0I0QjE4QzNCQjREMTQ1RUMzOTA+PEU2NzEyRkI5NUMzMjc4RUE2REZFMTE4OTNEMzIyOTlCPl0+PgpzdGFydHhyZWYKOTA4CiUlRU9GCg==';
+
 test.use({ serviceWorkers: 'block' });
 
 test('syncs authenticated reading progress to the account endpoint', async ({ page }) => {
@@ -132,10 +134,6 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
 }
 
 
-function optionalLayerIdForFixture(pageCount, withAnnotations) {
-  return 3 + pageCount * 3 + (withAnnotations ? 2 + (pageCount > 1 ? 1 : 0) : 0);
-}
-
 function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = false) {
   const annotationId = 3 + pageCount * 3;
   const optionalLayerId = 3 + pageCount * 3 + (withAnnotations ? 2 + (pageCount > 1 ? 1 : 0) : 0);
@@ -192,17 +190,19 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
     contentType: 'text/html',
     body: '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
   }));
-  const fixturePdf = makePdfFixture(pageCount, withAnnotations, withLayers);
+  const fixturePdf = withLayers
+    ? Buffer.from(PDF_OPTIONAL_CONTENT_FIXTURE_BASE64, 'base64')
+    : makePdfFixture(pageCount, withAnnotations, false);
   if (withLayers) {
     const fixtureText = fixturePdf.toString('binary');
-    if (!fixtureText.startsWith('%PDF-1.5') || !fixtureText.includes('/OCProperties') || !fixtureText.includes('/Type /OCG')) {
-      throw new Error('Optional-content PDF fixture is missing its PDF 1.5 OCG catalog structures');
+    if (!fixtureText.startsWith('%PDF-1.7') || !fixtureText.includes('/OCProperties') || !fixtureText.includes('/Type/OCG')) {
+      throw new Error('Known-good PDF 1.7 optional-content fixture is invalid');
     }
     console.log('[PDF QA OCG fixture]', JSON.stringify({
       header: fixtureText.slice(0, 8),
-      hasCatalogVersion: fixtureText.includes('/Version /1.5'),
       hasOCProperties: fixtureText.includes('/OCProperties'),
-      hasOCGReference: fixtureText.includes('/OCGs [' + optionalLayerIdForFixture(pageCount, withAnnotations) + ' 0 R]'),
+      hasOCG: fixtureText.includes('/Type/OCG'),
+      bytes: fixturePdf.length,
     }));
   }
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
