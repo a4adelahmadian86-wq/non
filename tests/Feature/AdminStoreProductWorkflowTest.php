@@ -98,7 +98,65 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-folder', false)
             ->assertSee('data-ingestion-selected', false)
             ->assertSee('بررسی امن فایل')
-            ->assertSee('بررسی ساختار و امنیت');
+            ->assertSee('بررسی ساختار و امنیت')
+            ->assertSee('اسکن تکمیلی آنتی‌ویروس (اختیاری)');
+    }
+
+    public function test_authorized_admin_can_opt_in_to_real_antivirus_during_preflight(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $product = StoreProduct::create([
+            'category_id' => $this->category()->id,
+            'title' => 'محصول با اسکن آنتی‌ویروس',
+            'slug' => 'product-with-opt-in-antivirus',
+            'sku' => 'PRODUCT-ANTIVIRUS-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $checksum = hash('sha256', 'fake-pdf-content');
+        $security = \\Mockery::mock(UploadSecurityService::class);
+        $security->shouldReceive('inspect')->once()->andReturn([
+            'safe' => true,
+            'mime' => 'application/pdf',
+            'size' => 16,
+            'checksum' => $checksum,
+            'risk_level' => 'low',
+            'detected_type' => 'pdf',
+            'findings' => [],
+            'warnings' => [],
+        ]);
+        app()->instance(UploadSecurityService::class, $security);
+
+        $scanner = \\Mockery::mock(OptionalAntivirusScanner::class);
+        $scanner->shouldReceive('scan')->once()->withArgs(fn ($path) => is_string($path) && $path !== '')
+            ->andReturn([
+                'status' => 'clean',
+                'engine' => 'clamav',
+                'version' => 'ClamAV 1.4.0',
+                'scanned_at' => now()->toISOString(),
+            ]);
+        app()->instance(OptionalAntivirusScanner::class, $scanner);
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.files.preflight', $product), [
+                'file' => UploadedFile::fake()->createWithContent('source.pdf', '%PDF-1.4 fake'),
+                'security_scan' => '1',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('antivirus.requested', true)
+            ->assertJsonPath('antivirus.status', 'clean')
+            ->assertJsonPath('antivirus.engine', 'clamav');
+
+        $this->assertDatabaseHas('store_product_ingestions', [
+            'product_id' => $product->id,
+            'antivirus_requested' => true,
+            'antivirus_status' => 'clean',
+            'antivirus_engine' => 'clamav',
+            'antivirus_version' => 'ClamAV 1.4.0',
+        ]);
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
