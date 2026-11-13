@@ -75,17 +75,20 @@ class SupportTicketService
                 $payload['last_reply_at'] = now();
             }
 
-            // ارجاع خودکار به کم‌بارترین کارشناس
-            if (Schema::hasColumn('tickets', 'assigned_to') && empty($data['assigned_to'])) {
-                $agent = $this->pickLeastLoadedAgent();
-                if ($agent) {
-                    $payload['assigned_to'] = $agent->id;
-                }
-            } elseif (! empty($data['assigned_to']) && Schema::hasColumn('tickets', 'assigned_to')) {
-                $payload['assigned_to'] = $data['assigned_to'];
-            }
-
             $ticket = Ticket::create($payload);
+
+            // Assignment is resolved against the persisted ticket so RBAC scope
+            // checks always evaluate the actual record, not an incomplete payload.
+            if (Schema::hasColumn('tickets', 'assigned_to')) {
+                $agent = ! empty($data['assigned_to'])
+                    ? User::query()->find((int) $data['assigned_to'])
+                    : $this->pickLeastLoadedAgent($ticket);
+
+                if ($agent) {
+                    abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
+                    $ticket->forceFill(['assigned_to' => $agent->id])->save();
+                }
+            }
 
             $this->addMessage($ticket, $user, $data['body'], [
                 'is_staff' => false,
@@ -125,19 +128,39 @@ class SupportTicketService
     /**
      * انتخاب کارشناس با کمترین تیکت باز.
      */
-    public function pickLeastLoadedAgent(): ?User
+    /**
+     * Active users who can manage this exact ticket under the central RBAC scope.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function eligibleAgentsFor(Ticket $ticket)
     {
         if (! Schema::hasColumn('tickets', 'assigned_to')) {
-            return null;
+            return collect();
         }
 
-        $admins = User::query()
-            ->where('role', User::ROLE_ADMIN)
-            ->where('is_blocked', false)
-            ->limit(50)
-            ->get();
+        $authorization = app(AuthorizationService::class);
 
-        if ($admins->isEmpty()) {
+        return User::query()
+            ->where(function ($query) {
+                $query->where('is_blocked', false)->orWhereNull('is_blocked');
+            })
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
+            ->values();
+    }
+
+    public function isEligibleSupportAgent(User $agent, Ticket $ticket): bool
+    {
+        return ! (bool) $agent->is_blocked
+            && app(AuthorizationService::class)->allowsRecord($agent, 'support.manage', $ticket);
+    }
+
+    public function pickLeastLoadedAgent(Ticket $ticket): ?User
+    {
+        $agents = $this->eligibleAgentsFor($ticket);
+        if ($agents->isEmpty()) {
             return null;
         }
 
@@ -148,7 +171,7 @@ class SupportTicketService
             ->groupBy('assigned_to')
             ->pluck('c', 'assigned_to');
 
-        return $admins->sortBy(fn (User $u) => (int) ($openCounts[$u->id] ?? 0))->first();
+        return $agents->sortBy(fn (User $user) => (int) ($openCounts[$user->id] ?? 0))->first();
     }
 
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
@@ -229,9 +252,20 @@ class SupportTicketService
                 if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
                     $update['resolved_at'] = now();
                 }
+                if (($options['status'] ?? 'answered') !== 'closed') {
+                    if (Schema::hasColumn('tickets', 'closed_at')) {
+                        $update['closed_at'] = null;
+                    }
+                    if (Schema::hasColumn('tickets', 'resolved_at')) {
+                        $update['resolved_at'] = null;
+                    }
+                }
             } else {
                 if ($ticket->status !== 'closed') {
                     $update['status'] = 'user_replied';
+                    if (Schema::hasColumn('tickets', 'resolved_at')) {
+                        $update['resolved_at'] = null;
+                    }
                 }
                 if (Schema::hasColumn('tickets', 'closed_at')) {
                     $update['closed_at'] = null;
@@ -282,6 +316,9 @@ class SupportTicketService
         if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
             $update['closed_at'] = null;
         }
+        if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
+            $update['resolved_at'] = null;
+        }
         $update = array_merge($update, $this->sla->statusTransitionAttributes($ticket, $status));
         $ticket->update($update);
 
@@ -306,6 +343,10 @@ class SupportTicketService
     {
         if (! Schema::hasColumn('tickets', 'assigned_to')) {
             return $ticket;
+        }
+
+        if ($agent !== null) {
+            abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
         }
 
         $ticket->update(['assigned_to' => $agent?->id]);
