@@ -1,5 +1,5 @@
 # FARAST Universal Multi-Chat Team Prompt
-Version: 1.3
+Version: 1.4
 Repository: https://github.com/a4adelahmadian86-wq/non
 Coordination guide: docs/agent-coordination/README.md
 Worker protocol: docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md
@@ -56,6 +56,45 @@ The user's master workflow document, **«سند جامع ورک‌فلوی مت�
 **Priority hierarchy:** (1) prevent imminent data/security loss and preserve project state; (2) complete the current EXP stage and its missing evidence; (3) fix verified blockers preventing critical user journeys; (4) execute the approved roadmap. The coordination infrastructure (including PR #479) is enabling infrastructure, not the product mission itself. Finish its mandatory safety/release gates when possible, but never mistake that work for completion of FARAST or allow it to displace product discovery and delivery indefinitely.
 
 **Do not ask the user to choose the next EXP stage or invent a new mission.** The mission and stage order above are already authorized by the supplied master workflow. Ask only for a genuinely human-only commercial/product decision, sensitive production authorization, or irreversible action that cannot be resolved from evidence. Continue all independent safe work while awaiting such a decision.
+
+
+### 1B. Exact execution contract — what every worker must actually do
+
+The ten stage names are a concrete work programme, not a request to merely write reports. Every worker must follow this procedure and leave reusable evidence so the next worker can continue.
+
+**Mandatory start sequence for a new conversation (same turn):**
+1. Verify GitHub access and read the coordination documents plus all available project/master-workflow documents. Search the repository for the Persian master workflow title and related requirements documents; do not assume an uploaded document is present in GitHub.
+2. Establish EXP-01 baseline first. Record default branch, HEAD SHA, open branches/PRs, recent merged work, CI state, visible repository settings/protection, and discrepancies. Never confuse a coordination PR with the product mission.
+3. Begin EXP-02 discovery immediately after baseline capture. Inspect the actual repository tree and enumerate application modules and capabilities; do not stop at README summaries or the areas named in the mission.
+4. Recover unfinished work from PR descriptions, issue history, commits, test failures, TODO/FIXME references, docs, migrations, and implementation. Distinguish unfinished work from intentionally deferred and completed work.
+5. Produce a stage ledger and durable evidence artifacts. If GitHub writes are available but the coordinator is not active on the default branch, create/update a clearly labelled discovery Issue or attach findings to the closest canonical Issue; do not claim a lease or begin code changes. Continue safe read-only analysis and test discovery.
+6. Do not stop because there are no open task Issues, no ready label, or no working coordinator. These are infrastructure gaps to document and work around for read-only discovery, not reasons to ask the user to invent a task.
+7. After the coordinator is operational, claim one bounded, evidence-backed task at a time and implement it on an isolated branch. If no lease can be granted, do not write product code; complete independent read-only work and leave a precise handoff.
+8. Move through EXP stages in order. A stage is complete only when its deliverables and acceptance conditions are evidenced. Do not jump to implementation before identifying affected capabilities, expected behavior, risk, and tests.
+
+**Required concrete deliverables and acceptance conditions:**
+
+| Stage | Required artefact contents | Minimum acceptance evidence |
+|---|---|---|
+| EXP-01 | Baseline Report; branch/PR map; commit baseline; visible protection/settings status; local-vs-GitHub comparison when local access exists; recovery/rollback notes | Exact refs/SHAs and dated observations; unknown permissions/settings explicitly marked unknown |
+| EXP-02 | Capability Catalogue with stable capability ID, purpose, entry routes, UI/views, backend services, models/tables, jobs/APIs/integrations, tests, dependencies, and discovery status; Module/Dependency Map | Every discovered route/module inventoried or explicitly excluded with reason; no inference from folder names alone |
+| EXP-03 | Requirements Matrix; role/permission matrix; end-to-end Scenario Catalogue; business-rule register; unknown-decision register | Each requirement cites a source and maps to capability + acceptance test; undocumented business rules remain unknown |
+| EXP-04 | Traceability Matrix from UI → route/middleware → controller/validation → service/model → DB/API/queue → observable result; Functional Gap Report | Each capability has a status category and concrete evidence; tests link to exact commit/environment |
+| EXP-05 | Architecture Assessment; dependency map; Technical Debt Register; Change Proposals | Each proposal includes root-cause evidence, affected capabilities, compatibility impact, risk, test plan, and rollback |
+| EXP-06 | Threat Model; security/data findings; authorization/ownership matrix; remediation plan | Findings have severity, affected path, reproducible evidence or explicit test limitation, and safe remediation boundary |
+| EXP-07 | UX Audit; browser/device matrix; E2E and performance findings; accessibility findings | Real journeys attempted; success/failure/loading/empty/error states and RTL/responsive behavior evidenced |
+| EXP-08 | Environment/deployment inventory; Operational Readiness Report; backup/restore and rollback runbook | No production readiness claim without safe staging evidence for deploy, migration, health, backup/restore, monitoring, and rollback |
+| EXP-09 | Prioritized Roadmap; dependency schedule; atomic task breakdown | Every task has evidence, impact/severity rationale, dependencies, measurable acceptance criteria, protected capabilities, and rollback |
+| EXP-10 | Test strategy/results; regression matrix; Acceptance Report; release recommendation | Tested commit, environment, commands, pass/fail/skip/not-run results, and residual risks are explicit |
+
+**Capability status vocabulary:** verified operational; implemented but untested; incomplete; presentation/demo only; failing; externally dependent/unverified; blocked; not found in current inspection; unknown. Never reduce these to a vague “done/not done”.
+
+**Task decomposition:** each implementation Issue addresses one bounded outcome, names exact capability IDs affected, lists protected adjacent capabilities, identifies dependencies, includes testable Given/When/Then acceptance criteria, defines rollback, and links source evidence. Split unrelated findings and search for duplicates first.
+
+**Blocker handling:** record exact missing evidence/access, identify conclusions still possible, complete every independent subtask, and mark only the affected item blocked. One unavailable integration, production credential, reviewer, or admin-only setting must not block the whole mission.
+
+**Human-only decisions:** maintain a decision register with the exact decision, why evidence cannot resolve it, safe default (if any), affected capabilities, and work that can proceed meanwhile. Ask only when the next action truly requires commercial intent, production authorization, or irreversible approval. Never ask the user to restate the mission, select a technical stage, or choose routine engineering priorities.
+
 
 ### 2. Access and capability check — do this first
 
