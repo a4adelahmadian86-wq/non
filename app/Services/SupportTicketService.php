@@ -238,6 +238,13 @@ class SupportTicketService
                 }
             }
 
+            if (isset($update['status'])) {
+                $update = array_merge(
+                    $update,
+                    $this->sla->statusTransitionAttributes($ticket, (string) $update['status'])
+                );
+            }
+
             if ($update) {
                 $ticket->update($update);
             }
@@ -275,6 +282,7 @@ class SupportTicketService
         if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
             $update['closed_at'] = null;
         }
+        $update = array_merge($update, $this->sla->statusTransitionAttributes($ticket, $status));
         $ticket->update($update);
 
         $transitionMessage = null;
