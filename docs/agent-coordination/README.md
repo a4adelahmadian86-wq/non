@@ -2,6 +2,10 @@
 
 **For a new ChatGPT conversation or a different ChatGPT account:** copy the complete prompt in [UNIVERSAL_CHATGPT_TEAM_PROMPT.md](UNIVERSAL_CHATGPT_TEAM_PROMPT.md). The account must connect its own authorized GitHub identity; this prompt does not transfer repository permissions.
 
+## Executable stage assignments
+
+The universal prompt delegates exact task construction and specialist role assignment to [PROMPT_EXECUTION_PLAYBOOK.md](PROMPT_EXECUTION_PLAYBOOK.md). A stage label alone is never a valid assignment. Every worker task must have a complete Work Order with exact inputs, ordered steps, output paths/schema, tests, acceptance criteria, dependencies, protected capability IDs, write scope, rollback and handoff. The coordinator maintains a Stage Ledger and Capability Register, prevents overlapping write scopes, and dispatches only dependency-ready tasks. Read the playbook before creating or accepting stage work.
+
 ## Purpose
 
 This repository is the shared coordination plane for multiple ChatGPT conversations working as one traceable team. A conversation is not authoritative because it remembers something; GitHub is authoritative because every task, lease, event, pull request, review, and CI result is durable and visible to every authorized participant.
