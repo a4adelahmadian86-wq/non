@@ -287,4 +287,16 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->actingAs($manager)->get('/admin/store')->assertForbidden();
     }
 
+    public function test_product_operations_and_support_report_require_global_admin_sections(): void
+    {
+        $organization = Organization::create(['name' => 'Restricted Admin Org', 'slug' => 'restricted-admin-org', 'status' => 'active']);
+        $employee = $this->makeUser('09123456794', User::ROLE_EMPLOYEE, $organization->id);
+        $manager = $this->makeUser('09123456795', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        $this->actingAs($employee)->get('/admin/store/operations')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/store/operations')->assertForbidden();
+        $this->actingAs($employee)->get('/admin/support-report')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/support-report')->assertForbidden();
+    }
+
 }
