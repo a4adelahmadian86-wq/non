@@ -24,8 +24,18 @@ class CheckSupportSlaCommand extends Command
             return self::SUCCESS;
         }
 
-        if (! Schema::hasTable('tickets') || ! Schema::hasColumn('tickets', 'sla_first_due_at')) {
-            $this->warn('ستون‌های SLA موجود نیست. migrate را اجرا کنید.');
+        $requiredColumns = [
+            'first_response_at',
+            'sla_first_due_at',
+            'sla_first_breached_at',
+            'sla_first_warned_at',
+            'sla_resolve_due_at',
+            'sla_resolve_breached_at',
+            'sla_resolve_warned_at',
+        ];
+        if (! Schema::hasTable('tickets')
+            || collect($requiredColumns)->contains(fn (string $column): bool => ! Schema::hasColumn('tickets', $column))) {
+            $this->warn('ستون‌های موردنیاز پایش SLA موجود نیستند. migrate را اجرا کنید.');
 
             return self::SUCCESS;
         }
@@ -120,13 +130,11 @@ class CheckSupportSlaCommand extends Command
 
             $minutes = (int) now()->diffInMinutes($ticket->sla_first_due_at, false);
             if ($minutes < 0
-                && Schema::hasColumn('tickets', 'sla_first_breached_at')
                 && empty($ticket->sla_first_breached_at)) {
                 return ['event' => 'breached', 'minutes' => $minutes, 'column' => 'sla_first_breached_at'];
             }
 
             if ($minutes >= 0 && $minutes <= $warnBefore
-                && Schema::hasColumn('tickets', 'sla_first_warned_at')
                 && empty($ticket->sla_first_warned_at)) {
                 return ['event' => 'warning', 'minutes' => $minutes, 'column' => 'sla_first_warned_at'];
             }
@@ -141,13 +149,11 @@ class CheckSupportSlaCommand extends Command
 
         $minutes = (int) now()->diffInMinutes($ticket->sla_resolve_due_at, false);
         if ($minutes < 0
-            && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
             && empty($ticket->sla_resolve_breached_at)) {
             return ['event' => 'breached', 'minutes' => $minutes, 'column' => 'sla_resolve_breached_at'];
         }
 
         if ($minutes >= 0 && $minutes <= $warnBefore
-            && Schema::hasColumn('tickets', 'sla_resolve_warned_at')
             && empty($ticket->sla_resolve_warned_at)) {
             return ['event' => 'warning', 'minutes' => $minutes, 'column' => 'sla_resolve_warned_at'];
         }
