@@ -341,36 +341,55 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        $old = $ticket->status;
-        $update = ['status' => $status];
-        if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-            $update['closed_at'] = now();
-        }
-        if ($status === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-            $update['resolved_at'] = now();
-        }
-        if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-            $update['closed_at'] = null;
-        }
-        if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-            $update['resolved_at'] = null;
-        }
-        $update = array_merge($update, $this->sla->statusTransitionAttributes($ticket, $status));
-        $ticket->update($update);
+        [$fresh, $old, $transitionMessageId, $changed] = DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            $old = (string) $locked->status;
 
-        $transitionMessage = null;
-        if ($systemNote && $actor) {
-            $label = $ticket->fresh()->statusLabel();
-            $transitionMessage = $this->addMessage($ticket, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
+            if ($old === $status) {
+                return [$locked->fresh(), $old, null, false];
+            }
+
+            $update = ['status' => $status];
+            if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
+                $update['closed_at'] = now();
+            }
+            if ($status === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
+                $update['resolved_at'] = now();
+            }
+            if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
+                $update['closed_at'] = null;
+            }
+            if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
+                $update['resolved_at'] = null;
+            }
+
+            $update = array_merge($update, $this->sla->statusTransitionAttributes($locked, $status));
+            $locked->update($update);
+
+            $transitionMessage = null;
+            if ($systemNote && $actor) {
+                $label = $locked->fresh()->statusLabel();
+                $transitionMessage = $this->addMessage($locked, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
+
+            return [$locked->fresh(), $old, $transitionMessage?->id, true];
+        });
+
+        if (! $changed) {
+            return $fresh;
         }
 
-        $fresh = $ticket->fresh();
-        $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $old, $status, $transitionMessage ? 'message:'.$transitionMessage->id : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
+        $this->safeNotify(fn () => $this->notifier->statusChanged(
+            $fresh,
+            $old,
+            $status,
+            $transitionMessageId ? 'message:'.$transitionMessageId : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
+        ));
 
         return $fresh;
     }
