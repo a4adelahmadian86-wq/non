@@ -722,6 +722,19 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Range', 'bytes 2-5/10')
             ->assertHeader('Content-Length', '4');
         $this->assertSame('2345', $response->streamedContent());
+
+        $suffix = $this->withHeader('Range', 'bytes=-4')
+            ->get(route('store.preview.audio', $preview));
+
+        $suffix->assertStatus(206)
+            ->assertHeader('Content-Range', 'bytes 6-9/10')
+            ->assertHeader('Content-Length', '4');
+        $this->assertSame('6789', $suffix->streamedContent());
+
+        $emptySuffix = $this->withHeader('Range', 'bytes=-0')
+            ->get(route('store.preview.audio', $preview));
+        $emptySuffix->assertStatus(416)
+            ->assertHeader('Content-Range', 'bytes */10');
         $etag = (string) $response->headers->get('ETag');
         $lastModified = (string) $response->headers->get('Last-Modified');
         $this->assertNotSame('', $etag);
