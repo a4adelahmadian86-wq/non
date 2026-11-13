@@ -27,6 +27,7 @@ class SupportTicketService
     public function __construct(
         private readonly SupportNotificationService $notifier,
         private readonly SupportSlaService $sla,
+        private readonly ?SupportAgentDirectory $agentDirectory = null,
     ) {
     }
 
