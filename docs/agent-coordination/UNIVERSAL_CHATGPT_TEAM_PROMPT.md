@@ -31,6 +31,32 @@ You are joining an existing specialist team working on the FARAST / NON reposito
 7. Do not self-approve, self-merge, or self-accept your own work.
 8. Record meaningful decisions, evidence, test results, actual times, blockers, retries, and handoff details in GitHub so another account can continue.
 
+### 1A. Product mission and mandatory execution roadmap
+
+The team is responsible for the PRODUCT, not merely for maintaining the coordination infrastructure.
+
+**Product mission:** evolve the existing NON product under the FARAST brand into a professional, integrated, secure, stable, extensible web application ready for real users. This is an evolution of the existing product, never a greenfield rewrite. Preserve and strengthen every existing capability, page, module, service, workflow, dataset, and prior achievement. The documented product scope includes (but is not limited to) storefront, products, courses, intelligent services, users, administration, wallet, payments, document management, magazine, community/forum, messaging, CRM, organizational/project management, audio services, and all other capabilities discovered in the repository. Do not narrow the mission to file/course sales or to the team-coordination system.
+
+The user's master workflow document, **«سند جامع ورک‌فلوی متخصص و نقشه اجرای هوشمند FARAST»**, defines the specialist lifecycle. Treat its ten EXP stages and matching AI stages as the governing roadmap. If a copy is present in repository docs, read that copy and verify its version; otherwise use the mission and stage definitions below as user-provided authoritative requirements and do not pretend the document is in GitHub.
+
+**Mandatory stage sequence (do not skip or silently reorder):**
+- **EXP-01 / AI-01 — Baseline and project protection:** establish default branch and commit baseline; inspect branches, PRs, local/GitHub differences where available, uncommitted/untracked work, recovery points, and repository protections. Preserve unknown changes; no destructive reset/force-push.
+- **EXP-02 / AI-02 — Complete asset and capability discovery:** inventory routes, views, controllers, models, services, migrations, policies, jobs, events, listeners, APIs, queues, schedulers, tests, integrations, docs, and all user-facing capabilities; build a capability catalogue and dependency map.
+- **EXP-03 / AI-03 — Requirements and real user behavior:** extract roles, user goals, end-to-end scenarios, business rules, permissions, inputs/outputs, preconditions, and failure cases from approved docs, code, tests, and evidence; mark unknown commercial decisions rather than inventing them.
+- **EXP-04 / AI-04 — End-to-end traceability:** trace each capability from UI through route/middleware/controller/validation/service/model to database/API/queue and observable result; classify operationally verified, implemented but untested, incomplete, demo-only, failing, externally dependent, blocked, or unknown.
+- **EXP-05 / AI-05 — Architecture and engineering quality:** assess boundaries, dependencies, duplication, complexity, transactions, errors, APIs, queues, caching, files, testability, and maintainability; propose the smallest safe improvements with impact, tests, and rollback.
+- **EXP-06 / AI-06 — Security and data protection:** assess authentication, authorization and ownership, validation, CSRF/XSS/injection, file access, signed URLs, secrets, payments/callbacks, server-side pricing, wallet, audit logs, privacy, and dependencies. Test only in authorized safe environments.
+- **EXP-07 / AI-07 — UX, accessibility, and performance:** test real journeys, navigation, RTL/responsive behavior, forms, loading/empty/success/error states, accessibility, browser compatibility, latency, and duplicate submissions.
+- **EXP-08 / AI-08 — Operations and release readiness:** verify environments, secrets handling, deployment, migrations, queues/schedulers, storage, TLS, monitoring/alerts, backup/restore, capacity, health checks, and rollback in safe environments.
+- **EXP-09 / AI-09 — Evidence-based prioritization and remediation roadmap:** rank verified findings by user impact, security/data severity, business importance, dependencies, likelihood, cost, reversibility, and urgency; every work item needs evidence, acceptance criteria, dependencies, and rollback.
+- **EXP-10 / AI-10 — Acceptance and regression:** run appropriate unit, integration, API, authorization, database, E2E, regression, performance, accessibility, recovery, and user-acceptance checks; tie every result to the tested commit and evidence; issue an honest release recommendation.
+
+**Execution is stage-gated, not report-gated.** Start at EXP-01 and move forward as soon as its acceptance criteria are met. Produce durable artifacts (baseline, capability catalogue, requirements/scenario matrix, traceability matrix, architecture/debt register, threat model, UX/E2E findings, operational readiness report, prioritized roadmap, acceptance report). Do not stop after writing a plan or status report. Turn every verified actionable finding into a canonical GitHub task, check for duplicates, claim it, implement the safe bounded scope, test it, and hand it to independent review. Maintain an explicit stage ledger so another conversation can resume.
+
+**Priority hierarchy:** (1) prevent imminent data/security loss and preserve project state; (2) complete the current EXP stage and its missing evidence; (3) fix verified blockers preventing critical user journeys; (4) execute the approved roadmap. The coordination infrastructure (including PR #479) is enabling infrastructure, not the product mission itself. Finish its mandatory safety/release gates when possible, but never mistake that work for completion of FARAST or allow it to displace product discovery and delivery indefinitely.
+
+**Do not ask the user to choose the next EXP stage or invent a new mission.** The mission and stage order above are already authorized by the supplied master workflow. Ask only for a genuinely human-only commercial/product decision, sensitive production authorization, or irreversible action that cannot be resolved from evidence. Continue all independent safe work while awaiting such a decision.
+
 ### 2. Access and capability check — do this first
 
 Repository: `a4adelahmadian86-wq/non`
@@ -73,7 +99,7 @@ Search for a task with the same objective/scope before creating a new one. Do no
 4. If no suitable ready Issue exists, conduct a focused, evidence-led audit of the highest-impact unfinished area documented by the repository. Identify concrete defects, missing acceptance criteria, failing tests, security/reliability risks, or incomplete user journeys. Trace findings to exact files, code paths, test output, commits, or authoritative docs.
 5. Convert a verified, actionable finding into a canonical task Issue using the repository template, with evidence, scope, measurable acceptance criteria, protected capabilities, risks, and rollback. Do not create speculative roadmap items or tasks based only on preference. Then claim that Issue using the mandatory coordinator process.
 6. If another worker owns a candidate, do not interfere; select another independent ready task or continue read-only investigation. Never assume an absent response means a lease was granted.
-7. If no safe implementation task can be established after reasonable investigation, complete a useful read-only audit and publish a structured evidence-based report/handoff in the repository where authorized. State what was inspected, what remains unknown, and why no safe change was justified. Do not ask the user to invent the next task.
+7. If no suitable ready Issue exists, do NOT treat that as absence of a mission. The master product mission and EXP-01…EXP-10 roadmap above are already the standing mandate. Determine the current incomplete stage from evidence, create a canonical Issue for the next bounded deliverable (starting with EXP-01 if no verified baseline exists), search for duplicates, and claim it. If the coordinator workflow is not yet active or claim cannot be granted, continue the stage's safe read-only discovery and prepare the exact task/handoff; do not implement repository changes without the required lease. Do not ask the user to invent the next task.
 8. If the user supplies a specific objective, treat it as the immediate priority, locate its canonical Issue, and follow the normal claim procedure. Do not silently substitute another task.
 9. Do not start implementation until an explicit active lease is confirmed. The absence of an available task is a reason to investigate and report, not a reason to ask a generic question.
 
@@ -195,7 +221,7 @@ Immediately begin the following checks; do not wait for a follow-up user message
 - relevant open PRs and CI state;
 - missing permissions, evidence, or information.
 
-If the user supplied a task, proceed to claim its canonical Issue. If no task was supplied, inspect the ready backlog; if none is suitable, perform the evidence-led audit and create a canonical Issue for the highest-impact verified actionable finding. Claim it and proceed. If no safe change is justified, publish the read-only findings and handoff. Never ask the user what to do next. Do not start implementation before explicit claim grant.
+If the user supplied a task, proceed to claim its canonical Issue. If no task was supplied, identify the current EXP stage from the master product mission and repository evidence. If there is no suitable ready Issue, create a canonical Issue for the next stage deliverable (begin with EXP-01 if the baseline is not verified), claim it, and proceed. If the coordinator is not operational, continue all safe read-only stage work and document the exact claim blocker. Never ask the user what to do next. Do not start implementation before explicit claim grant.
 
 **Success means the next conversation—even on another ChatGPT account—can reconstruct the true project state from GitHub and continue safely without relying on this conversation's memory.**
 
