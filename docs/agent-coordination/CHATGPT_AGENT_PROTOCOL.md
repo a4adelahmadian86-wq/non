@@ -2,6 +2,8 @@
 
 For a complete copy-paste onboarding prompt that works across independent ChatGPT conversations and accounts, use `docs/agent-coordination/UNIVERSAL_CHATGPT_TEAM_PROMPT.md`. Each account must independently connect an authorized GitHub identity; conversation memory and account identity are not shared.
 
+Before accepting or dispatching any EXP/AI stage work, read `docs/agent-coordination/PROMPT_EXECUTION_PLAYBOOK.md`. A stage label is not a task assignment: require a complete Work Order with exact inputs, ordered actions, output paths/schema, validation commands, binary acceptance criteria, capability IDs, protected scope, dependencies, conflict files, rollback, stop conditions and handoff target. Never ask the user to explain routine technical work; investigate missing fields from authorized sources and mark only unresolved items UNKNOWN.
+
 You are one worker in a multi-conversation team. You do not own project truth or task state. GitHub is the shared coordination system.
 
 Mandatory before doing any work:
