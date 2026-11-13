@@ -6,6 +6,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\StorageManagedFile;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
@@ -560,6 +561,31 @@ class SupportController extends Controller
         $diskName = (string) ($attachment['disk'] ?? 'public');
         $isManagedVolume = preg_match('/^storage_volume:[0-9]+$/', $diskName) === 1;
         abort_unless(in_array($diskName, ['private', 'public'], true) || $isManagedVolume, 404);
+
+        // New support uploads must still be live, private and bound to this
+        // exact message. Never serve a deleted, detached or reclassified object.
+        if (! empty($attachment['managed_file_id'])) {
+            $managed = StorageManagedFile::query()
+                ->whereKey((int) $attachment['managed_file_id'])
+                ->where('source_module', 'support')
+                ->where('source_type', TicketMessage::class)
+                ->where('source_id', $message->id)
+                ->where('visibility', 'private')
+                ->whereIn('status', ['active', 'pending_transfer'])
+                ->first();
+
+            $expectedDisk = $managed?->storage_volume_id
+                ? 'storage_volume:'.$managed->storage_volume_id
+                : 'private';
+
+            abort_unless(
+                $managed
+                && $managed->file_key === $path
+                && (string) data_get($managed->metadata, 'disk', $expectedDisk) === $diskName
+                && $expectedDisk === $diskName,
+                404
+            );
+        }
 
         $filename = basename((string) ($attachment['name'] ?? 'attachment'));
         $filename = preg_replace('/[\r\n"]+/', '_', $filename) ?: 'attachment';
