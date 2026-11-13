@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\Ticket;
 use App\Services\SupportNotificationService;
-use App\Services\SupportSlaService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +16,7 @@ class CheckSupportSlaCommand extends Command
 
     protected $description = 'پایش SLA تیکت‌ها و ارسال هشدار نزدیک‌به‌نقض / نقض';
 
-    public function handle(SupportSlaService $sla, SupportNotificationService $notifier): int
+    public function handle(SupportNotificationService $notifier): int
     {
         if (! config('support.monitor_enabled', true)) {
             $this->info('پایش SLA غیرفعال است.');
