@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\AuthorizationService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -34,7 +35,7 @@ class SupportNotificationService
             $this->email->sendTicketCreated($ticket->user, $ticket);
         }
 
-        foreach ($this->staffUsers() as $admin) {
+        foreach ($this->staffUsers($ticket) as $admin) {
             $this->pushInApp(
                 $admin->id,
                 'ticket_created_staff',
@@ -47,7 +48,7 @@ class SupportNotificationService
         }
 
         if ($this->smsEnabled('ticket_created_staff')) {
-            $mobile = $this->staffAlertMobile();
+            $mobile = $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -71,7 +72,7 @@ class SupportNotificationService
         if ($ticket->assignee) {
             $targets->push($ticket->assignee);
         } else {
-            $targets = $targets->merge($this->staffUsers());
+            $targets = $targets->merge($this->staffUsers($ticket));
         }
 
         foreach ($targets->unique('id') as $staff) {
@@ -88,7 +89,7 @@ class SupportNotificationService
         }
 
         if ($this->smsEnabled('ticket_customer_reply') && $ticket->priority === 'high') {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -213,7 +214,7 @@ class SupportNotificationService
         }
 
         if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -249,7 +250,7 @@ class SupportNotificationService
         }
 
         if ($this->smsEnabled('ticket_sla_breach')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -269,7 +270,7 @@ class SupportNotificationService
             return collect([$ticket->assignee]);
         }
 
-        return $this->staffUsers();
+        return $this->staffUsers($ticket);
     }
 
     protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null): void
@@ -298,26 +299,28 @@ class SupportNotificationService
     }
 
     /** @return \Illuminate\Support\Collection<int, User> */
-    protected function staffUsers()
+    protected function staffUsers(Ticket $ticket)
     {
-        try {
-            return User::query()
-                ->where('role', User::ROLE_ADMIN)
-                ->limit(30)
-                ->get();
-        } catch (\Throwable) {
-            return User::all()->filter(fn ($u) => $u->isAdmin())->take(30)->values();
-        }
+        $authorization = app(AuthorizationService::class);
+
+        return User::query()
+            ->where(function ($query) {
+                $query->where('is_blocked', false)->orWhereNull('is_blocked');
+            })
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
+            ->values();
     }
 
-    protected function staffAlertMobile(): ?string
+    protected function staffAlertMobile(Ticket $ticket): ?string
     {
         $fromSetting = SiteSetting::read('support_alert_mobile', null);
         if ($fromSetting) {
             return preg_replace('/\D+/', '', (string) $fromSetting) ?: null;
         }
 
-        $admin = $this->staffUsers()->first(fn ($u) => filled($u->mobile));
+        $admin = $this->staffUsers($ticket)->first(fn ($u) => filled($u->mobile));
 
         return $admin?->mobile ? preg_replace('/\D+/', '', $admin->mobile) : null;
     }
