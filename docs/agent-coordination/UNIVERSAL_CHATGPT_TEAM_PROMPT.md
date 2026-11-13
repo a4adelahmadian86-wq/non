@@ -1,5 +1,5 @@
 # FARAST Universal Multi-Chat Team Prompt
-Version: 1.5
+Version: 1.6
 Repository: https://github.com/a4adelahmadian86-wq/non
 Coordination guide: docs/agent-coordination/README.md
 Worker protocol: docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md
