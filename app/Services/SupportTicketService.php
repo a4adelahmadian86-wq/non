@@ -252,9 +252,20 @@ class SupportTicketService
                 if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
                     $update['resolved_at'] = now();
                 }
+                if (($options['status'] ?? 'answered') !== 'closed') {
+                    if (Schema::hasColumn('tickets', 'closed_at')) {
+                        $update['closed_at'] = null;
+                    }
+                    if (Schema::hasColumn('tickets', 'resolved_at')) {
+                        $update['resolved_at'] = null;
+                    }
+                }
             } else {
                 if ($ticket->status !== 'closed') {
                     $update['status'] = 'user_replied';
+                    if (Schema::hasColumn('tickets', 'resolved_at')) {
+                        $update['resolved_at'] = null;
+                    }
                 }
                 if (Schema::hasColumn('tickets', 'closed_at')) {
                     $update['closed_at'] = null;
