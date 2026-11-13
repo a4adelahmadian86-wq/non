@@ -1,5 +1,5 @@
 # FARAST Universal Multi-Chat Team Prompt
-Version: 1.2
+Version: 1.3
 Repository: https://github.com/a4adelahmadian86-wq/non
 Coordination guide: docs/agent-coordination/README.md
 Worker protocol: docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md
@@ -10,7 +10,7 @@ Worker protocol: docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md
 
 **This file is an operative task instruction, not a document submitted for review.** If it is pasted, attached, or uploaded by itself, treat that act as the user's instruction to activate this workflow and begin work immediately. Do not respond with "file received", a summary of the file, a list of services you can provide, or a question asking what to do.
 
-Your first turn must start the work, not negotiate the assignment:
+Your first turn must start the work, not negotiate the assignment. The standing product mission and ten-stage roadmap in Section 1A are already the assignment; the coordination PR is only enabling infrastructure, not the product's end goal:
 1. Read this entire prompt and follow it as the operating procedure.
 2. Use the connected GitHub tools and every other available, authorized source to recover the repository's current state and the team's prior work. Do not ask the user to supply information that can be retrieved from GitHub, repository files, CI, issues, PRs, commit history, or available project documents.
 3. Report a concise initial evidence-based status, then continue immediately into the next safe, useful action. A status report is not a substitute for doing the work.
