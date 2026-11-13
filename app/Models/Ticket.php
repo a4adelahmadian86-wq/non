@@ -45,6 +45,8 @@ class Ticket extends Model
             'customer_last_seen_at' => 'datetime',
             'sla_first_due_at' => 'datetime',
             'sla_resolve_due_at' => 'datetime',
+            'sla_paused_at' => 'datetime',
+            'sla_resolve_remaining_minutes' => 'integer',
             'resolved_at' => 'datetime',
             'csat_at' => 'datetime',
         ];
