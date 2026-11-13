@@ -49,14 +49,26 @@ class FinancialIdempotencyTest extends TestCase
         self::assertNotEmpty($payment->idempotency_key);
     }
 
-    public function test_order_idempotency_key_is_unique_across_users(): void
+    public function test_different_customers_can_use_the_same_order_idempotency_key(): void
     {
         $first = User::factory()->create();
         $second = User::factory()->create();
-        $this->order($first, 'checkout-request-001');
+
+        $firstOrder = $this->order($first, 'checkout-request-001');
+        $secondOrder = $this->order($second, 'checkout-request-001');
+
+        self::assertNotSame($firstOrder->id, $secondOrder->id);
+        self::assertSame($first->id, $firstOrder->user_id);
+        self::assertSame($second->id, $secondOrder->user_id);
+    }
+
+    public function test_order_idempotency_key_remains_unique_for_the_same_customer(): void
+    {
+        $user = User::factory()->create();
+        $this->order($user, 'checkout-request-001');
 
         $this->expectException(QueryException::class);
-        $this->order($second, 'checkout-request-001');
+        $this->order($user, 'checkout-request-001');
     }
 
     public function test_gateway_authority_is_unique_per_gateway(): void
