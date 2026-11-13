@@ -25,14 +25,9 @@ class AdminPlatformController extends Controller {
    'permissions.*'=>['required','string','distinct','exists:permissions,key'],
   ]);
   $keys=array_values(array_unique($data['permissions']??[]));
-  $ids=Permission::whereIn('key',$keys)->pluck('id')->all();
+  $authz->updateRolePermissions($r->user(),$role,$keys,$r);
 
-  DB::transaction(function()use($role,$ids){
-   RolePermission::where('role',$role)->delete();
-   foreach($ids as $id)RolePermission::create(['role'=>$role,'permission_id'=>$id]);
-  });
-
-  app(AuditLogService::class)->record(auth()->id(),'rbac.role_permissions.updated',request()->ip(),['role'=>$role,'count'=>count($ids)]);
+  app(AuditLogService::class)->record(auth()->id(),'rbac.role_permissions.updated',request()->ip(),['role'=>$role,'count'=>count($keys)]);
   return back()->with('status','مجوزهای نقش ذخیره شد.');
  }
  public function organizations(Request $request, AdminConsoleService $console){
