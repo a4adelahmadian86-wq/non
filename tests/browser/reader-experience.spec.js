@@ -163,7 +163,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = fal
     }
   }
   if (withLayers) objects.push('<< /Type /OCG /Name (Optional test layer) /Intent /View >>');
-  let pdf = '%PDF-1.4\n';
+  let pdf = withLayers ? '%PDF-1.5\n' : '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(pdf, 'binary'));
