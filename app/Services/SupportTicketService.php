@@ -139,22 +139,12 @@ class SupportTicketService
             return collect();
         }
 
-        $authorization = app(AuthorizationService::class);
-
-        return User::query()
-            ->where(function ($query) {
-                $query->where('is_blocked', false)->orWhereNull('is_blocked');
-            })
-            ->orderBy('id')
-            ->get()
-            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
-            ->values();
+        return ($this->agentDirectory ?? app(SupportAgentDirectory::class))->eligibleFor($ticket);
     }
 
     public function isEligibleSupportAgent(User $agent, Ticket $ticket): bool
     {
-        return ! (bool) $agent->is_blocked
-            && app(AuthorizationService::class)->allowsRecord($agent, 'support.manage', $ticket);
+        return ($this->agentDirectory ?? app(SupportAgentDirectory::class))->allows($agent, $ticket);
     }
 
     public function pickLeastLoadedAgent(Ticket $ticket): ?User
