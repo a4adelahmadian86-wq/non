@@ -6,6 +6,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\StorageManagedFile;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
@@ -290,8 +291,7 @@ class SupportController extends Controller
         if ($request->filled('sla') && $request->sla === 'at_risk') {
             $warn = (int) config('support.warn_before_minutes', 30);
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
-                $query->whereNotIn('status', ['closed', 'pending'])
-                    ->where(function ($q) use ($warn) {
+                $query->where(function ($q) use ($warn) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                             $q->where(function ($w) use ($warn) {
                                 $w->whereNull('first_response_at')
@@ -302,7 +302,8 @@ class SupportController extends Controller
                         }
                         if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                             $q->orWhere(function ($w) use ($warn) {
-                                $w->whereNotNull('sla_resolve_due_at')
+                                $w->whereNotIn('status', ['closed', 'pending'])
+                                    ->whereNotNull('sla_resolve_due_at')
                                     ->where('sla_resolve_due_at', '>', now())
                                     ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
                             });
@@ -360,7 +361,7 @@ class SupportController extends Controller
         
             'sla_breached' => Ticket::query()->slaBreached()->count(),
             'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
-                ? Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
+                ? Ticket::query()->where(function ($q) {
                     $warn = (int) config('support.warn_before_minutes', 30);
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                         $q->where(function ($w) use ($warn) {
@@ -369,14 +370,14 @@ class SupportController extends Controller
                     }
                     if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                         $q->orWhere(function ($w) use ($warn) {
-                            $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                            $w->whereNotIn('status', ['closed', 'pending'])->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
                         });
                     }
                 })->count()
                 : 0,
         ];
 
-        $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
+        $agents = $active ? $this->tickets->eligibleAgentsFor($active) : collect();
 
         $canned = config('support.canned_replies', [
             'سلام، پیام شما دریافت شد. در حال بررسی هستیم و به‌زودی پاسخ می‌دهیم.',
@@ -560,6 +561,31 @@ class SupportController extends Controller
         $diskName = (string) ($attachment['disk'] ?? 'public');
         $isManagedVolume = preg_match('/^storage_volume:[0-9]+$/', $diskName) === 1;
         abort_unless(in_array($diskName, ['private', 'public'], true) || $isManagedVolume, 404);
+
+        // New support uploads must still be live, private and bound to this
+        // exact message. Never serve a deleted, detached or reclassified object.
+        if (! empty($attachment['managed_file_id'])) {
+            $managed = StorageManagedFile::query()
+                ->whereKey((int) $attachment['managed_file_id'])
+                ->where('source_module', 'support')
+                ->where('source_type', TicketMessage::class)
+                ->where('source_id', $message->id)
+                ->where('visibility', 'private')
+                ->whereIn('status', ['active', 'pending_transfer'])
+                ->first();
+
+            $expectedDisk = $managed?->storage_volume_id
+                ? 'storage_volume:'.$managed->storage_volume_id
+                : 'private';
+
+            abort_unless(
+                $managed
+                && $managed->file_key === $path
+                && (string) data_get($managed->metadata, 'disk', $expectedDisk) === $diskName
+                && $expectedDisk === $diskName,
+                404
+            );
+        }
 
         $filename = basename((string) ($attachment['name'] ?? 'attachment'));
         $filename = preg_replace('/[\r\n"]+/', '_', $filename) ?: 'attachment';

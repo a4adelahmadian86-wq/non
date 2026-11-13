@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/communications', CommunicationCenterController::class)->middleware(['admin.section:support_admin', 'throttle:60,1'])->name('communications.index');
-    Route::get('/support-report', SupportReportController::class)->name('support.report');
+    Route::get('/support-report', SupportReportController::class)->middleware('admin.section:support_admin')->name('support.report');
 });
 
 Route::middleware(['auth'])->group(function () {
