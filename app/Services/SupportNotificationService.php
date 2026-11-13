@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Services\AuthorizationService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -18,6 +17,7 @@ class SupportNotificationService
         private readonly EmailService $email,
         private readonly SmsService $sms,
         private readonly NotificationService $notifications,
+        private readonly ?SupportAgentDirectory $agentDirectory = null,
     ) {}
 
     public function ticketCreated(Ticket $ticket): void
@@ -301,16 +301,7 @@ class SupportNotificationService
     /** @return \Illuminate\Support\Collection<int, User> */
     protected function staffUsers(Ticket $ticket)
     {
-        $authorization = app(AuthorizationService::class);
-
-        return User::query()
-            ->where(function ($query) {
-                $query->where('is_blocked', false)->orWhereNull('is_blocked');
-            })
-            ->orderBy('id')
-            ->get()
-            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
-            ->values();
+        return ($this->agentDirectory ?? app(SupportAgentDirectory::class))->eligibleFor($ticket);
     }
 
     protected function staffAlertMobile(Ticket $ticket): ?string
