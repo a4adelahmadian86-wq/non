@@ -7,6 +7,7 @@ use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
 use App\Services\Storage\StorageManager;
