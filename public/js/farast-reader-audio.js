@@ -48,7 +48,7 @@
       section,
       url: article.dataset.audioUrl || '',
       timings,
-      granularity: timings.some(item => item.words.length > 0) ? 'word' : 'segment',
+      granularity: timings.length > 0 && timings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'word' : 'segment',
       alignmentQuality: timings.length > 0 && timings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
     };
   });
@@ -74,7 +74,7 @@
       <label class="farast-audio-speed"><span>سرعت</span><select data-audio-speed aria-label="سرعت پخش"><option value="0.75">۰٫۷۵×</option><option value="1" selected>۱×</option><option value="1.25">۱٫۲۵×</option><option value="1.5">۱٫۵×</option><option value="1.75">۱٫۷۵×</option><option value="2">۲×</option></select></label>
       <label class="farast-audio-volume"><i class="fa-solid fa-volume-high"></i><input type="range" min="0" max="1" value="1" step="0.05" data-audio-volume aria-label="میزان صدا"></label>
     </div>
-    <div class="farast-audio-foot"><span data-audio-progress>همگام‌سازی متن فعال است</span><span>کلیک روی کلمه برای رفتن به همان لحظه</span></div>
+    <div class="farast-audio-foot"><span data-audio-progress>همگام‌سازی متن فعال است</span><span data-audio-word-hint>زمان‌بندی واژه‌ها تقریبی است</span></div>
   `;
   root.append(dock);
 
@@ -330,6 +330,10 @@
       : 'صوت از پیش آماده · زمان‌بندی تقریبی واژه‌ها';
     const totalWordMarks = track.timings.reduce((count, item) => count + item.words.length, 0);
     progressLabel.textContent = track.granularity === 'word' ? fa(totalWordMarks) + ' نشانگر واژهٔ آماده' : fa(track.timings.length) + ' بخش آماده';
+    const wordHint = $('[data-audio-word-hint]');
+    if (wordHint) wordHint.textContent = activeTrack.alignmentQuality === 'phoneme'
+      ? 'کلیک روی واژه برای رفتن به بازهٔ دقیق'
+      : 'زمان‌بندی واژه‌ها تقریبی است؛ برای خواندن دقیق، جمله را انتخاب کنید';
   };
 
   playButton.addEventListener('click', () => {
