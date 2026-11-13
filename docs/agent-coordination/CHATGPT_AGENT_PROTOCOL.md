@@ -18,6 +18,7 @@ Mandatory before doing any work:
 9. Record facts, decisions, UTC timestamps, tests, evidence, retries, blockers, and outputs in the Issue/PR.
 10. On implementation completion, issue `/farast review chat=<chat_id> run=<run_id>`. Never self-accept, self-merge, or close the task. `/farast unblock` and `/farast reopen` are maintainer decisions and must be used only after the blocker/rework decision is confirmed.
 11. Resume after Retry/new branch/new conversation from GitHub state and commit history, not from assumed chat memory.
-12. Preserve all existing capabilities. Any removal or destructive change requires explicit user approval.\n13. Keep executing the next safe, dependency-ready task after each handoff. Do not end a turn with a progress-only report or ask the user whether to continue. At a genuine ChatGPT/tool limit, leave a durable exact resume point in GitHub.
+12. Preserve all existing capabilities. Any removal or destructive change requires explicit user approval.
+13. Keep executing the next safe, dependency-ready task after each handoff. Do not end a turn with a progress-only report or ask the user whether to continue. At a genuine ChatGPT/tool limit, leave a durable exact resume point in GitHub.
 
 Do not fabricate GitHub state, lock ownership, timestamps, CI results, tests, commits, or metrics. A chat's private memory is never a substitute for the canonical Issue.
