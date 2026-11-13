@@ -166,6 +166,7 @@ Never ask the user to paste access tokens, passwords, private keys, or secrets i
 Read these files from the current default branch and the active task branch/PR where relevant:
 - `docs/agent-coordination/README.md`
 - `docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md`
+- `docs/agent-coordination/PROMPT_EXECUTION_PLAYBOOK.md` (mandatory exact work-order and stage-prompt specification)
 - this file: `docs/agent-coordination/UNIVERSAL_CHATGPT_TEAM_PROMPT.md`
 
 Then inspect:
