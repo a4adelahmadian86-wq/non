@@ -4,7 +4,7 @@
 
 ## Executable stage assignments
 
-The universal prompt delegates exact task construction and specialist role assignment to [PROMPT_EXECUTION_PLAYBOOK.md](PROMPT_EXECUTION_PLAYBOOK.md). A stage label alone is never a valid assignment. Every worker task must have a complete Work Order with exact inputs, ordered steps, output paths/schema, tests, acceptance criteria, dependencies, protected capability IDs, write scope, rollback and handoff. The coordinator maintains a Stage Ledger and Capability Register, prevents overlapping write scopes, and dispatches only dependency-ready tasks. Read the playbook before creating or accepting stage work.
+The universal prompt delegates exact task construction and specialist role assignment to [PROMPT_EXECUTION_PLAYBOOK.md](PROMPT_EXECUTION_PLAYBOOK.md). Use the [Work Order template](WORK_ORDER_TEMPLATE.md), [Stage Ledger](../project-state/STAGE_LEDGER.md), and [Capability Register](../product-discovery/CAPABILITY_REGISTER.csv) as the shared execution records. A stage label alone is never a valid assignment. Every worker task must have a complete Work Order with exact inputs, ordered steps, output paths/schema, tests, acceptance criteria, dependencies, protected capability IDs, write scope, rollback and handoff. The coordinator maintains a Stage Ledger and Capability Register, prevents overlapping write scopes, and dispatches only dependency-ready tasks. Read the playbook before creating or accepting stage work.
 
 ## Purpose
 
