@@ -280,7 +280,10 @@ class StoreCartController extends Controller
             return $order->fresh();
             });
         } catch (QueryException $exception) {
-            $existingOrder = Order::query()->where('idempotency_key', $idempotencyKey)->first();
+            $existingOrder = Order::query()
+                ->where('user_id', $request->user()->id)
+                ->where('idempotency_key', $idempotencyKey)
+                ->first();
             if (! $existingOrder || (int) $existingOrder->user_id !== (int) $request->user()->id) {
                 throw $exception;
             }
