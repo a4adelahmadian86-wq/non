@@ -50,58 +50,71 @@ class AdminPlatformController extends Controller {
   return back()->with('status','سازمان ایجاد شد.');
  }
  public function analytics(Request $request, AdminConsoleService $console){
-  $visibleIds=$console->visibleUserIds($request->user());
+  $user=$request->user();
+  $permissionContext=$request->attributes->get('farast.section_permission');
+  $canViewUsers=$console->sectionAllowed($user,'users');
+  $canViewDocuments=$console->sectionAllowed($user,'documents');
+  $canViewAi=$console->sectionAllowed($user,'ai');
+  $canViewFinance=$console->sectionAllowed($user,'finance');
+  $request->attributes->set('farast.section_permission',$permissionContext);
+
+  $userIds=$canViewUsers?$console->visibleUserIds($user,'users.view'):[];
+  $documentIds=$canViewDocuments?$console->visibleUserIds($user,'documents.view'):[];
+  $aiIds=$canViewAi?$console->visibleUserIds($user,'ai.view'):[];
+  $financeIds=$canViewFinance?$console->visibleUserIds($user,'finance.view'):[];
+  $canManageVoice=$user->isAdmin()&&app(AuthorizationService::class)->allows($user,'voice.manage');
+
   $users=User::query();
   $activeUsers=User::query()->where('is_blocked',false);
-  if($visibleIds!==null){
-   $users->whereIn('id',$visibleIds);
-   $activeUsers->whereIn('id',$visibleIds);
+  if($userIds!==null){
+   $users->whereIn('id',$userIds);
+   $activeUsers->whereIn('id',$userIds);
   }
 
   // Canonical workspace documents are authoritative. Count only unlinked
   // legacy editor rows so both admin dashboards use the same data contract.
   $documentCount=0;
-  if(Schema::hasTable('farast_documents')){
+  if($canViewDocuments&&Schema::hasTable('farast_documents')){
    $canonical=DB::table('farast_documents');
    if(Schema::hasColumn('farast_documents','status'))$canonical->where('status','active');
    if(Schema::hasColumn('farast_documents','trashed_at'))$canonical->whereNull('trashed_at');
-   if($visibleIds!==null){
+   if($documentIds!==null){
     if(!Schema::hasColumn('farast_documents','user_id'))$canonical=null;
-    else $canonical->whereIn('user_id',$visibleIds);
+    else $canonical->whereIn('user_id',$documentIds);
    }
    if($canonical!==null)$documentCount+=(int)$canonical->count();
   }
-  if(Schema::hasTable('typing_documents')){
+  if($canViewDocuments&&Schema::hasTable('typing_documents')){
    $legacy=DB::table('typing_documents');
    if(Schema::hasColumn('typing_documents','farast_document_id'))$legacy->whereNull('farast_document_id');
-   if($visibleIds!==null){
+   if($documentIds!==null){
     if(!Schema::hasColumn('typing_documents','user_id'))$legacy=null;
-    else $legacy->whereIn('user_id',$visibleIds);
+    else $legacy->whereIn('user_id',$documentIds);
    }
    if($legacy!==null)$documentCount+=(int)$legacy->count();
   }
 
   $aiTotal=0;
   $aiToday=0;
-  if(Schema::hasTable('ai_interactions')
-   &&($visibleIds===null||Schema::hasColumn('ai_interactions','user_id'))){
+  if($canViewAi&&Schema::hasTable('ai_interactions')
+   &&($aiIds===null||Schema::hasColumn('ai_interactions','user_id'))){
    $ai=DB::table('ai_interactions');
-   if($visibleIds!==null)$ai->whereIn('user_id',$visibleIds);
+   if($aiIds!==null)$ai->whereIn('user_id',$aiIds);
    $aiTotal=(int)(clone $ai)->count();
    if(Schema::hasColumn('ai_interactions','created_at'))$aiToday=(int)(clone $ai)->whereDate('created_at',today())->count();
   }
 
   $revenue=0;
-  if(Schema::hasTable('payments')
+  if($canViewFinance&&Schema::hasTable('payments')
    &&Schema::hasColumn('payments','status')
    &&Schema::hasColumn('payments','amount_rials')){
    $payments=DB::table('payments')->where('payments.status','paid');
-   if($visibleIds!==null){
+   if($financeIds!==null){
     if(Schema::hasTable('orders')
      &&Schema::hasColumn('payments','order_id')
      &&Schema::hasColumn('orders','user_id')){
      $payments->join('orders','orders.id','=','payments.order_id')
-      ->whereIn('orders.user_id',$visibleIds);
+      ->whereIn('orders.user_id',$financeIds);
      $revenue=(int)$payments->sum('payments.amount_rials');
     }
    }else{
@@ -109,17 +122,16 @@ class AdminPlatformController extends Controller {
    }
   }
 
-  $global=$visibleIds===null;
   $voiceSeconds=0;
   $voiceRequests=0;
-  if($global&&Schema::hasTable('voice_provider_usage')){
+  if($canManageVoice&&Schema::hasTable('voice_provider_usage')){
    if(Schema::hasColumn('voice_provider_usage','audio_seconds'))$voiceSeconds=(int)DB::table('voice_provider_usage')->sum('audio_seconds');
    if(Schema::hasColumn('voice_provider_usage','requests'))$voiceRequests=(int)DB::table('voice_provider_usage')->sum('requests');
   }
 
   $stats=[
-   'users'=>$users->count(),
-   'active_users'=>$activeUsers->count(),
+   'users'=>$canViewUsers?$users->count():0,
+   'active_users'=>$canViewUsers?$activeUsers->count():0,
    'documents'=>$documentCount,
    'ai_total'=>$aiTotal,
    'ai_today'=>$aiToday,
@@ -127,7 +139,7 @@ class AdminPlatformController extends Controller {
    'voice_requests'=>$voiceRequests,
    'revenue'=>$revenue,
   ];
-  $providers=$global&&Schema::hasTable('voice_provider_accounts')
+  $providers=$canManageVoice&&Schema::hasTable('voice_provider_accounts')
    ?VoiceProviderAccount::get(['provider','model','enabled','healthy','quota_used_seconds','quota_limit_seconds','last_latency_ms','last_success_at','last_failure_at'])
    :collect();
 

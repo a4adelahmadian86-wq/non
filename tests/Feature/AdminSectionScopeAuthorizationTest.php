@@ -72,6 +72,11 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $organizationB = Organization::create(['name' => 'Org B', 'slug' => 'org-b', 'status' => 'active']);
 
         $manager = $this->makeUser('09123456782', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $financePermission = Permission::query()->where('key', 'finance.view')->firstOrFail();
+        RolePermission::firstOrCreate([
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'permission_id' => $financePermission->id,
+        ]);
         $member = $this->makeUser('09123456783', User::ROLE_EMPLOYEE, $organizationA->id);
         $outsider = $this->makeUser('09123456784', User::ROLE_EMPLOYEE, $organizationB->id);
 
@@ -151,7 +156,7 @@ class AdminSectionScopeAuthorizationTest extends TestCase
                 && $stats['teams'] === 1
                 && $stats['voice_requests'] === 0
                 && $stats['voice_seconds'] === 0
-                && $stats['audit_events'] === 1
+                && $stats['audit_events'] === 0
                 && $stats['revenue_total'] === 1000
                 && $stats['wallet_balance'] === 300;
         });
@@ -176,11 +181,6 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             ->assertForbidden();
         $this->assertDatabaseMissing('organizations', ['slug' => 'unauthorized-org']);
 
-        $financePermission = Permission::query()->where('key', 'finance.view')->firstOrFail();
-        RolePermission::firstOrCreate([
-            'role' => User::ROLE_ORGANIZATION_MANAGER,
-            'permission_id' => $financePermission->id,
-        ]);
         $finance = $this->get('/admin/finance')->assertOk();
         $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
         $finance->assertViewHas('walletTotal', 300);
@@ -196,6 +196,32 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         ])->assertForbidden();
 
         $this->get('/admin/access')->assertForbidden();
+    }
+
+    public function test_organization_manager_without_finance_permission_sees_no_financial_aggregates(): void
+    {
+        $organization = Organization::create(['name' => 'Finance Redaction Org', 'slug' => 'finance-redaction-org', 'status' => 'active']);
+        $manager = $this->makeUser('09123456792', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $member = $this->makeUser('09123456793', User::ROLE_EMPLOYEE, $organization->id);
+
+        $order = $this->makePaidOrder($member, 7500);
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'transaction_id' => 'FINANCE-REDACTION',
+            'amount_rials' => 7500,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        Wallet::create(['user_id' => $member->id, 'balance_rials' => 1200]);
+
+        $this->actingAs($manager)->get('/admin')->assertOk()
+            ->assertViewHas('stats', fn (array $stats): bool =>
+                $stats['revenue_total'] === 0 && $stats['wallet_balance'] === 0
+            );
+
+        $this->get('/admin/analytics')->assertOk()
+            ->assertViewHas('stats', fn (array $stats): bool => $stats['revenue'] === 0);
     }
 
     public function test_team_supervisor_analytics_is_limited_to_managed_team_members(): void
