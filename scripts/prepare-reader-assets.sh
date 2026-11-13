@@ -79,6 +79,8 @@ printf '%s\n' "$PACKAGE_INTEGRITY" > "$STAGING_DIR/NPM_INTEGRITY"
 
 # Swap only after the full, verified payload is ready. Restore the previous
 # runtime if the final move fails, rather than leaving a partial asset tree.
+# Ensure the destination parent exists on a clean checkout.
+mkdir -p "$(dirname "$TARGET_DIR")"
 BACKUP_DIR="$TMP_DIR/pdfjs-previous"
 if [ -d "$TARGET_DIR" ]; then
   mv "$TARGET_DIR" "$BACKUP_DIR"
