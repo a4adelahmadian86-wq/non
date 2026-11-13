@@ -26,7 +26,7 @@ Logical roles do not imply separate model instances. One conversation may perfor
 
 ## 3. Universal work-order envelope
 
-The coordinator MUST publish these fields in every canonical task Issue. Do not leave a field blank; use `UNKNOWN — <why and how to investigate>` where needed.
+The coordinator MUST publish these fields in every canonical task Issue. Validate machine-readable JSON Work Orders against `docs/agent-coordination/WORK_ORDER.schema.json`; the Markdown template is `docs/agent-coordination/WORK_ORDER_TEMPLATE.md`. Do not leave a field blank; use `UNKNOWN — <why and how to investigate>` where needed.
 
 ```yaml
 work_order_id: "WO-<stage>-<sequence>"
