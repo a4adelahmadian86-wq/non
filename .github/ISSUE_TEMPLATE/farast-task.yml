@@ -61,3 +61,62 @@ body:
         - Critical
     validations:
       required: true
+
+  - type: input
+    id: work_order_id
+    attributes:
+      label: Work Order ID and stage
+      description: Example WO-EXP-02-003 / EXP-02 / P-02. Link the applicable stage prompt.
+      placeholder: WO-EXP-02-003
+    validations:
+      required: true
+  - type: input
+    id: accountable_role
+    attributes:
+      label: Accountable specialist role
+      description: Exactly one accountable role; reviewer must be independent.
+      placeholder: FAR-REPO
+    validations:
+      required: true
+  - type: textarea
+    id: ordered_steps
+    attributes:
+      label: Ordered execution steps
+      description: Exact numbered actions, target files/systems, tools or commands. Avoid vague instructions.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Exact deliverables and output schema
+      description: Required artifact paths, formats, columns/sections, and evidence links.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation procedure
+      description: Exact test commands or manual steps and expected results.
+    validations:
+      required: true
+  - type: textarea
+    id: capability_scope
+    attributes:
+      label: Capability IDs and protected scope
+      description: List affected capability IDs, adjacent capabilities that must remain intact, allowed write paths, and prohibited paths.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Dependencies, stop conditions and rollback
+      description: Prerequisites, conflict files, parallelization key, stop conditions, human-only approvals, and exact rollback/recovery.
+    validations:
+      required: true
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Handoff contract
+      description: Next role/stage, required payload, remaining work and independent reviewer.
+    validations:
+      required: true
