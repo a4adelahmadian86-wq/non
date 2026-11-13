@@ -72,7 +72,7 @@ class SupportNotificationService
         if ($ticket->assignee) {
             $targets->push($ticket->assignee);
         } else {
-            $targets = $targets->merge($this->staffUsers());
+            $targets = $targets->merge($this->staffUsers($ticket));
         }
 
         foreach ($targets->unique('id') as $staff) {
@@ -89,7 +89,7 @@ class SupportNotificationService
         }
 
         if ($this->smsEnabled('ticket_customer_reply') && $ticket->priority === 'high') {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -214,7 +214,7 @@ class SupportNotificationService
         }
 
         if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -250,7 +250,7 @@ class SupportNotificationService
         }
 
         if ($this->smsEnabled('ticket_sla_breach')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
             if ($mobile) {
                 $this->sms->sendEvent(
                     $mobile,
@@ -270,7 +270,7 @@ class SupportNotificationService
             return collect([$ticket->assignee]);
         }
 
-        return $this->staffUsers();
+        return $this->staffUsers($ticket);
     }
 
     protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null): void
