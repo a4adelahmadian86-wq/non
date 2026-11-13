@@ -1,0 +1,1 @@
+capability_id,capability_name,domain,description,roles,entry_routes,ui_paths,backend_paths,models_tables,integrations,jobs_queues,tests,dependencies,status,evidence_refs,source_commit,last_verified_at,owner_issue,notes
