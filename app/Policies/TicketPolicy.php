@@ -4,21 +4,28 @@ namespace App\Policies;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\AuthorizationService;
 
 class TicketPolicy
 {
+    private function canManageSupport(User $user, Ticket $ticket): bool
+    {
+        return app(AuthorizationService::class)->allowsRecord($user, 'support.manage', $ticket);
+    }
+
     public function viewAny(User $user): bool
     {
-        return true;
+        return app(AuthorizationService::class)->allows($user, 'support.manage')
+            || $user->hasDashboardRole(User::ROLE_USER)
+            || $user->hasDashboardRole(User::ROLE_EMPLOYEE)
+            || $user->hasDashboardRole(User::ROLE_ORGANIZATION_MANAGER)
+            || $user->hasDashboardRole(User::ROLE_TEAM_SUPERVISOR);
     }
 
     public function view(User $user, Ticket $ticket): bool
     {
-        if ($user->isAdmin()) {
-            return true;
-        }
-
-        return (int) $ticket->user_id === (int) $user->id;
+        return (int) $ticket->user_id === (int) $user->id
+            || $this->canManageSupport($user, $ticket);
     }
 
     public function create(User $user): bool
@@ -32,29 +39,23 @@ class TicketPolicy
             return false;
         }
 
-        if ($user->isAdmin()) {
-            return true;
-        }
-
-        return (int) $ticket->user_id === (int) $user->id;
+        return (int) $ticket->user_id === (int) $user->id
+            || $this->canManageSupport($user, $ticket);
     }
 
     public function close(User $user, Ticket $ticket): bool
     {
-        if ($user->isAdmin()) {
-            return true;
-        }
-
-        return (int) $ticket->user_id === (int) $user->id;
+        return (int) $ticket->user_id === (int) $user->id
+            || $this->canManageSupport($user, $ticket);
     }
 
     public function manage(User $user, Ticket $ticket): bool
     {
-        return $user->isAdmin();
+        return $this->canManageSupport($user, $ticket);
     }
 
     public function assign(User $user, Ticket $ticket): bool
     {
-        return $user->isAdmin();
+        return $this->canManageSupport($user, $ticket);
     }
 }
