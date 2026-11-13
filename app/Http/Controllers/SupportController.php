@@ -443,7 +443,6 @@ class SupportController extends Controller
 
     public function adminMeta(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('manage', $ticket);
 
         $data = $request->validate([
