@@ -19,7 +19,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
     private function supportAgent(): User
     {
         $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $agent = User::factory()->create(['role' => User::ROLE_USER]);
+        $agent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
         $permission = Permission::firstOrCreate(
             ['key' => 'support.manage'],
             ['label' => 'Support management', 'group' => 'support'],
