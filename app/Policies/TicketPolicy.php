@@ -15,11 +15,7 @@ class TicketPolicy
 
     public function viewAny(User $user): bool
     {
-        return app(AuthorizationService::class)->allows($user, 'support.manage')
-            || $user->hasDashboardRole(User::ROLE_USER)
-            || $user->hasDashboardRole(User::ROLE_EMPLOYEE)
-            || $user->hasDashboardRole(User::ROLE_ORGANIZATION_MANAGER)
-            || $user->hasDashboardRole(User::ROLE_TEAM_SUPERVISOR);
+        return true;
     }
 
     public function view(User $user, Ticket $ticket): bool
