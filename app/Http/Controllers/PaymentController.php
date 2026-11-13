@@ -44,6 +44,7 @@ class PaymentController extends Controller
         abort_if(strlen($idempotencyKey) > 120, 422, 'کلید تکرارپذیری درخواست معتبر نیست.');
 
         $order = Order::firstOrCreate([
+            'user_id' => auth()->id(),
             'idempotency_key' => $idempotencyKey,
         ], [
             'user_id' => auth()->id(),
