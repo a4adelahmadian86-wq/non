@@ -400,25 +400,42 @@ class SupportTicketService
             return $ticket;
         }
 
-        if ($agent !== null) {
-            abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
+        [$fresh, $assignmentMessageId, $changed] = DB::transaction(function () use ($ticket, $agent, $actor): array {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+
+            if ((int) ($locked->assigned_to ?? 0) === (int) ($agent?->id ?? 0)) {
+                return [$locked->fresh(['assignee']), null, false];
+            }
+
+            if ($agent !== null) {
+                abort_unless($this->isEligibleSupportAgent($agent, $locked), 403);
+            }
+
+            $locked->update(['assigned_to' => $agent?->id]);
+
+            $assignmentMessage = null;
+            if ($actor) {
+                $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
+                $assignmentMessage = $this->addMessage($locked, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
+
+            return [$locked->fresh(['assignee']), $assignmentMessage?->id, true];
+        });
+
+        if (! $changed) {
+            return $fresh;
         }
 
-        $ticket->update(['assigned_to' => $agent?->id]);
-
-        $assignmentMessage = null;
-        if ($actor) {
-            $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
-            $assignmentMessage = $this->addMessage($ticket, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
-        }
-
-        $fresh = $ticket->fresh(['assignee']);
-        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $assignmentMessage ? 'message:'.$assignmentMessage->id : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
+        $this->safeNotify(fn () => $this->notifier->assigned(
+            $fresh,
+            $agent,
+            $assignmentMessageId ? 'message:'.$assignmentMessageId : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
+        ));
 
         return $fresh;
     }
