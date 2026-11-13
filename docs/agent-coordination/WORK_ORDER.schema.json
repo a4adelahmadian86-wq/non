@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/a4adelahmadian86-wq/non/blob/work/farast-multi-chat-team-infrastructure/docs/agent-coordination/WORK_ORDER.schema.json",
+  "title": "FARAST Work Order",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "work_order_id",
+    "task_id",
+    "stage_id",
+    "prompt_id",
+    "version",
+    "objective",
+    "why_now",
+    "accountable_role",
+    "reviewer_role",
+    "source_commit",
+    "inputs",
+    "evidence_refs",
+    "capability_ids_in_scope",
+    "protected_capability_ids",
+    "write_scope",
+    "out_of_scope",
+    "ordered_steps",
+    "expected_artifacts",
+    "validation_steps",
+    "acceptance_criteria",
+    "dependencies",
+    "parallelization_key",
+    "conflict_files",
+    "risk_level",
+    "rollback",
+    "stop_conditions",
+    "human_decisions",
+    "handoff_target",
+    "handoff_payload",
+    "status"
+  ],
+  "properties": {
+    "work_order_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^GH-[0-9]+$"
+    },
+    "stage_id": {
+      "enum": [
+        "EXP-01",
+        "EXP-02",
+        "EXP-03",
+        "EXP-04",
+        "EXP-05",
+        "EXP-06",
+        "EXP-07",
+        "EXP-08",
+        "EXP-09",
+        "EXP-10"
+      ]
+    },
+    "prompt_id": {
+      "enum": [
+        "P-01",
+        "P-02",
+        "P-03",
+        "P-04",
+        "P-05",
+        "P-06",
+        "P-07",
+        "P-08",
+        "P-09",
+        "P-10",
+        "REVIEW"
+      ]
+    },
+    "version": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 20
+    },
+    "why_now": {
+      "type": "string",
+      "minLength": 10
+    },
+    "accountable_role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer_role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "capability_ids_in_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "protected_capability_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "write_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths",
+        "prohibited_paths"
+      ],
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prohibited_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ordered_steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 20
+      }
+    },
+    "expected_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "format",
+          "required_fields"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "required_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "validation_steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command_or_procedure",
+          "expected_result"
+        ],
+        "properties": {
+          "command_or_procedure": {
+            "type": "string"
+          },
+          "expected_result": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "condition",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "parallelization_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "conflict_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risk_level": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "rollback": {
+      "type": "string",
+      "minLength": 10
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "human_decisions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "handoff_target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "handoff_payload": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "in_progress",
+        "blocked",
+        "review",
+        "accepted"
+      ]
+    }
+  }
+}
