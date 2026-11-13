@@ -61,6 +61,8 @@
   const rotateButton=root.querySelector('#reader-rotate');
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
+  const layersSection=root.querySelector('#reader-layers');
+  const layersHost=root.querySelector('#reader-layers-list');
 
   let pdfjsPromise=null;
   const getPdfjs=()=>{
@@ -103,6 +105,13 @@
       else if(action==='FirstPage')navigatePdfPage(1).catch(showPdfError);
       else if(action==='LastPage')navigatePdfPage(pdfDoc.numPages).catch(showPdfError);
     });
+    service.executeSetOCGState=async action=>{
+      if(!pdfOptionalContentConfig?.setOCGState)return;
+      pdfOptionalContentConfig.setOCGState(action);
+      refreshPdfLayerControls();
+      if(continuousMode)await refreshContinuousVisiblePages(true);
+      else await renderPdfPage(pdfPage);
+    };
     pdfLinkService=service;pdfLinkEventBus=eventBus;pdfLinkDocument=pdfDoc;
     return service;
   };
@@ -140,7 +149,7 @@
   };
 
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -363,7 +372,9 @@
     pdfCanvas.style.height=viewport.height+'px';
     if(pdfSurface){pdfSurface.style.width=viewport.width+'px';pdfSurface.style.minHeight=viewport.height+'px';}
     context.setTransform(ratio,0,0,ratio,0,0);
-    renderTask=page.render({canvasContext:context,viewport});
+    const renderOptions={canvasContext:context,viewport};
+    if(pdfOptionalContentConfig)renderOptions.optionalContentConfigPromise=Promise.resolve(pdfOptionalContentConfig);
+    renderTask=page.render(renderOptions);
     try{await renderTask.promise;}catch(error){
       if(error?.name==='RenderingCancelledException')return;
       throw error;
@@ -452,7 +463,9 @@
     wrapper.dataset.renderedHeight=String(Math.round(viewport.height));
     const context=canvas.getContext('2d',{alpha:false});
     context.setTransform(ratio,0,0,ratio,0,0);
-    await page.render({canvasContext:context,viewport}).promise;
+    const renderOptions={canvasContext:context,viewport};
+    if(pdfOptionalContentConfig)renderOptions.optionalContentConfigPromise=Promise.resolve(pdfOptionalContentConfig);
+    await page.render(renderOptions).promise;
     paintPdfWatermark(canvas);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
     if(textLayer&&window.pdfjsLib?.TextLayer){
@@ -672,6 +685,68 @@
     }catch(_){outlineSection.hidden=true;}
   };
 
+  const refreshPdfLayerControls=()=>{
+    if(!layersHost||!pdfOptionalContentConfig)return;
+    const groups=pdfOptionalContentConfig.getGroups?.()||{};
+    const entries=groups instanceof Map?[...groups.entries()]:Object.entries(groups);
+    const inputs=[...layersHost.querySelectorAll('input[data-ocg-id]')];
+    for(const [id,group] of entries){
+      const input=inputs.find(item=>item.dataset.ocgId===String(id));
+      if(input)input.checked=group.visible!==false;
+    }
+  };
+
+  const loadPdfLayers=async()=>{
+    if(!pdfDoc||!layersSection||!layersHost)return;
+    try{
+      if(!pdfOptionalContentConfig&&typeof pdfDoc.getOptionalContentConfig==='function'){
+        pdfOptionalContentConfig=await pdfDoc.getOptionalContentConfig({intent:'display'});
+      }
+      const groups=pdfOptionalContentConfig?.getGroups?.()||{};
+      const entries=groups instanceof Map?[...groups.entries()]:Object.entries(groups);
+      root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
+        supported:typeof pdfDoc.getOptionalContentConfig==='function',
+        count:entries.length,
+        groups:entries.map(([id,group])=>({id:String(id),name:String(group?.name||''),visible:group?.visible!==false}))
+      }}));
+      layersHost.replaceChildren();
+      const visibleGroups=entries.filter(([,group])=>group&&typeof group==='object');
+      if(!visibleGroups.length){layersSection.hidden=true;return;}
+      const fragment=document.createDocumentFragment();
+      visibleGroups.forEach(([id,group],index)=>{
+        const label=document.createElement('label');
+        label.className='farast-reader-layer-option';
+        const input=document.createElement('input');
+        input.type='checkbox';
+        input.checked=group.visible!==false;
+        input.dataset.ocgId=String(id);
+        input.addEventListener('change',async()=>{
+          pdfOptionalContentConfig.setVisibility(id,input.checked);
+          refreshPdfLayerControls();
+          try{
+            if(continuousMode)await refreshContinuousVisiblePages(true);
+            else await renderPdfPage(pdfPage);
+          }catch(error){showPdfError(error);}
+        });
+        const name=document.createElement('span');
+        name.textContent=String(group.name||('لایه '+faNumber(index+1)));
+        label.append(input,name);
+        fragment.append(label);
+      });
+      layersHost.append(fragment);
+      layersSection.hidden=false;
+    }catch(error){
+      root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
+        supported:typeof pdfDoc?.getOptionalContentConfig==='function',
+        count:0,
+        groups:[],
+        error:String(error?.message||error)
+      }}));
+      layersHost.replaceChildren();
+      layersSection.hidden=true;
+    }
+  };
+
   const loadPdf=async()=>{
     const surface=activeArticle()?.querySelector('.farast-pdf-document');
     const nextUrl=surface?.dataset.pdfUrl;
@@ -688,7 +763,9 @@
       pdfLoading=surface.querySelector('.farast-pdf-loading');
       continuousHost=surface.querySelector('.farast-pdf-continuous-pages');
       activePdfUrl=nextUrl;
-      pdfPage=1;pdfMatches=[];matchIndex=-1;
+      pdfPage=1;pdfMatches=[];matchIndex=-1;pdfOptionalContentConfig=null;
+      layersHost?.replaceChildren();
+      if(layersSection)layersSection.hidden=true;
       scrollModeButton?.setAttribute('aria-pressed','false');
     }else{
       pdfSurface=surface;
@@ -704,6 +781,9 @@
         const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
         loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
         pdfDoc=await loadingTask.promise;
+        if(typeof pdfDoc.getOptionalContentConfig==='function'){
+          try{pdfOptionalContentConfig=await pdfDoc.getOptionalContentConfig({intent:'display'});}catch(_){pdfOptionalContentConfig=null;}
+        }
       }
       if(pdfDoc.isPureXfa){
         if(pdfLoading){
@@ -716,6 +796,7 @@
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
+      await loadPdfLayers();
     }catch(error){if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
   };
 
