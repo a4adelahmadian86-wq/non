@@ -208,6 +208,102 @@ class SupportSlaService
         ];
     }
 
+    /**
+     * Build the SLA fields required for a status transition.
+     * Resolution time is frozen while a ticket waits for the customer.
+     *
+     * @return array<string, mixed>
+     */
+    public function statusTransitionAttributes(Ticket $ticket, string $newStatus): array
+    {
+        if (! Schema::hasColumn('tickets', 'sla_resolve_due_at')
+            || ! Schema::hasColumn('tickets', 'sla_paused_at')
+            || ! Schema::hasColumn('tickets', 'sla_resolve_remaining_minutes')) {
+            return [];
+        }
+
+        $oldStatus = (string) $ticket->status;
+        if ($oldStatus === $newStatus) {
+            return [];
+        }
+
+        if ($newStatus === 'pending' && $oldStatus !== 'pending') {
+            $dueAt = $ticket->sla_resolve_due_at;
+
+            return [
+                'sla_paused_at' => now(),
+                'sla_resolve_remaining_minutes' => $dueAt
+                    ? $this->businessMinutesBetween(now(), $dueAt)
+                    : null,
+            ];
+        }
+
+        if ($oldStatus === 'pending' && $newStatus !== 'pending' && $ticket->sla_paused_at) {
+            $remaining = $ticket->sla_resolve_remaining_minutes;
+
+            return [
+                'sla_resolve_due_at' => $remaining === null
+                    ? $ticket->sla_resolve_due_at
+                    : $this->addSlaMinutes(now(), (int) $remaining),
+                'sla_paused_at' => null,
+                'sla_resolve_remaining_minutes' => null,
+            ];
+        }
+
+        return [];
+    }
+
+    /**
+     * Count working minutes in [from, to), using the same calendar as SLA deadlines.
+     */
+    public function businessMinutesBetween(Carbon $from, Carbon $to): int
+    {
+        if ($to->lte($from)) {
+            return 0;
+        }
+
+        if (! config('support.business_hours_only', true)) {
+            return (int) floor(($to->getTimestamp() - $from->getTimestamp()) / 60);
+        }
+
+        $tz = config('support.business_hours.timezone', config('app.timezone', 'Asia/Tehran'));
+        $startH = (int) config('support.business_hours.start', 9);
+        $endH = (int) config('support.business_hours.end', 18);
+        $weekend = config('support.business_hours.weekend', [4, 5]);
+        $cursor = $from->copy()->timezone($tz);
+        $end = $to->copy()->timezone($tz);
+        $minutes = 0;
+        $guard = 0;
+
+        while ($cursor->lt($end) && $guard < 20000) {
+            $guard++;
+            if (in_array((int) $cursor->dayOfWeek, $weekend, true)) {
+                $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+                continue;
+            }
+
+            $dayStart = $cursor->copy()->setTime($startH, 0, 0);
+            $dayEnd = $cursor->copy()->setTime($endH, 0, 0);
+            if ($cursor->lt($dayStart)) {
+                $cursor = $dayStart;
+            }
+            if ($cursor->gte($dayEnd)) {
+                $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+                continue;
+            }
+
+            $segmentEnd = $end->lt($dayEnd) ? $end : $dayEnd;
+            if ($segmentEnd->gt($cursor)) {
+                $minutes += (int) floor(($segmentEnd->getTimestamp() - $cursor->getTimestamp()) / 60);
+            }
+            $cursor = $dayEnd->lt($end)
+                ? $dayEnd->addDay()->startOfDay()->setTime($startH, 0, 0)
+                : $end->copy();
+        }
+
+        return $minutes;
+    }
+
     public function markResolved(Ticket $ticket): void
     {
         if (Schema::hasColumn('tickets', 'resolved_at') && empty($ticket->resolved_at)) {
