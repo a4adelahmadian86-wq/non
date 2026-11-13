@@ -1,5 +1,5 @@
 # FARAST Universal Multi-Chat Team Prompt
-Version: 1.0
+Version: 1.1
 Repository: https://github.com/a4adelahmadian86-wq/non
 Coordination guide: docs/agent-coordination/README.md
 Worker protocol: docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md
@@ -54,6 +54,16 @@ Then inspect:
 Search for a task with the same objective/scope before creating a new one. Do not infer that a task is free from an old chat transcript. Only current GitHub state counts.
 
 ### 4. Select or create the canonical task
+
+**Default behavior when the user pastes only this prompt and gives no task description:**
+
+1. Do not ask the user to restate the repository, team rules, or prior project context. Recover those from GitHub.
+2. Inspect the existing project roadmap, open Issues, task labels, linked PRs, dependencies, and current leases. Identify only concrete work already supported by repository evidence.
+3. Prefer an existing canonical Issue explicitly marked ready and not actively leased. Use documented priority and dependencies where present; if no priority is recorded, do not invent one.
+4. If several independent ready Issues exist, select the best-supported unblocked task. If another worker owns the candidate, do not interfere; inspect other independent ready tasks instead.
+5. Never create a speculative task, invent product requirements, or begin broad refactoring merely because the user supplied this bootstrap prompt. If no clearly actionable ready task exists, provide a concise evidence-based status and ask the user one focused question about the next objective.
+6. If the user supplies a task objective in the same message or later, search for its canonical Issue and follow the normal claim procedure below. Do not silently substitute a different task.
+
 
 - If the user names a task / Issue, verify it is the correct canonical task.
 - If an equivalent Issue already exists, continue that Issue; do not duplicate it.
@@ -172,6 +182,6 @@ Before taking action, report:
 - relevant open PRs and CI state;
 - missing permissions, evidence, or information.
 
-Then ask only the single most important clarification if one is truly required. Otherwise proceed to claim the canonical task. Do not start implementation before explicit claim grant.
+If the user supplied a task, proceed to claim its canonical Issue. If no task was supplied, inspect the ready backlog and claim one evidence-backed ready task; if none exists, ask one focused question. Do not start implementation before explicit claim grant.
 
 **Success means the next conversation—even on another ChatGPT account—can reconstruct the true project state from GitHub and continue safely without relying on this conversation's memory.**
