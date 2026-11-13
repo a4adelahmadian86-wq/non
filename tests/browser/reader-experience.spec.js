@@ -132,6 +132,10 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
 }
 
 
+function optionalLayerIdForFixture(pageCount, withAnnotations) {
+  return 3 + pageCount * 3 + (withAnnotations ? 2 + (pageCount > 1 ? 1 : 0) : 0);
+}
+
 function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = false) {
   const annotationId = 3 + pageCount * 3;
   const optionalLayerId = 3 + pageCount * 3 + (withAnnotations ? 2 + (pageCount > 1 ? 1 : 0) : 0);
@@ -140,8 +144,9 @@ function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = fal
   const catalog = withAnnotations
     ? '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [' + widgetId + ' 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >>'
     : '<< /Type /Catalog /Pages 2 0 R >>';
+  const catalogWithVersion = withLayers ? catalog.replace('/Type /Catalog', '/Type /Catalog /Version /1.5') : catalog;
   const objects = [
-    withLayers ? catalog.replace(/ >>$/, ' /OCProperties << /OCGs [' + optionalLayerId + ' 0 R] /D << /BaseState /ON /Order [' + optionalLayerId + ' 0 R] /ON [' + optionalLayerId + ' 0 R] >> >> >>') : catalog,
+    withLayers ? catalogWithVersion.replace(/ >>$/, ' /OCProperties << /OCGs [' + optionalLayerId + ' 0 R] /D << /Name (Default) /BaseState /ON /Intent [/View] /Order [' + optionalLayerId + ' 0 R] /ON [' + optionalLayerId + ' 0 R] /AS [ << /Event /View /Category [/View] >> ] >> >> >>') : catalogWithVersion,
     '<< /Type /Pages /Kids [' + Array.from({ length: pageCount }, (_, index) => (3 + index * 3) + ' 0 R').join(' ') + '] /Count ' + pageCount + ' >>',
   ];
   for (let page = 1; page <= pageCount; page++) {
@@ -162,7 +167,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = fal
       objects.push('<< /Type /Annot /Subtype /Link /Rect [72 590 240 625] /Border [0 0 0] /Dest [6 0 R /Fit] /F 4 /P 3 0 R >>');
     }
   }
-  if (withLayers) objects.push('<< /Type /OCG /Name (Optional test layer) /Intent /View >>');
+  if (withLayers) objects.push('<< /Type /OCG /Name (Optional test layer) /Intent [/View] /Usage << /View << /ViewState /ON >> >> >>');
   let pdf = withLayers ? '%PDF-1.5\n' : '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -187,10 +192,23 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
     contentType: 'text/html',
     body: '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
   }));
+  const fixturePdf = makePdfFixture(pageCount, withAnnotations, withLayers);
+  if (withLayers) {
+    const fixtureText = fixturePdf.toString('binary');
+    if (!fixtureText.startsWith('%PDF-1.5') || !fixtureText.includes('/OCProperties') || !fixtureText.includes('/Type /OCG')) {
+      throw new Error('Optional-content PDF fixture is missing its PDF 1.5 OCG catalog structures');
+    }
+    console.log('[PDF QA OCG fixture]', JSON.stringify({
+      header: fixtureText.slice(0, 8),
+      hasCatalogVersion: fixtureText.includes('/Version /1.5'),
+      hasOCProperties: fixtureText.includes('/OCProperties'),
+      hasOCGReference: fixtureText.includes('/OCGs [' + optionalLayerIdForFixture(pageCount, withAnnotations) + ' 0 R]'),
+    }));
+  }
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
-    body: makePdfFixture(pageCount, withAnnotations, withLayers),
+    body: fixturePdf,
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
