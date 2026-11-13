@@ -189,6 +189,9 @@ class SupportTicketService
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
             $temporaryPath = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            if (! is_string($temporaryPath) || $temporaryPath === '') {
+                throw new \RuntimeException('ذخیره موقت پیوست تیکت ناموفق بود.');
+            }
 
             try {
                 $inspection = app(UploadSecurityService::class)->inspect($temporaryPath, (string) $file->getMimeType(), 8 * 1024 * 1024);
