@@ -168,6 +168,7 @@ Read these files from the current default branch and the active task branch/PR w
 - `docs/agent-coordination/CHATGPT_AGENT_PROTOCOL.md`
 - `docs/agent-coordination/PROMPT_EXECUTION_PLAYBOOK.md` (mandatory exact work-order and stage-prompt specification)
 - `docs/agent-coordination/WORK_ORDER_TEMPLATE.md` (required assignment format)
+- `docs/agent-coordination/WORK_ORDER.schema.json` (machine-readable Work Order validation)
 - `docs/project-state/STAGE_LEDGER.md` (shared stage status; verify before updating)
 - `docs/product-discovery/CAPABILITY_REGISTER.csv` (stable capability inventory)
 - this file: `docs/agent-coordination/UNIVERSAL_CHATGPT_TEAM_PROMPT.md`
