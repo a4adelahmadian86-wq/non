@@ -91,17 +91,17 @@ class SupportController extends Controller
         return view('support.show', compact('ticket'));
     }
 
-    public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities, AuthorizationService $authorization)
     {
-        abort_unless($capabilities->allowed(auth()->user(), 'can_support') || auth()->user()->isAdmin(), 403);
+        $canSeeInternal = $authorization->allowsRecord(auth()->user(), 'support.manage', $ticket);
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
         $afterId = (int) $request->input('after_id', 0);
-        $isAdmin = auth()->user()->isAdmin();
 
         $messages = $ticket->messages()
             ->where('id', '>', $afterId)
-            ->when(! $isAdmin, fn ($q) => $q->where(function ($w) {
+            ->when(! $canSeeInternal, fn ($q) => $q->where(function ($w) {
                 $w->where('is_internal', false)->orWhereNull('is_internal');
             }))
             ->orderBy('created_at')
@@ -123,7 +123,7 @@ class SupportController extends Controller
                 ];
             });
 
-        if (! $isAdmin) {
+        if (! $canSeeInternal) {
             $this->tickets->markCustomerSeen($ticket);
         }
 
@@ -262,8 +262,6 @@ class SupportController extends Controller
 
     public function adminIndex(Request $request)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-
         $query = Ticket::with([
             'messages' => fn ($q) => $q->orderBy('created_at'),
             'user', 'relatedProduct', 'assignee',
@@ -391,7 +389,6 @@ class SupportController extends Controller
 
     public function adminReply(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('manage', $ticket);
 
         $data = $request->validate([
@@ -418,7 +415,6 @@ class SupportController extends Controller
 
     public function adminStatus(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('manage', $ticket);
 
         $data = $request->validate([
@@ -432,7 +428,6 @@ class SupportController extends Controller
 
     public function adminAssign(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('assign', $ticket);
 
         $data = $request->validate([
@@ -448,7 +443,6 @@ class SupportController extends Controller
 
     public function adminMeta(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('manage', $ticket);
 
         $data = $request->validate([
@@ -550,11 +544,11 @@ class SupportController extends Controller
         ]);
     }
 
-    public function attachment(Request $request, Ticket $ticket, TicketMessage $message, int $index, StorageManager $storage)
+    public function attachment(Request $request, Ticket $ticket, TicketMessage $message, int $index, StorageManager $storage, AuthorizationService $authorization)
     {
         $this->authorize('view', $ticket);
         abort_unless((int) $message->ticket_id === (int) $ticket->id, 404);
-        abort_if($message->is_internal && ! $request->user()->isAdmin(), 404);
+        abort_if($message->is_internal && ! $authorization->allowsRecord($request->user(), 'support.manage', $ticket), 404);
 
         $attachments = array_values((array) ($message->attachments ?? []));
         abort_unless(isset($attachments[$index]) && is_array($attachments[$index]), 404);
