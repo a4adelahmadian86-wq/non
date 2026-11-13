@@ -171,7 +171,6 @@ class SupportTicketService
         $isInternal = (bool) ($options['is_internal'] ?? false);
         $touchStatus = $options['touch_status'] ?? true;
         $notify = $options['notify'] ?? true;
-        $previousStatus = $ticket->status;
 
         $payload = [
             'user_id' => $actor?->id,
@@ -183,15 +182,25 @@ class SupportTicketService
             $payload['is_staff'] = $isStaff;
         }
 
+        $temporaryPath = null;
+        $managed = null;
+
         if (! empty($options['attachment']) && $options['attachment'] instanceof UploadedFile
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
-            $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            $temporaryPath = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            if (! is_string($temporaryPath) || $temporaryPath === '') {
+                throw new \RuntimeException('ذخیره موقت پیوست تیکت ناموفق بود.');
+            }
+
             try {
-                $inspection = app(UploadSecurityService::class)->inspect($path, (string) $file->getMimeType(), 8 * 1024 * 1024);
-                if (empty($inspection['safe'])) throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                $inspection = app(UploadSecurityService::class)->inspect($temporaryPath, (string) $file->getMimeType(), 8 * 1024 * 1024);
+                if (empty($inspection['safe'])) {
+                    throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                }
+
                 $managed = app(StorageManager::class)->adoptExistingPrivate(
-                    $path,
+                    $temporaryPath,
                     $file->getClientOriginalName(),
                     (string) ($inspection['mime'] ?? $file->getMimeType()),
                     (int) $file->getSize(),
@@ -200,11 +209,12 @@ class SupportTicketService
                     (int) $ticket->id
                 );
             } catch (\Throwable $exception) {
-        if (isset($path) && $path !== '') {
-            \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
-        }
+                if ($temporaryPath !== '') {
+                    \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
+                }
                 throw $exception;
             }
+
             $payload['attachments'] = [[
                 'path' => $managed['path'],
                 'disk' => $managed['disk'],
@@ -216,67 +226,105 @@ class SupportTicketService
             ]];
         }
 
-        $message = $ticket->messages()->create($payload);
-        if (isset($path) && $path !== '') {
-            \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
+        try {
+            [$message, $previousStatus, $fresh] = DB::transaction(function () use (
+                $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus
+            ): array {
+                $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+                $previousStatus = (string) $locked->status;
+
+                // A customer reply must not race past a concurrent ticket close.
+                if (! $isStaff && ! $isInternal && $previousStatus === 'closed') {
+                    throw new \InvalidArgumentException('این تیکت بسته شده و امکان ارسال پاسخ ندارد.');
+                }
+
+                $message = $locked->messages()->create($payload);
+
+                foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
+                    if (! empty($attachment['managed_file_id'])) {
+                        app(StorageManager::class)->bindReference(
+                            (int) $attachment['managed_file_id'],
+                            TicketMessage::class,
+                            (int) $message->id
+                        );
+                    }
+                }
+
+                if ($touchStatus && ! $isInternal) {
+                    $update = [];
+                    if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                        $update['last_reply_at'] = now();
+                    }
+
+                    if ($isStaff) {
+                        $targetStatus = (string) ($options['status'] ?? 'answered');
+                        if (! in_array($targetStatus, self::STATUSES, true)) {
+                            throw new \InvalidArgumentException('وضعیت نامعتبر است.');
+                        }
+
+                        $update['status'] = $targetStatus;
+                        if (Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
+                            $update['first_response_at'] = now();
+                        }
+
+                        if ($targetStatus === 'closed') {
+                            if (Schema::hasColumn('tickets', 'closed_at')) {
+                                $update['closed_at'] = now();
+                            }
+                            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                                $update['resolved_at'] = now();
+                            }
+                        } else {
+                            if (Schema::hasColumn('tickets', 'closed_at')) {
+                                $update['closed_at'] = null;
+                            }
+                            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                                $update['resolved_at'] = null;
+                            }
+                        }
+                    } else {
+                        $update['status'] = 'user_replied';
+                        if (Schema::hasColumn('tickets', 'closed_at')) {
+                            $update['closed_at'] = null;
+                        }
+                        if (Schema::hasColumn('tickets', 'resolved_at')) {
+                            $update['resolved_at'] = null;
+                        }
+                    }
+
+                    if (isset($update['status'])) {
+                        $update = array_merge(
+                            $update,
+                            $this->sla->statusTransitionAttributes($locked, (string) $update['status'])
+                        );
+                    }
+
+                    if ($update !== []) {
+                        $locked->update($update);
+                    }
+                }
+
+                return [$message, $previousStatus, $locked->fresh()];
+            });
+        } catch (\Throwable $exception) {
+            if ($temporaryPath !== null && $temporaryPath !== '') {
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
+            }
+            if (is_array($managed) && ! empty($managed['disk']) && ! empty($managed['path'])) {
+                try {
+                    app(StorageManager::class)->delete((string) $managed['disk'], (string) $managed['path']);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+            throw $exception;
         }
-        foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
-            if (! empty($attachment['managed_file_id'])) {
-                app(StorageManager::class)->bindReference((int) $attachment['managed_file_id'], TicketMessage::class, (int) $message->id);
-            }
-        }
 
-        if ($touchStatus && ! $isInternal) {
-            $update = [];
-            if (Schema::hasColumn('tickets', 'last_reply_at')) {
-                $update['last_reply_at'] = now();
-            }
-
-            if ($isStaff) {
-                $update['status'] = $options['status'] ?? 'answered';
-                if (Schema::hasColumn('tickets', 'first_response_at') && empty($ticket->first_response_at)) {
-                    $update['first_response_at'] = now();
-                }
-                if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-                    $update['closed_at'] = now();
-                }
-                if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-                    $update['resolved_at'] = now();
-                }
-                if (($options['status'] ?? 'answered') !== 'closed') {
-                    if (Schema::hasColumn('tickets', 'closed_at')) {
-                        $update['closed_at'] = null;
-                    }
-                    if (Schema::hasColumn('tickets', 'resolved_at')) {
-                        $update['resolved_at'] = null;
-                    }
-                }
-            } else {
-                if ($ticket->status !== 'closed') {
-                    $update['status'] = 'user_replied';
-                    if (Schema::hasColumn('tickets', 'resolved_at')) {
-                        $update['resolved_at'] = null;
-                    }
-                }
-                if (Schema::hasColumn('tickets', 'closed_at')) {
-                    $update['closed_at'] = null;
-                }
-            }
-
-            if (isset($update['status'])) {
-                $update = array_merge(
-                    $update,
-                    $this->sla->statusTransitionAttributes($ticket, (string) $update['status'])
-                );
-            }
-
-            if ($update) {
-                $ticket->update($update);
-            }
+        if ($temporaryPath !== null && $temporaryPath !== '') {
+            \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
         }
 
         if ($notify && ! $isInternal) {
-            $fresh = $ticket->fresh();
             if ($isStaff) {
                 $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
                 if (($options['status'] ?? null) === 'closed') {
@@ -296,36 +344,55 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        $old = $ticket->status;
-        $update = ['status' => $status];
-        if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-            $update['closed_at'] = now();
-        }
-        if ($status === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-            $update['resolved_at'] = now();
-        }
-        if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-            $update['closed_at'] = null;
-        }
-        if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-            $update['resolved_at'] = null;
-        }
-        $update = array_merge($update, $this->sla->statusTransitionAttributes($ticket, $status));
-        $ticket->update($update);
+        [$fresh, $old, $transitionMessageId, $changed] = DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            $old = (string) $locked->status;
 
-        $transitionMessage = null;
-        if ($systemNote && $actor) {
-            $label = $ticket->fresh()->statusLabel();
-            $transitionMessage = $this->addMessage($ticket, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
+            if ($old === $status) {
+                return [$locked->fresh(), $old, null, false];
+            }
+
+            $update = ['status' => $status];
+            if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
+                $update['closed_at'] = now();
+            }
+            if ($status === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
+                $update['resolved_at'] = now();
+            }
+            if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
+                $update['closed_at'] = null;
+            }
+            if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
+                $update['resolved_at'] = null;
+            }
+
+            $update = array_merge($update, $this->sla->statusTransitionAttributes($locked, $status));
+            $locked->update($update);
+
+            $transitionMessage = null;
+            if ($systemNote && $actor) {
+                $label = $locked->fresh()->statusLabel();
+                $transitionMessage = $this->addMessage($locked, $actor, '[سیستم] وضعیت تیکت به «'.$label.'» تغییر کرد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
+
+            return [$locked->fresh(), $old, $transitionMessage?->id, true];
+        });
+
+        if (! $changed) {
+            return $fresh;
         }
 
-        $fresh = $ticket->fresh();
-        $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $old, $status, $transitionMessage ? 'message:'.$transitionMessage->id : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
+        $this->safeNotify(fn () => $this->notifier->statusChanged(
+            $fresh,
+            $old,
+            $status,
+            $transitionMessageId ? 'message:'.$transitionMessageId : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
+        ));
 
         return $fresh;
     }
@@ -336,25 +403,42 @@ class SupportTicketService
             return $ticket;
         }
 
-        if ($agent !== null) {
-            abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
+        [$fresh, $assignmentMessageId, $changed] = DB::transaction(function () use ($ticket, $agent, $actor): array {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+
+            if ((int) ($locked->assigned_to ?? 0) === (int) ($agent?->id ?? 0)) {
+                return [$locked->fresh(['assignee']), null, false];
+            }
+
+            if ($agent !== null) {
+                abort_unless($this->isEligibleSupportAgent($agent, $locked), 403);
+            }
+
+            $locked->update(['assigned_to' => $agent?->id]);
+
+            $assignmentMessage = null;
+            if ($actor) {
+                $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
+                $assignmentMessage = $this->addMessage($locked, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
+
+            return [$locked->fresh(['assignee']), $assignmentMessage?->id, true];
+        });
+
+        if (! $changed) {
+            return $fresh;
         }
 
-        $ticket->update(['assigned_to' => $agent?->id]);
-
-        $assignmentMessage = null;
-        if ($actor) {
-            $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
-            $assignmentMessage = $this->addMessage($ticket, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
-        }
-
-        $fresh = $ticket->fresh(['assignee']);
-        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $assignmentMessage ? 'message:'.$assignmentMessage->id : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')));
+        $this->safeNotify(fn () => $this->notifier->assigned(
+            $fresh,
+            $agent,
+            $assignmentMessageId ? 'message:'.$assignmentMessageId : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
+        ));
 
         return $fresh;
     }
@@ -364,52 +448,52 @@ class SupportTicketService
      */
     public function updateMeta(Ticket $ticket, array $data, ?User $actor = null): Ticket
     {
-        $update = [];
-        $notes = [];
+        return DB::transaction(function () use ($ticket, $data, $actor): Ticket {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            $update = [];
+            $notes = [];
 
-        if (array_key_exists('priority', $data) && in_array($data['priority'], self::PRIORITIES, true)
-            && $data['priority'] !== $ticket->priority) {
-            $update['priority'] = $data['priority'];
-            $notes[] = 'اولویت به «'.(match ($data['priority']) {
-                'high' => 'زیاد',
-                'low' => 'کم',
-                default => 'متوسط',
-            }).'»';
-        }
+            if (array_key_exists('priority', $data) && in_array($data['priority'], self::PRIORITIES, true)
+                && $data['priority'] !== $locked->priority) {
+                $update['priority'] = $data['priority'];
+                $notes[] = 'اولویت به «'.(match ($data['priority']) {
+                    'high' => 'زیاد',
+                    'low' => 'کم',
+                    default => 'متوسط',
+                }).'»';
+            }
 
-        if (array_key_exists('department', $data) && in_array($data['department'], self::DEPARTMENTS, true)
-            && $data['department'] !== $ticket->department) {
-            $update['department'] = $data['department'];
-            $notes[] = 'دپارتمان به «'.(match ($data['department']) {
-                'sales' => 'فروش',
-                'billing' => 'مالی',
-                'complaint' => 'شکایات',
-                default => 'پشتیبانی',
-            }).'»';
-        }
+            if (array_key_exists('department', $data) && in_array($data['department'], self::DEPARTMENTS, true)
+                && $data['department'] !== $locked->department) {
+                $update['department'] = $data['department'];
+                $notes[] = 'دپارتمان به «'.(match ($data['department']) {
+                    'sales' => 'فروش',
+                    'billing' => 'مالی',
+                    'complaint' => 'شکایات',
+                    default => 'پشتیبانی',
+                }).'»';
+            }
 
-        if ($update === []) {
-            return $ticket;
-        }
+            if ($update === []) {
+                return $locked->fresh(['assignee', 'user']);
+            }
 
-        $ticket->update($update);
-        $ticket = $ticket->fresh();
+            $locked->update($update);
+            if (isset($update['priority'])) {
+                $this->sla->applyTargets($locked);
+            }
 
-        if (isset($update['priority'])) {
-            $this->sla->applyTargets($ticket);
-            $ticket = $ticket->fresh();
-        }
+            if ($actor && $notes) {
+                $this->addMessage($locked, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
+                    'is_staff' => true,
+                    'is_internal' => true,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+            }
 
-        if ($actor && $notes) {
-            $this->addMessage($ticket, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
-                'is_staff' => true,
-                'is_internal' => true,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
-        }
-
-        return $ticket->fresh(['assignee', 'user']);
+            return $locked->fresh(['assignee', 'user']);
+        });
     }
 
     /**
@@ -417,26 +501,31 @@ class SupportTicketService
      */
     public function submitCsat(Ticket $ticket, int $score, ?string $comment = null): Ticket
     {
-        if ($ticket->status !== 'closed') {
-            throw new \InvalidArgumentException('فقط تیکت بسته‌شده قابل امتیازدهی است.');
-        }
         if ($score < 1 || $score > 5) {
             throw new \InvalidArgumentException('امتیاز باید بین ۱ تا ۵ باشد.');
         }
         if (! Schema::hasColumn('tickets', 'csat_score')) {
             return $ticket;
         }
-        if ($ticket->csat_at) {
-            throw new \InvalidArgumentException('قبلاً امتیاز ثبت شده است.');
-        }
 
-        $ticket->update([
-            'csat_score' => $score,
-            'csat_comment' => $comment ? Str::limit($comment, 500) : null,
-            'csat_at' => now(),
-        ]);
+        return DB::transaction(function () use ($ticket, $score, $comment): Ticket {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
-        return $ticket->fresh();
+            if ($locked->status !== 'closed') {
+                throw new \InvalidArgumentException('فقط تیکت بسته‌شده قابل امتیازدهی است.');
+            }
+            if ($locked->csat_at) {
+                throw new \InvalidArgumentException('قبلاً امتیاز ثبت شده است.');
+            }
+
+            $locked->update([
+                'csat_score' => $score,
+                'csat_comment' => $comment ? Str::limit($comment, 500) : null,
+                'csat_at' => now(),
+            ]);
+
+            return $locked->fresh();
+        });
     }
 
     public function markCustomerSeen(Ticket $ticket): void
