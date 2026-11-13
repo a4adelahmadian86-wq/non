@@ -498,26 +498,31 @@ class SupportTicketService
      */
     public function submitCsat(Ticket $ticket, int $score, ?string $comment = null): Ticket
     {
-        if ($ticket->status !== 'closed') {
-            throw new \InvalidArgumentException('فقط تیکت بسته‌شده قابل امتیازدهی است.');
-        }
         if ($score < 1 || $score > 5) {
             throw new \InvalidArgumentException('امتیاز باید بین ۱ تا ۵ باشد.');
         }
         if (! Schema::hasColumn('tickets', 'csat_score')) {
             return $ticket;
         }
-        if ($ticket->csat_at) {
-            throw new \InvalidArgumentException('قبلاً امتیاز ثبت شده است.');
-        }
 
-        $ticket->update([
-            'csat_score' => $score,
-            'csat_comment' => $comment ? Str::limit($comment, 500) : null,
-            'csat_at' => now(),
-        ]);
+        return DB::transaction(function () use ($ticket, $score, $comment): Ticket {
+            $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
-        return $ticket->fresh();
+            if ($locked->status !== 'closed') {
+                throw new \InvalidArgumentException('فقط تیکت بسته‌شده قابل امتیازدهی است.');
+            }
+            if ($locked->csat_at) {
+                throw new \InvalidArgumentException('قبلاً امتیاز ثبت شده است.');
+            }
+
+            $locked->update([
+                'csat_score' => $score,
+                'csat_comment' => $comment ? Str::limit($comment, 500) : null,
+                'csat_at' => now(),
+            ]);
+
+            return $locked->fresh();
+        });
     }
 
     public function markCustomerSeen(Ticket $ticket): void
