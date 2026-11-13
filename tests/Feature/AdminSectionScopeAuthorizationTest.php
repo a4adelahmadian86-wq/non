@@ -277,4 +277,14 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+    public function test_store_management_requires_global_store_section_access(): void
+    {
+        $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
+        $employee = $this->makeUser('09123456792', User::ROLE_EMPLOYEE, $organization->id);
+        $manager = $this->makeUser('09123456793', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        $this->actingAs($employee)->get('/admin/store')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/store')->assertForbidden();
+    }
+
 }
