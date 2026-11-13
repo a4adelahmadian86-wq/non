@@ -171,7 +171,6 @@ class SupportTicketService
         $isInternal = (bool) ($options['is_internal'] ?? false);
         $touchStatus = $options['touch_status'] ?? true;
         $notify = $options['notify'] ?? true;
-        $previousStatus = $ticket->status;
 
         $payload = [
             'user_id' => $actor?->id,
@@ -183,15 +182,22 @@ class SupportTicketService
             $payload['is_staff'] = $isStaff;
         }
 
+        $temporaryPath = null;
+        $managed = null;
+
         if (! empty($options['attachment']) && $options['attachment'] instanceof UploadedFile
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
-            $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            $temporaryPath = $file->store('ticket-attachments/'.$ticket->id, 'private');
+
             try {
-                $inspection = app(UploadSecurityService::class)->inspect($path, (string) $file->getMimeType(), 8 * 1024 * 1024);
-                if (empty($inspection['safe'])) throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                $inspection = app(UploadSecurityService::class)->inspect($temporaryPath, (string) $file->getMimeType(), 8 * 1024 * 1024);
+                if (empty($inspection['safe'])) {
+                    throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                }
+
                 $managed = app(StorageManager::class)->adoptExistingPrivate(
-                    $path,
+                    $temporaryPath,
                     $file->getClientOriginalName(),
                     (string) ($inspection['mime'] ?? $file->getMimeType()),
                     (int) $file->getSize(),
@@ -200,11 +206,12 @@ class SupportTicketService
                     (int) $ticket->id
                 );
             } catch (\Throwable $exception) {
-        if (isset($path) && $path !== '') {
-            \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
-        }
+                if ($temporaryPath !== '') {
+                    \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
+                }
                 throw $exception;
             }
+
             $payload['attachments'] = [[
                 'path' => $managed['path'],
                 'disk' => $managed['disk'],
@@ -216,67 +223,105 @@ class SupportTicketService
             ]];
         }
 
-        $message = $ticket->messages()->create($payload);
-        if (isset($path) && $path !== '') {
-            \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
+        try {
+            [$message, $previousStatus, $fresh] = DB::transaction(function () use (
+                $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus
+            ): array {
+                $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+                $previousStatus = (string) $locked->status;
+
+                // A customer reply must not race past a concurrent ticket close.
+                if (! $isStaff && ! $isInternal && $previousStatus === 'closed') {
+                    throw new \InvalidArgumentException('این تیکت بسته شده و امکان ارسال پاسخ ندارد.');
+                }
+
+                $message = $locked->messages()->create($payload);
+
+                foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
+                    if (! empty($attachment['managed_file_id'])) {
+                        app(StorageManager::class)->bindReference(
+                            (int) $attachment['managed_file_id'],
+                            TicketMessage::class,
+                            (int) $message->id
+                        );
+                    }
+                }
+
+                if ($touchStatus && ! $isInternal) {
+                    $update = [];
+                    if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                        $update['last_reply_at'] = now();
+                    }
+
+                    if ($isStaff) {
+                        $targetStatus = (string) ($options['status'] ?? 'answered');
+                        if (! in_array($targetStatus, self::STATUSES, true)) {
+                            throw new \InvalidArgumentException('وضعیت نامعتبر است.');
+                        }
+
+                        $update['status'] = $targetStatus;
+                        if (Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
+                            $update['first_response_at'] = now();
+                        }
+
+                        if ($targetStatus === 'closed') {
+                            if (Schema::hasColumn('tickets', 'closed_at')) {
+                                $update['closed_at'] = now();
+                            }
+                            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                                $update['resolved_at'] = now();
+                            }
+                        } else {
+                            if (Schema::hasColumn('tickets', 'closed_at')) {
+                                $update['closed_at'] = null;
+                            }
+                            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                                $update['resolved_at'] = null;
+                            }
+                        }
+                    } else {
+                        $update['status'] = 'user_replied';
+                        if (Schema::hasColumn('tickets', 'closed_at')) {
+                            $update['closed_at'] = null;
+                        }
+                        if (Schema::hasColumn('tickets', 'resolved_at')) {
+                            $update['resolved_at'] = null;
+                        }
+                    }
+
+                    if (isset($update['status'])) {
+                        $update = array_merge(
+                            $update,
+                            $this->sla->statusTransitionAttributes($locked, (string) $update['status'])
+                        );
+                    }
+
+                    if ($update !== []) {
+                        $locked->update($update);
+                    }
+                }
+
+                return [$message, $previousStatus, $locked->fresh()];
+            });
+        } catch (\Throwable $exception) {
+            if ($temporaryPath !== null && $temporaryPath !== '') {
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
+            }
+            if (is_array($managed) && ! empty($managed['disk']) && ! empty($managed['path'])) {
+                try {
+                    app(StorageManager::class)->delete((string) $managed['disk'], (string) $managed['path']);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+            throw $exception;
         }
-        foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
-            if (! empty($attachment['managed_file_id'])) {
-                app(StorageManager::class)->bindReference((int) $attachment['managed_file_id'], TicketMessage::class, (int) $message->id);
-            }
-        }
 
-        if ($touchStatus && ! $isInternal) {
-            $update = [];
-            if (Schema::hasColumn('tickets', 'last_reply_at')) {
-                $update['last_reply_at'] = now();
-            }
-
-            if ($isStaff) {
-                $update['status'] = $options['status'] ?? 'answered';
-                if (Schema::hasColumn('tickets', 'first_response_at') && empty($ticket->first_response_at)) {
-                    $update['first_response_at'] = now();
-                }
-                if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-                    $update['closed_at'] = now();
-                }
-                if (($options['status'] ?? null) === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-                    $update['resolved_at'] = now();
-                }
-                if (($options['status'] ?? 'answered') !== 'closed') {
-                    if (Schema::hasColumn('tickets', 'closed_at')) {
-                        $update['closed_at'] = null;
-                    }
-                    if (Schema::hasColumn('tickets', 'resolved_at')) {
-                        $update['resolved_at'] = null;
-                    }
-                }
-            } else {
-                if ($ticket->status !== 'closed') {
-                    $update['status'] = 'user_replied';
-                    if (Schema::hasColumn('tickets', 'resolved_at')) {
-                        $update['resolved_at'] = null;
-                    }
-                }
-                if (Schema::hasColumn('tickets', 'closed_at')) {
-                    $update['closed_at'] = null;
-                }
-            }
-
-            if (isset($update['status'])) {
-                $update = array_merge(
-                    $update,
-                    $this->sla->statusTransitionAttributes($ticket, (string) $update['status'])
-                );
-            }
-
-            if ($update) {
-                $ticket->update($update);
-            }
+        if ($temporaryPath !== null && $temporaryPath !== '') {
+            \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
         }
 
         if ($notify && ! $isInternal) {
-            $fresh = $ticket->fresh();
             if ($isStaff) {
                 $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
                 if (($options['status'] ?? null) === 'closed') {
