@@ -19,10 +19,22 @@ class SupportSlaService
         $resolveMins = (int) config("support.sla_resolution_minutes.{$priority}", 1440);
         $base = $ticket->created_at ? Carbon::parse($ticket->created_at) : now();
 
-        $ticket->forceFill([
-            'sla_first_due_at' => $this->addSlaMinutes($base->copy(), $firstMins),
-            'sla_resolve_due_at' => $this->addSlaMinutes($base->copy(), $resolveMins),
-        ])->saveQuietly();
+        $firstDueAt = $this->addSlaMinutes($base->copy(), $firstMins);
+        $resolveDueAt = $this->addSlaMinutes($base->copy(), $resolveMins);
+        $targets = [
+            'sla_first_due_at' => $firstDueAt,
+            'sla_resolve_due_at' => $resolveDueAt,
+        ];
+
+        // A priority change while waiting for the customer must also update
+        // the frozen resolution budget, without restarting the paused clock.
+        if ($ticket->status === 'pending'
+            && $ticket->sla_paused_at
+            && Schema::hasColumn('tickets', 'sla_resolve_remaining_minutes')) {
+            $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween(now(), $resolveDueAt);
+        }
+
+        $ticket->forceFill($targets)->saveQuietly();
     }
 
     public function addSlaMinutes(Carbon $from, int $minutes): Carbon
