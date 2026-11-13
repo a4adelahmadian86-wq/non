@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\RolePermission;
+use App\Models\StorageManagedFile;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AuthorizationService;
@@ -130,6 +131,66 @@ class SupportTicketWorkflowIntegrityTest extends TestCase
         $assigned = $service->assign($ticket, $agent);
 
         $this->assertSame($agent->id, (int) $assigned->assigned_to);
+    }
+
+    public function test_deleted_managed_ticket_attachment_is_never_served(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Deleted attachment must stay private',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $message = $ticket->messages()->create([
+            'user_id' => $customer->id,
+            'body' => 'attachment',
+            'is_internal' => false,
+            'is_staff' => false,
+        ]);
+
+        $volumeId = DB::table('storage_volumes')->insertGetId([
+            'drive_key' => 'foreign_primary',
+            'name' => 'Ticket attachment test volume',
+            'driver' => 'local',
+            'is_active' => true,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $managed = StorageManagedFile::create([
+            'storage_volume_id' => $volumeId,
+            'drive_key' => 'foreign_primary',
+            'file_key' => 'support/2026/11/deleted.txt',
+            'original_name' => 'deleted.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => 7,
+            'checksum' => hash('sha256', 'deleted'),
+            'classification' => 'non_critical',
+            'source_module' => 'support',
+            'source_type' => \App\Models\TicketMessage::class,
+            'source_id' => $message->id,
+            'visibility' => 'private',
+            'status' => 'deleted',
+            'metadata' => ['disk' => 'storage_volume:'.$volumeId],
+        ]);
+
+        $message->update(['attachments' => [[
+            'managed_file_id' => $managed->id,
+            'path' => $managed->file_key,
+            'disk' => 'storage_volume:'.$volumeId,
+            'name' => 'deleted.txt',
+        ]]]);
+
+        $this->actingAs($customer)
+            ->get(route('support.attachment', [
+                'ticket' => $ticket->id,
+                'message' => $message->id,
+                'index' => 0,
+            ]))
+            ->assertNotFound();
     }
 
     public function test_user_without_support_permission_cannot_be_assigned(): void
