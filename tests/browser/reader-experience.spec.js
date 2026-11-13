@@ -2040,7 +2040,7 @@ test('captures a selected reader passage and jumps back to its anchored discussi
 });
 
 test('exposes and toggles PDF optional-content layers', async ({ page }) => {
-  await mountPdfReader(page, 1, true, true);
+  await mountPdfReader(page, 1, false, true);
   const root = page.locator('[data-reader-root]');
   await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
   await expect.poll(() => page.evaluate(() => window.__pdfLayerDiagnostics.length)).toBe(1);
