@@ -68,12 +68,7 @@ class SupportNotificationService
     {
         $ticket->loadMissing(['user', 'assignee']);
 
-        $targets = collect();
-        if ($ticket->assignee) {
-            $targets->push($ticket->assignee);
-        } else {
-            $targets = $targets->merge($this->staffUsers($ticket));
-        }
+        $targets = $this->staffTargets($ticket);
 
         foreach ($targets->unique('id') as $staff) {
             $this->pushInApp(
@@ -266,7 +261,8 @@ class SupportNotificationService
     /** @return \Illuminate\Support\Collection<int, User> */
     protected function staffTargets(Ticket $ticket)
     {
-        if ($ticket->assignee) {
+        if ($ticket->assignee
+            && ($this->agentDirectory ?? app(SupportAgentDirectory::class))->allows($ticket->assignee, $ticket)) {
             return collect([$ticket->assignee]);
         }
 
