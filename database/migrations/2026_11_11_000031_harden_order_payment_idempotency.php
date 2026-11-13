@@ -53,9 +53,25 @@ return new class extends Migration
             }
         });
 
+        $duplicateOrderKeys = DB::table('orders')
+            ->select('user_id', 'idempotency_key')
+            ->whereNotNull('idempotency_key')
+            ->groupBy('user_id', 'idempotency_key')
+            ->havingRaw('COUNT(*) > 1')
+            ->limit(5)
+            ->get();
+
+        if ($duplicateOrderKeys->isNotEmpty()) {
+            throw new RuntimeException(
+                'Cannot enforce per-customer order idempotency: duplicate user/key pairs exist. '
+                .'Reconcile these orders before retrying: '
+                .$duplicateOrderKeys->map(fn ($row) => $row->user_id.':'.$row->idempotency_key)->implode(', ')
+            );
+        }
+
         Schema::table('orders', function (Blueprint $table): void {
-            if (! Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {
-                $table->unique('idempotency_key', 'orders_idempotency_key_unique');
+            if (! Schema::hasIndex('orders', 'orders_user_idempotency_unique')) {
+                $table->unique(['user_id', 'idempotency_key'], 'orders_user_idempotency_unique');
             }
         });
 
@@ -87,8 +103,8 @@ return new class extends Migration
         });
 
         Schema::table('orders', function (Blueprint $table): void {
-            if (Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {
-                $table->dropUnique('orders_idempotency_key_unique');
+            if (Schema::hasIndex('orders', 'orders_user_idempotency_unique')) {
+                $table->dropUnique('orders_user_idempotency_unique');
             }
         });
 
