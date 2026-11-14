@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\SiteSetting;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseLesson;
@@ -105,6 +106,10 @@ class ZarinpalCommerceWorkflowOutboxTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        SiteSetting::write('payment_gateway', 'zarinpal');
+        SiteSetting::write('gateway_merchant_id', 'test-merchant-id');
+        SiteSetting::write('zarinpal_sandbox', true);
 
         Http::fake([
             'https://sandbox.zarinpal.com/pg/v4/payment/verify.json' => Http::response([
