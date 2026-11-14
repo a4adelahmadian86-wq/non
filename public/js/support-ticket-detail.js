@@ -106,11 +106,12 @@
     return String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  function appendMessage(m) {
-    if (!messages || document.querySelector('[data-msg-id="' + m.id + '"]')) return;
+  function buildMessageNode(m) {
     const isMine = !!m.is_mine;
     const row = document.createElement('div');
     row.className = 'tk-bubble-row ' + (isMine ? 'is-user' : 'is-staff');
@@ -139,15 +140,72 @@
       '<pre>' + escapeHtml(m.body || '') + '</pre>' + attachHtml + '</div>' +
       '<p class="tk-bubble-time ' + (isMine ? '' : 'is-end') + '">' + escapeHtml(m.time || '') + '</p></div>';
 
-    messages.appendChild(row);
-    messages.scrollTop = messages.scrollHeight;
+    return row;
+  }
+
+  function appendMessage(m, forceScroll = false) {
+    if (!messages || messages.querySelector('[data-msg-id="' + m.id + '"]')) return;
+    const shouldStickToBottom = forceScroll || messages.scrollHeight - messages.scrollTop - messages.clientHeight <= 96;
+    messages.appendChild(buildMessageNode(m));
+    if (shouldStickToBottom) messages.scrollTop = messages.scrollHeight;
     lastId = Math.max(lastId, Number(m.id) || 0);
   }
 
+  const olderButton = document.getElementById('loadOlderTicketMessages');
+  let olderInFlight = false;
   let pollInFlight = false;
+  olderButton?.addEventListener('click', async () => {
+    if (olderInFlight || pollInFlight || !messages || !pollUrl) return;
+    let beforeId = Number(page?.dataset.oldestId || 0);
+    if (!beforeId) return;
+
+    olderInFlight = true;
+    olderButton.disabled = true;
+    olderButton.textContent = 'در حال بارگذاری...';
+    let loadFailed = false;
+    const previousHeight = messages.scrollHeight;
+    const previousTop = messages.scrollTop;
+
+    try {
+      let olderMessages = [];
+      let hasMore = false;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const url = pollUrl + (pollUrl.includes('?') ? '&' : '?') + 'before_id=' + beforeId;
+        const response = await fetch(url, {
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('history request failed');
+        const data = await response.json();
+        if (!data.ok) throw new Error('history response invalid');
+
+        olderMessages = Array.isArray(data.messages) ? data.messages : [];
+        const nextBeforeId = Number(data.next_before_id);
+        if (Number.isFinite(nextBeforeId) && nextBeforeId > 0) beforeId = nextBeforeId;
+        hasMore = !!data.has_more;
+        if (olderMessages.length || !hasMore) break;
+      }
+
+      const firstMessage = messages.querySelector('[data-msg-id]');
+      olderMessages.forEach((message) => {
+        if (messages.querySelector('[data-msg-id="' + message.id + '"]')) return;
+        messages.insertBefore(buildMessageNode(message), firstMessage);
+      });
+
+      if (page && beforeId > 0) page.dataset.oldestId = String(beforeId);
+      if (!hasMore) olderButton.hidden = true;
+      messages.scrollTop = previousTop + (messages.scrollHeight - previousHeight);
+    } catch (_) {
+      loadFailed = true;
+    } finally {
+      olderInFlight = false;
+      olderButton.disabled = false;
+      if (!olderButton.hidden) olderButton.textContent = loadFailed ? 'خطا؛ دوباره تلاش کنید' : 'نمایش پیام‌های قدیمی‌تر';
+    }
+  });
 
   async function poll() {
-    if (!pollUrl || document.hidden || pollInFlight) return;
+    if (!pollUrl || document.hidden || pollInFlight || olderInFlight) return;
     pollInFlight = true;
     try {
       const res = await fetch(pollUrl + (pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId, {
@@ -223,7 +281,7 @@
               is_staff: false,
               time: data.message.created_at || data.message.time || '',
               attachments: data.message.attachments || [],
-            });
+            }, true);
           }
         } catch (_) {}
         if (body) body.value = '';
