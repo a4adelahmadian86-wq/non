@@ -49,6 +49,12 @@ class SupportTicketAuditLedgerTest extends TestCase
             'support.ticket.assignment_changed',
         ], $events->pluck('event_type')->all());
 
+        $this->assertSame($actor->id, $events[0]->user_id);
+        $this->assertSame($actor->id, $events[1]->user_id);
+        $this->assertSame($actor->id, $events[2]->user_id);
+        $this->assertSame('support', $events[0]->source);
+        $this->assertNotNull($events[0]->created_at);
+
         $status = $events[0]->payload_meta;
         $this->assertSame('open', $status['from_status']);
         $this->assertSame('pending', $status['to_status']);
