@@ -31,7 +31,11 @@
                     <div class="fm-message-meta"><strong>{{ $message->user?->name ?? 'کاربر حذف‌شده' }}</strong><time>{{ $message->created_at?->format('Y/m/d H:i') }}</time></div>
                     @if($message->body !== '')<p>{{ $message->body }}</p>@endif
                     @foreach($message->attachments ?? [] as $i => $attachment)
-                        <a class="fm-attachment" href="{{ route('messenger.attachment', [$conversation, $message, $i]) }}">📎 {{ $attachment['name'] ?? 'پیوست' }}</a>
+                        @if(!empty($attachment['managed_file_id']) && empty($attachment['quarantined']))
+                            <a class="fm-attachment" href="{{ route('messenger.attachment', [$conversation, $message, $i]) }}">📎 {{ $attachment['name'] ?? 'پیوست' }}</a>
+                        @else
+                            <span class="fm-attachment" aria-disabled="true">📎 {{ $attachment['name'] ?? 'پیوست' }} · پیوست در دسترس نیست</span>
+                        @endif
                     @endforeach
                 </article>
             @endforeach
