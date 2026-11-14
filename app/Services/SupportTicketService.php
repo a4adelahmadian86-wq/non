@@ -350,6 +350,10 @@ class SupportTicketService
             \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
         }
 
+        if ($resolutionBreachDetected) {
+            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
+        }
+
         if ($notify && ! $isInternal) {
             if ($isStaff) {
                 $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
