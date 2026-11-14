@@ -56,6 +56,8 @@ class FinancialRecordImmutabilityTest extends TestCase
             $this->assertSame('paid_order_financial_snapshot_is_immutable', $exception->getMessage());
         }
 
+        $order->refresh();
+
         try {
             $order->delete();
             $this->fail('Settled orders must not be deleted.');
