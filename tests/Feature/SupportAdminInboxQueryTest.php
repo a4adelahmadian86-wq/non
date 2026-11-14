@@ -67,7 +67,7 @@ class SupportAdminInboxQueryTest extends TestCase
 
         $html = $response->getContent();
         $this->assertStringContainsString('let pollInFlight = false;', $html);
-        $this->assertStringContainsString('if (pollInFlight || document.hidden) return;', $html);
+        $this->assertStringContainsString('if (pollInFlight || olderInFlight || document.hidden) return;', $html);
         $this->assertStringContainsString('const serverCursor = Number(data.last_id);', $html);
         $this->assertStringContainsString('const shouldStickToBottom = box', $html);
         $this->assertStringContainsString('finally {', $html);
