@@ -107,6 +107,31 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->assertNull($transitioned->resolved_at);
     }
 
+    public function test_staff_reply_without_status_change_preserves_original_close_timestamps(): void
+    {
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $closedAt = now()->subHours(3);
+        $ticket = Ticket::create([
+            'subject' => 'Preserve original close timestamp',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'closed_at' => $closedAt,
+            'resolved_at' => $closedAt,
+        ]);
+
+        $this->service()->addMessage($ticket, $staff, 'پیام تکمیلی پس از بسته‌شدن', [
+            'is_staff' => true,
+            'status' => 'closed',
+            'notify' => false,
+        ]);
+
+        $updated = $ticket->fresh();
+        $this->assertSame('closed', $updated->status);
+        $this->assertTrue($updated->closed_at->equalTo($closedAt));
+        $this->assertTrue($updated->resolved_at->equalTo($closedAt));
+    }
+
     public function test_ticket_creation_rollback_removes_managed_attachment_after_initial_message_succeeds(): void
     {
         Storage::fake('private');
