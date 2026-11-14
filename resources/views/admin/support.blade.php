@@ -34,8 +34,17 @@
     $statusBase = array_filter(['status' => request('status')], $filterValue);
     $chipFilters = array_merge($base, $statusBase);
     $statusLabels = ['open'=>'باز','user_replied'=>'پاسخ کاربر','pending'=>'منتظر کاربر','answered'=>'پاسخ‌شده','closed'=>'بسته'];
-    $departmentLabels = ['support'=>'پشتیبانی','sales'=>'فروش','billing'=>'مالی','complaint'=>'شکایات'];
-    $priorityLabels = ['low'=>'کم','normal'=>'متوسط','high'=>'زیاد'];
+    $departmentLabels = [
+        \\App\\Services\\SupportTicketService::DEPARTMENT_SUPPORT => 'پشتیبانی',
+        \\App\\Services\\SupportTicketService::DEPARTMENT_SALES => 'فروش',
+        \\App\\Services\\SupportTicketService::DEPARTMENT_BILLING => 'مالی',
+        \\App\\Services\\SupportTicketService::DEPARTMENT_COMPLAINT => 'شکایات',
+    ];
+    $priorityLabels = [
+        \\App\\Services\\SupportTicketService::PRIORITY_LOW => 'کم',
+        \\App\\Services\\SupportTicketService::PRIORITY_NORMAL => 'متوسط',
+        \\App\\Services\\SupportTicketService::PRIORITY_HIGH => 'زیاد',
+    ];
     $sourceLabels = ['dashboard'=>'پنل','widget'=>'ویجت'];
     $topicAreaLabels = ['services'=>'خدمات','store'=>'فروشگاه'];
     $slaFilterLabels = [
@@ -90,8 +99,8 @@
             @endforeach
             <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_AT_RISK?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_AT_RISK])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
             <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_BREACHED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_BREACHED])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['department'=>'billing'])) }}">مالی</a>
+            <a class="sd-chip {{ request('priority')===\\App\\Services\\SupportTicketService::PRIORITY_HIGH?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['priority'=>\\App\\Services\\SupportTicketService::PRIORITY_HIGH])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('department')===\\App\\Services\\SupportTicketService::DEPARTMENT_BILLING?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['department'=>\\App\\Services\\SupportTicketService::DEPARTMENT_BILLING])) }}">مالی</a>
             <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME])) }}">ارجاع به من</a>
             <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED])) }}">بدون ارجاع</a>
             @foreach(\App\Services\SupportTicketService::SOURCES as $source)
