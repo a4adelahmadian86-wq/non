@@ -34,7 +34,12 @@ class SupportAssignmentMutexTest extends TestCase
                     [SupportAssignmentMutex::LOCK_NAME],
                     false
                 );
-                $lockObservations[] = (int) ($row->acquired ?? -1);
+                $acquired = (int) ($row->acquired ?? -1);
+                $lockObservations[] = $acquired;
+
+                if ($acquired === 1) {
+                    $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
+                }
             }
         );
         $this->app->instance(WorkflowEngine::class, $workflow);
