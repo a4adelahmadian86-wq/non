@@ -103,6 +103,13 @@ class FinancialRecordImmutabilityTest extends TestCase
         }
 
         try {
+            $payment->update(['status' => 'failed']);
+            $this->fail('A settled payment status must not be rewritten.');
+        } catch (LogicException $exception) {
+            $this->assertSame('settled_payment_financial_record_is_immutable', $exception->getMessage());
+        }
+
+        try {
             $payment->delete();
             $this->fail('Settled payment records must not be deleted.');
         } catch (LogicException $exception) {
