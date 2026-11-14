@@ -15,6 +15,8 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
 use App\Services\AdminConsoleService;
+use App\Services\DashboardQueueHealthService;
+use App\Services\DashboardMessagingSummaryService;
 use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
@@ -75,6 +77,37 @@ class AdminController extends Controller
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
+        $canViewStore = $console->sectionAllowed($actor, 'store');
+        $storeProductStats = ['total' => 0, 'published' => 0, 'draft' => 0, 'archived' => 0];
+        $followUpStats = ['open' => 0, 'overdue' => 0, 'due_today' => 0];
+        if ($canViewUsers && Schema::hasTable('crm_follow_up_tasks')) {
+            $followUpQuery = DB::table('crm_follow_up_tasks');
+            if ($visibleIds !== null) {
+                $followUpQuery->whereIn('customer_id', $visibleIds);
+            }
+            $followUpRow = (clone $followUpQuery)
+                ->selectRaw("SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_count")
+                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count", [now()])
+                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at >= ? AND due_at <= ? THEN 1 ELSE 0 END) as due_today_count", [now(), today()->endOfDay()])
+                ->first();
+            $followUpStats = [
+                'open' => (int) ($followUpRow->open_count ?? 0),
+                'overdue' => (int) ($followUpRow->overdue_count ?? 0),
+                'due_today' => (int) ($followUpRow->due_today_count ?? 0),
+            ];
+        }
+        if ($canViewStore && Schema::hasTable('store_products')) {
+            $productStatusCounts = DB::table('store_products')
+                ->select('status', DB::raw('COUNT(*) as aggregate'))
+                ->groupBy('status')
+                ->pluck('aggregate', 'status');
+            $storeProductStats['total'] = (int) $productStatusCounts->sum();
+            $storeProductStats['published'] = (int) ($productStatusCounts['published'] ?? 0);
+            $storeProductStats['draft'] = (int) ($productStatusCounts['draft'] ?? 0);
+            $storeProductStats['archived'] = (int) ($productStatusCounts['archived'] ?? 0);
+        }
+        $messengerSummary = app(DashboardMessagingSummaryService::class)->snapshot($actor);
+        $canViewAudit = $console->sectionAllowed($actor, 'audit');
 
         $settings = [];
         if ($globalScope) {
@@ -314,6 +347,9 @@ class AdminController extends Controller
             'scope' => $scope,
             'scopeSummary' => $console->scopeSummary($actor),
             'allowedSections' => $allowedSections,
+            'messengerSummary' => $messengerSummary,
+            'storeProductStats' => $storeProductStats,
+            'followUpStats' => $followUpStats,
             'stats' => [
                 'users' => $totalScopedUsers,
                 'active_users' => $visibleIds === null
@@ -370,11 +406,28 @@ class AdminController extends Controller
             ],
             'ticketStats' => $ticketStats,
             'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
-            'recentAudit' => (Schema::hasTable('audit_logs') && $scope === AdminConsoleService::SCOPE_GLOBAL)
-                ? DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
-                    ->latest('audit_logs.id')->limit(7)
-                    ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name'])
-                : collect(),
+            'recentAudit' => (function () use ($canViewAudit, $visibleIds) {
+                if (! $canViewAudit || ! Schema::hasTable('audit_logs')) {
+                    return collect();
+                }
+
+                // Scoped operators may only see audit entries attributed to users
+                // inside their visible user set. Never fall back to a global feed.
+                if ($visibleIds !== null && ! Schema::hasColumn('audit_logs', 'user_id')) {
+                    return collect();
+                }
+
+                $query = DB::table('audit_logs')
+                    ->leftJoin('users', 'users.id', '=', 'audit_logs.user_id');
+
+                if ($visibleIds !== null) {
+                    $query->whereIn('audit_logs.user_id', $visibleIds);
+                }
+
+                return $query->latest('audit_logs.id')
+                    ->limit(8)
+                    ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name']);
+            })(),
             'settings' => $globalScope ? $settings : [
                 'weekly_free_pages' => '',
                 'max_file_mb' => '',
@@ -401,7 +454,7 @@ class AdminController extends Controller
                 'driver' => config('database.default'),
                 'db_ok' => $this->databaseReachable(),
                 'cache_ok' => $this->cacheReachable(),
-                'queue_connection' => config('queue.default'),
+                'queue' => app(DashboardQueueHealthService::class)->snapshot(),
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
