@@ -100,7 +100,7 @@
                         @csrf
                         <div class="tk-reply-inner">
                             <textarea name="body" id="composerBody" rows="4" required maxlength="5000" placeholder="متن پاسخ شما ..." dir="auto"></textarea>
-                            <input type="file" name="attachment" id="composerFile" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.doc,.docx" hidden>
+                            <input type="file" name="attachment" id="composerFile" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.docx" hidden>
                             <div class="tk-reply-actions">
                                 <button type="button" class="tk-icon-btn" id="pickAttachBtn" title="پیوست فایل"><i class="fa-solid fa-paperclip"></i></button>
                                 <button type="submit" class="tk-send-btn" id="sendBtn" title="ارسال"><i class="fa-solid fa-paper-plane"></i></button>
