@@ -2,7 +2,7 @@
 
 @section('content')
 @php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019csat">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114pollcursor">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019csat">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
