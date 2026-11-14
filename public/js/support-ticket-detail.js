@@ -143,9 +143,9 @@
     return row;
   }
 
-  function appendMessage(m) {
+  function appendMessage(m, forceScroll = false) {
     if (!messages || messages.querySelector('[data-msg-id="' + m.id + '"]')) return;
-    const shouldStickToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight <= 96;
+    const shouldStickToBottom = forceScroll || messages.scrollHeight - messages.scrollTop - messages.clientHeight <= 96;
     messages.appendChild(buildMessageNode(m));
     if (shouldStickToBottom) messages.scrollTop = messages.scrollHeight;
     lastId = Math.max(lastId, Number(m.id) || 0);
@@ -281,7 +281,7 @@
               is_staff: false,
               time: data.message.created_at || data.message.time || '',
               attachments: data.message.attachments || [],
-            });
+            }, true);
           }
         } catch (_) {}
         if (body) body.value = '';
