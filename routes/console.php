@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Services\WorkflowEngine;
+use App\Services\StoreOrderFulfillmentService;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
@@ -80,6 +81,15 @@ Artisan::command('farast:workflows:retry {--limit=50}', function (WorkflowEngine
 })->purpose('Retry failed FARAST workflow event steps');
 
 Schedule::command('farast:workflows:retry --limit=50')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+Artisan::command('store:orders:fulfill-pending {--limit=50}', function (StoreOrderFulfillmentService $service) {
+    $completed = $service->retryPendingFulfillments((int) $this->option('limit'));
+    $this->info("Completed {$completed} recovered store-order fulfillment(s).");
+})->purpose('Retry post-capture store order fulfillment without repeating payment');
+
+Schedule::command('store:orders:fulfill-pending --limit=50')
     ->everyMinute()
     ->withoutOverlapping();
 
