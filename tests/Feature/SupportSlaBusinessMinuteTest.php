@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\CheckSupportSlaCommand;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
@@ -10,6 +11,8 @@ use App\Services\SupportSlaService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Mockery;
 use Tests\TestCase;
 
