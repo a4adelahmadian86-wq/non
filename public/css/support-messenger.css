@@ -140,3 +140,64 @@
   .sd-admin-stats { grid-template-columns: repeat(2, 1fr); }
   #farast-support-widget { right: 12px; left: 12px; width: auto; }
 }
+
+/* Combined, accessible support inbox filters */
+.sd-filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--sd-line);
+  background: #fff;
+}
+.sd-filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--sd-muted);
+  font-size: .7rem;
+  font-weight: 700;
+}
+.sd-filter-field select,
+.sd-filter-field input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--sd-line);
+  border-radius: 10px;
+  padding: 0 9px;
+  background: #f8fafc;
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: .76rem;
+}
+.sd-filter-field select:focus,
+.sd-filter-field input:focus {
+  outline: 2px solid rgba(23, 105, 255, .18);
+  border-color: var(--sd-blue);
+}
+.sd-filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sd-filter-actions button {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: .78rem;
+}
+.sd-filter-actions a {
+  color: var(--sd-muted);
+  font-size: .76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.sd-filter-actions a:hover { color: var(--sd-blue); text-decoration: underline; }
+@media (max-width: 420px) {
+  .sd-filter-form { grid-template-columns: 1fr; }
+  .sd-filter-actions { flex-direction: column; align-items: stretch; }
+  .sd-filter-actions a { text-align: center; padding: 6px; }
+}

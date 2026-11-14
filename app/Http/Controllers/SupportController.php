@@ -18,6 +18,7 @@ use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -346,19 +347,27 @@ class SupportController extends Controller
             ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
             ->with(['user', 'relatedProduct', 'assignee']);
 
-        if ($request->filled('status') && $request->status !== 'all') {
-            if ($request->status === 'needs_reply') {
+        $statusFilter = $request->input('status');
+        if (is_string($statusFilter)
+            && $statusFilter !== 'all'
+            && in_array($statusFilter, array_merge(['needs_reply'], SupportTicketService::STATUSES), true)) {
+            if ($statusFilter === 'needs_reply') {
                 $query->needsReply();
             } else {
-                $query->where('status', $request->status);
+                $query->where('status', $statusFilter);
             }
         }
-        if ($request->filled('department') && $request->department !== 'all') {
-            $query->where('department', $request->department);
+
+        $departmentFilter = $request->input('department');
+        if (is_string($departmentFilter) && in_array($departmentFilter, SupportTicketService::DEPARTMENTS, true)) {
+            $query->where('department', $departmentFilter);
         }
-        if ($request->filled('priority') && $request->priority !== 'all') {
-            $query->where('priority', $request->priority);
+
+        $priorityFilter = $request->input('priority');
+        if (is_string($priorityFilter) && in_array($priorityFilter, SupportTicketService::PRIORITIES, true)) {
+            $query->where('priority', $priorityFilter);
         }
+
         // These are the source and topic values currently emitted by the
         // canonical ticket creation flows. Ignore unknown values rather than
         // turning arbitrary query parameters into hidden/empty inbox states.
@@ -370,13 +379,21 @@ class SupportController extends Controller
             && in_array($request->input('topic_area'), ['services', 'store'], true)) {
             $query->where('topic_area', $request->input('topic_area'));
         }
-        if ($request->filled('assigned') && $request->assigned === 'me') {
-            $query->where('assigned_to', auth()->id());
+
+        $assignedFilter = $request->input('assigned');
+        if (Schema::hasColumn('tickets', 'assigned_to')) {
+            if ($assignedFilter === 'me') {
+                $query->where('assigned_to', auth()->id());
+            } elseif ($assignedFilter === 'unassigned') {
+                $query->whereNull('assigned_to');
+            }
         }
-        if ($request->filled('sla') && $request->sla === 'breached') {
+
+        $slaFilter = $request->input('sla');
+        if ($slaFilter === 'breached') {
             $query->slaBreached();
         }
-        if ($request->filled('sla') && $request->sla === 'at_risk') {
+        if ($slaFilter === 'at_risk') {
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                 $query->where(function ($q) use ($warningDeadline) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
@@ -400,6 +417,22 @@ class SupportController extends Controller
                 $query->whereRaw('0 = 1');
             }
         }
+
+        $createdFrom = $this->parseInboxDateFilter($request->input('created_from'));
+        $createdTo = $this->parseInboxDateFilter($request->input('created_to'));
+        if ($createdFrom && $createdTo && $createdTo->lt($createdFrom)) {
+            // An invalid range is ignored as a whole instead of producing a
+            // confusing empty inbox.
+            $createdFrom = null;
+            $createdTo = null;
+        }
+        if ($createdFrom) {
+            $query->where('tickets.created_at', '>=', $createdFrom->copy()->startOfDay());
+        }
+        if ($createdTo) {
+            $query->where('tickets.created_at', '<', $createdTo->copy()->addDay()->startOfDay());
+        }
+
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($w) use ($q) {
@@ -801,4 +834,22 @@ class SupportController extends Controller
     {
         return app(SupportTicketService::class)->claimGuestTickets($user);
     }
+
+    private function parseInboxDateFilter(mixed $value): ?Carbon
+    {
+        if (! is_string($value) || ! preg_match('/^\\d{4}-\\d{2}-\\d{2}$/D', $value)) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value, config('app.timezone'));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $date instanceof Carbon && $date->format('Y-m-d') === $value
+            ? $date
+            : null;
+    }
+
 }

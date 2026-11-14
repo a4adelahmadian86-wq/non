@@ -201,4 +201,110 @@ class SupportAdminInboxQueryTest extends TestCase
             ->assertJsonPath('has_more', false);
     }
 
+
+    public function test_admin_inbox_combines_unassigned_and_created_date_filters_with_existing_dimensions(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $from = Carbon::today()->subDays(10);
+        $to = Carbon::today()->subDays(2);
+
+        $createTicketAt = function (array $attributes, Carbon $createdAt): Ticket {
+            $ticket = Ticket::create($attributes);
+            $ticket->forceFill(['created_at' => $createdAt])->save();
+
+            return $ticket;
+        };
+
+        $createTicketAt([
+            'subject' => 'Unassigned date-range match',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+            'assigned_to' => null,
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ], $from->copy()->addDays(3)->setTime(12, 0));
+        $createTicketAt([
+            'subject' => 'Assigned same date range',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+            'assigned_to' => $admin->id,
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ], $from->copy()->addDays(4)->setTime(12, 0));
+        $createTicketAt([
+            'subject' => 'Outside date range',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+            'assigned_to' => null,
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ], $to->copy()->addDay()->setTime(12, 0));
+        $createTicketAt([
+            'subject' => 'Other channel in date range',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+            'assigned_to' => null,
+            'source' => 'dashboard',
+            'topic_area' => 'store',
+        ], $from->copy()->addDays(5)->setTime(12, 0));
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.support.management', [
+                'assigned' => 'unassigned',
+                'source' => 'widget',
+                'topic_area' => 'store',
+                'created_from' => $from->toDateString(),
+                'created_to' => $to->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('Unassigned date-range match')
+            ->assertDontSee('Assigned same date range')
+            ->assertDontSee('Outside date range')
+            ->assertDontSee('Other channel in date range');
+
+        $html = $response->getContent();
+        $this->assertStringContainsString('name="created_from"', $html);
+        $this->assertStringContainsString('name="created_to"', $html);
+        $this->assertStringContainsString('name="assigned"', $html);
+        $this->assertStringContainsString('assigned=unassigned', $html);
+        $this->assertStringContainsString('created_from='.$from->toDateString(), $html);
+
+        preg_match('/href="([^"]*status=needs_reply[^"]*)"/', $html, $statusChipMatch);
+        $this->assertNotEmpty($statusChipMatch[1] ?? null);
+        $this->assertStringContainsString('assigned=unassigned', $statusChipMatch[1]);
+        $this->assertStringContainsString('created_from=', $statusChipMatch[1]);
+    }
+
+    public function test_unknown_inbox_filter_values_are_ignored_and_reversed_date_ranges_do_not_hide_tickets(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Ticket::create([
+            'subject' => 'Invalid filter values must not hide this ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'source' => 'dashboard',
+            'topic_area' => 'services',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', [
+                'status' => 'not-a-status',
+                'department' => 'not-a-department',
+                'priority' => 'urgent',
+                'source' => 'unknown-source',
+                'topic_area' => 'unknown-topic',
+                'assigned' => 'unknown-assignee-filter',
+                'sla' => 'unknown-sla-filter',
+                'created_from' => '2099-01-01',
+                'created_to' => '2000-01-01',
+            ]))
+            ->assertOk()
+            ->assertSee('Invalid filter values must not hide this ticket');
+    }
+
 }

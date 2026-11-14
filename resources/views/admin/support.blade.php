@@ -16,9 +16,11 @@
         'topic_area' => request('topic_area'),
         'sla' => request('sla'),
         'assigned' => request('assigned'),
+        'created_from' => request('created_from'),
+        'created_to' => request('created_to'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114inboxfilters">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 <link rel="stylesheet" href="{{ asset('css/support-sla.css') }}?v=20261019sla">
 
@@ -46,7 +48,7 @@
         <div class="sd-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <form method="get" action="{{ route('admin.support.management') }}" style="width:100%">
-                @foreach(request()->only(['status','department','priority','source','topic_area','sla','assigned']) as $k=>$v)
+                @foreach(request()->only(['status','department','priority','source','topic_area','sla','assigned','created_from','created_to']) as $k=>$v)
                     @if($v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
                 @endforeach
                 <input type="search" name="q" value="{{ request('q') }}" placeholder="کد تیکت، موضوع، ایمیل..." autocomplete="off">
@@ -54,7 +56,7 @@
         </div>
 
         <div class="sd-filters">
-            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla')]); @endphp
+            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'assigned'=>request('assigned'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]); @endphp
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
             <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
             <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
@@ -65,12 +67,92 @@
             <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
             <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
             <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['department'=>'billing'])) }}">مالی</a>
-            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('assigned')==='unassigned'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]), ['assigned'=>'unassigned'])) }}">بدون ارجاع</a>
             <a class="sd-chip {{ request('source')==='dashboard'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'dashboard'])) }}">ثبت از پنل</a>
             <a class="sd-chip {{ request('source')==='widget'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'widget'])) }}">ثبت از ویجت</a>
             <a class="sd-chip {{ request('topic_area')==='services'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'services'])) }}">موضوع خدمات</a>
             <a class="sd-chip {{ request('topic_area')==='store'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'store'])) }}">موضوع فروشگاه</a>
         </div>
+
+        <form class="sd-filter-form" method="get" action="{{ route('admin.support.management') }}">
+            <input type="hidden" name="q" value="{{ request('q') }}">
+            <label class="sd-filter-field">
+                <span>وضعیت</span>
+                <select name="status">
+                    <option value="">همه وضعیت‌ها</option>
+                    <option value="needs_reply" @selected(request('status') === 'needs_reply')>نیازمند پاسخ</option>
+                    <option value="open" @selected(request('status') === 'open')>باز</option>
+                    <option value="user_replied" @selected(request('status') === 'user_replied')>پاسخ کاربر</option>
+                    <option value="pending" @selected(request('status') === 'pending')>منتظر کاربر</option>
+                    <option value="answered" @selected(request('status') === 'answered')>پاسخ‌شده</option>
+                    <option value="closed" @selected(request('status') === 'closed')>بسته</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>دپارتمان</span>
+                <select name="department">
+                    <option value="">همه دپارتمان‌ها</option>
+                    <option value="support" @selected(request('department') === 'support')>پشتیبانی</option>
+                    <option value="sales" @selected(request('department') === 'sales')>فروش</option>
+                    <option value="billing" @selected(request('department') === 'billing')>مالی</option>
+                    <option value="complaint" @selected(request('department') === 'complaint')>شکایات</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>اولویت</span>
+                <select name="priority">
+                    <option value="">همه اولویت‌ها</option>
+                    <option value="high" @selected(request('priority') === 'high')>زیاد</option>
+                    <option value="normal" @selected(request('priority') === 'normal')>متوسط</option>
+                    <option value="low" @selected(request('priority') === 'low')>کم</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>کانال ثبت</span>
+                <select name="source">
+                    <option value="">همه کانال‌ها</option>
+                    <option value="dashboard" @selected(request('source') === 'dashboard')>پنل</option>
+                    <option value="widget" @selected(request('source') === 'widget')>ویجت</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>حوزه موضوع</span>
+                <select name="topic_area">
+                    <option value="">همه حوزه‌ها</option>
+                    <option value="services" @selected(request('topic_area') === 'services')>خدمات</option>
+                    <option value="store" @selected(request('topic_area') === 'store')>فروشگاه</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>وضعیت SLA</span>
+                <select name="sla">
+                    <option value="">همه وضعیت‌های SLA</option>
+                    <option value="at_risk" @selected(request('sla') === 'at_risk')>نزدیک نقض</option>
+                    <option value="breached" @selected(request('sla') === 'breached')>نقض‌شده</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>ارجاع</span>
+                <select name="assigned">
+                    <option value="">همه تیکت‌ها</option>
+                    <option value="me" @selected(request('assigned') === 'me')>ارجاع به من</option>
+                    <option value="unassigned" @selected(request('assigned') === 'unassigned')>بدون ارجاع</option>
+                </select>
+            </label>
+            <label class="sd-filter-field">
+                <span>از تاریخ ثبت</span>
+                <input type="date" name="created_from" value="{{ request('created_from') }}">
+            </label>
+            <label class="sd-filter-field">
+                <span>تا تاریخ ثبت</span>
+                <input type="date" name="created_to" value="{{ request('created_to') }}">
+            </label>
+            <div class="sd-filter-actions">
+                <button type="submit" class="sd-btn sd-btn-primary">اعمال فیلترها</button>
+                <a href="{{ route('admin.support.management') }}">پاک‌کردن فیلترها</a>
+            </div>
+        </form>
 
         <div class="sd-list" id="ticketList">
             @forelse($tickets as $t)
