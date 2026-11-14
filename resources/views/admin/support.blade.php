@@ -357,7 +357,6 @@
     return wrap;
   };
 
-  const box = document.getElementById('chatMessages');
   const olderButton = document.getElementById('loadOlderAdminMessages');
   if (thread && thread.dataset.pollUrl) {
     let lastId = parseInt(thread.dataset.lastId || '0', 10) || 0;
