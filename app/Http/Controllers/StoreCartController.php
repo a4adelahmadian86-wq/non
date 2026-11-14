@@ -275,6 +275,18 @@ class StoreCartController extends Controller
                     );
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
+
+                app(\App\Services\WorkflowEngine::class)->enqueue(
+                    'order.paid',
+                    [
+                        'user_id' => (int) $order->user_id,
+                        'customer_id' => (int) $order->user_id,
+                        'order_id' => (int) $order->id,
+                        'amount_rials' => (int) $order->total_rials,
+                        'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                    ],
+                    'order:'.$order->id.':order.paid',
+                );
             }
 
             return $order->fresh();
