@@ -77,7 +77,7 @@ class SupportSlaAlertOutboxService
      */
     public function processPending(int $limit = 10): int
     {
-        if (! DB::getSchemaBuilder()->hasTable('support_sla_alert_outbox')) {
+        if (! Schema::hasTable('support_sla_alert_outbox')) {
             return 0;
         }
 
