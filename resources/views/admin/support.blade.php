@@ -249,7 +249,7 @@
                         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                             <select name="status" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
                                 <option value="answered">پاسخ داده‌شده</option>
-                                <option value="pending">در حال بررسی</option>
+                                <option value="pending">منتظر پاسخ کاربر</option>
                                 <option value="open">باز نگه دار</option>
                                 <option value="closed">بستن تیکت</option>
                             </select>
