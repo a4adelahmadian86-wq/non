@@ -251,4 +251,82 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertSame(0, $count);
         $this->assertSame(0, DB::table('farast_workflow_runs')->count());
     }
+
+    public function test_enqueue_is_transactional_idempotent_and_processed_by_the_retry_worker(): void
+    {
+        $user = $this->user('09152223354');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Queued ticket follow-up',
+            'enabled' => true,
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([
+                ['action' => 'create_follow_up', 'title' => 'پیگیری تیکت صف‌شده', 'priority' => 'high'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $context = [
+            'user_id' => $user->id,
+            'customer_id' => $user->id,
+            'ticket_id' => 92,
+            'ticket_code' => 'TK-92',
+        ];
+
+        $eventId = $engine->enqueue('ticket.created', $context, 'ticket:92:created');
+        $duplicateId = $engine->enqueue(
+            'ticket.created',
+            [...$context, 'ticket_code' => 'changed-payload-must-not-replace-original'],
+            'ticket:92:created',
+        );
+
+        $this->assertGreaterThan(0, $eventId);
+        $this->assertSame($eventId, $duplicateId);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'event_type' => 'ticket.created',
+            'status' => 'pending',
+            'user_id' => $user->id,
+        ]);
+        $storedContext = json_decode((string) DB::table('farast_workflow_events')->where('id', $eventId)->value('context'), true);
+        $this->assertSame('TK-92', $storedContext['ticket_code']);
+        $this->assertSame(0, DB::table('farast_workflow_runs')->where('workflow_id', $workflow)->count());
+        $this->assertSame(0, DB::table('crm_follow_up_tasks')->where('customer_id', $user->id)->count());
+
+        $this->assertSame(1, $engine->retryFailedEvents());
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'completed']);
+        $this->assertSame(1, DB::table('crm_follow_up_tasks')
+            ->where('customer_id', $user->id)
+            ->where('title', 'پیگیری تیکت صف‌شده')
+            ->count());
+        $this->assertSame(0, $engine->enqueue('ticket.created', $context, 'ticket:92:created'));
+    }
+
+    public function test_enqueued_domain_event_rolls_back_with_its_business_transaction(): void
+    {
+        $user = $this->user('09152223355');
+        $engine = app(WorkflowEngine::class);
+
+        try {
+            DB::transaction(function () use ($engine, $user): void {
+                $engine->enqueue(
+                    'ticket.created',
+                    ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 93],
+                    'ticket:93:created',
+                );
+
+                throw new \RuntimeException('Force source transaction rollback.');
+            });
+            $this->fail('The source transaction should have rolled back.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Force source transaction rollback.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('farast_workflow_events', [
+            'idempotency_key' => 'ticket:93:created',
+        ]);
+    }
+
 }
