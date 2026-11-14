@@ -44,12 +44,25 @@ class StoreCourseEnrollmentService
                 throw new RuntimeException('دسترسی دوره فقط پس از تسویه معتبر همان سفارش قابل اعطا است.');
             }
 
-            $matchingOrderItems = StoreOrderItem::query()
+            $orderItems = StoreOrderItem::query()
                 ->where('order_id', $order->id)
-                ->where('product_id', $product->id)
-                ->when($lockedLibraryItem->order_item_id, fn ($query) => $query->whereKey($lockedLibraryItem->order_item_id))
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+
+            $orderItemsTotal = (int) $orderItems->sum(
+                fn (StoreOrderItem $item): int => (int) $item->total_rials + (int) $item->tax_rials,
+            );
+            if ($orderItems->isEmpty() || $orderItemsTotal !== (int) $order->total_rials) {
+                throw new RuntimeException('جمع اقلام سفارش با مبلغ نهایی سفارش مطابقت ندارد.');
+            }
+
+            $matchingOrderItems = $orderItems
+                ->filter(fn (StoreOrderItem $item): bool =>
+                    (int) $item->product_id === (int) $product->id
+                    && (! $lockedLibraryItem->order_item_id || (int) $item->id === (int) $lockedLibraryItem->order_item_id)
+                )
+                ->values();
 
             if ($matchingOrderItems->count() !== 1 || (int) $matchingOrderItems->first()->quantity < 1) {
                 throw new RuntimeException('قلم سفارش با محصول دوره و مجوز کتابخانه مطابقت ندارد.');
