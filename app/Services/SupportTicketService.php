@@ -250,11 +250,12 @@ class SupportTicketService
         }
 
         try {
-            [$message, $previousStatus, $fresh] = DB::transaction(function () use (
+            [$message, $previousStatus, $fresh, $resolutionBreachDetected] = DB::transaction(function () use (
                 $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus
             ): array {
                 $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
                 $previousStatus = (string) $locked->status;
+                $resolutionBreachDetected = false;
 
                 // A customer reply must not race past a concurrent ticket close.
                 if (! $isStaff && ! $isInternal && $previousStatus === 'closed') {
@@ -320,6 +321,8 @@ class SupportTicketService
                             $update,
                             $this->sla->statusTransitionAttributes($locked, (string) $update['status'])
                         );
+                        $resolutionBreachDetected = ! empty($update['sla_resolve_breached_at'])
+                            && empty($locked->sla_resolve_breached_at);
                     }
 
                     if ($update !== []) {
@@ -327,7 +330,7 @@ class SupportTicketService
                     }
                 }
 
-                return [$message, $previousStatus, $locked->fresh()];
+                return [$message, $previousStatus, $locked->fresh(), $resolutionBreachDetected];
             });
         } catch (\Throwable $exception) {
             if ($temporaryPath !== null && $temporaryPath !== '') {
@@ -367,14 +370,15 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        [$fresh, $old, $transitionMessageId, $changed] = DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
+        [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             $old = (string) $locked->status;
 
             if ($old === $status) {
-                return [$locked->fresh(), $old, null, false];
+                return [$locked->fresh(), $old, null, false, false];
             }
 
+            $wasResolutionBreached = ! empty($locked->sla_resolve_breached_at);
             $update = ['status' => $status];
             if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
                 $update['closed_at'] = now();
@@ -391,6 +395,7 @@ class SupportTicketService
 
             $update = array_merge($update, $this->sla->statusTransitionAttributes($locked, $status));
             $locked->update($update);
+            $resolutionBreachDetected = ! $wasResolutionBreached && ! empty($update['sla_resolve_breached_at']);
 
             $transitionMessage = null;
             if ($systemNote && $actor) {
@@ -403,11 +408,15 @@ class SupportTicketService
                 ]);
             }
 
-            return [$locked->fresh(), $old, $transitionMessage?->id, true];
+            return [$locked->fresh(), $old, $transitionMessage?->id, true, $resolutionBreachDetected];
         });
 
         if (! $changed) {
             return $fresh;
+        }
+
+        if ($resolutionBreachDetected) {
+            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
         }
 
         $this->safeNotify(fn () => $this->notifier->statusChanged(
