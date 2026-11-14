@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FarastDocument;
+use App\Models\FarastProject;
 use App\Models\TypingDocument;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Arr;
@@ -33,9 +34,22 @@ class EditorDocumentService
                 ? FarastDocument::whereKey($legacy->farast_document_id)->where('user_id', $legacy->user_id)->lockForUpdate()->first()
                 : null;
 
+            if (
+                $document
+                && $document->project_id !== null
+                && $legacy->project_id !== null
+                && (int) $document->project_id !== (int) $legacy->project_id
+            ) {
+                throw new \RuntimeException('document_project_mismatch');
+            }
+
+            $documentProjectId = $document?->project_id ?? $legacy->project_id;
+            $this->assertProjectOwnership($documentProjectId, (int) $legacy->user_id);
+
             if (! $document) {
                 $document = FarastDocument::create([
                     'user_id' => $legacy->user_id,
+                    'project_id' => $documentProjectId,
                     'title' => $title ?: $legacy->title ?: 'سند جدید',
                     'content' => $safeHtml,
                     'content_json' => $model,
@@ -60,6 +74,7 @@ class EditorDocumentService
 
             $nextRevision = (int) $document->revision + 1;
             $document->fill([
+                'project_id' => $documentProjectId,
                 'title' => $title ?: $document->title,
                 'content' => $safeHtml,
                 'content_json' => $model,
@@ -105,12 +120,23 @@ class EditorDocumentService
             throw new \RuntimeException('legacy_document_not_found');
         }
 
+        if (
+            $document->project_id !== null
+            && $legacy->project_id !== null
+            && (int) $document->project_id !== (int) $legacy->project_id
+        ) {
+            throw new \RuntimeException('document_project_mismatch');
+        }
+
+        $documentProjectId = $document->project_id ?? $legacy->project_id;
+        $this->assertProjectOwnership($documentProjectId, (int) $legacy->user_id);
+
         $normalized = $this->sanitizeDocumentModel($model);
         $settings = $this->normalizePageSettings($normalized['settings'] ?? $document->page_settings);
         $normalized['settings'] = $settings;
         $html = $this->documentModelToHtml($normalized);
 
-        return $this->db->transaction(function () use ($document, $legacy, $normalized, $settings, $html, $source, $expectedRevision) {
+        return $this->db->transaction(function () use ($document, $legacy, $normalized, $settings, $html, $source, $expectedRevision, $documentProjectId) {
             $locked = FarastDocument::whereKey($document->id)
                 ->where('user_id', $document->user_id)
                 ->lockForUpdate()
@@ -120,8 +146,17 @@ class EditorDocumentService
                 throw new \RuntimeException('document_revision_conflict');
             }
 
+            if (
+                $locked->project_id !== null
+                && $documentProjectId !== null
+                && (int) $locked->project_id !== (int) $documentProjectId
+            ) {
+                throw new \RuntimeException('document_project_mismatch');
+            }
+
             $nextRevision = (int) $locked->revision + 1;
             $locked->fill([
+                'project_id' => $locked->project_id ?? $documentProjectId,
                 'content' => $html,
                 'content_json' => $normalized,
                 'page_settings' => $settings,
@@ -173,6 +208,17 @@ class EditorDocumentService
             'document_model' => $document?->content_json ?: $this->normalizeHtml($document?->content ?: $legacy->content ?: '<p><br></p>'),
             'page_settings' => $document?->page_settings ?: $this->defaultPageSettings(),
         ];
+    }
+
+    private function assertProjectOwnership(?int $projectId, int $userId): void
+    {
+        if ($projectId === null) {
+            return;
+        }
+
+        if (! FarastProject::query()->whereKey($projectId)->where('user_id', $userId)->exists()) {
+            throw new \RuntimeException('document_project_owner_mismatch');
+        }
     }
 
     public function normalizePageSettings(?array $settings): array
