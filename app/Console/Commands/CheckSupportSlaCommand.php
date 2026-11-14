@@ -43,7 +43,7 @@ class CheckSupportSlaCommand extends Command
         foreach ($open as $ticket) {
             // —— اولین پاسخ ——
             if (! $ticket->first_response_at && $ticket->sla_first_due_at) {
-                $mins = (int) now()->diffInMinutes($ticket->sla_first_due_at, false);
+                $mins = $sla->minutesUntilDeadline($ticket->sla_first_due_at);
 
                 if ($mins < 0 && empty($ticket->sla_first_breached_at)) {
                     $stats['breached_first']++;
@@ -64,7 +64,7 @@ class CheckSupportSlaCommand extends Command
 
             // —— حل کامل (pending = ساعت متوقف) ——
             if ($ticket->status !== 'closed' && $ticket->status !== 'pending' && $ticket->sla_resolve_due_at) {
-                $mins = (int) now()->diffInMinutes($ticket->sla_resolve_due_at, false);
+                $mins = $sla->minutesUntilDeadline($ticket->sla_resolve_due_at);
 
                 if ($mins < 0 && empty($ticket->sla_resolve_breached_at)) {
                     $stats['breached_resolve']++;
