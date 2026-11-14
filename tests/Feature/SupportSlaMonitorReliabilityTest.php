@@ -90,7 +90,6 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         Artisan::call('support:check-sla');
 
         $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
-        $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'breached']);
         $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_resolve_breached_at'));
         $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'breached']);
         $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'resolution']);
@@ -119,6 +118,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         Artisan::call('support:check-sla');
 
         $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'breached']);
     }
 
     public function test_business_hour_calendar_is_used_for_warning_thresholds(): void
