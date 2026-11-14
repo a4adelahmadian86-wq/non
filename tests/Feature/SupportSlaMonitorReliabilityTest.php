@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\User;
-use App\\Services\\SupportNotificationService;
-use Carbon\\Carbon;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Artisan;
-use Illuminate\\Support\\Facades\\DB;
+use App\Models\User;
+use App\Services\SupportNotificationService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Mockery;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class SupportSlaMonitorReliabilityTest extends TestCase
 {
@@ -225,7 +225,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             function ($ticket, $kind) use (&$calls): void {
                 $calls++;
                 if ($calls === 1) {
-                    throw new \\RuntimeException('notification provider unavailable');
+                    throw new \RuntimeException('notification provider unavailable');
                 }
             }
         );
