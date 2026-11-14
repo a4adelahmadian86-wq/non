@@ -539,7 +539,7 @@ class SupportController extends Controller
 
         try {
             $date = Carbon::createFromFormat('!Y-m-d', $value, config('app.timezone'));
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return null;
         }
 
