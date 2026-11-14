@@ -71,43 +71,70 @@ class WorkflowEngine
         return $runId;
     }
 
-    /** Dispatch a domain event once and retain failed workflow runs for safe retry. */
-    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    /**
+     * Persist a domain event without executing its workflows.
+     *
+     * Call this inside the same database transaction as the business change.
+     * The scheduled retry command is the durable delivery mechanism; callers
+     * must not swallow persistence failures or move this write after commit.
+     */
+    public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
             throw new \InvalidArgumentException('Unsupported workflow event.');
         }
+
         if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
             return 0;
         }
 
         $userId = (int) $context['user_id'];
+        $idempotencyKey = trim($idempotencyKey);
+        if ($userId < 1 || $idempotencyKey === '' || mb_strlen($idempotencyKey) > 190) {
+            throw new \InvalidArgumentException('Workflow event identity is invalid.');
+        }
 
-        try {
-            $eventId = DB::table('farast_workflow_events')->insertGetId([
-                'event_type' => $eventType,
-                'idempotency_key' => $idempotencyKey,
-                'user_id' => $userId,
-                'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'status' => 'pending',
-                'attempts' => 0,
-                'matched_workflows' => 0,
-                'failed_workflows' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (\Illuminate\Database\QueryException $exception) {
-            $existing = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
-            if (! $existing) {
-                throw $exception;
-            }
-            if ((int) $existing->user_id !== $userId || $existing->event_type !== $eventType) {
-                throw new \RuntimeException('Workflow event idempotency key is already bound to another event.');
-            }
-            if (($existing->status ?? null) === 'completed') {
-                return 0;
-            }
-            $eventId = (int) $existing->id;
+        $encodedContext = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        // insertOrIgnore makes the idempotency boundary portable across supported
+        // database drivers and avoids a check-then-insert race on concurrent retries.
+        DB::table('farast_workflow_events')->insertOrIgnore([
+            'event_type' => $eventType,
+            'idempotency_key' => $idempotencyKey,
+            'user_id' => $userId,
+            'context' => $encodedContext,
+            'status' => 'pending',
+            'attempts' => 0,
+            'matched_workflows' => 0,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $event = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
+        if (! $event) {
+            throw new \RuntimeException('Workflow event could not be persisted.');
+        }
+
+        if ((int) $event->user_id !== $userId || $event->event_type !== $eventType) {
+            throw new \RuntimeException('Workflow event idempotency key is already bound to another event.');
+        }
+
+        return ($event->status ?? null) === 'completed' ? 0 : (int) $event->id;
+    }
+
+    /**
+     * Persist and immediately process a domain event.
+     *
+     * Business operations that require durable event delivery should call
+     * enqueue() inside their source transaction instead. This method remains
+     * for existing non-transactional integrations and explicit synchronous use.
+     */
+    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    {
+        $eventId = $this->enqueue($eventType, $context, $idempotencyKey);
+        if ($eventId < 1) {
+            return 0;
         }
 
         $event = DB::table('farast_workflow_events')->where('id', $eventId)->first();
@@ -115,7 +142,8 @@ class WorkflowEngine
             return 0;
         }
 
-        // Always retry using the original immutable event payload, not a later caller's payload.
+        // Always process using the original immutable event payload, not a later
+        // caller's payload when an idempotency key is replayed.
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
             throw new \RuntimeException('Stored workflow event context is invalid.');
