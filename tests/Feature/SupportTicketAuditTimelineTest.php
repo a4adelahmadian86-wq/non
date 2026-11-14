@@ -211,4 +211,36 @@ class SupportTicketAuditTimelineTest extends TestCase
             ->assertDontSee('event_identity');
     }
 
+
+    public function test_message_and_csat_events_have_safe_timeline_labels(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Message and CSAT timeline',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $service = app(SupportTicketService::class);
+        $service->addMessage($ticket, $admin, 'Private internal note body', [
+            'is_staff' => true,
+            'is_internal' => true,
+            'touch_status' => false,
+            'notify' => false,
+        ]);
+        $service->submitCsat($ticket, 4, 'Private CSAT comment', $customer);
+
+        $response = $this->actingAs($admin)->get(
+            route('admin.support.management', ['ticket' => $ticket->id])
+        );
+
+        $response->assertOk()
+            ->assertSee('ثبت یادداشت داخلی در گفتگو')
+            ->assertSee('ثبت امتیاز رضایت مشتری')
+            ->assertSee('امتیاز ثبت‌شده: 4 از ۵');
+    }
+
 }

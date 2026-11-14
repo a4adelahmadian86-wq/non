@@ -47,13 +47,15 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertSame([
             'support.ticket.status_transitioned',
             'support.ticket.metadata_changed',
+            'support.ticket.message_added',
             'support.ticket.assignment_changed',
+            'support.ticket.message_added',
         ], $events->pluck('event_type')->all());
 
-        $this->assertSame($actor->id, $events[0]->user_id);
-        $this->assertSame($actor->id, $events[1]->user_id);
-        $this->assertSame($actor->id, $events[2]->user_id);
-        $this->assertSame('support', $events[0]->source);
+        foreach ($events as $event) {
+            $this->assertSame($actor->id, $event->user_id);
+            $this->assertSame('support', $event->source);
+        }
         $this->assertNotNull($events[0]->created_at);
 
         $status = $events[0]->payload_meta;
@@ -68,9 +70,16 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertSame('billing', $metadata['after']['department']);
         $this->assertNotNull($metadata['sla_after']['resolution_due_at']);
 
-        $assignment = $events[2]->payload_meta;
+        $internalNote = $events[2]->payload_meta;
+        $this->assertSame('internal_note', $internalNote['message_type']);
+        $this->assertSame('staff', $internalNote['actor_type']);
+        $this->assertTrue($internalNote['is_internal']);
+        $this->assertArrayNotHasKey('body', $internalNote);
+
+        $assignment = $events[3]->payload_meta;
         $this->assertNull($assignment['from_assigned_to']);
         $this->assertSame($agent->id, $assignment['to_assigned_to']);
+        $this->assertSame('internal_note', $events[4]->payload_meta['message_type']);
 
         $encoded = json_encode($events->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('Audit ledger support ticket', $encoded);
@@ -111,6 +120,117 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertStringNotContainsString('Private ticket subject', $encoded);
         $this->assertStringNotContainsString('Private initial message content', $encoded);
         $this->assertStringNotContainsString('audit-customer@example.test', $encoded);
+    }
+
+
+    public function test_public_reply_and_internal_note_append_sanitized_message_events(): void
+    {
+        $customer = User::factory()->create();
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Message audit lifecycle',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('customerReplied')->once();
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $service = app(SupportTicketService::class);
+        $service->addMessage($ticket, $customer, 'Private customer message body', [
+            'is_staff' => false,
+        ]);
+        $service->addMessage($ticket->fresh(), $staff, 'Private internal note body', [
+            'is_staff' => true,
+            'is_internal' => true,
+            'touch_status' => false,
+            'notify' => false,
+        ]);
+
+        $events = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.message_added')
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $events);
+        $this->assertSame($customer->id, $events[0]->user_id);
+        $this->assertSame('customer_reply', $events[0]->payload_meta['message_type']);
+        $this->assertSame('customer', $events[0]->payload_meta['actor_type']);
+        $this->assertFalse($events[0]->payload_meta['is_internal']);
+        $this->assertFalse($events[0]->payload_meta['is_staff']);
+
+        $this->assertSame($staff->id, $events[1]->user_id);
+        $this->assertSame('internal_note', $events[1]->payload_meta['message_type']);
+        $this->assertSame('staff', $events[1]->payload_meta['actor_type']);
+        $this->assertTrue($events[1]->payload_meta['is_internal']);
+        $this->assertTrue($events[1]->payload_meta['is_staff']);
+
+        $encoded = json_encode($events->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('Private customer message body', $encoded);
+        $this->assertStringNotContainsString('Private internal note body', $encoded);
+        $this->assertArrayNotHasKey('body', $events[0]->payload_meta);
+    }
+
+    public function test_csat_submission_is_audited_without_storing_the_customer_comment(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'CSAT audit privacy',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        app(SupportTicketService::class)->submitCsat($ticket, 4, 'Private CSAT comment', $customer);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.csat_submitted')
+            ->firstOrFail();
+
+        $this->assertSame($customer->id, $event->user_id);
+        $this->assertSame(4, $event->payload_meta['score']);
+        $this->assertSame('customer', $event->payload_meta['initiator_type']);
+        $this->assertStringNotContainsString(
+            'Private CSAT comment',
+            json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+    }
+
+    public function test_csat_audit_failure_rolls_back_the_rating(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'CSAT audit rollback',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->submitCsat($ticket, 5, 'Private comment', $customer);
+            $this->fail('CSAT must roll back when its audit append fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertNull($ticket->fresh()->csat_score);
+        $this->assertNull($ticket->fresh()->csat_at);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+        ]);
     }
 
     public function test_guest_ticket_creation_audit_does_not_store_guest_contact_details(): void
@@ -249,6 +369,38 @@ class SupportTicketAuditLedgerTest extends TestCase
             'محتوای محرمانه پیام مشتری',
             json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
         );
+    }
+
+
+    public function test_message_audit_failure_rolls_back_the_reply_and_status_transition(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Reply audit rollback',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->addMessage($ticket, $customer, 'Reply must not persist', [
+                'is_staff' => false,
+            ]);
+            $this->fail('Reply and status must roll back when the message audit append fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertSame('open', $ticket->fresh()->status);
+        $this->assertSame(0, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+        ]);
     }
 
     public function test_reassigning_ticket_to_the_same_agent_does_not_append_duplicate_history(): void

@@ -295,7 +295,7 @@ class SupportController extends Controller
         ]);
 
         try {
-            $this->tickets->submitCsat($ticket, (int) $data['score'], $data['comment'] ?? null);
+            $this->tickets->submitCsat($ticket, (int) $data['score'], $data['comment'] ?? null, auth()->user());
         } catch (\InvalidArgumentException $e) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
