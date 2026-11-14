@@ -30,6 +30,32 @@ class SecureTicketAttachments extends Command
         $storage->delete($disk, $path);
     }
 
+    private function isReferencedByAnotherMessage(int $messageId, string $path): bool
+    {
+        // JSON encoders may persist forward slashes either literally or escaped.
+        // Narrow candidates in SQL, then compare decoded attachment paths exactly.
+        $patterns = array_unique([$path, str_replace('/', chr(92).'/', $path)]);
+        $candidates = TicketMessage::query()
+            ->where('id', '!=', $messageId)
+            ->whereNotNull('attachments')
+            ->where(function ($query) use ($patterns): void {
+                foreach ($patterns as $pattern) {
+                    $query->orWhere('attachments', 'like', '%'.$pattern.'%');
+                }
+            })
+            ->get(['attachments']);
+
+        return $candidates->contains(function (TicketMessage $candidate) use ($path): bool {
+            foreach ((array) ($candidate->attachments ?? []) as $attachment) {
+                if (is_array($attachment) && (string) ($attachment['path'] ?? '') === $path) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
     public function handle(UploadSecurityService $security, StorageManager $storage): int
     {
         $limit = max(1, min((int) $this->option('limit'), 1000));
@@ -74,10 +100,7 @@ class SecureTicketAttachments extends Command
                             $legacyPath = base64_decode((string) $attachment['legacy_source_path_b64'], true);
                             $legacyDisk = (string) ($attachment['legacy_source_disk'] ?? 'public');
                             if (is_string($legacyPath) && $legacyPath !== '') {
-                                $stillReferenced = TicketMessage::query()
-                                    ->where('id', '!=', $message->id)
-                                    ->whereJsonContains('attachments', ['path' => $legacyPath])
-                                    ->exists();
+                                $stillReferenced = $this->isReferencedByAnotherMessage((int) $message->id, $legacyPath);
 
                                 if (! $stillReferenced) {
                                     try {
@@ -305,10 +328,7 @@ class SecureTicketAttachments extends Command
                     $cleanupMetadataChanged = false;
                     foreach ($sourceCleanup as [$index, $disk, $path]) {
                         try {
-                            $stillReferenced = TicketMessage::query()
-                                ->where('id', '!=', $message->id)
-                                ->whereJsonContains('attachments', ['path' => $path])
-                                ->exists();
+                            $stillReferenced = $this->isReferencedByAnotherMessage((int) $message->id, (string) $path);
 
                             if ($stillReferenced) {
                                 continue;
