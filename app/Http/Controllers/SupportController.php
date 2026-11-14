@@ -481,7 +481,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)
