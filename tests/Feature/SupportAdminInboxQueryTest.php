@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Ticket;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -70,6 +71,58 @@ class SupportAdminInboxQueryTest extends TestCase
         $this->assertStringContainsString('const shouldStickToBottom = box', $html);
         $this->assertStringContainsString('finally {', $html);
         $this->assertStringContainsString('pollInFlight = false;', $html);
+    }
+
+
+    public function test_at_risk_filter_uses_business_minutes_and_keeps_first_response_active_when_pending(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $timezone = config('app.timezone', 'Asia/Tehran');
+        $now = Carbon::parse('2026-11-15 08:00:00', $timezone);
+        Carbon::setTestNow($now);
+
+        try {
+            config([
+                'support.business_hours_only' => true,
+                'support.business_hours.timezone' => $timezone,
+                'support.business_hours.start' => 9,
+                'support.business_hours.end' => 18,
+                'support.business_hours.weekend' => [],
+                'support.warn_before_minutes' => 30,
+            ]);
+
+            $pendingFirstResponse = Ticket::create([
+                'subject' => 'Pending first-response at risk',
+                'status' => 'pending',
+                'priority' => 'normal',
+                'department' => 'support',
+                'sla_first_due_at' => Carbon::parse('2026-11-15 09:15:00', $timezone),
+            ]);
+            Ticket::create([
+                'subject' => 'Outside business-minute warning window',
+                'status' => 'open',
+                'priority' => 'normal',
+                'department' => 'support',
+                'sla_first_due_at' => Carbon::parse('2026-11-15 09:45:00', $timezone),
+            ]);
+            Ticket::create([
+                'subject' => 'Paused resolution only',
+                'status' => 'pending',
+                'priority' => 'normal',
+                'department' => 'support',
+                'first_response_at' => $now->copy()->subMinute(),
+                'sla_resolve_due_at' => Carbon::parse('2026-11-15 09:15:00', $timezone),
+            ]);
+
+            $this->actingAs($admin)
+                ->get(route('admin.support.management', ['sla' => 'at_risk']))
+                ->assertOk()
+                ->assertSee('Pending first-response at risk')
+                ->assertDontSee('Outside business-minute warning window')
+                ->assertDontSee('Paused resolution only');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
 }
