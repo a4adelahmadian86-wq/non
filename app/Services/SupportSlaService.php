@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Ticket;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SupportSlaService
@@ -412,7 +414,9 @@ class SupportSlaService
             'first_response_total' => 0,
             'avg_first_response_minutes' => null,
         ];
-        $allFirst = [];
+        $allFirstHistogram = [];
+        $allFirstSum = 0;
+        $allFirstCount = 0;
 
         $ensureAgent = function (int $id, string $name) use (&$agents): void {
             $name = trim($name) !== '' ? $name : 'کارشناس نامشخص';
@@ -425,22 +429,91 @@ class SupportSlaService
                     'replies' => 0,
                     'first_response_met' => 0,
                     'first_response_total' => 0,
-                    'first_response_samples' => [],
+                    'first_response_sum' => 0,
+                    'first_response_histogram' => [],
                 ];
             } elseif ($agents[$id]['name'] === 'بدون ارجاع' && $name !== 'بدون ارجاع') {
                 $agents[$id]['name'] = $name;
             }
         };
 
-        // Process a bounded number of tickets at a time. Eager-loading message
-        // authors prevents isFromStaff() from issuing one query per message.
+        // Keep ticket hydration bounded and never hydrate message bodies or all
+        // public replies. Counts and first-reply candidates are aggregated in SQL.
         Ticket::query()
             ->whereBetween('created_at', [$from, $to])
-            ->with([
-                'assignee',
-                'messages' => fn ($q) => $q->with('user')->orderBy('created_at'),
-            ])
-            ->chunkById(100, function ($tickets) use (&$agents, &$totals, &$allFirst, $ensureAgent): void {
+            ->with('assignee')
+            ->chunkById(100, function ($tickets) use (&$agents, &$totals, &$allFirstHistogram, &$allFirstSum, &$allFirstCount, $ensureAgent): void {
+                $ticketIds = $tickets->modelKeys();
+                if ($ticketIds === []) {
+                    return;
+                }
+
+                $eligibleMessages = function () use ($ticketIds) {
+                    return DB::table('ticket_messages as messages')
+                        ->leftJoin('users as reply_author', 'reply_author.id', '=', 'messages.user_id')
+                        ->whereIn('messages.ticket_id', $ticketIds)
+                        ->where(function ($query): void {
+                            $query->where('messages.is_staff', true)
+                                ->orWhere('reply_author.role', User::ROLE_ADMIN);
+                        })
+                        ->where(function ($query): void {
+                            $query->where('messages.is_internal', false)
+                                ->orWhereNull('messages.is_internal');
+                        });
+                };
+
+                // Count public staff replies by their actual author, matching
+                // TicketMessage::isFromStaff() without loading message models.
+                $replyCounts = $eligibleMessages()
+                    ->whereNotNull('messages.user_id')
+                    ->select([
+                        'messages.user_id',
+                        'reply_author.name as author_name',
+                        'reply_author.email as author_email',
+                    ])
+                    ->selectRaw('COUNT(*) as reply_count')
+                    ->groupBy('messages.user_id', 'reply_author.name', 'reply_author.email')
+                    ->get();
+
+                foreach ($replyCounts as $replyCount) {
+                    $authorId = (int) $replyCount->user_id;
+                    $authorName = $replyCount->author_name ?: ($replyCount->author_email ?: 'کارشناس نامشخص');
+                    $ensureAgent($authorId, $authorName);
+                    $agents[$authorId]['replies'] += (int) $replyCount->reply_count;
+                }
+
+                // Find the earliest public staff reply per ticket. The second
+                // aggregation chooses the lowest message ID for deterministic
+                // handling when two replies share the same timestamp.
+                $firstTimes = $eligibleMessages()
+                    ->select('messages.ticket_id')
+                    ->selectRaw('MIN(messages.created_at) as first_created_at')
+                    ->groupBy('messages.ticket_id');
+
+                $firstIds = DB::table('ticket_messages as first_messages')
+                    ->joinSub($firstTimes, 'first_times', function ($join): void {
+                        $join->on('first_messages.ticket_id', '=', 'first_times.ticket_id')
+                            ->on('first_messages.created_at', '=', 'first_times.first_created_at');
+                    })
+                    ->select('first_messages.ticket_id')
+                    ->selectRaw('MIN(first_messages.id) as first_message_id')
+                    ->groupBy('first_messages.ticket_id');
+
+                $firstReplies = DB::table('ticket_messages as first_messages')
+                    ->joinSub($firstIds, 'first_ids', function ($join): void {
+                        $join->on('first_messages.id', '=', 'first_ids.first_message_id');
+                    })
+                    ->leftJoin('users as reply_author', 'reply_author.id', '=', 'first_messages.user_id')
+                    ->select([
+                        'first_messages.ticket_id',
+                        'first_messages.user_id',
+                        'first_messages.created_at',
+                        'reply_author.name as author_name',
+                        'reply_author.email as author_email',
+                    ])
+                    ->get()
+                    ->keyBy('ticket_id');
+
                 foreach ($tickets as $ticket) {
                     $totals['tickets']++;
                     if ($ticket->status === 'closed') {
@@ -460,32 +533,20 @@ class SupportSlaService
                         }
                     }
 
-                    // Count every public staff reply against its actual author,
-                    // not against whichever agent happens to own the ticket.
-                    foreach ($ticket->messages as $message) {
-                        if (! $message->isFromStaff() || $message->is_internal || ! $message->user_id) {
-                            continue;
-                        }
-
-                        $authorId = (int) $message->user_id;
-                        $authorName = $message->user?->name ?? $message->user?->email ?? 'کارشناس نامشخص';
-                        $ensureAgent($authorId, $authorName);
-                        $agents[$authorId]['replies']++;
-                    }
-
-                    $firstStaff = $ticket->messages->first(
-                        fn ($message) => $message->isFromStaff() && ! $message->is_internal
-                    );
-
+                    $firstStaff = $firstReplies->get($ticket->id);
                     if (! $firstStaff) {
                         continue;
                     }
 
-                    $minutes = $this->businessMinutesBetween($ticket->created_at, $firstStaff->created_at);
-                    $allFirst[] = $minutes;
+                    $firstResponseAt = Carbon::parse($firstStaff->created_at);
+                    $minutes = $this->businessMinutesBetween($ticket->created_at, $firstResponseAt);
+                    $allFirstHistogram[$minutes] = ($allFirstHistogram[$minutes] ?? 0) + 1;
+                    $allFirstSum += $minutes;
+                    $allFirstCount++;
                     $totals['first_response_total']++;
+
                     $met = ! $ticket->sla_first_due_at
-                        || $firstStaff->created_at->lte($ticket->sla_first_due_at);
+                        || $firstResponseAt->lte($ticket->sla_first_due_at);
 
                     if ($met) {
                         $totals['first_response_met']++;
@@ -495,12 +556,14 @@ class SupportSlaService
                     // the previous fallback to the assigned agent.
                     $responderId = (int) ($firstStaff->user_id ?: $assignedId);
                     if ($responderId > 0) {
-                        $responderName = $firstStaff->user?->name
-                            ?? $firstStaff->user?->email
-                            ?? $assignedName;
+                        $responderName = $firstStaff->author_name
+                            ?: ($firstStaff->author_email ?: $assignedName);
                         $ensureAgent($responderId, $responderName);
                         $agents[$responderId]['first_response_total']++;
-                        $agents[$responderId]['first_response_samples'][] = $minutes;
+                        $agents[$responderId]['first_response_sum'] += $minutes;
+                        $agents[$responderId]['first_response_histogram'][$minutes]
+                            = ($agents[$responderId]['first_response_histogram'][$minutes] ?? 0) + 1;
+
                         if ($met) {
                             $agents[$responderId]['first_response_met']++;
                         }
@@ -509,23 +572,23 @@ class SupportSlaService
             });
 
         foreach ($agents as &$row) {
-            $samples = $row['first_response_samples'];
-            $row['avg_first_response_minutes'] = count($samples)
-                ? (int) round(array_sum($samples) / count($samples))
+            $count = (int) $row['first_response_total'];
+            $row['avg_first_response_minutes'] = $count > 0
+                ? (int) round($row['first_response_sum'] / $count)
                 : null;
-            $row['median_first_response_minutes'] = $this->median($samples);
-            $row['sla_rate'] = $row['first_response_total'] > 0
-                ? round(100 * $row['first_response_met'] / $row['first_response_total'], 1)
+            $row['median_first_response_minutes'] = $this->medianFromHistogram($row['first_response_histogram']);
+            $row['sla_rate'] = $count > 0
+                ? round(100 * $row['first_response_met'] / $count, 1)
                 : null;
-            unset($row['first_response_samples']);
+            unset($row['first_response_sum'], $row['first_response_histogram']);
         }
         unset($row);
 
-        $totals['avg_first_response_minutes'] = count($allFirst)
-            ? (int) round(array_sum($allFirst) / count($allFirst))
+        $totals['avg_first_response_minutes'] = $allFirstCount > 0
+            ? (int) round($allFirstSum / $allFirstCount)
             : null;
-        $totals['median_first_response_minutes'] = $this->median($allFirst);
-        $totals['p90_first_response_minutes'] = $this->percentile($allFirst, 90);
+        $totals['median_first_response_minutes'] = $this->medianFromHistogram($allFirstHistogram);
+        $totals['p90_first_response_minutes'] = $this->percentileFromHistogram($allFirstHistogram, 90);
         $totals['sla_rate'] = $totals['first_response_total'] > 0
             ? round(100 * $totals['first_response_met'] / $totals['first_response_total'], 1)
             : null;
@@ -538,6 +601,72 @@ class SupportSlaService
             'from' => $from,
             'to' => $to,
         ];
+    }
+
+    /**
+     * Exact median from an integer-minute frequency map; memory grows with
+     * distinct response-minute values rather than the number of tickets.
+     *
+     * @param array<int, int> $histogram
+     */
+    protected function medianFromHistogram(array $histogram): ?int
+    {
+        $count = array_sum($histogram);
+        if ($count === 0) {
+            return null;
+        }
+
+        $lower = $this->histogramValueAtRank($histogram, intdiv($count - 1, 2));
+        $upper = $this->histogramValueAtRank($histogram, intdiv($count, 2));
+
+        return (int) round(($lower + $upper) / 2);
+    }
+
+    /**
+     * Preserve the existing linear-interpolation percentile definition exactly.
+     *
+     * @param array<int, int> $histogram
+     */
+    protected function percentileFromHistogram(array $histogram, float $percentile): ?int
+    {
+        $count = array_sum($histogram);
+        if ($count === 0) {
+            return null;
+        }
+
+        if ($count === 1) {
+            return (int) array_key_first($histogram);
+        }
+
+        $rank = ($percentile / 100) * ($count - 1);
+        $lowerRank = (int) floor($rank);
+        $upperRank = (int) ceil($rank);
+        $lower = $this->histogramValueAtRank($histogram, $lowerRank);
+
+        if ($lowerRank === $upperRank) {
+            return $lower;
+        }
+
+        $upper = $this->histogramValueAtRank($histogram, $upperRank);
+        $weight = $rank - $lowerRank;
+
+        return (int) round($lower * (1 - $weight) + $upper * $weight);
+    }
+
+    /** @param array<int, int> $histogram */
+    protected function histogramValueAtRank(array $histogram, int $rank): int
+    {
+        ksort($histogram, SORT_NUMERIC);
+        $seen = 0;
+
+        foreach ($histogram as $minutes => $frequency) {
+            $seen += $frequency;
+            if ($rank < $seen) {
+                return (int) $minutes;
+            }
+        }
+
+        return (int) array_key_last($histogram);
     }
 
     /** @param list<int|float> $samples */
