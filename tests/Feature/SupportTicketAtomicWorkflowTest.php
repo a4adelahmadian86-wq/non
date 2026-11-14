@@ -69,6 +69,44 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->assertSame(0, $ticket->messages()->count());
     }
 
+    public function test_staff_reply_and_explicit_transition_share_reopen_timestamp_semantics(): void
+    {
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $closedAt = now()->subHour();
+        $replyTicket = Ticket::create([
+            'subject' => 'Reopen through staff reply',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'closed_at' => $closedAt,
+            'resolved_at' => $closedAt,
+        ]);
+        $transitionTicket = Ticket::create([
+            'subject' => 'Reopen through status transition',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'closed_at' => $closedAt,
+            'resolved_at' => $closedAt,
+        ]);
+
+        $service = $this->service();
+        $service->addMessage($replyTicket, $staff, 'ادامه بررسی درخواست', [
+            'is_staff' => true,
+            'status' => 'answered',
+            'notify' => false,
+        ]);
+        $transitioned = $service->changeStatus($transitionTicket, 'answered', $staff, false);
+
+        $replied = $replyTicket->fresh();
+        $this->assertSame('answered', $replied->status);
+        $this->assertNull($replied->closed_at);
+        $this->assertNull($replied->resolved_at);
+        $this->assertSame('answered', $transitioned->status);
+        $this->assertNull($transitioned->closed_at);
+        $this->assertNull($transitioned->resolved_at);
+    }
+
     public function test_ticket_creation_rollback_removes_managed_attachment_after_initial_message_succeeds(): void
     {
         Storage::fake('private');
