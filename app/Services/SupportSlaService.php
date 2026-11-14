@@ -391,7 +391,7 @@ class SupportSlaService
                 return $m->isFromStaff() && ! $m->is_internal;
             });
             if ($firstStaff) {
-                $mins = $ticket->created_at->diffInMinutes($firstStaff->created_at);
+                $mins = $this->businessMinutesBetween($ticket->created_at, $firstStaff->created_at);
                 $allFirst[] = $mins;
                 $totals['first_response_total']++;
                 $met = ! $ticket->sla_first_due_at || $firstStaff->created_at->lte($ticket->sla_first_due_at);
