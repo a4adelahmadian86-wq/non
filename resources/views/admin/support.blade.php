@@ -218,9 +218,19 @@
                                 @if(!empty($m->attachments))
                                     <div class="tk-attach-list">
                                         @foreach((array)$m->attachments as $index => $att)
-                                            <a href="{{ route('support.attachment', ['ticket' => $active->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
-                                                <i class="fa-solid fa-paperclip"></i> {{ $att['name'] ?? 'پیوست' }}
-                                            </a>
+                                            @if(!empty($att['quarantined']))
+                                                <span class="tk-attach-unavailable" title="فایل در بررسی امنیتی پذیرفته نشده است">
+                                                    <i class="fa-solid fa-shield-halved"></i> {{ $att['name'] ?? 'پیوست' }} · قرنطینه امنیتی
+                                                </span>
+                                            @elseif(empty($att['managed_file_id']))
+                                                <span class="tk-attach-pending">
+                                                    <i class="fa-solid fa-hourglass-half"></i> {{ $att['name'] ?? 'پیوست' }} · در حال انتقال به فضای امن
+                                                </span>
+                                            @else
+                                                <a href="{{ route('support.attachment', ['ticket' => $active->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
+                                                    <i class="fa-solid fa-paperclip"></i> {{ $att['name'] ?? 'پیوست' }}
+                                                </a>
+                                            @endif
                                         @endforeach
                                     </div>
                                 @endif
