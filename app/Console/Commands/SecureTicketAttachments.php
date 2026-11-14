@@ -216,11 +216,17 @@ class SecureTicketAttachments extends Command
                             continue;
                         }
 
+                        $storageName = pathinfo($originalName, PATHINFO_FILENAME);
+                        $sourceExtension = strtolower(pathinfo($sourceName, PATHINFO_EXTENSION));
+                        if ($sourceExtension !== '') {
+                            $storageName .= '.'.$sourceExtension;
+                        }
+
                         $managed = null;
                         try {
                             $managed = $storage->adoptExistingPrivate(
                                 $stagingPath,
-                                $originalName,
+                                $storageName,
                                 (string) ($inspection['mime'] ?? 'application/octet-stream'),
                                 (int) ($inspection['size'] ?? Storage::disk('private')->size($stagingPath)),
                                 'support',
@@ -315,8 +321,15 @@ class SecureTicketAttachments extends Command
                     }
 
                     if ($cleanupMetadataChanged) {
-                        $message->attachments = $attachments;
-                        $message->save();
+                        try {
+                            $message->attachments = $attachments;
+                            $message->save();
+                        } catch (Throwable $exception) {
+                            // The managed attachment is already committed. Keep
+                            // its cleanup metadata so the next scheduled run retries.
+                            $failedAttachments++;
+                            $this->warn("Could not clear old-source cleanup metadata for ticket message {$message->id}.");
+                        }
                     }
 
                     foreach (array_unique($createdStaging) as $path) {
