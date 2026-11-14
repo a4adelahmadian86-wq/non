@@ -451,6 +451,20 @@
                                                 $slaEventLabel = ($auditMeta['event'] ?? null) === 'breached' ? 'نقض مهلت' : 'نزدیک به پایان';
                                             @endphp
                                             {{ $auditEvent->event_type === 'support.ticket.sla_alert_queued' ? 'ثبت هشدار SLA در صف ارسال' : 'تحویل هشدار SLA به کانال‌های اطلاع‌رسانی' }}: {{ $slaKindLabel }} — {{ $slaEventLabel }}
+                                        @elseif($auditEvent->event_type === 'support.ticket.message_added')
+                                            @php
+                                                $messageTypeLabel = match ($auditMeta['message_type'] ?? null) {
+                                                    'internal_note' => 'یادداشت داخلی',
+                                                    'system_note' => 'یادداشت سیستمی',
+                                                    'staff_reply' => 'پاسخ کارشناس',
+                                                    'customer_reply' => 'پاسخ مشتری',
+                                                    'guest_reply' => 'پاسخ مهمان',
+                                                    default => 'پیام',
+                                                };
+                                            @endphp
+                                            ثبت {{ $messageTypeLabel }} در گفتگو
+                                        @elseif($auditEvent->event_type === 'support.ticket.csat_submitted')
+                                            ثبت امتیاز رضایت مشتری
                                         @else
                                             {{ $auditEvent->event_type }}
                                         @endif
@@ -478,6 +492,21 @@
                                         @if($auditEvent->event_type === 'support.ticket.sla_alert_dispatched' && isset($auditMeta['attempts']))
                                             · تلاش ارسال: {{ (int) $auditMeta['attempts'] }}
                                         @endif
+                                    </div>
+                                @elseif($auditEvent->event_type === 'support.ticket.message_added')
+                                    <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
+                                        @if(!empty($auditMeta['is_internal']))
+                                            داخلی
+                                        @else
+                                            عمومی
+                                        @endif
+                                        @if(!empty($auditMeta['attachment_count']))
+                                            · پیوست: {{ (int) $auditMeta['attachment_count'] }}
+                                        @endif
+                                    </div>
+                                @elseif($auditEvent->event_type === 'support.ticket.csat_submitted')
+                                    <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
+                                        امتیاز ثبت‌شده: {{ (int) ($auditMeta['score'] ?? 0) }} از ۵
                                     </div>
                                 @endif
                             </li>
