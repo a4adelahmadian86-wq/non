@@ -95,6 +95,37 @@ class CrmCustomerWorkspaceTest extends TestCase
             'idempotency_key' => 'crm-test-wallet-1',
         ]);
 
+        $usageCharge = FarastCharge::create([
+            'charge_id' => (string) \\Illuminate\\Support\\Str::uuid(),
+            'idempotency_key' => 'crm-usage-charge-1',
+            'actor_id' => $customer->id,
+            'organization_id' => null,
+            'usage_event_id' => null,
+            'reservation_id' => null,
+            'order_id' => null,
+            'invoice_id' => null,
+            'capability' => 'ai.assistance',
+            'quantity' => 2,
+            'unit' => 'request',
+            'unit_price' => 10000,
+            'currency' => 'IRR',
+            'subtotal' => 20000,
+            'discount' => 0,
+            'fee' => 0,
+            'tax' => 0,
+            'total' => 20000,
+            'status' => 'charged',
+            'pricing_policy_version_id' => null,
+            'snapshot' => ['source' => 'crm-integration-test'],
+        ]);
+        $refund = app(CommerceAuthorizationService::class)->refund(
+            $usageCharge,
+            5000,
+            'اعتبار اصلاح مصرف',
+            'crm-usage-refund-1',
+        );
+        $this->assertSame(755000, (int) $wallet->fresh()->balance_rials);
+
         $category = StoreCategory::create(['name' => 'فایل‌ها', 'slug' => 'crm-files']);
         $product = StoreProduct::create([
             'category_id' => $category->id, 'seller_id' => $admin->id,
@@ -120,7 +151,13 @@ class CrmCustomerWorkspaceTest extends TestCase
         ]);
 
         $this->actingAs($admin)->getJson('/admin/crm/customers')
-            ->assertOk()->assertJsonFragment(['id' => $customer->id, 'paid_revenue_rials' => 300000]);
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $customer->id,
+                'paid_revenue_rials' => 300000,
+                'usage_charges_count' => 1,
+                'usage_refunds_count' => 1,
+            ]);
 
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
@@ -132,7 +169,14 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 50000])
             ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
             ->assertJsonPath('metrics.payments_count', 2)
-            ->assertJsonPath('metrics.wallet_transactions_count', 1);
+            ->assertJsonPath('metrics.wallet_transactions_count', 2)
+            ->assertJsonPath('metrics.usage_charges_count', 1)
+            ->assertJsonPath('metrics.usage_refunds_count', 1)
+            ->assertJsonPath('metrics.usage_financials_by_currency.IRR.charged_total', 20000)
+            ->assertJsonPath('metrics.usage_financials_by_currency.IRR.refunded_total', 5000)
+            ->assertJsonPath('metrics.usage_financials_by_currency.IRR.net_total', 15000)
+            ->assertJsonFragment(['type' => 'usage_charge', 'capability' => 'ai.assistance', 'amount' => 20000])
+            ->assertJsonFragment(['type' => 'usage_refund', 'charge_id' => $usageCharge->id, 'amount' => 5000, 'status' => 'completed']);
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('metrics.store_library_items_count', 1)
