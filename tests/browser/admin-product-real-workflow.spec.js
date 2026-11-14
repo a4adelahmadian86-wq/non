@@ -170,6 +170,88 @@ test.describe('Real admin product workflow', () => {
     await expect(page.getByText('پاسخ‌گویی آزمایشی قابل قبول بود.')).toBeVisible();
   });
 
+  test('internal support notes stay private from customer pages and polling', async ({ browser }) => {
+    test.setTimeout(120_000);
+    const baseURL = process.env.FARAST_E2E_URL || 'http://127.0.0.1:8000';
+    const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
+    const subject = `حریم یادداشت داخلی ${runId}`;
+    const firstMessage = 'درخواست مشتری برای بررسی محرمانگی یادداشت داخلی.';
+    const internalNote = `یادداشت محرمانه کارشناسان ${runId}`;
+
+    const customerContext = await browser.newContext({ baseURL });
+    const adminContext = await browser.newContext({ baseURL });
+    const customerPage = await customerContext.newPage();
+    const adminPage = await adminContext.newPage();
+
+    try {
+      customerPage.setDefaultTimeout(15_000);
+      adminPage.setDefaultTimeout(15_000);
+
+      // The seeded employee is a regular support customer, not a support manager.
+      await signInAsSeededRole(customerPage, '09150000001');
+      await customerPage.goto('/support/create');
+      const form = customerPage.locator('#createTicketForm');
+      await expect(form).toBeVisible();
+      await form.locator('select[name="department"]').selectOption('support');
+      await form.locator('select[name="priority"]').selectOption('normal');
+      await form.locator('#topicAreaChips label.tk-chip').filter({ hasText: 'خدمات' }).click();
+      await form.locator('#servicesBlock label.tk-chip').filter({ hasText: 'تایپ آنلاین' }).click();
+      await form.locator('input[name="subject"]').fill(subject);
+      await form.locator('textarea[name="body"]').fill(firstMessage);
+
+      const createResponsePromise = customerPage.waitForResponse(response =>
+        new URL(response.url()).pathname === '/support/tickets' &&
+        response.request().method() === 'POST'
+      );
+      await form.getByRole('button', { name: 'ثبت تیکت' }).click();
+      const createResponse = await createResponsePromise;
+      expect(createResponse.status()).toBe(302);
+      await expect(customerPage).toHaveURL(/\/support\/tickets\/\d+$/);
+      const ticketId = Number(new URL(customerPage.url()).pathname.split('/').pop());
+      expect(ticketId).toBeGreaterThan(0);
+      await expect(customerPage.locator('#chatMessages')).toContainText(firstMessage);
+
+      await signInAsSeededAdmin(adminPage);
+      const adminResponse = await adminPage.goto(`/admin/support-management?ticket=${ticketId}`);
+      expect(adminResponse?.status()).toBe(200);
+      await expect(adminPage.getByRole('heading', { name: subject })).toBeVisible();
+      await adminPage.locator('#adminReplyBody').fill(internalNote);
+      await adminPage.locator('#adminInternalNote').check();
+      await expect(adminPage.locator('#adminReplyStatus')).toBeDisabled();
+
+      const noteResponsePromise = adminPage.waitForResponse(response =>
+        new URL(response.url()).pathname === `/admin/tickets/${ticketId}/reply` &&
+        response.request().method() === 'POST'
+      );
+      await adminPage.getByRole('button', { name: 'ارسال پاسخ' }).click();
+      const noteResponse = await noteResponsePromise;
+      expect(noteResponse.status()).toBe(302);
+      await expect(adminPage.locator('#adminThread')).toContainText(internalNote);
+      await expect(adminPage.locator('#adminThread')).toContainText('یادداشت داخلی');
+
+      // Customer HTML and incremental polling must both omit the internal note.
+      await customerPage.reload();
+      await expect(customerPage.locator('#chatMessages')).toContainText(firstMessage);
+      await expect(customerPage.locator('#chatMessages')).not.toContainText(internalNote);
+
+      const pollResult = await customerPage.evaluate(async ticket => {
+        const response = await fetch(`/support/tickets/${ticket}/messages?after_id=0`, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        return { status: response.status, payload: await response.json() };
+      }, ticketId);
+      expect(pollResult.status).toBe(200);
+      expect(JSON.stringify(pollResult.payload)).not.toContain(internalNote);
+
+      const deniedResponse = await customerPage.goto(`/admin/support-management?ticket=${ticketId}`);
+      expect(deniedResponse?.status()).toBe(403);
+    } finally {
+      await customerContext.close();
+      await adminContext.close();
+    }
+  });
+
   test('admin can open the role console, change a role permission, and verify persistence', async ({ page }) => {
     await signInAsSeededAdmin(page);
     const response = await page.goto('/admin/access');
