@@ -196,7 +196,7 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             'user_id' => $user->id,
             'status' => 'pending',
         ]);
-        $this->assertSame(1, app(\\App\\Services\\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
         $this->assertDatabaseHas('crm_follow_up_tasks', [
             'customer_id' => $user->id,
             'created_by' => $user->id,
