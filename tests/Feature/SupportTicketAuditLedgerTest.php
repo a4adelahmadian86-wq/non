@@ -189,4 +189,32 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertSame($messageCount, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
     }
 
+
+    public function test_reapplying_identical_ticket_metadata_does_not_append_duplicate_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'No-op metadata audit',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $before = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count();
+
+        app(SupportTicketService::class)->updateMeta($ticket, [
+            'priority' => 'normal',
+            'department' => 'support',
+        ], $admin);
+
+        $this->assertSame($before, FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count());
+    }
+
 }
