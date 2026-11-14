@@ -2126,3 +2126,33 @@ test('searches multi-page PDFs concurrently, normalizes Unicode and reports acce
   expect(observations.busy).toContain('false');
 });
 
+
+
+test('does not rewrite durable reading progress when only the PDF zoom changes', async ({ page }) => {
+  await mountPdfReader(page, 2);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+
+  // Prime a known persisted position before observing durable-store writes.
+  await root.locator('#reader-next').click();
+  await expect(root.locator('#reader-page-number')).toHaveValue('2');
+  await page.evaluate(() => {
+    window.__readerDurableWrites = [];
+    window.FarastReaderDurableStore = {
+      set: async (key, raw) => {
+        window.__readerDurableWrites.push({ key, state: JSON.parse(raw) });
+      },
+    };
+  });
+
+  await root.locator('#reader-zoom-in').click();
+  await expect(root.locator('#reader-zoom-label')).toContainText('۱۱۰');
+  await expect.poll(() => page.evaluate(() => window.__readerDurableWrites.length)).toBe(0);
+
+  await root.locator('#reader-prev').click();
+  await expect(root.locator('#reader-page-number')).toHaveValue('1');
+  await expect.poll(() => page.evaluate(() => window.__readerDurableWrites.length)).toBe(1);
+  const writes = await page.evaluate(() => window.__readerDurableWrites);
+  expect(writes[0].state.progress).toEqual({ section: 0, page: 1 });
+});
+
