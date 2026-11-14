@@ -32,28 +32,24 @@ class SecureTicketAttachments extends Command
 
     private function isReferencedByAnotherMessage(int $messageId, string $path): bool
     {
-        // JSON encoders may persist forward slashes either literally or escaped.
-        // Narrow candidates in SQL, then compare decoded attachment paths exactly.
-        $patterns = array_unique([$path, str_replace('/', chr(92).'/', $path)]);
-        $candidates = TicketMessage::query()
-            ->where('id', '!=', $messageId)
-            ->whereNotNull('attachments')
-            ->where(function ($query) use ($patterns): void {
-                foreach ($patterns as $pattern) {
-                    $query->orWhere('attachments', 'like', '%'.$pattern.'%');
-                }
-            })
-            ->get(['attachments']);
-
-        return $candidates->contains(function (TicketMessage $candidate) use ($path): bool {
+        // Decode the JSON cast and compare exact paths. SQL LIKE is unsafe here:
+        // JSON encoders may escape slashes, and substring matches can retain/delete
+        // the wrong source. Cursor keeps memory bounded for large ticket histories.
+        foreach (
+            TicketMessage::query()
+                ->where('id', '!=', $messageId)
+                ->whereNotNull('attachments')
+                ->select(['id', 'attachments'])
+                ->cursor() as $candidate
+        ) {
             foreach ((array) ($candidate->attachments ?? []) as $attachment) {
                 if (is_array($attachment) && (string) ($attachment['path'] ?? '') === $path) {
                     return true;
                 }
             }
+        }
 
-            return false;
-        });
+        return false;
     }
 
     public function handle(UploadSecurityService $security, StorageManager $storage): int
