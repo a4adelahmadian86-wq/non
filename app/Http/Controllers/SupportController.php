@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\StorageManagedFile;
 use App\Models\User;
+use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
@@ -277,6 +278,18 @@ class SupportController extends Controller
 
     public function adminIndex(Request $request)
     {
+        // Apply the current RBAC data scope before filtering, searching, counting,
+        // pagination or resolving the active ticket. Guest tickets (user_id=null)
+        // remain visible only to global support operators.
+        $visibleUserIds = app(AdminConsoleService::class)->visibleUserIds(auth()->user());
+        $scopeQuery = static function ($query) use ($visibleUserIds) {
+            if ($visibleUserIds !== null) {
+                $query->whereIn('tickets.user_id', $visibleUserIds);
+            }
+
+            return $query;
+        };
+
         // Inbox rows need only the latest public preview. Loading every message
         // for every ticket on the page caused memory growth proportional to all
         // conversation history; the active thread is loaded separately below.
@@ -290,7 +303,7 @@ class SupportController extends Controller
             ->orderByDesc('id')
             ->limit(1);
 
-        $query = Ticket::query()
+        $query = $scopeQuery(Ticket::query())
             ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
             ->with(['user', 'relatedProduct', 'assignee']);
 
@@ -368,28 +381,39 @@ class SupportController extends Controller
 
         $active = null;
         if ($request->filled('ticket')) {
-            $active = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
-                ->find($request->integer('ticket'));
+            $activeQuery = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
+                ->whereKey($request->integer('ticket'));
+            $scopeQuery($activeQuery);
+            $active = $activeQuery->first();
+            if ($active) {
+                $this->authorize('manage', $active);
+            }
         }
         if (! $active) {
             $firstTicketId = $tickets->getCollection()->first()?->id;
-            $active = $firstTicketId
-                ? Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])->find($firstTicketId)
-                : null;
+            if ($firstTicketId) {
+                $activeQuery = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
+                    ->whereKey($firstTicketId);
+                $scopeQuery($activeQuery);
+                $active = $activeQuery->first();
+                if ($active) {
+                    $this->authorize('manage', $active);
+                }
+            }
         }
 
         $stats = [
-            'needs_reply' => Ticket::needsReply()->count(),
-            'open' => Ticket::where('status', 'open')->count(),
-            'user_replied' => Ticket::where('status', 'user_replied')->count(),
-            'answered' => Ticket::where('status', 'answered')->count(),
-            'pending' => Ticket::where('status', 'pending')->count(),
-            'closed' => Ticket::where('status', 'closed')->count(),
-            'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
+            'needs_reply' => $scopeQuery(Ticket::query())->needsReply()->count(),
+            'open' => $scopeQuery(Ticket::query())->where('status', 'open')->count(),
+            'user_replied' => $scopeQuery(Ticket::query())->where('status', 'user_replied')->count(),
+            'answered' => $scopeQuery(Ticket::query())->where('status', 'answered')->count(),
+            'pending' => $scopeQuery(Ticket::query())->where('status', 'pending')->count(),
+            'closed' => $scopeQuery(Ticket::query())->where('status', 'closed')->count(),
+            'high' => $scopeQuery(Ticket::query())->where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         
-            'sla_breached' => Ticket::query()->slaBreached()->count(),
+            'sla_breached' => $scopeQuery(Ticket::query())->slaBreached()->count(),
             'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
-                ? Ticket::query()->where(function ($q) {
+                ? $scopeQuery(Ticket::query())->where(function ($q) {
                     $warn = (int) config('support.warn_before_minutes', 30);
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                         $q->where(function ($w) use ($warn) {
