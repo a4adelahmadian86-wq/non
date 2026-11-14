@@ -27,6 +27,7 @@ class SupportTicketAuditTimelineTest extends TestCase
 
         $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $teamAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $teamMate = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
         $outsideAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
         $customer = User::factory()->create();
 
@@ -48,6 +49,7 @@ class SupportTicketAuditTimelineTest extends TestCase
             'supervisor_id' => $outsideAgent->id,
         ]);
         $team->members()->attach($teamAgent->id, ['team_role' => 'manager']);
+        $team->members()->attach($teamMate->id, ['team_role' => 'manager']);
         $team->members()->attach($customer->id, ['team_role' => 'employee']);
         $otherTeam->members()->attach($outsideAgent->id, ['team_role' => 'manager']);
 
@@ -70,6 +72,7 @@ class SupportTicketAuditTimelineTest extends TestCase
 
         $authorization = app(AuthorizationService::class);
         $authorization->assignRole($root, $teamAgent, 'support_audit_timeline_operator', 'team', $organization->id, $team->id);
+        $authorization->assignRole($root, $teamMate, 'support_audit_timeline_operator', 'team', $organization->id, $team->id);
         $authorization->assignRole($root, $outsideAgent, 'support_audit_timeline_operator', 'team', $organization->id, $otherTeam->id);
 
         $ticket = Ticket::create([
@@ -80,7 +83,22 @@ class SupportTicketAuditTimelineTest extends TestCase
             'department' => 'support',
         ]);
 
-        app(AuditEventService::class)->record(
+        $audit = app(AuditEventService::class);
+        $audit->record(
+            'support.ticket.status_transitioned',
+            $teamMate->id,
+            null,
+            'ticket',
+            $ticket->id,
+            [
+                'from_status' => 'open',
+                'to_status' => 'pending',
+                'sla_before' => ['resolution_paused_at' => null],
+                'sla_after' => ['resolution_paused_at' => now()->toIso8601String()],
+            ],
+            'support'
+        );
+        $audit->record(
             'support.ticket.assignment_changed',
             $outsideAgent->id,
             null,
@@ -96,6 +114,7 @@ class SupportTicketAuditTimelineTest extends TestCase
 
         $response->assertOk()
             ->assertSee('کارشناس دیگر')
+            ->assertSee($teamMate->name)
             ->assertDontSee($outsideAgent->name);
     }
 
