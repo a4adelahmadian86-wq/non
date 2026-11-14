@@ -25,9 +25,32 @@ trait RefreshDatabaseWithoutOuterTransactionForMySql
             return;
         }
 
-        // MySQL advisory-lock integration tests need a real commit boundary.
-        // Rebuild per test so data isolation is retained without an outer tx.
-        $this->artisan('migrate:fresh', $this->migrateFreshUsing());
-        RefreshDatabaseState::$migrated = true;
+        if (! RefreshDatabaseState::$migrated) {
+            $this->artisan('migrate:fresh', $this->migrateFreshUsing());
+            RefreshDatabaseState::$migrated = true;
+
+            return;
+        }
+
+        // Reuse the schema but clear data between tests. Re-running hundreds of
+        // migrations for every MySQL test made the dedicated lock suite needlessly slow.
+        $connection = DB::connection();
+        $connection->statement('SET FOREIGN_KEY_CHECKS=0');
+
+        try {
+            foreach ($connection->select('SHOW TABLES', [], false) as $row) {
+                $table = array_values((array) $row)[0] ?? null;
+
+                if (! is_string($table) || $table === 'migrations') {
+                    continue;
+                }
+
+                $quote = chr(96);
+                $quoted = $quote.str_replace($quote, $quote.$quote, $table).$quote;
+                $connection->statement('TRUNCATE TABLE '.$quoted);
+            }
+        } finally {
+            $connection->statement('SET FOREIGN_KEY_CHECKS=1');
+        }
     }
 }
