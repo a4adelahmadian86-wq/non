@@ -63,6 +63,8 @@ class ProjectDocumentCanonicalLinkageTest extends TestCase
         $this->assertSame($project->id, (int) $document->project_id);
         $this->assertSame($user->id, (int) $document->user_id);
         $this->assertSame($document->id, (int) $legacy->fresh()->farast_document_id);
+        $this->assertSame($document->id, (int) $legacy->fresh()->farastDocument->id);
+        $this->assertSame($legacy->id, (int) $document->fresh()->typingDocument->id);
         $this->assertSame(1, $document->versions()->count());
         $this->assertSame(1, $project->documents()->count());
 
