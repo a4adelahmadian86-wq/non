@@ -215,20 +215,29 @@ class SupportNotificationService
             }
         }
 
-        if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-            if ($mobile) {
-                $this->sms->sendEvent(
-                    $mobile,
-                    'ticket_sla_warning',
-                    'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
-                    [
-                        'token' => $ticket->displayCode(),
-                        'token2' => (string) $minutesLeft,
-                    ],
-                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$cycleIdentity
-                );
+        try {
+            if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
+                $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
+                if ($mobile) {
+                    $this->sms->sendEvent(
+                        $mobile,
+                        'ticket_sla_warning',
+                        'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
+                        [
+                            'token' => $ticket->displayCode(),
+                            'token2' => (string) $minutesLeft,
+                        ],
+                        'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$cycleIdentity
+                    );
+                }
             }
+        } catch (\\Throwable $exception) {
+            Log::warning('farast.support.sla_sms_notification_failed', [
+                'ticket_id' => $ticket->id,
+                'notification_type' => 'ticket_sla_warning',
+                'kind' => $kind,
+                'exception_class' => get_class($exception),
+            ]);
         }
     }
 
@@ -258,17 +267,26 @@ class SupportNotificationService
             }
         }
 
-        if ($this->smsEnabled('ticket_sla_breach')) {
-            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-            if ($mobile) {
-                $this->sms->sendEvent(
-                    $mobile,
-                    'ticket_sla_breach',
-                    'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
-                    ['token' => $ticket->displayCode()],
-                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$cycleIdentity
-                );
+        try {
+            if ($this->smsEnabled('ticket_sla_breach')) {
+                $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
+                if ($mobile) {
+                    $this->sms->sendEvent(
+                        $mobile,
+                        'ticket_sla_breach',
+                        'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
+                        ['token' => $ticket->displayCode()],
+                        'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$cycleIdentity
+                    );
+                }
             }
+        } catch (\\Throwable $exception) {
+            Log::warning('farast.support.sla_sms_notification_failed', [
+                'ticket_id' => $ticket->id,
+                'notification_type' => 'ticket_sla_breach',
+                'kind' => $kind,
+                'exception_class' => get_class($exception),
+            ]);
         }
     }
 
