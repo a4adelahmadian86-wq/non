@@ -3,17 +3,25 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
 use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
+use App\Models\Wallet;
+use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
+use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Mockery;
+use RuntimeException;
+use LogicException;
 use Tests\TestCase;
 
 class StoreCourseLearningTest extends TestCase
@@ -71,7 +79,35 @@ class StoreCourseLearningTest extends TestCase
         return [$product, $course, $section, $lesson];
     }
 
-    private function grantCourse(User $user, StoreProduct $product): StoreLibraryItem
+    private function attachPaidStoreOrderRecords(Order $order, StoreProduct $product): StoreOrderItem
+    {
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => (int) $order->total_rials,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => (int) $order->total_rials,
+            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
+        ]);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'amount_rials' => (int) $order->total_rials,
+            'status' => 'paid',
+            'transaction_id' => 'TEST-COURSE-ORDER-'.$order->id,
+            'idempotency_key' => 'test-course-order-'.$order->id,
+            'paid_at' => now(),
+        ]);
+
+        return $orderItem;
+    }
+
+    private function grantCourse(User $user, StoreProduct $product, $grantedAt = null): StoreLibraryItem
     {
         $order = Order::create([
             'user_id' => $user->id,
@@ -84,12 +120,13 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now(),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $item = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
             'order_id' => $order->id,
             'product_file_id' => null,
-            'granted_at' => now(),
+            'granted_at' => $grantedAt ?? now(),
         ]);
         app(StoreCourseEnrollmentService::class)->grant($item, $product);
 
@@ -108,6 +145,13 @@ class StoreCourseLearningTest extends TestCase
         $this->post('/cart/checkout', ['accept_terms' => '1'])
             ->assertRedirect(route('library'));
 
+        $freeOrder = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$freeOrder->id.':order.paid',
+            'event_type' => 'order.paid',
+            'status' => 'pending',
+        ]);
+
         $libraryItem = StoreLibraryItem::query()
             ->where('user_id', $user->id)
             ->where('product_id', $product->id)
@@ -119,6 +163,225 @@ class StoreCourseLearningTest extends TestCase
             'user_id' => $user->id,
             'product_id' => $product->id,
         ]);
+    }
+
+    public function test_paid_course_wallet_checkout_grants_one_verified_entitlement(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('wallet-paid-course', 12000);
+        Wallet::create(['user_id' => $user->id, 'balance_rials' => 100000]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame('pending', $order->status);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $order->refresh();
+        $this->assertTrue($order->isPaid());
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$order->id.':order.paid',
+            'event_type' => 'order.paid',
+            'status' => 'pending',
+        ]);
+        $payment = Payment::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame((int) $order->total_rials, (int) $payment->amount_rials);
+
+        $libraryItem = StoreLibraryItem::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->where('order_id', $order->id)
+            ->firstOrFail();
+        $this->assertNotNull($libraryItem->order_item_id);
+
+        $enrollment = StoreCourseEnrollment::query()
+            ->where('library_item_id', $libraryItem->id)
+            ->firstOrFail();
+        $this->assertSame($user->id, (int) $enrollment->user_id);
+        $this->assertSame($product->id, (int) $enrollment->product_id);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $this->assertSame(1, Payment::query()->where('order_id', $order->id)->count());
+        $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
+        $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
+        $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', 'order:'.$order->id.':order.paid')->count());
+    }
+
+    public function test_wallet_checkout_rolls_back_when_paid_order_outbox_cannot_be_persisted(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('wallet-outbox-failure', 12000);
+        $wallet = Wallet::create(['user_id' => $user->id, 'balance_rials' => 100000]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+
+        $engine = Mockery::mock(WorkflowEngine::class);
+        $engine->shouldReceive('enqueue')
+            ->once()
+            ->andThrow(new RuntimeException('workflow outbox unavailable'));
+        $this->app->instance(WorkflowEngine::class, $engine);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect()
+            ->assertSessionHasErrors('payment');
+
+        $this->assertSame('pending', $order->fresh()->status);
+        $this->assertSame(100000, (int) $wallet->fresh()->balance_rials);
+        $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
+        $this->assertDatabaseMissing('wallet_transactions', [
+            'reference_type' => 'store_order',
+            'reference_id' => $order->id,
+        ]);
+        $this->assertDatabaseMissing('store_library_items', ['order_id' => $order->id]);
+        $this->assertDatabaseMissing('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$order->id.':order.paid',
+        ]);
+    }
+
+    public function test_course_enrollment_rejects_paid_order_without_matching_payment_ledger(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('missing-payment-course', 15000);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 15000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 15000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now(),
+        ]);
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 15000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 15000,
+            'product_snapshot' => ['title' => $product->title],
+        ]);
+        $libraryItem = StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'order_item_id' => $orderItem->id,
+            'granted_at' => now(),
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+    }
+
+    public function test_course_enrollment_rejects_revoked_library_entitlement(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('revoked-course-regrant', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+        $libraryItem->update(['revoked_at' => now()]);
+
+        $this->expectException(\RuntimeException::class);
+        app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+    }
+
+    public function test_purchased_library_entitlement_identity_is_immutable_but_revocation_is_allowed(): void
+    {
+        $user = $this->makeUser();
+        $otherUser = User::create([
+            'name' => 'Other Student',
+            'mobile' => '09123456780',
+            'password' => 'secret',
+        ]);
+        [$product] = $this->makeCourse('immutable-entitlement', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+
+        try {
+            $libraryItem->update(['user_id' => $otherUser->id]);
+            $this->fail('A purchased entitlement must not be reassigned to another customer.');
+        } catch (LogicException $exception) {
+            $this->assertSame('store_library_entitlement_identity_is_immutable', $exception->getMessage());
+        }
+
+        $libraryItem->refresh();
+        $libraryItem->update(['revoked_at' => now()]);
+        $this->assertNotNull($libraryItem->fresh()->revoked_at);
+
+        try {
+            $libraryItem->delete();
+            $this->fail('A purchased entitlement must be revoked, not deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('purchased_library_entitlements_must_be_revoked_not_deleted', $exception->getMessage());
+        }
+    }
+
+    public function test_course_enrollment_and_progress_identity_are_immutable_while_progress_remains_mutable(): void
+    {
+        $user = $this->makeUser();
+        $otherUser = User::create([
+            'name' => 'Other Student',
+            'mobile' => '09123456781',
+            'password' => 'secret',
+        ]);
+        [$product, , , $lesson] = $this->makeCourse('immutable-course-progress', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+        $enrollment = StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->firstOrFail();
+
+        try {
+            $enrollment->update(['user_id' => $otherUser->id]);
+            $this->fail('A course enrollment must not be reassigned to another customer.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_enrollment_identity_is_immutable', $exception->getMessage());
+        }
+
+        try {
+            $enrollment->delete();
+            $this->fail('Course enrollment history must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_enrollment_history_cannot_be_deleted', $exception->getMessage());
+        }
+
+        $this->actingAs($user)
+            ->postJson(route('store.course.progress', [$product, $lesson]), ['completed' => true])
+            ->assertOk();
+
+        $progress = StoreCourseLessonProgress::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->where('lesson_id', $lesson->id)
+            ->firstOrFail();
+
+        try {
+            $progress->update(['enrollment_id' => $enrollment->id + 100]);
+            $this->fail('Progress must remain bound to its original enrollment.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_progress_identity_is_immutable', $exception->getMessage());
+        }
+
+        $progress->refresh();
+        $progress->update(['completed_at' => now()]);
+        $this->assertNotNull($progress->fresh()->completed_at);
+
+        try {
+            $progress->delete();
+            $this->fail('Course progress history must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_progress_history_cannot_be_deleted', $exception->getMessage());
+        }
     }
 
     public function test_enrolled_student_can_open_lesson_and_save_completion(): void
@@ -152,8 +415,7 @@ class StoreCourseLearningTest extends TestCase
         $user = $this->makeUser();
         [$product, $course] = $this->makeCourse('multiple-entitlements', 10000);
 
-        $originalEntitlement = $this->grantCourse($user, $product); // Original enrollment has no expiry.
-        $originalEntitlement->update(['granted_at' => now()->subDays(10)]);
+        $originalEntitlement = $this->grantCourse($user, $product, now()->subDays(10)); // Original enrollment has no expiry.
         $course->update(['access_duration_days' => 1]);
 
         $order = Order::create([
@@ -167,6 +429,7 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now()->subDays(3),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $newerPurchase = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,

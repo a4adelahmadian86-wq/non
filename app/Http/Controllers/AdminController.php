@@ -542,8 +542,6 @@ class AdminController extends Controller
 
     public function supportSms()
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-
         $eventDefs = [
             'ticket_reply' => ['label' => 'پاسخ کارشناس به کاربر', 'hint' => 'وقتی پشتیبان به تیکت پاسخ می‌دهد، به موبایل کاربر پیامک می‌رود.'],
             'ticket_closed' => ['label' => 'بستن تیکت', 'hint' => 'پس از بسته شدن تیکت به کاربر اطلاع داده شود.'],
@@ -574,8 +572,6 @@ class AdminController extends Controller
 
     public function updateSupportSms(Request $request)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-
         $request->validate(['support_alert_mobile' => ['nullable', 'string', 'max:20']]);
 
         SiteSetting::write('sms_enabled', $request->boolean('sms_enabled') ? '1' : '0');

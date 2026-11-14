@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
+use App\Models\StorageManagedFile;
 use App\Models\User;
 use App\Services\MessengerAccessService;
 use App\Services\Storage\StorageManager;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class MessengerController extends Controller
 {
@@ -147,76 +149,107 @@ class MessengerController extends Controller
 
         $attachments = [];
         $sourcePathsToDelete = [];
-        foreach ($files as $file) {
-            $path = $file->store('messenger/'.$conversation->id, 'private');
-            try {
-                $inspection = app(\App\Services\UploadSecurityService::class)->inspect(
+
+        try {
+            foreach ($files as $file) {
+                $path = $file->store('messenger/'.$conversation->id, 'private');
+                if (! is_string($path) || $path === '') {
+                    throw new \RuntimeException('ذخیره موقت پیوست پیام ناموفق بود.');
+                }
+                $sourcePathsToDelete[] = $path;
+
+                try {
+                    $inspection = app(\App\Services\UploadSecurityService::class)->inspect(
+                        $path,
+                        (string) $file->getMimeType(),
+                        10 * 1024 * 1024,
+                    );
+                    if (($inspection['safe'] ?? false) !== true || ($inspection['risk_level'] ?? null) === 'blocked') {
+                        throw new \RuntimeException('فایل از بررسی امنیتی داخلی عبور نکرد.');
+                    }
+                } catch (\Throwable $exception) {
+                    throw ValidationException::withMessages([
+                        'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
+                    ]);
+                }
+
+                $managed = $storage->adoptExistingPrivate(
                     $path,
-                    (string) $file->getMimeType(),
-                    10 * 1024 * 1024,
+                    Str::limit(basename($file->getClientOriginalName()), 180, ''),
+                    (string) ($inspection['mime'] ?? $file->getMimeType()),
+                    (int) $file->getSize(),
+                    'messenger',
+                    Conversation::class,
+                    (int) $conversation->id
                 );
-                if (empty($inspection['safe'])) {
-                    throw new \RuntimeException('فایل از بررسی امنیتی داخلی عبور نکرد.');
-                }
-            } catch (\Throwable $exception) {
-                Storage::disk('private')->delete($path);
-                foreach ($attachments as $stored) {
-                    $storage->delete($stored['disk'] ?? 'private', $stored['path']);
-                }
-                foreach ($sourcePathsToDelete as $sourcePath) {
-                    Storage::disk('private')->delete($sourcePath);
-                }
-                throw ValidationException::withMessages([
-                    'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
-                ]);
+
+                $attachments[] = [
+                    'path' => $managed['path'],
+                    'disk' => $managed['disk'],
+                    'managed_file_id' => $managed['managed_file_id'],
+                    'name' => Str::limit(basename($file->getClientOriginalName()), 180, ''),
+                    'size' => (int) $file->getSize(),
+                    'mime' => (string) ($inspection['mime'] ?? $file->getMimeType()),
+                    'sha256' => (string) ($inspection['checksum'] ?? ''),
+                    'scan' => (string) ($inspection['scan'] ?? 'farast_static_v1'),
+                    'risk_level' => (string) ($inspection['risk_level'] ?? 'unknown'),
+                ];
             }
 
-            $managed = $storage->adoptExistingPrivate(
-                $path,
-                Str::limit(basename($file->getClientOriginalName()), 180, ''),
-                (string) ($inspection['mime'] ?? $file->getMimeType()),
-                (int) $file->getSize(),
-                'messenger',
-                Conversation::class,
-                (int) $conversation->id
-            );
-            $sourcePathsToDelete[] = $path;
-            $attachments[] = [
-                'path' => $managed['path'],
-                'disk' => $managed['disk'],
-                'managed_file_id' => $managed['managed_file_id'],
-                'name' => Str::limit(basename($file->getClientOriginalName()), 180, ''),
-                'size' => (int) $file->getSize(),
-                'mime' => (string) ($inspection['mime'] ?? $file->getMimeType()),
-                'sha256' => (string) ($inspection['checksum'] ?? ''),
-                'scan' => (string) ($inspection['scan'] ?? 'farast_static_v1'),
-                'risk_level' => (string) ($inspection['risk_level'] ?? 'unknown'),
-            ];
+            $message = DB::transaction(function () use ($conversation, $request, $body, $replyTo, $attachments, $storage) {
+                $message = $conversation->messages()->create([
+                    'user_id' => $request->user()->id,
+                    'reply_to_id' => $replyTo?->id,
+                    'body' => $body,
+                    'attachments' => $attachments ?: null,
+                ]);
+
+                $conversation->forceFill([
+                    'last_message_at' => $message->created_at,
+                    'last_message_preview' => Str::limit($body !== '' ? $body : 'فایل پیوست', 220),
+                ])->save();
+
+                // The message row and every managed-file reference commit or roll back together.
+                foreach ($attachments as $attachment) {
+                    $storage->bindReference(
+                        (int) $attachment['managed_file_id'],
+                        ConversationMessage::class,
+                        (int) $message->id
+                    );
+                }
+
+                return $message;
+            });
+        } catch (\Throwable $exception) {
+            foreach ($attachments as $stored) {
+                if (empty($stored['managed_file_id']) || empty($stored['path'])) {
+                    continue;
+                }
+
+                try {
+                    $storage->delete((string) ($stored['disk'] ?? 'private'), (string) $stored['path']);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            foreach ($sourcePathsToDelete as $sourcePath) {
+                try {
+                    Storage::disk('private')->delete($sourcePath);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
         }
 
-        $message = DB::transaction(function () use ($conversation, $request, $body, $replyTo, $attachments) {
-            $message = $conversation->messages()->create([
-                'user_id' => $request->user()->id,
-                'reply_to_id' => $replyTo?->id,
-                'body' => $body,
-                'attachments' => $attachments ?: null,
-            ]);
-
-            $conversation->forceFill([
-                'last_message_at' => $message->created_at,
-                'last_message_preview' => Str::limit($body !== '' ? $body : 'فایل پیوست', 220),
-            ])->save();
-
-            return $message;
-        });
-
+        // The managed object and message reference are committed before staging is removed.
         foreach ($sourcePathsToDelete as $sourcePath) {
-            Storage::disk('private')->delete($sourcePath);
-        }
-
-        foreach ($attachments as $attachment) {
-            if (! empty($attachment['managed_file_id'])) {
-                $storage->bindReference((int) $attachment['managed_file_id'], ConversationMessage::class, (int) $message->id);
+            try {
+                Storage::disk('private')->delete($sourcePath);
+            } catch (\Throwable $cleanupException) {
+                report($cleanupException);
             }
         }
 
@@ -246,6 +279,8 @@ class MessengerController extends Controller
                     'name' => $a['name'] ?? 'پیوست',
                     'size' => $a['size'] ?? 0,
                     'url' => route('messenger.attachment', [$conversation, $message, $i]),
+                    'available' => ! empty($a['managed_file_id']) && empty($a['quarantined']),
+                    'quarantined' => ! empty($a['quarantined']),
                 ])->values(),
             ],
         ], 201)->header('Cache-Control', 'private, no-store')->header('Pragma', 'no-cache');
@@ -282,6 +317,8 @@ class MessengerController extends Controller
             'attachments' => collect($m->attachments ?? [])->map(fn ($a, $i) => [
                 'name' => $a['name'] ?? 'پیوست',
                 'url' => route('messenger.attachment', [$conversation, $m, $i]),
+                'available' => ! empty($a['managed_file_id']) && empty($a['quarantined']),
+                'quarantined' => ! empty($a['quarantined']),
             ])->values(),
         ])])->header('Cache-Control', 'private, no-store')->header('Pragma', 'no-cache');
     }
@@ -290,14 +327,46 @@ class MessengerController extends Controller
     {
         $this->authorizeParticipant($request, $conversation);
         abort_unless((int) $message->conversation_id === (int) $conversation->id, 404);
+        abort_if($message->deleted_at !== null, 404);
         $attachment = $message->attachments[$index] ?? null;
-        $disk = (string) ($attachment['disk'] ?? 'private');
-        abort_unless(is_array($attachment) && ($disk === 'private' || preg_match('/^storage_volume:[0-9]+$/', $disk)) && filled($attachment['path'] ?? null), 404);
-        abort_unless($storage->exists($disk, $attachment['path']), 404);
+        abort_unless(is_array($attachment) && empty($attachment['quarantined']), 404);
 
-        return response($storage->get($disk, $attachment['path']), 200, [
+        $managedFileId = (int) ($attachment['managed_file_id'] ?? 0);
+        $path = (string) ($attachment['path'] ?? '');
+        $disk = (string) ($attachment['disk'] ?? 'private');
+        $isManagedVolume = preg_match('/^storage_volume:[0-9]+$/', $disk) === 1;
+        abort_unless($managedFileId > 0 && $path !== '' && ($disk === 'private' || $isManagedVolume), 404);
+
+        $managed = StorageManagedFile::query()
+            ->whereKey($managedFileId)
+            ->where('source_module', 'messenger')
+            ->where('source_type', ConversationMessage::class)
+            ->where('source_id', $message->id)
+            ->where('visibility', 'private')
+            ->whereIn('status', ['active', 'pending_transfer'])
+            ->first();
+
+        $expectedDisk = $managed?->storage_volume_id
+            ? 'storage_volume:'.$managed->storage_volume_id
+            : 'private';
+        $expectedChecksum = trim((string) ($attachment['sha256'] ?? ''));
+
+        abort_unless(
+            $managed
+            && $managed->file_key === $path
+            && (string) data_get($managed->metadata, 'disk', $expectedDisk) === $disk
+            && $expectedDisk === $disk
+            && ($expectedChecksum === '' || hash_equals((string) $managed->checksum, $expectedChecksum)),
+            404
+        );
+        abort_unless($storage->exists($disk, $path), 404);
+
+        $filename = trim((string) ($attachment['name'] ?? 'attachment')) ?: 'attachment';
+        $asciiFilename = Str::ascii($filename) ?: 'attachment';
+
+        return response($storage->get($disk, $path), 200, [
             'Content-Type' => 'application/octet-stream',
-            'Content-Disposition' => 'attachment; filename="'.addslashes($attachment['name'] ?? 'attachment').'"',
+            'Content-Disposition' => HeaderUtils::makeDisposition('attachment', $filename, $asciiFilename),
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);

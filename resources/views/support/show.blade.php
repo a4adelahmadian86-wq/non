@@ -2,8 +2,8 @@
 
 @section('content')
 @php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019csat">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019csat">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
@@ -68,10 +68,20 @@
                                 @if(!empty($m->attachments))
                                     <div class="tk-attach-list">
                                         @foreach((array) $m->attachments as $index => $att)
-                                            <a href="{{ route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
-                                                <i class="fa-solid fa-paperclip"></i>
-                                                {{ $att['name'] ?? 'پیوست' }}
-                                            </a>
+                                            @if(!empty($att['quarantined']))
+                                                <span class="tk-attach-unavailable" title="فایل در بررسی امنیتی پذیرفته نشده است">
+                                                    <i class="fa-solid fa-shield-halved"></i> {{ $att['name'] ?? 'پیوست' }} · قرنطینه امنیتی
+                                                </span>
+                                            @elseif(empty($att['managed_file_id']))
+                                                <span class="tk-attach-pending">
+                                                    <i class="fa-solid fa-hourglass-half"></i> {{ $att['name'] ?? 'پیوست' }} · در حال انتقال به فضای امن
+                                                </span>
+                                            @else
+                                                <a href="{{ route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
+                                                    <i class="fa-solid fa-paperclip"></i>
+                                                    {{ $att['name'] ?? 'پیوست' }}
+                                                </a>
+                                            @endif
                                         @endforeach
                                     </div>
                                 @endif
@@ -192,7 +202,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261019csat"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114managedattachments"></script>
 <script>
 (function () {
     const form = document.getElementById('csatForm');

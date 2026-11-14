@@ -28,10 +28,12 @@
     article.innerHTML = '<div class="fm-message-meta"><strong>' + escapeHtml(message.user_name || 'کاربر') + '</strong><time>' + escapeHtml(date) + '</time></div>' + (message.body ? '<p></p>' : '');
     if (message.body) article.querySelector('p').textContent = message.body;
     (message.attachments || []).forEach((file) => {
-      const link = document.createElement(file.url ? 'a' : 'span');
+      const available = file.available === true && !!file.url && !file.quarantined;
+      const link = document.createElement(available ? 'a' : 'span');
       link.className = 'fm-attachment';
-      link.textContent = '📎 ' + (file.name || 'پیوست');
-      if (file.url) link.href = file.url;
+      link.textContent = '📎 ' + (file.name || 'پیوست') + (file.quarantined ? ' · قرنطینه امنیتی' : (available ? '' : ' · پیوست در دسترس نیست'));
+      if (available) link.href = file.url;
+      else link.setAttribute('aria-disabled', 'true');
       article.appendChild(link);
     });
     list.appendChild(article);

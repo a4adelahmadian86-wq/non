@@ -164,6 +164,34 @@ trait PaysWithZarinpal
                 abort_unless(in_array($locked->status, ['pending', 'gateway_pending'], true) && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
                 abort_unless((int) $lockedPayment->amount_rials === (int) $locked->total_rials, 409, 'مبلغ تراکنش با سفارش مطابقت ندارد.');
 
+                $lockedPayment->update([
+                    'status' => 'paid',
+                    'gateway_response' => [
+                        'verification_code' => (int) $verify['code'],
+                        'ref_id' => $verify['ref_id'] ?? null,
+                    ],
+                    'paid_at' => now(),
+                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
+                ]);
+
+                $locked->update(['status' => 'paid', 'paid_at' => now()]);
+
+                try {
+                    app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+                } catch (\RuntimeException $exception) {
+                    // External funds are already captured. Preserve the paid order and
+                    // expose a reconciliation marker instead of rolling payment back.
+                    report($exception);
+                    $gatewayResponse = $lockedPayment->gateway_response ?? [];
+                    $gatewayResponse['coupon_redemption_reconciliation'] = [
+                        'status' => 'required',
+                        'reason_code' => 'post_capture_validation_failed',
+                        'reason' => mb_substr($exception->getMessage(), 0, 180),
+                        'recorded_at' => now()->toIso8601String(),
+                    ];
+                    $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
+                }
+
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
@@ -209,19 +237,6 @@ trait PaysWithZarinpal
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
-
-                $lockedPayment->update([
-                    'status' => 'paid',
-                    'gateway_response' => [
-                        'verification_code' => (int) $verify['code'],
-                        'ref_id' => $verify['ref_id'] ?? null,
-                    ],
-                    'paid_at' => now(),
-                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
-                ]);
-
-                $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -230,6 +245,17 @@ trait PaysWithZarinpal
                     ['order_id' => $locked->id, 'amount_rials' => (int) $locked->total_rials, 'url' => route('library')],
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
+                );
+                app(\App\Services\WorkflowEngine::class)->enqueue(
+                    'order.paid',
+                    [
+                        'user_id' => (int) $locked->user_id,
+                        'customer_id' => (int) $locked->user_id,
+                        'order_id' => (int) $locked->id,
+                        'amount_rials' => (int) $locked->total_rials,
+                        'order_kind' => (string) ($locked->pricing_snapshot['kind'] ?? 'unknown'),
+                    ],
+                    'order:'.$locked->id.':order.paid',
                 );
                 $paymentProcessed = true;
             });
@@ -246,17 +272,6 @@ trait PaysWithZarinpal
             }
         }
 
-        if ($paymentProcessed) {
-            try {
-                app(\App\Services\WorkflowEngine::class)->dispatch(
-                    'order.paid',
-                    ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
-                    'order:'.$order->id.':paid',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
 
         return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل یا دوره در کتابخانه شما فعال شد.');
     }

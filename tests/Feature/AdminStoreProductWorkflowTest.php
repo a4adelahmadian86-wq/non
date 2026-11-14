@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
+use App\Services\AuthorizationService;
 use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
@@ -18,6 +19,7 @@ use App\Services\ProductKnowledgeService;
 use App\Services\ProductContentGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
@@ -461,6 +463,133 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSessionHasErrors('compare_at_price_rials');
 
         $this->assertDatabaseMissing('store_products', ['sku' => 'TEST-PRODUCT-001']);
+    }
+
+    public function test_admin_publication_is_audited_and_requires_a_clean_primary_file(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول آماده تأیید',
+            'slug' => 'product-ready-for-approval',
+            'sku' => 'PRODUCT-APPROVAL-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'short_description' => 'شرح محصول',
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'event_type' => 'store.product.published',
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $product->id,
+        ]);
+
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/approval-primary.pdf',
+            'original_name' => 'approval-primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 17,
+            'sha256' => hash('sha256', 'safe-test-content'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasNoErrors();
+
+        $published = $product->fresh();
+        $this->assertSame('published', $published->status);
+        $this->assertNotNull($published->published_at);
+        $this->assertDatabaseHas('farast_audit_events', [
+            'event_type' => 'store.product.published',
+            'user_id' => $admin->id,
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $product->id,
+        ]);
+    }
+
+    public function test_publication_requires_the_separate_store_products_publish_permission(): void
+    {
+        $admin = $this->admin();
+        app(AuthorizationService::class)->syncDefaults();
+        $this->assertDatabaseHas('permissions', [
+            'key' => 'store.products.publish',
+            'label' => 'تأیید و انتشار محصول',
+        ]);
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول نیازمند مجوز انتشار',
+            'slug' => 'product-publish-permission',
+            'sku' => 'PRODUCT-PUBLISH-PERMISSION-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'short_description' => 'شرح محصول',
+            'status' => 'draft',
+        ]);
+
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/permission-primary.pdf',
+            'original_name' => 'permission-primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 17,
+            'sha256' => hash('sha256', 'safe-test-content'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $authorization = Mockery::mock(AuthorizationService::class)->makePartial();
+        $authorization->shouldReceive('allows')
+            ->andReturnUsing(fn ($user, string $permission): bool => $permission === 'store.manage');
+        $this->app->instance(AuthorizationService::class, $authorization);
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertForbidden();
+
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'event_type' => 'store.product.published',
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $product->id,
+        ]);
     }
 
     public function test_last_primary_file_cannot_be_deleted_while_product_is_published(): void

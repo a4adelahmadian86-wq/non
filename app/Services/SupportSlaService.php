@@ -42,7 +42,17 @@ class SupportSlaService
             && $ticket->sla_paused_at
             && $resolveDueAt
             && Schema::hasColumn('tickets', 'sla_resolve_remaining_minutes')) {
-            $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween(now(), $resolveDueAt);
+            // The clock stopped at sla_paused_at. Recalculate the budget from
+            // that instant, not from now(), which may be days later.
+            $pauseStartedAt = $ticket->sla_paused_at;
+            $remainingAtPause = $this->minutesUntilDeadline($resolveDueAt, $pauseStartedAt);
+            $targets['sla_resolve_remaining_minutes'] = max(0, $remainingAtPause);
+
+            if ($remainingAtPause < 0
+                && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
+                && empty($ticket->sla_resolve_breached_at)) {
+                $targets['sla_resolve_breached_at'] = $pauseStartedAt;
+            }
         }
 
         if ($targets !== []) {
@@ -186,12 +196,27 @@ class SupportSlaService
     /** @return array{state:string,label:string,color:string,breached:bool} */
     public function resolutionStatus(Ticket $ticket): array
     {
+        $hasResolutionBreach = ! empty($ticket->sla_resolve_breached_at);
+
         if ($ticket->status === 'pending') {
             return [
                 'state' => 'paused',
-                'label' => 'متوقف (منتظر کاربر)',
-                'color' => 'muted',
-                'breached' => false,
+                'label' => $hasResolutionBreach
+                    ? 'متوقف؛ نقض SLA حل ثبت شده'
+                    : 'متوقف (منتظر کاربر)',
+                'color' => $hasResolutionBreach ? 'danger' : 'muted',
+                'breached' => $hasResolutionBreach,
+            ];
+        }
+
+        // A recorded breach is historical evidence and must not disappear
+        // when a paused ticket resumes or is eventually closed.
+        if ($hasResolutionBreach) {
+            return [
+                'state' => 'breached',
+                'label' => 'نقض SLA حل ثبت شده',
+                'color' => 'danger',
+                'breached' => true,
             ];
         }
 
@@ -267,13 +292,21 @@ class SupportSlaService
 
         if ($newStatus === 'pending' && $oldStatus !== 'pending') {
             $dueAt = $ticket->sla_resolve_due_at;
-
-            return [
-                'sla_paused_at' => now(),
-                'sla_resolve_remaining_minutes' => $dueAt
-                    ? $this->businessMinutesBetween(now(), $dueAt)
-                    : null,
+            $pausedAt = now();
+            $remaining = $dueAt ? $this->minutesUntilDeadline($dueAt, $pausedAt) : null;
+            $attributes = [
+                'sla_paused_at' => $pausedAt,
+                'sla_resolve_remaining_minutes' => $remaining === null ? null : max(0, $remaining),
             ];
+
+            if ($remaining !== null
+                && $remaining < 0
+                && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
+                && empty($ticket->sla_resolve_breached_at)) {
+                $attributes['sla_resolve_breached_at'] = $pausedAt;
+            }
+
+            return $attributes;
         }
 
         if ($oldStatus === 'pending' && $newStatus !== 'pending' && $ticket->sla_paused_at) {
@@ -355,11 +388,6 @@ class SupportSlaService
         $from = $from ?: now()->subDays(30)->startOfDay();
         $to = $to ?: now()->endOfDay();
 
-        $tickets = Ticket::query()
-            ->whereBetween('created_at', [$from, $to])
-            ->with(['assignee', 'messages' => fn ($q) => $q->orderBy('created_at')])
-            ->get();
-
         $agents = [];
         $totals = [
             'tickets' => 0,
@@ -368,22 +396,14 @@ class SupportSlaService
             'first_response_total' => 0,
             'avg_first_response_minutes' => null,
         ];
-
         $allFirst = [];
 
-        foreach ($tickets as $ticket) {
-            $totals['tickets']++;
-            if ($ticket->status === 'closed') {
-                $totals['closed']++;
-            }
-
-            $agentId = $ticket->assigned_to ?: 0;
-            $agentName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'بدون ارجاع';
-
-            if (! isset($agents[$agentId])) {
-                $agents[$agentId] = [
-                    'id' => $agentId,
-                    'name' => $agentName,
+        $ensureAgent = function (int $id, string $name) use (&$agents): void {
+            $name = trim($name) !== '' ? $name : 'کارشناس نامشخص';
+            if (! isset($agents[$id])) {
+                $agents[$id] = [
+                    'id' => $id,
+                    'name' => $name,
                     'assigned' => 0,
                     'closed' => 0,
                     'replies' => 0,
@@ -391,37 +411,86 @@ class SupportSlaService
                     'first_response_total' => 0,
                     'first_response_samples' => [],
                 ];
+            } elseif ($agents[$id]['name'] === 'بدون ارجاع' && $name !== 'بدون ارجاع') {
+                $agents[$id]['name'] = $name;
             }
+        };
 
-            if ($agentId) {
-                $agents[$agentId]['assigned']++;
-                if ($ticket->status === 'closed') {
-                    $agents[$agentId]['closed']++;
-                }
-            }
+        // Process a bounded number of tickets at a time. Eager-loading message
+        // authors prevents isFromStaff() from issuing one query per message.
+        Ticket::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->with([
+                'assignee',
+                'messages' => fn ($q) => $q->with('user')->orderBy('created_at'),
+            ])
+            ->chunkById(100, function ($tickets) use (&$agents, &$totals, &$allFirst, $ensureAgent): void {
+                foreach ($tickets as $ticket) {
+                    $totals['tickets']++;
+                    if ($ticket->status === 'closed') {
+                        $totals['closed']++;
+                    }
 
-            $firstStaff = $ticket->messages->first(function ($m) {
-                return $m->isFromStaff() && ! $m->is_internal;
-            });
-            if ($firstStaff) {
-                $mins = $this->businessMinutesBetween($ticket->created_at, $firstStaff->created_at);
-                $allFirst[] = $mins;
-                $totals['first_response_total']++;
-                $met = ! $ticket->sla_first_due_at || $firstStaff->created_at->lte($ticket->sla_first_due_at);
-                if ($met) {
-                    $totals['first_response_met']++;
-                }
+                    $assignedId = (int) ($ticket->assigned_to ?? 0);
+                    $assignedName = $ticket->assignee?->name
+                        ?? $ticket->assignee?->email
+                        ?? 'بدون ارجاع';
+                    $ensureAgent($assignedId, $assignedName);
 
-                if ($agentId) {
-                    $agents[$agentId]['replies']++;
-                    $agents[$agentId]['first_response_total']++;
-                    $agents[$agentId]['first_response_samples'][] = $mins;
+                    if ($assignedId > 0) {
+                        $agents[$assignedId]['assigned']++;
+                        if ($ticket->status === 'closed') {
+                            $agents[$assignedId]['closed']++;
+                        }
+                    }
+
+                    // Count every public staff reply against its actual author,
+                    // not against whichever agent happens to own the ticket.
+                    foreach ($ticket->messages as $message) {
+                        if (! $message->isFromStaff() || $message->is_internal || ! $message->user_id) {
+                            continue;
+                        }
+
+                        $authorId = (int) $message->user_id;
+                        $authorName = $message->user?->name ?? $message->user?->email ?? 'کارشناس نامشخص';
+                        $ensureAgent($authorId, $authorName);
+                        $agents[$authorId]['replies']++;
+                    }
+
+                    $firstStaff = $ticket->messages->first(
+                        fn ($message) => $message->isFromStaff() && ! $message->is_internal
+                    );
+
+                    if (! $firstStaff) {
+                        continue;
+                    }
+
+                    $minutes = $this->businessMinutesBetween($ticket->created_at, $firstStaff->created_at);
+                    $allFirst[] = $minutes;
+                    $totals['first_response_total']++;
+                    $met = ! $ticket->sla_first_due_at
+                        || $firstStaff->created_at->lte($ticket->sla_first_due_at);
+
                     if ($met) {
-                        $agents[$agentId]['first_response_met']++;
+                        $totals['first_response_met']++;
+                    }
+
+                    // If a legacy/system public response has no actor ID, retain
+                    // the previous fallback to the assigned agent.
+                    $responderId = (int) ($firstStaff->user_id ?: $assignedId);
+                    if ($responderId > 0) {
+                        $responderName = $firstStaff->user?->name
+                            ?? $firstStaff->user?->email
+                            ?? $assignedName;
+                        $ensureAgent($responderId, $responderName);
+                        $agents[$responderId]['first_response_total']++;
+                        $agents[$responderId]['first_response_samples'][] = $minutes;
+                        if ($met) {
+                            $agents[$responderId]['first_response_met']++;
+                        }
                     }
                 }
-            }
-        }
+            });
 
         foreach ($agents as &$row) {
             $samples = $row['first_response_samples'];
@@ -445,7 +514,7 @@ class SupportSlaService
             ? round(100 * $totals['first_response_met'] / $totals['first_response_total'], 1)
             : null;
 
-        usort($agents, fn ($a, $b) => ($b['assigned'] <=> $a['assigned']));
+        usort($agents, fn ($a, $b) => ($b['assigned'] <=> $a['assigned']) ?: ($b['replies'] <=> $a['replies']));
 
         return [
             'agents' => array_values($agents),
@@ -454,7 +523,6 @@ class SupportSlaService
             'to' => $to,
         ];
     }
-
 
     /** @param list<int|float> $samples */
     protected function median(array $samples): ?int

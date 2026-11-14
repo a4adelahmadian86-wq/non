@@ -194,12 +194,12 @@ class PaymentController extends Controller
                     if ($project) $project->update(['paid_rials' => max((int)$project->paid_rials, (int)$total), 'billing_state' => array_merge($project->billing_state ?? [], ['status'=>'paid','amount_remaining'=>0]), 'output_state' => ['status'=>'unlocked','reason'=>'payment_verified']]);
                 }
                 $paidOrder = $locked->fresh();
+                $this->enqueuePaidOrderWorkflow($paidOrder);
             });
 
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
             }
-            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('editor')->with('status', 'پرداخت با موفقیت ثبت شد؛ اکنون خروجی قابل دریافت است.');
         } catch (\RuntimeException $e) {
@@ -299,8 +299,6 @@ class PaymentController extends Controller
                     ]);
                 }
 
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
-
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
@@ -310,6 +308,9 @@ class PaymentController extends Controller
                     'transaction_id' => 'STORE-WALLET-'.$locked->id.'-'.now()->timestamp,
                     'paid_at' => now(),
                 ]);
+
+                $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
 
                 foreach ($validatedItems as [$item, $product, $file]) {
                     $libraryItem = StoreLibraryItem::firstOrCreate(
@@ -325,7 +326,6 @@ class PaymentController extends Controller
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
-                $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -335,12 +335,12 @@ class PaymentController extends Controller
                     true,
                 );
                 $paidOrder = $locked->fresh();
+                $this->enqueuePaidOrderWorkflow($paidOrder);
             });
 
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
             }
-            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('store')->with('status', 'خرید با موفقیت ثبت شد؛ فایل یا دوره در کتابخانه شما فعال شد.');
         } catch (\RuntimeException $e) {
@@ -430,6 +430,8 @@ class PaymentController extends Controller
                     'deposit_order_id' => $locked->id,
                     'project_id' => (int) ($snapshot['project_id'] ?? 0) ?: null,
                 ]);
+                $paidDeposit = $locked->fresh();
+                $this->enqueuePaidOrderWorkflow($paidDeposit);
             });
 
             $paidDeposit = $order->fresh();
@@ -437,7 +439,6 @@ class PaymentController extends Controller
             $project = $projectId > 0
                 ? FarastProject::query()->whereKey($projectId)->where('user_id', auth()->id())->first()
                 : null;
-            $this->dispatchPaidOrderWorkflow($paidDeposit);
 
             return redirect()->route('editor', $project ? ['project' => $project->id] : [])
                 ->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
@@ -485,24 +486,20 @@ class PaymentController extends Controller
             : 0;
     }
 
-    private function dispatchPaidOrderWorkflow(Order $order): void
+    private function enqueuePaidOrderWorkflow(Order $order): void
     {
-        try {
-            $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
-            app(\App\Services\WorkflowEngine::class)->dispatch(
-                $eventType,
-                [
-                    'user_id' => (int) $order->user_id,
-                    'customer_id' => (int) $order->user_id,
-                    'order_id' => (int) $order->id,
-                    'amount_rials' => (int) $order->total_rials,
-                    'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
-                ],
-                'order:'.$order->id.':'.$eventType,
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
+        app(\App\Services\WorkflowEngine::class)->enqueue(
+            $eventType,
+            [
+                'user_id' => (int) $order->user_id,
+                'customer_id' => (int) $order->user_id,
+                'order_id' => (int) $order->id,
+                'amount_rials' => (int) $order->total_rials,
+                'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+            ],
+            'order:'.$order->id.':'.$eventType,
+        );
     }
 
 

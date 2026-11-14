@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
 use App\Services\SupportTicketService;
+use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -99,6 +100,52 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->assertDatabaseCount('tickets', 0);
         $this->assertDatabaseCount('ticket_messages', 0);
         $this->assertSame([], Storage::disk('private')->allFiles());
+    }
+
+    public function test_ticket_creation_enqueues_its_workflow_event_before_commit(): void
+    {
+        $customer = User::factory()->create();
+
+        $ticket = $this->service()->createTicket($customer, [
+            'subject' => 'Transactional ticket event',
+            'body' => 'Please follow up',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:'.$ticket->id.':created',
+            'event_type' => 'ticket.created',
+            'user_id' => $customer->id,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseCount('farast_workflow_runs', 0);
+    }
+
+    public function test_ticket_creation_rolls_back_when_outbox_persistence_fails(): void
+    {
+        $customer = User::factory()->create();
+        $engine = Mockery::mock(WorkflowEngine::class);
+        $engine->shouldReceive('enqueue')
+            ->once()
+            ->andThrow(new \RuntimeException('workflow outbox unavailable'));
+        $this->app->instance(WorkflowEngine::class, $engine);
+
+        try {
+            $this->service()->createTicket($customer, [
+                'subject' => 'Outbox failure rollback',
+                'body' => 'This ticket must not commit without its event',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+            $this->fail('Ticket creation must roll back when the outbox cannot persist its event.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('workflow outbox unavailable', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('tickets', 0);
+        $this->assertDatabaseCount('ticket_messages', 0);
+        $this->assertDatabaseCount('farast_workflow_events', 0);
     }
 
     public function test_csat_can_only_be_submitted_once_even_from_a_stale_ticket_instance(): void
