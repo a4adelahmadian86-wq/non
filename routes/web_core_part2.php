@@ -209,11 +209,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/support-sms', [AdminController::class, 'supportSms'])->middleware('admin.section:support_admin')->name('support.sms');
     Route::post('/support-sms', [AdminController::class, 'updateSupportSms'])->middleware('admin.section:support_admin')->name('support.sms.update');
-    Route::get('/support-management', [SupportController::class, 'adminIndex'])->middleware('admin.section:support_admin')->name('support.management');
-    Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->middleware('admin.section:support_admin')->name('tickets.reply');
-    Route::post('/tickets/{ticket}/status', [SupportController::class, 'adminStatus'])->middleware('admin.section:support_admin')->name('tickets.status');
-    Route::post('/tickets/{ticket}/assign', [SupportController::class, 'adminAssign'])->middleware('admin.section:support_admin')->name('tickets.assign');
-    Route::post('/tickets/{ticket}/meta', [SupportController::class, 'adminMeta'])->middleware('admin.section:support_admin')->name('tickets.meta');
+    Route::get('/support-management', [SupportController::class, 'adminIndex'])->middleware('admin.section:support_inbox')->name('support.management');
+    Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->middleware('admin.section:support_inbox')->name('tickets.reply');
+    Route::post('/tickets/{ticket}/status', [SupportController::class, 'adminStatus'])->middleware('admin.section:support_inbox')->name('tickets.status');
+    Route::post('/tickets/{ticket}/assign', [SupportController::class, 'adminAssign'])->middleware('admin.section:support_inbox')->name('tickets.assign');
+    Route::post('/tickets/{ticket}/meta', [SupportController::class, 'adminMeta'])->middleware('admin.section:support_inbox')->name('tickets.meta');
     Route::get('/plans', [PlatformCompletionController::class, 'adminPlans'])->middleware('admin.section:plans')->name('plans');
     Route::post('/plans', [PlatformCompletionController::class, 'savePlan'])->middleware('admin.section:plans')->name('plans.save');
     Route::get('/cms', [PlatformCompletionController::class, "cms"])->middleware('admin.section:cms')->name('cms');
