@@ -128,8 +128,8 @@ class SupportTicketAtomicWorkflowTest extends TestCase
 
         $updated = $ticket->fresh();
         $this->assertSame('closed', $updated->status);
-        $this->assertTrue($updated->closed_at->equalTo($closedAt));
-        $this->assertTrue($updated->resolved_at->equalTo($closedAt));
+        $this->assertSame($closedAt->getTimestamp(), $updated->closed_at->getTimestamp());
+        $this->assertSame($closedAt->getTimestamp(), $updated->resolved_at->getTimestamp());
     }
 
     public function test_ticket_creation_rollback_removes_managed_attachment_after_initial_message_succeeds(): void
