@@ -188,6 +188,7 @@ class BusinessCommerceLifecycleTest extends TestCase
             ->where('user_id', $customer->id)
             ->where('type', 'order_paid')
             ->count());
+
         $this->assertSame(1, DB::table('farast_workflow_events')
             ->where('idempotency_key', $workflowEventKey)
             ->count());
