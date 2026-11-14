@@ -106,6 +106,53 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertSame(30, $report['agents'][0]['avg_first_response_minutes']);
     }
 
+    public function test_agent_report_preserves_exact_percentiles_and_attributes_replies_to_their_authors(): void
+    {
+        $createdAt = Carbon::parse('2026-11-17 10:00:00', 'Asia/Tehran');
+        $assignedAgent = User::factory()->create();
+        $responder = User::factory()->create();
+        $delays = [10, 20, 30, 40];
+
+        foreach ($delays as $index => $delay) {
+            $this->travelTo($createdAt);
+            $ticket = Ticket::create([
+                'subject' => 'Agent report sample '.$index,
+                'status' => 'answered',
+                'priority' => 'normal',
+                'department' => 'support',
+                'assigned_to' => $assignedAgent->id,
+                'sla_first_due_at' => $createdAt->copy()->addMinutes(60),
+            ]);
+
+            $this->travelTo($createdAt->copy()->addMinutes($delay));
+            TicketMessage::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $responder->id,
+                'body' => 'Public response '.$index,
+                'is_internal' => false,
+                'is_staff' => true,
+            ]);
+        }
+
+        $report = app(SupportSlaService::class)->agentReport(
+            $createdAt->copy()->subMinute(),
+            $createdAt->copy()->addHour()
+        );
+
+        $this->assertSame(25, $report['totals']['avg_first_response_minutes']);
+        $this->assertSame(25, $report['totals']['median_first_response_minutes']);
+        $this->assertSame(37, $report['totals']['p90_first_response_minutes']);
+        $this->assertSame(4, $report['totals']['first_response_total']);
+
+        $agents = collect($report['agents'])->keyBy('id');
+        $this->assertSame(4, $agents[$responder->id]['replies']);
+        $this->assertSame(4, $agents[$responder->id]['first_response_total']);
+        $this->assertSame(25, $agents[$responder->id]['avg_first_response_minutes']);
+        $this->assertSame(25, $agents[$responder->id]['median_first_response_minutes']);
+        $this->assertSame(4, $agents[$assignedAgent->id]['assigned']);
+        $this->assertSame(0, $agents[$assignedAgent->id]['replies']);
+    }
+
     public function test_sla_monitor_persists_warning_when_business_time_reaches_threshold(): void
     {
         $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
