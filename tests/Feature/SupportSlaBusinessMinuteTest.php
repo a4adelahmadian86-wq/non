@@ -75,6 +75,41 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
     }
 
+    public function test_sla_monitor_does_not_starve_tickets_after_the_first_batch(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
+        $sla = app(SupportSlaService::class);
+        $deadline = $sla->addSlaMinutes(now(), 30);
+
+        for ($i = 1; $i <= 500; $i++) {
+            Ticket::create([
+                'subject' => 'No SLA '.$i,
+                'status' => 'open',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+        }
+
+        $lastTicket = Ticket::create([
+            'subject' => 'Ticket beyond first batch',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => $deadline,
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaWarning')
+            ->once()
+            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($lastTicket)), 'first_response', 30);
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        Artisan::call('support:check-sla');
+
+        $this->assertNotNull($lastTicket->fresh()->sla_first_warned_at);
+    }
+
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
     {
         $this->travelTo(Carbon::parse('2026-11-21 09:30:00', 'Asia/Tehran'));
