@@ -8,5 +8,5 @@ class TypingDocument extends Model {
     protected function casts(): array { return ['expires_at'=>'datetime','price_rials'=>'integer','page_count'=>'integer','word_count'=>'integer','language_mix'=>'array']; }
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
     public function project(): BelongsTo { return $this->belongsTo(FarastProject::class); }
-    public function farastDocument(): HasOne { return $this->hasOne(FarastDocument::class, 'id', 'farast_document_id'); }
+    public function farastDocument(): BelongsTo { return $this->belongsTo(FarastDocument::class, 'farast_document_id', 'id'); }
 }
