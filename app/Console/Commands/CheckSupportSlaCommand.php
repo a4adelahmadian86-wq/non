@@ -9,7 +9,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 
 class CheckSupportSlaCommand extends Command
 {
@@ -56,7 +55,7 @@ class CheckSupportSlaCommand extends Command
                     foreach (['first_response', 'resolution'] as $kind) {
                         $alert = $dry
                             ? $this->pendingAlert($snapshot, $kind, $warnBefore, $sla)
-                            : $this->claimAlert((int) $snapshot->id, $kind, $warnBefore, $sla);
+                            : $this->dispatchAlert((int) $snapshot->id, $kind, $warnBefore, $sla, $notifier);
 
                         if (! $alert) {
                             continue;
@@ -82,22 +81,9 @@ class CheckSupportSlaCommand extends Command
                             continue;
                         }
 
-                        try {
-                            if ($event === 'breached') {
-                                $notifier->slaBreached($ticket, $kind);
-                            } else {
-                                $notifier->slaWarning($ticket, $kind, $minutes);
-                            }
-                        } catch (Throwable $exception) {
-                            // The marker is already claimed. Log the failed delivery
-                            // with context and continue monitoring other tickets.
-                            Log::error('farast.support.sla_notification_failed', [
-                                'ticket_id' => $ticket->id,
-                                'kind' => $kind,
-                                'event' => $event,
-                                'error' => $exception->getMessage(),
-                            ]);
-                        }
+                        // dispatchAlert() sends the notification and writes its marker
+                        // in one transaction. A failed notifier rolls back the marker
+                        // and propagates the exception so the scheduler can retry.
                     }
                 }
             });
@@ -174,9 +160,14 @@ class CheckSupportSlaCommand extends Command
      *
      * @return array{ticket:Ticket,event:string,minutes:int}|null
      */
-    private function claimAlert(int $ticketId, string $kind, int $warnBefore, SupportSlaService $sla): ?array
-    {
-        return DB::transaction(function () use ($ticketId, $kind, $warnBefore, $sla): ?array {
+    private function dispatchAlert(
+        int $ticketId,
+        string $kind,
+        int $warnBefore,
+        SupportSlaService $sla,
+        SupportNotificationService $notifier
+    ): ?array {
+        return DB::transaction(function () use ($ticketId, $kind, $warnBefore, $sla, $notifier): ?array {
             $ticket = Ticket::query()->lockForUpdate()->find($ticketId);
             if (! $ticket) {
                 return null;
@@ -185,6 +176,14 @@ class CheckSupportSlaCommand extends Command
             $alert = $this->pendingAlert($ticket, $kind, $warnBefore, $sla);
             if (! $alert) {
                 return null;
+            }
+
+            // Keep the row locked until delivery succeeds and the marker commits.
+            // If a provider throws, the transaction rolls back and a later run can retry.
+            if ($alert['event'] === 'breached') {
+                $notifier->slaBreached($ticket, $kind);
+            } else {
+                $notifier->slaWarning($ticket, $kind, (int) $alert['minutes']);
             }
 
             $ticket->forceFill([$alert['column'] => now()])->saveQuietly();
@@ -196,4 +195,5 @@ class CheckSupportSlaCommand extends Command
             ];
         });
     }
+
 }
