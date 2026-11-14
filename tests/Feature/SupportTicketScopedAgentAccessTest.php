@@ -121,4 +121,60 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertOk()
             ->assertJsonMissing(['body' => 'private staff note']);
     }
+
+    public function test_customer_poll_cursor_advances_over_hidden_internal_notes(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Hidden-note polling cursor',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'private note one',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+        $public = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'body' => 'public response',
+            'is_internal' => false,
+            'is_staff' => false,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?after_id=0')
+            ->assertOk()
+            ->assertJsonPath('last_id', $public->id)
+            ->assertJsonFragment(['body' => 'public response'])
+            ->assertJsonMissing(['body' => 'private note one']);
+
+        $ticket->forceFill(['customer_last_seen_at' => null])->saveQuietly();
+        $secondInternal = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'private note two',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?after_id='.$public->id)
+            ->assertOk()
+            ->assertJsonPath('messages', [])
+            ->assertJsonPath('last_id', $secondInternal->id)
+            ->assertJsonMissing(['body' => 'private note two']);
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'customer_last_seen_at' => null,
+        ]);
+    }
+
 }
