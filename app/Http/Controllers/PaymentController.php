@@ -217,8 +217,7 @@ class PaymentController extends Controller
 
             DB::transaction(function () use ($order, &$paidOrder) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                // A repeated wallet request for an already-paid order is a no-op.
-                // Do not redispatch receipts, notifications, or post-payment workflows.
+                // Reconcile the durable workflow outbox without repeating payment side effects.
                 if ($locked->isPaid()) {
                     app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
                     return;
@@ -490,6 +489,7 @@ class PaymentController extends Controller
             ? (int) round(max(0, $taxable) * $this->taxRate() / 100)
             : 0;
     }
+
 
 
 
