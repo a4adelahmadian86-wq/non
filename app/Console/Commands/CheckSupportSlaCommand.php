@@ -41,17 +41,23 @@ class CheckSupportSlaCommand extends Command
             ->chunkById(500, function ($tickets) use ($sla, $notifier, $dry, $warnBefore, &$stats): void {
                 foreach ($tickets as $ticket) {
                     // First-response SLA keeps running while a ticket is pending.
-                    if (! $ticket->first_response_at && $ticket->sla_first_due_at) {
+                    if ($ticket->sla_first_due_at) {
+                        $firstResponseLate = $ticket->first_response_at
+                            && $ticket->first_response_at->gt($ticket->sla_first_due_at);
                         $mins = $sla->minutesUntilDeadline($ticket->sla_first_due_at);
 
-                        if ($mins < 0 && empty($ticket->sla_first_breached_at)) {
+                        if (($firstResponseLate || (! $ticket->first_response_at && $mins < 0))
+                            && empty($ticket->sla_first_breached_at)) {
                             $stats['breached_first']++;
                             $this->line("BREACH first #{$ticket->id} {$ticket->displayCode()}");
                             if (! $dry) {
                                 $ticket->forceFill(['sla_first_breached_at' => now()])->saveQuietly();
                                 $notifier->slaBreached($ticket, 'first_response');
                             }
-                        } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_first_warned_at)) {
+                        } elseif (! $ticket->first_response_at
+                            && $mins >= 0
+                            && $mins <= $warnBefore
+                            && empty($ticket->sla_first_warned_at)) {
                             $stats['warned_first']++;
                             $this->line("WARN first #{$ticket->id} ({$mins}m left)");
                             if (! $dry) {
