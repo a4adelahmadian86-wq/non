@@ -398,11 +398,23 @@
                                 $auditMeta = (array) ($auditEvent->payload_meta ?? []);
                                 $auditActor = $auditUserLabels[$auditEvent->user_id] ?? null;
                                 $auditActorLabel = $auditActor ?? ($auditEvent->user_id ? 'کاربر حذف‌شده' : 'سامانه');
+                                if ($auditEvent->event_type === 'support.ticket.created' && ($auditMeta['initiator_type'] ?? null) === 'guest') {
+                                    $auditActorLabel = 'مهمان';
+                                }
                             @endphp
                             <li style="padding:8px 10px;border-right:2px solid var(--sd-line);background:var(--sd-bg);border-radius:8px;list-style-position:outside">
                                 <div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between">
                                     <strong style="font-size:.78rem;color:var(--sd-ink)">
-                                        @if($auditEvent->event_type === 'support.ticket.status_transitioned')
+                                        @if($auditEvent->event_type === 'support.ticket.created')
+                                            @php
+                                                $createdSource = match ($auditMeta['source'] ?? null) {
+                                                    'dashboard' => 'داشبورد کاربری',
+                                                    'widget' => 'ابزارک پشتیبانی',
+                                                    default => 'مسیر ثبت تیکت',
+                                                };
+                                            @endphp
+                                            ایجاد تیکت از {{ $createdSource }}
+                                        @elseif($auditEvent->event_type === 'support.ticket.status_transitioned')
                                             @php
                                                 $fromStatus = $auditStatusLabels[$auditMeta['from_status'] ?? ''] ?? ($auditMeta['from_status'] ?? '—');
                                                 $toStatus = $auditStatusLabels[$auditMeta['to_status'] ?? ''] ?? ($auditMeta['to_status'] ?? '—');
