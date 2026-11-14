@@ -150,6 +150,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
+  let continuousNavigationTarget=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -503,6 +504,13 @@
 
   const updateContinuousPageFromViewport=()=>{
     if(!continuousMode||!stage||!continuousHost||!pdfDoc)return;
+    // While an explicit page jump is being laid out, observer callbacks may still
+    // describe the previous viewport. Keep the requested page authoritative.
+    if(continuousNavigationTarget!==null){
+      const target=continuousHost.querySelector('[data-pdf-cont-page="'+continuousNavigationTarget+'"]');
+      if(target){pdfPage=continuousNavigationTarget;setPageControls(pdfPage,pdfDoc.numPages);}
+      return continuousNavigationTarget;
+    }
     const stageRect=stage.getBoundingClientRect();
     const stageCenter=(stageRect.top+stageRect.bottom)/2;
     let best=null;
@@ -609,15 +617,44 @@
     updateContinuousPageFromViewport();
   };
 
+  const getContinuousScrollRoot=()=>{
+    const candidates=[stage,pdfSurface?.closest('.farast-reader-canvas')].filter(Boolean);
+    return candidates.find(node=>{
+      const overflow=getComputedStyle(node).overflowY;
+      return (overflow==='auto'||overflow==='scroll'||overflow==='overlay')&&node.scrollHeight>node.clientHeight+1;
+    })||stage;
+  };
+
   const navigatePdfPage=async(number)=>{
     if(!pdfDoc)return;
     const target=clamp(Number(number)||1,1,pdfDoc.numPages);
     if(continuousMode){
+      const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
+      if(!wrapper)return;
+      continuousNavigationTarget=target;
       pdfPage=target;
       setPageControls(target,pdfDoc.numPages);
-      const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
-      wrapper?.scrollIntoView({behavior:'auto',block:'start'});
-      await renderContinuousPage(target);
+      const scrollRoot=getContinuousScrollRoot();
+      const alignTarget=()=>{
+        wrapper.scrollIntoView({behavior:'auto',block:'start'});
+        if(!scrollRoot)return;
+        const rootRect=scrollRoot.getBoundingClientRect();
+        const pageRect=wrapper.getBoundingClientRect();
+        const delta=pageRect.top-rootRect.top;
+        if(Math.abs(delta)>1)scrollRoot.scrollTo({top:Math.max(0,scrollRoot.scrollTop+delta),behavior:'auto'});
+      };
+      try{
+        alignTarget();
+        await renderContinuousPage(target);
+        // Rendering can change a placeholder's measured height and trigger scroll
+        // anchoring. Re-align after layout settles before releasing observer updates.
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        alignTarget();
+        pdfPage=target;
+        setPageControls(target,pdfDoc.numPages);
+      }finally{
+        continuousNavigationTarget=null;
+      }
       updateContinuousPageFromViewport();
     }else{
       await renderPdfPage(target);
