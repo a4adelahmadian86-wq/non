@@ -159,4 +159,33 @@ class SupportTicketAuditLedgerTest extends TestCase
             json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
         );
     }
+
+    public function test_reassigning_ticket_to_the_same_agent_does_not_append_duplicate_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'No-op assignment audit',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agent->id,
+        ]);
+
+        $auditCount = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count();
+        $messageCount = TicketMessage::query()->where('ticket_id', $ticket->id)->count();
+
+        app(SupportTicketService::class)->assign($ticket, $agent, $admin);
+
+        $this->assertSame($auditCount, FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count());
+        $this->assertSame($messageCount, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
+    }
+
 }
