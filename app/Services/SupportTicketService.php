@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Http\Middleware\ResolveAdminScope;
 use App\Services\WorkflowEngine;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\UploadedFile;
@@ -168,14 +169,45 @@ class SupportTicketService
             return null;
         }
 
-        $openCounts = Ticket::query()
-            ->whereNotIn('status', ['closed'])
-            ->whereNotNull('assigned_to')
+        // createTicket calls this inside its transaction. Lock candidate rows
+        // in a stable order so concurrent creations do not all observe the same
+        // stale workload and assign to the same agent.
+        $agentIds = $agents->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        DB::table('users')
+            ->whereIn('id', $agentIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
+
+        // Count only active tickets visible to each candidate under that
+        // candidate's own effective scope. A team agent must not be penalized
+        // for tickets belonging to other teams or global-only guest tickets.
+        $loadQuery = Ticket::query()->whereNotIn('status', ['closed']);
+        $loadQuery->where(function ($query) use ($agents): void {
+            foreach ($agents as $agent) {
+                $visibleUserIds = ResolveAdminScope::visibleUserIds($agent);
+
+                $query->orWhere(function ($agentQuery) use ($agent, $visibleUserIds): void {
+                    $agentQuery->where('assigned_to', $agent->id);
+
+                    if ($visibleUserIds !== null) {
+                        $agentQuery->whereIn('user_id', $visibleUserIds);
+                    }
+                });
+            }
+        });
+
+        $openCounts = $loadQuery
             ->selectRaw('assigned_to, COUNT(*) as c')
             ->groupBy('assigned_to')
             ->pluck('c', 'assigned_to');
 
-        return $agents->sortBy(fn (User $user) => (int) ($openCounts[$user->id] ?? 0))->first();
+        return $agents->sort(function (User $left, User $right) use ($openCounts): int {
+            $leftLoad = (int) ($openCounts[$left->id] ?? 0);
+            $rightLoad = (int) ($openCounts[$right->id] ?? 0);
+
+            return ($leftLoad <=> $rightLoad) ?: ((int) $left->id <=> (int) $right->id);
+        })->first();
     }
 
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
