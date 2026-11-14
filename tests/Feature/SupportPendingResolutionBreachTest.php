@@ -82,6 +82,36 @@ class SupportPendingResolutionBreachTest extends TestCase
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
     }
 
+    public function test_priority_change_during_pending_can_reveal_a_breach_that_existed_at_pause_time(): void
+    {
+        config(['support.sla_resolution_minutes.high' => 60]);
+
+        $createdAt = now()->subHours(2);
+        $pausedAt = $createdAt->copy()->addMinutes(90);
+        $ticket = Ticket::create([
+            'subject' => 'Priority change reveals pre-pause breach',
+            'status' => 'pending',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_paused_at' => $pausedAt,
+            'sla_resolve_remaining_minutes' => 120,
+        ]);
+        $ticket->forceFill(['created_at' => $createdAt])->saveQuietly();
+
+        $notifier = $this->notifier();
+        $notifier->shouldReceive('slaBreached')
+            ->once()
+            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'resolution');
+
+        $service = new SupportTicketService($notifier, new SupportSlaService());
+        $updated = $service->updateMeta($ticket, ['priority' => 'high']);
+
+        $this->assertNotNull($updated->sla_resolve_breached_at);
+        $this->assertTrue($updated->sla_resolve_breached_at->equalTo($pausedAt));
+        $this->assertSame(0, (int) $updated->sla_resolve_remaining_minutes);
+        $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+    }
+
     public function test_pending_ticket_that_was_not_overdue_is_not_marked_as_breached(): void
     {
         $ticket = Ticket::create([
