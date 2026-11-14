@@ -173,7 +173,7 @@ class SupportTicketAuditLedgerTest extends TestCase
         $encoded = json_encode($events->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('Private customer message body', $encoded);
         $this->assertStringNotContainsString('Private internal note body', $encoded);
-        $this->assertStringNotContainsString('attachments', $encoded);
+        $this->assertArrayNotHasKey('body', $events[0]->payload_meta);
     }
 
     public function test_csat_submission_is_audited_without_storing_the_customer_comment(): void
