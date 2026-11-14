@@ -51,7 +51,8 @@ test('a delayed durable restore cannot overwrite personal-tool changes made duri
     let releaseRestore;
     const delayed=new Promise(resolve=>{releaseRestore=resolve;});
     window.__releasePersonalToolsRestore=()=>releaseRestore(oldState);
-    window.FarastReaderDurableStore.migrate=()=>delayed;
+    const durableStore=window.FarastReaderDurableStore;
+    Object.defineProperty(window,'FarastReaderDurableStore',{configurable:true,value:{...durableStore,migrate:()=>delayed,set:durableStore.set.bind(durableStore),requestPersistence:durableStore.requestPersistence.bind(durableStore),restore:durableStore.restore.bind(durableStore)}});
   },{key,oldState});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-personal-tools.js')});
   await page.locator('[data-reading-light]').click();
