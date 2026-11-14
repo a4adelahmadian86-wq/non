@@ -2032,8 +2032,9 @@ test('captures a selected reader passage and jumps back to its anchored discussi
 
 
 test('personal reading controls use compact icons with accessible names and tooltips', async ({ page }) => {
-  await mountReader(page);
-  await page.addScriptTag({ path: require('path').join(__dirname, '../../public/js/farast-reader-personal-tools.js') });
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="icon-tools-fixture"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1"><div class="farast-reader-document"><p>نمونه متن برای ابزارهای مطالعه</p></div></article></section>');
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
   await page.locator('.farast-reader-preferences-panel > summary').click();
   const focus = page.locator('[data-reader-focus]');
   await expect(focus).toHaveAttribute('aria-label', 'حالت تمرکز');
