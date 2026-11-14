@@ -338,7 +338,7 @@ class AdminStoreController extends Controller
             if (($data['status'] ?? '') === 'published') {
                 if ($lockedProduct->status !== 'published') {
                     abort_unless(
-                        app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.products.publish'),
+                        app(\App\Services\AuthorizationService::class)->allows(request()->user(), 'store.products.publish'),
                         403,
                         'مجوز مستقل تأیید و انتشار محصول برای این حساب فعال نیست.'
                     );
