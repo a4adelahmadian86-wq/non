@@ -72,6 +72,9 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
             ])
             ->assertRedirect()
             ->assertSessionHas('status');
+
+        $this->assertSame('09120000000', (string) SiteSetting::read('support_alert_mobile'));
+        $this->assertTrue(filter_var(SiteSetting::read('sms_ticket_reply_enabled'), FILTER_VALIDATE_BOOLEAN));
     }
 
     public function test_employee_without_support_permission_cannot_open_support_report_or_sms_settings(): void
