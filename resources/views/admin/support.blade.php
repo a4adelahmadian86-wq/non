@@ -254,6 +254,82 @@
                 </div>
             </div>
 
+            @php
+                $auditStatusLabels = ['open' => 'باز', 'pending' => 'در انتظار مشتری', 'answered' => 'پاسخ داده شده', 'user_replied' => 'پاسخ مشتری', 'closed' => 'بسته'];
+                $auditPriorityLabels = ['low' => 'کم', 'normal' => 'عادی', 'high' => 'زیاد'];
+                $auditDepartmentLabels = ['support' => 'پشتیبانی', 'sales' => 'فروش', 'billing' => 'مالی', 'complaint' => 'شکایات'];
+            @endphp
+            <details style="padding:10px 16px;border-top:1px solid var(--sd-line);background:var(--sd-card)">
+                <summary style="cursor:pointer;font-size:.82rem;font-weight:800;color:var(--sd-ink)">
+                    تاریخچه تغییرات ممیزی‌شده ({{ $auditEvents->count() }})
+                    <span style="font-size:.72rem;font-weight:500;color:var(--sd-muted)"> · آخرین ۵۰ رویداد</span>
+                </summary>
+                @if($auditEvents->isEmpty())
+                    <p style="margin:10px 0 2px;font-size:.78rem;color:var(--sd-muted)">برای این تیکت هنوز رویداد ممیزی‌شده‌ای ثبت نشده است.</p>
+                @else
+                    <ol style="margin:12px 0 0;padding:0 18px 0 0;display:grid;gap:10px">
+                        @foreach($auditEvents as $auditEvent)
+                            @php
+                                $auditMeta = (array) ($auditEvent->payload_meta ?? []);
+                                $auditActor = $auditUsers[$auditEvent->user_id] ?? null;
+                                $auditActorLabel = $auditActor?->name ?? ($auditEvent->user_id ? 'کاربر #'.$auditEvent->user_id : 'سامانه');
+                            @endphp
+                            <li style="padding:8px 10px;border-right:2px solid var(--sd-line);background:var(--sd-bg);border-radius:8px;list-style-position:outside">
+                                <div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between">
+                                    <strong style="font-size:.78rem;color:var(--sd-ink)">
+                                        @if($auditEvent->event_type === 'support.ticket.status_transitioned')
+                                            @php
+                                                $fromStatus = $auditStatusLabels[$auditMeta['from_status'] ?? ''] ?? ($auditMeta['from_status'] ?? '—');
+                                                $toStatus = $auditStatusLabels[$auditMeta['to_status'] ?? ''] ?? ($auditMeta['to_status'] ?? '—');
+                                            @endphp
+                                            تغییر وضعیت: از {{ $fromStatus }} به {{ $toStatus }}
+                                        @elseif($auditEvent->event_type === 'support.ticket.metadata_changed')
+                                            @php
+                                                $before = (array) ($auditMeta['before'] ?? []);
+                                                $after = (array) ($auditMeta['after'] ?? []);
+                                                $changes = [];
+                                                if (($before['priority'] ?? null) !== ($after['priority'] ?? null)) {
+                                                    $changes[] = 'اولویت: '.($auditPriorityLabels[$before['priority'] ?? ''] ?? ($before['priority'] ?? '—')).' ← '.($auditPriorityLabels[$after['priority'] ?? ''] ?? ($after['priority'] ?? '—'));
+                                                }
+                                                if (($before['department'] ?? null) !== ($after['department'] ?? null)) {
+                                                    $changes[] = 'دپارتمان: '.($auditDepartmentLabels[$before['department'] ?? ''] ?? ($before['department'] ?? '—')).' ← '.($auditDepartmentLabels[$after['department'] ?? ''] ?? ($after['department'] ?? '—'));
+                                                }
+                                            @endphp
+                                            تغییر مشخصات: {{ implode('، ', $changes) ?: 'به‌روزرسانی مشخصات تیکت' }}
+                                        @elseif($auditEvent->event_type === 'support.ticket.assignment_changed')
+                                            @php
+                                                $fromAssigneeId = $auditMeta['from_assigned_to'] ?? null;
+                                                $toAssigneeId = $auditMeta['to_assigned_to'] ?? null;
+                                                $fromAssignee = $fromAssigneeId ? ($auditUsers[$fromAssigneeId]->name ?? 'کاربر #'.$fromAssigneeId) : 'بدون ارجاع';
+                                                $toAssignee = $toAssigneeId ? ($auditUsers[$toAssigneeId]->name ?? 'کاربر #'.$toAssigneeId) : 'بدون ارجاع';
+                                            @endphp
+                                            تغییر ارجاع: از {{ $fromAssignee }} به {{ $toAssignee }}
+                                        @else
+                                            {{ $auditEvent->event_type }}
+                                        @endif
+                                    </strong>
+                                    <time style="font-size:.7rem;color:var(--sd-muted)" datetime="{{ $auditEvent->created_at?->toIso8601String() }}">
+                                        {{ $auditEvent->created_at?->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                    </time>
+                                </div>
+                                <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">عامل تغییر: {{ $auditActorLabel }}</div>
+                                @if($auditEvent->event_type === 'support.ticket.status_transitioned')
+                                    @php
+                                        $slaBefore = (array) ($auditMeta['sla_before'] ?? []);
+                                        $slaAfter = (array) ($auditMeta['sla_after'] ?? []);
+                                    @endphp
+                                    @if(empty($slaBefore['resolution_paused_at']) && !empty($slaAfter['resolution_paused_at']))
+                                        <div style="margin-top:4px;font-size:.72rem;color:#b45309">ساعت SLA حل متوقف شد</div>
+                                    @elseif(!empty($slaBefore['resolution_paused_at']) && empty($slaAfter['resolution_paused_at']))
+                                        <div style="margin-top:4px;font-size:.72rem;color:#047857">ساعت SLA حل از سر گرفته شد</div>
+                                    @endif
+                                @endif
+                            </li>
+                        @endforeach
+                    </ol>
+                @endif
+            </details>
+
             @if(count($canned))
             <div style="padding:8px 14px 0;display:flex;flex-wrap:wrap;gap:6px;background:var(--sd-card);border-top:1px solid var(--sd-line)">
                 <span style="font-size:.75rem;color:var(--sd-muted);align-self:center">پاسخ آماده:</span>
