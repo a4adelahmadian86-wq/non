@@ -71,8 +71,7 @@ Artisan::command('support:deliver-sla-alerts {--limit=10}', function (\App\Servi
 
 Schedule::command('support:deliver-sla-alerts --limit=10')
     ->everyMinute()
-    ->withoutOverlapping(10)
-    ->when(fn () => config('support.monitor_enabled', true));
+    ->withoutOverlapping(10);
 
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
