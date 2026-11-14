@@ -119,4 +119,53 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $service->submitCsat($staleTicket, 3, 'دوباره');
     }
+
+    public function test_ticket_creation_persists_its_workflow_event_with_the_ticket(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = $this->service()->createTicket($customer, [
+            'subject' => 'Transactional ticket event',
+            'body' => 'Please follow up',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'event_type' => 'ticket.created',
+            'idempotency_key' => 'ticket:'.$ticket->id.':created',
+            'user_id' => $customer->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_ticket_creation_rolls_back_when_its_workflow_event_cannot_be_persisted(): void
+    {
+        $customer = User::factory()->create();
+        $workflow = Mockery::mock(WorkflowEngine::class);
+        $workflow->shouldReceive('enqueue')
+            ->once()
+            ->with(
+                'ticket.created',
+                Mockery::on(fn (array $context): bool => (int) ($context['user_id'] ?? 0) === (int) $customer->id),
+                Mockery::type('string'),
+            )
+            ->andThrow(new \\RuntimeException('Workflow outbox unavailable.'));
+        $this->instance(WorkflowEngine::class, $workflow);
+
+        try {
+            $this->service()->createTicket($customer, [
+                'subject' => 'Must roll back without outbox',
+                'body' => 'This ticket must not commit',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+            $this->fail('Ticket creation must fail when the event cannot be persisted.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('Workflow outbox unavailable.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('tickets', 0);
+        $this->assertDatabaseCount('ticket_messages', 0);
+    }
+
 }
