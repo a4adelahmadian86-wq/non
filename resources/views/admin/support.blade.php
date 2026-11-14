@@ -212,7 +212,7 @@
                 <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $active->last_scanned_message_id ?? $active->messages->last()?->id ?? 0 }}" data-oldest-id="{{ $active->oldest_scanned_message_id ?? $active->messages->first()?->id ?? 0 }}">
                 @foreach($active->messages as $m)
                     @php $isStaff = $m->isFromStaff(); $isInternal = (bool) $m->is_internal; @endphp
-                    <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}">
+                    <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}" data-msg-id="{{ $m->id }}">
                         @unless($isStaff)
                             <div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>
                         @endunless
@@ -364,7 +364,7 @@
     let olderInFlight = false;
 
     olderButton?.addEventListener('click', async () => {
-      if (olderInFlight) return;
+      if (olderInFlight || pollInFlight) return;
       const beforeId = Number(thread.dataset.oldestId || 0);
       if (!beforeId || !box) return;
       olderInFlight = true;
@@ -398,7 +398,7 @@
     });
 
     setInterval(async () => {
-      if (pollInFlight || document.hidden) return;
+      if (pollInFlight || olderInFlight || document.hidden) return;
       pollInFlight = true;
       try {
         const url = thread.dataset.pollUrl + (thread.dataset.pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId;
