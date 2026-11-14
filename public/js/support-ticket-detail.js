@@ -205,7 +205,7 @@
   let pollInFlight = false;
 
   async function poll() {
-    if (!pollUrl || document.hidden || pollInFlight) return;
+    if (!pollUrl || document.hidden || pollInFlight || olderInFlight) return;
     pollInFlight = true;
     try {
       const res = await fetch(pollUrl + (pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId, {
