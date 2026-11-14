@@ -246,6 +246,17 @@ trait PaysWithZarinpal
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
                 );
+                app(\App\Services\WorkflowEngine::class)->enqueue(
+                    'order.paid',
+                    [
+                        'user_id' => (int) $locked->user_id,
+                        'customer_id' => (int) $locked->user_id,
+                        'order_id' => (int) $locked->id,
+                        'amount_rials' => (int) $locked->total_rials,
+                        'order_kind' => (string) ($locked->pricing_snapshot['kind'] ?? 'unknown'),
+                    ],
+                    'order:'.$locked->id.':order.paid',
+                );
                 $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {
@@ -261,17 +272,6 @@ trait PaysWithZarinpal
             }
         }
 
-        if ($paymentProcessed) {
-            try {
-                app(\App\Services\WorkflowEngine::class)->dispatch(
-                    'order.paid',
-                    ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
-                    'order:'.$order->id.':paid',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
 
         return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل یا دوره در کتابخانه شما فعال شد.');
     }
