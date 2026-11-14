@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Http\Middleware\ResolveAdminScope;
 use App\Services\AuthorizationService;
+use App\Services\SupportAssignmentMutex;
 use App\Services\SupportTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
