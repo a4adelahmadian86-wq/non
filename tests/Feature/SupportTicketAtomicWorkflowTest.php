@@ -119,7 +119,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
             'user_id' => $customer->id,
             'status' => 'pending',
         ]);
-        $this->assertDatabaseMissing('farast_workflow_runs', ['workflow_id' => 0]);
+        $this->assertDatabaseCount('farast_workflow_runs', 0);
     }
 
     public function test_ticket_creation_rolls_back_when_outbox_persistence_fails(): void
