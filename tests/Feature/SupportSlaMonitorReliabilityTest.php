@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\SupportNotificationService;
+use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -216,7 +217,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
                 $this->assertSame(0, DB::transactionLevel(), 'Provider delivery must not run while a database transaction is open.');
                 return (int) $ticket->id === $ticketId && $kind === 'first_response' && str_contains($identity, 'sla:first_response:breached');
             }
-        )->andThrow(new \\RuntimeException('temporary provider failure'));
+        )->andThrow(new \RuntimeException('temporary provider failure'));
         $this->app->instance(SupportNotificationService::class, $failedNotifier);
 
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
