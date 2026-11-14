@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\FarastCharge;
 use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreDownload;
@@ -13,7 +14,9 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\User;
 use App\Services\AuthorizationService;
+use App\Services\CommerceAuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -96,7 +99,7 @@ class CrmCustomerWorkspaceTest extends TestCase
         ]);
 
         $usageCharge = FarastCharge::create([
-            'charge_id' => (string) \\Illuminate\\Support\\Str::uuid(),
+            'charge_id' => (string) Str::uuid(),
             'idempotency_key' => 'crm-usage-charge-1',
             'actor_id' => $customer->id,
             'organization_id' => null,
