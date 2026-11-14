@@ -264,7 +264,7 @@ class SecureTicketAttachments extends Command
                                 if ($disk === 'public') {
                                     if (Storage::disk('public')->exists((string) $path)
                                         && ! Storage::disk('public')->delete((string) $path)) {
-                                        throw new \\RuntimeException('legacy_public_source_delete_failed');
+                                        throw new \RuntimeException('legacy_public_source_delete_failed');
                                     }
                                 } else {
                                     $storage->delete((string) $disk, (string) $path);
