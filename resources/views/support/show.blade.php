@@ -1,13 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
-@php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
+@php
+    $lastMsgId = $ticket->last_scanned_message_id ?? $ticket->messages->last()?->id ?? 0;
+    $oldestMsgId = $ticket->oldest_scanned_message_id ?? $ticket->messages->first()?->id ?? 0;
+@endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
      data-last-id="{{ $lastMsgId }}"
+     data-oldest-id="{{ $oldestMsgId }}"
      data-ticket-status="{{ $ticket->status }}">
     <nav class="tk-breadcrumb">
         <div class="tk-breadcrumb-inner">
@@ -48,6 +52,9 @@
             <div class="tk-divider"></div>
 
             <div class="tk-thread" id="chatMessages">
+                @if($ticket->has_older_messages)
+                    <button type="button" id="loadOlderTicketMessages" class="tk-btn" style="align-self:center;margin:8px auto;background:#eef4ff;color:#1769ff">نمایش پیام‌های قدیمی‌تر</button>
+                @endif
                 @php $prevDay = null; @endphp
                 @foreach($ticket->messages as $m)
                     @php
