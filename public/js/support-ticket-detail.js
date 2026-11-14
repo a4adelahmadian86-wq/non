@@ -137,8 +137,11 @@
     lastId = Math.max(lastId, Number(m.id) || 0);
   }
 
+  let pollInFlight = false;
+
   async function poll() {
-    if (!pollUrl || document.hidden) return;
+    if (!pollUrl || document.hidden || pollInFlight) return;
+    pollInFlight = true;
     try {
       const res = await fetch(pollUrl + (pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId, {
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -148,11 +151,20 @@
       const data = await res.json();
       if (!data.ok) return;
       (data.messages || []).forEach(appendMessage);
+
+      // Advance across private notes even when the customer receives no
+      // visible messages in this batch.
+      const serverCursor = Number(data.last_id);
+      if (Number.isFinite(serverCursor)) lastId = Math.max(lastId, serverCursor);
+
       if (data.status_label) {
         const el = document.getElementById('ticketStatusLabel');
         if (el) el.textContent = data.status_label;
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      pollInFlight = false;
+    }
   }
 
   if (pollUrl) {
