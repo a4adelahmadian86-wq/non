@@ -131,6 +131,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonFragment(['body' => 'public response'])
             ->assertJsonMissing(['body' => 'private note one']);
 
+        $ticket->forceFill(['customer_last_seen_at' => null])->saveQuietly();
         $secondInternal = TicketMessage::create([
             'ticket_id' => $ticket->id,
             'user_id' => null,
@@ -145,6 +146,11 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonPath('messages', [])
             ->assertJsonPath('last_id', $secondInternal->id)
             ->assertJsonMissing(['body' => 'private note two']);
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'customer_last_seen_at' => null,
+        ]);
     }
 
     public function test_customer_can_never_read_staff_internal_notes(): void
