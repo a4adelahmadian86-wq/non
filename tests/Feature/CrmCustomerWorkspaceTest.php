@@ -63,6 +63,25 @@ class CrmCustomerWorkspaceTest extends TestCase
             'transaction_id' => 'CRM-PAYMENT-1',
             'paid_at' => now(),
         ]);
+
+        $depositOrder = Order::create([
+            'user_id' => $customer->id,
+            'subtotal_rials' => 50000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 50000,
+            'status' => 'deposit_paid',
+            'pricing_snapshot' => ['kind' => 'typing_deposit'],
+            'paid_at' => now(),
+        ]);
+        Payment::create([
+            'order_id' => $depositOrder->id,
+            'gateway' => 'wallet',
+            'amount_rials' => 50000,
+            'status' => 'paid',
+            'transaction_id' => 'CRM-DEPOSIT-PAYMENT-'.uniqid(),
+            'paid_at' => now(),
+        ]);
         $wallet = Wallet::create(['user_id' => $customer->id, 'balance_rials' => 750000]);
         WalletTransaction::create([
             'wallet_id' => $wallet->id,
@@ -101,17 +120,17 @@ class CrmCustomerWorkspaceTest extends TestCase
         ]);
 
         $this->actingAs($admin)->getJson('/admin/crm/customers')
-            ->assertOk()->assertJsonFragment(['id' => $customer->id]);
+            ->assertOk()->assertJsonFragment(['id' => $customer->id, 'paid_revenue_rials' => 300000]);
 
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('customer.id', $customer->id)
-            ->assertJsonPath('metrics.orders_count', 1)
-            ->assertJsonPath('metrics.paid_revenue_rials', 250000)
+            ->assertJsonPath('metrics.orders_count', 2)
+            ->assertJsonPath('metrics.paid_revenue_rials', 300000)
             ->assertJsonFragment(['type' => 'order', 'id' => $order->id])
-            ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 250000])
+            ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 250000])\n            ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 50000])
             ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
-            ->assertJsonPath('metrics.payments_count', 1)
+            ->assertJsonPath('metrics.payments_count', 2)
             ->assertJsonPath('metrics.wallet_transactions_count', 1);
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
