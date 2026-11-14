@@ -173,7 +173,7 @@ class StoreOrderFulfillmentService
                         throw new RuntimeException('پرداخت مربوط به بازیابی تحویل پیدا نشد.');
                     }
                     $marker = data_get($payment->gateway_response, 'fulfillment_reconciliation', []);
-                    if ($payment->status !== 'paid' || ($marker['status'] ?? null) !== 'required') {
+                    if ($payment->status !== 'paid' || ! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
                         return false;
                     }
 
