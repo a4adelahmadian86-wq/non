@@ -484,7 +484,7 @@ class SupportController extends Controller
 
         $auditUserLabels = collect();
         foreach ($auditUsers as $auditUser) {
-            if ((int) $auditUser->id === (int) $active?->user_id) {
+            if ($active && (int) $auditUser->id === (int) $active->user_id) {
                 $auditUserLabels[$auditUser->id] = 'مشتری';
             } elseif (app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
