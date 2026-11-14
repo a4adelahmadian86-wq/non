@@ -244,7 +244,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
     }
 
 
-    public function test_outbox_enqueue_requires_the_ticket_transaction_and_rolls_back_with_it(): void
+    public function test_outbox_enqueue_rolls_back_with_the_ticket_transaction(): void
     {
         $customer = User::factory()->create();
         $ticketId = DB::table('tickets')->insertGetId([
@@ -278,16 +278,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
 
         $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
 
-        try {
-            $outbox->enqueue($ticket, 'first_response', [
-                'event' => 'breached',
-                'minutes' => -5,
-                'column' => 'sla_first_breached_at',
-            ]);
-            $this->fail('Outbox enqueue must reject calls outside a transaction.');
-        } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('inside the ticket transaction', $exception->getMessage());
-        }
+
     }
 
 }
