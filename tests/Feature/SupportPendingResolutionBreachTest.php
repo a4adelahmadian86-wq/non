@@ -86,6 +86,12 @@ class SupportPendingResolutionBreachTest extends TestCase
         $this->assertNotNull($resumed->sla_resolve_breached_at);
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
         $this->assertSame('breached', app(SupportSlaService::class)->resolutionStatus($resumed)['state']);
+
+        $closed = $service->changeStatus($resumed, 'closed', null, false);
+        $this->assertNotNull($closed->resolved_at);
+        $this->assertNotNull($closed->sla_resolve_breached_at);
+        $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+        $this->assertSame('breached', app(SupportSlaService::class)->resolutionStatus($closed)['state']);
     }
 
     public function test_staff_reply_transition_to_pending_also_records_a_preexisting_resolution_breach(): void
