@@ -112,6 +112,10 @@
                 </table>
             </div>
 
+            <p style="margin:10px 0 0;color:#64748b;font-size:.8rem;line-height:1.7">
+                ارجاع و بستن بر اساس مسئول تیکت محاسبه می‌شود؛ تعداد پاسخ‌ها و زمان اولین پاسخ بر اساس نویسنده واقعی پیام عمومی محاسبه می‌شود.
+            </p>
+
             <div style="margin-top:18px;padding:14px;background:#f8fafc;border-radius:12px;font-size:.85rem;color:#64748b;line-height:1.7">
                 <b style="color:#334155">اهداف SLA فعلی:</b>
                 اولویت بالا {{ config('support.sla_first_response_minutes.high') }}د /
