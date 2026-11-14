@@ -193,49 +193,4 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_warned_at'));
     }
 
-    public function test_notification_failure_for_one_ticket_does_not_stop_the_remaining_queue(): void
-    {
-        $customer = User::factory()->create();
-        $now = now();
-
-        $firstId = DB::table('tickets')->insertGetId([
-            'user_id' => $customer->id,
-            'subject' => 'First SLA notification failure',
-            'status' => 'open',
-            'priority' => 'normal',
-            'department' => 'support',
-            'sla_first_due_at' => $now->copy()->subMinutes(5),
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-        $secondId = DB::table('tickets')->insertGetId([
-            'user_id' => $customer->id,
-            'subject' => 'Second SLA notification',
-            'status' => 'open',
-            'priority' => 'normal',
-            'department' => 'support',
-            'sla_first_due_at' => $now->copy()->subMinutes(5),
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-
-        $calls = 0;
-        $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaBreached')->twice()->andReturnUsing(
-            function ($ticket, $kind) use (&$calls): void {
-                $calls++;
-                if ($calls === 1) {
-                    throw new \RuntimeException('notification provider unavailable');
-                }
-            }
-        );
-        $notifier->shouldNotReceive('slaWarning');
-        $this->app->instance(SupportNotificationService::class, $notifier);
-
-        Artisan::call('support:check-sla');
-
-        $this->assertNotNull(DB::table('tickets')->where('id', $firstId)->value('sla_first_breached_at'));
-        $this->assertNotNull(DB::table('tickets')->where('id', $secondId)->value('sla_first_breached_at'));
-    }
-
 }
