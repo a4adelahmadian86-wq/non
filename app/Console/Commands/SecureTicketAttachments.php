@@ -17,6 +17,19 @@ class SecureTicketAttachments extends Command
 
     protected $description = 'Inspect, privatize and register legacy support attachments in managed storage';
 
+    private function deleteLegacySource(StorageManager $storage, string $disk, string $path): void
+    {
+        if ($disk === 'public') {
+            if (Storage::disk('public')->exists($path) && ! Storage::disk('public')->delete($path)) {
+                throw new \RuntimeException('legacy_public_source_delete_failed');
+            }
+
+            return;
+        }
+
+        $storage->delete($disk, $path);
+    }
+
     public function handle(UploadSecurityService $security, StorageManager $storage): int
     {
         $limit = max(1, min((int) $this->option('limit'), 1000));
@@ -50,9 +63,37 @@ class SecureTicketAttachments extends Command
                     $sourceCleanup = [];
 
                     foreach ($attachments as $index => $attachment) {
-                        if (! is_array($attachment)
-                            || ! empty($attachment['managed_file_id'])
-                            || ! empty($attachment['quarantined'])) {
+                        if (! is_array($attachment)) {
+                            continue;
+                        }
+
+                        // Retry cleanup of an old source if a previous batch
+                        // saved the managed reference but could not remove the
+                        // original file (or another message still referenced it).
+                        if (! empty($attachment['legacy_source_path_b64'])) {
+                            $legacyPath = base64_decode((string) $attachment['legacy_source_path_b64'], true);
+                            $legacyDisk = (string) ($attachment['legacy_source_disk'] ?? 'public');
+                            if (is_string($legacyPath) && $legacyPath !== '') {
+                                $stillReferenced = TicketMessage::query()
+                                    ->where('id', '!=', $message->id)
+                                    ->where('attachments', 'like', '%'.$legacyPath.'%')
+                                    ->exists();
+
+                                if (! $stillReferenced) {
+                                    try {
+                                        $this->deleteLegacySource($storage, $legacyDisk, $legacyPath);
+                                        unset($attachment['legacy_source_path_b64'], $attachment['legacy_source_disk']);
+                                        $attachments[$index] = $attachment;
+                                        $changed = true;
+                                    } catch (Throwable $exception) {
+                                        $failedAttachments++;
+                                        $this->warn("Could not retry old attachment cleanup for ticket message {$message->id}.");
+                                    }
+                                }
+                            }
+                        }
+
+                        if (! empty($attachment['managed_file_id']) || ! empty($attachment['quarantined'])) {
                             continue;
                         }
 
@@ -157,8 +198,10 @@ class SecureTicketAttachments extends Command
                                     'disk' => 'private',
                                     'quarantined' => true,
                                     'quarantine_reason' => 'security_inspection_failed',
+                                    'legacy_source_disk' => $sourceDisk,
+                                    'legacy_source_path_b64' => base64_encode($sourcePath),
                                 ]);
-                                $sourceCleanup[] = [$sourceDisk, $sourcePath];
+                                $sourceCleanup[] = [$index, $sourceDisk, $sourcePath];
                                 $changed = true;
                                 $quarantinedAttachments++;
                             } catch (Throwable $quarantineException) {
@@ -201,6 +244,8 @@ class SecureTicketAttachments extends Command
                                 'mime' => (string) $inspection['mime'],
                                 'sha256' => (string) $inspection['checksum'],
                                 'quarantined' => false,
+                                'legacy_source_disk' => $sourceDisk,
+                                'legacy_source_path_b64' => base64_encode($sourcePath),
                             ]);
 
                             $createdManaged[] = [$managed['disk'], $managed['path']];
@@ -248,27 +293,30 @@ class SecureTicketAttachments extends Command
                         continue;
                     }
 
-                    foreach ($sourceCleanup as [$disk, $path]) {
+                    $cleanupMetadataChanged = false;
+                    foreach ($sourceCleanup as [$index, $disk, $path]) {
                         try {
                             $stillReferenced = TicketMessage::query()
                                 ->where('id', '!=', $message->id)
                                 ->where('attachments', 'like', '%'.$path.'%')
                                 ->exists();
 
-                            if (! $stillReferenced) {
-                                if ($disk === 'public') {
-                                    if (Storage::disk('public')->exists((string) $path)
-                                        && ! Storage::disk('public')->delete((string) $path)) {
-                                        throw new \RuntimeException('legacy_public_source_delete_failed');
-                                    }
-                                } else {
-                                    $storage->delete((string) $disk, (string) $path);
-                                }
+                            if ($stillReferenced) {
+                                continue;
                             }
+
+                            $this->deleteLegacySource($storage, (string) $disk, (string) $path);
+                            unset($attachments[$index]['legacy_source_disk'], $attachments[$index]['legacy_source_path_b64']);
+                            $cleanupMetadataChanged = true;
                         } catch (Throwable $exception) {
                             $failedAttachments++;
                             $this->warn("Could not remove old attachment source for ticket message {$message->id}.");
                         }
+                    }
+
+                    if ($cleanupMetadataChanged) {
+                        $message->attachments = $attachments;
+                        $message->save();
                     }
 
                     foreach (array_unique($createdStaging) as $path) {
