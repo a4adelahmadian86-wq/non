@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 
 class SupportTicketScopedAgentAccessTest extends TestCase
