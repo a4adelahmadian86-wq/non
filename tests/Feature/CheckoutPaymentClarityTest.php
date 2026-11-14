@@ -7,6 +7,7 @@ use App\Models\SiteSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CheckoutPaymentClarityTest extends TestCase
@@ -181,7 +182,7 @@ class CheckoutPaymentClarityTest extends TestCase
             'user_id' => $user->id,
             'status' => 'pending',
         ]);
-        $this->assertSame(1, app(\\App\\Services\\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => $eventKey,
             'status' => 'completed',
