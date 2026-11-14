@@ -260,6 +260,7 @@ class StoreCartController extends Controller
                     'idempotency_key' => 'free-order-'.$order->id,
                     'paid_at' => now(),
                 ]);
+                $order->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
 
                 foreach ($orderItems as [$orderItem, $product, $file]) {
@@ -274,7 +275,6 @@ class StoreCartController extends Controller
                     );
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
-                $order->update(['status' => 'paid', 'paid_at' => now()]);
             }
 
             return $order->fresh();
