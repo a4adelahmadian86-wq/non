@@ -199,9 +199,16 @@ class Ticket extends Model
         // Pending pauses only the resolution clock. First-response SLA remains active.
         return $query->where(function ($q) use ($hasResolvedAt, $hasClosedAt) {
             $q->where(function ($w) {
-                $w->whereNull('first_response_at')
-                    ->whereNotNull('sla_first_due_at')
-                    ->where('sla_first_due_at', '<', now());
+                $w->whereNotNull('sla_first_due_at')
+                    ->where(function ($first) {
+                        $first->where(function ($pending) {
+                            $pending->whereNull('first_response_at')
+                                ->where('sla_first_due_at', '<', now());
+                        })->orWhere(function ($completed) {
+                            $completed->whereNotNull('first_response_at')
+                                ->whereColumn('first_response_at', '>', 'sla_first_due_at');
+                        });
+                    });
             })->orWhere(function ($w) {
                 $w->whereNotIn('status', ['closed', 'pending'])
                     ->whereNotNull('sla_resolve_due_at')
