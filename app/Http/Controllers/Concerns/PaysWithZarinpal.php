@@ -253,7 +253,8 @@ trait PaysWithZarinpal
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
                 );
-                app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);                $paymentProcessed = true;
+                app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
+                $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {
             return redirect()->route('checkout', $order)->withErrors(['payment' => $e->getMessage()]);
