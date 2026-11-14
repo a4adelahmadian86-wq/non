@@ -501,6 +501,28 @@
     }
   };
 
+  const updateContinuousPageFromViewport=()=>{
+    if(!continuousMode||!stage||!continuousHost||!pdfDoc)return;
+    const stageRect=stage.getBoundingClientRect();
+    const stageCenter=(stageRect.top+stageRect.bottom)/2;
+    let best=null;
+    continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>{
+      const rect=node.getBoundingClientRect();
+      const visibleHeight=Math.max(0,Math.min(rect.bottom,stageRect.bottom)-Math.max(rect.top,stageRect.top));
+      if(visibleHeight<=0)return;
+      const ratio=visibleHeight/Math.max(1,Math.min(rect.height,stageRect.height));
+      const centerDistance=Math.abs((rect.top+rect.bottom)/2-stageCenter);
+      if(!best||ratio>best.ratio+.001||(Math.abs(ratio-best.ratio)<=.001&&centerDistance<best.centerDistance)){
+        best={number:Number(node.dataset.pdfContPage),ratio,centerDistance};
+      }
+    });
+    if(best&&best.number!==pdfPage){
+      pdfPage=best.number;
+      setPageControls(best.number,pdfDoc.numPages);
+    }
+    return best?.number||pdfPage;
+  };
+
   const buildContinuousPages=async()=>{
     if(!pdfDoc||!continuousHost)return;
     continuousHost.hidden=false;
@@ -528,18 +550,19 @@
     if(pdfSurface){pdfSurface.classList.add('is-continuous');pdfSurface.style.width='100%';pdfSurface.style.minHeight='0';}
     if(window.IntersectionObserver){
       continuousObserver=new IntersectionObserver(entries=>{
-        let best=null;
         entries.forEach(entry=>{
           const number=Number(entry.target.dataset.pdfContPage);
           if(entry.isIntersecting){
             entry.target.dataset.keepRendered='1';
-            if(!best||entry.intersectionRatio>best.ratio)best={number,ratio:entry.intersectionRatio};
             renderContinuousPage(number).catch(showPdfError);
           }else{
             releaseContinuousPage(entry.target);
           }
         });
-        if(best){pdfPage=best.number;setPageControls(best.number,pdfDoc.numPages);}
+        // The observer's 650px root margin is for pre-rendering only. Select the
+        // active page from the real stage viewport so nearby prefetched pages
+        // cannot overwrite an explicit page-navigation request.
+        updateContinuousPageFromViewport();
       },{root:stage,rootMargin:'650px 0px',threshold:[.05,.15,.35,.6]});
       continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>continuousObserver.observe(node));
       // Render only pages near the viewport; off-screen canvases are released as they leave the window.
@@ -583,6 +606,7 @@
       if(node.dataset.rendered!=='1'&&node.dataset.rendering!=='1')pending.push(node);
     });
     for(const node of pending)await renderContinuousPage(Number(node.dataset.pdfContPage));
+    updateContinuousPageFromViewport();
   };
 
   const navigatePdfPage=async(number)=>{
@@ -594,6 +618,7 @@
       const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
       wrapper?.scrollIntoView({behavior:'auto',block:'start'});
       await renderContinuousPage(target);
+      updateContinuousPageFromViewport();
     }else{
       await renderPdfPage(target);
     }
