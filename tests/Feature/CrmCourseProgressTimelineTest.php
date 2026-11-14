@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\FarastProject;
 use App\Models\FarastDocument;
 use App\Models\FarastDocumentVersion;
@@ -15,6 +16,7 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\AuthorizationService;
@@ -96,10 +98,31 @@ class CrmCourseProgressTimelineTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now(),
         ]);
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 300000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 300000,
+            'product_snapshot' => [],
+        ]);
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'wallet',
+            'transaction_id' => 'CRM-COURSE-'.$order->id,
+            'amount_rials' => 300000,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
         $libraryItem = StoreLibraryItem::create([
             'user_id' => $customer->id,
             'product_id' => $product->id,
             'order_id' => $order->id,
+            'order_item_id' => $orderItem->id,
             'granted_at' => now(),
         ]);
         $enrollment = app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);

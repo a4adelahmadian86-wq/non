@@ -71,7 +71,9 @@ class PlatformCompletionController extends Controller {
   DB::transaction(function()use($id){
    $updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->update(['status'=>'trashed','trashed_at'=>now(),'updated_at'=>now()]);
    abort_unless($updated===1,404);
-   DB::table('farast_document_shares')->where('document_id',$id)->where('owner_id',auth()->id())->update(['expires_at'=>now(),'updated_at'=>now()]);
+   // The public share endpoint already denies trashed documents. Preserve each link's
+   // original expiry so restoring the same canonical document can reactivate only
+   // links that have not naturally expired or been explicitly revoked.
   });
   return back()->with('status','سند به سطل زباله منتقل شد.');
  }
