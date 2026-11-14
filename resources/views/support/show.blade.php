@@ -2,8 +2,8 @@
 
 @section('content')
 @php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019csat">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019csat">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
@@ -202,7 +202,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261019csat"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114managedattachments"></script>
 <script>
 (function () {
     const form = document.getElementById('csatForm');
