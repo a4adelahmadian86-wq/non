@@ -23,6 +23,7 @@ use App\Services\AuthorizationService;
 use App\Services\StoreCourseEnrollmentService;
 use App\Services\StoreCourseProgressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CrmCourseProgressTimelineTest extends TestCase
@@ -115,8 +116,8 @@ class CrmCourseProgressTimelineTest extends TestCase
             'gateway' => 'test',
             'amount_rials' => 300000,
             'status' => 'paid',
-            'transaction_id' => 'TEST-CRM-COURSE-'.$order->id,
-            'idempotency_key' => 'test-crm-course-'.$order->id,
+            'transaction_id' => 'TEST-CRM-COURSE-'.Str::uuid(),
+            'idempotency_key' => (string) Str::uuid(),
             'paid_at' => now(),
         ]);
 
