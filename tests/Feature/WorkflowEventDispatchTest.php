@@ -317,10 +317,10 @@ class WorkflowEventDispatchTest extends TestCase
                     'ticket:93:created',
                 );
 
-                throw new \\RuntimeException('Force source transaction rollback.');
+                throw new \RuntimeException('Force source transaction rollback.');
             });
             $this->fail('The source transaction should have rolled back.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Force source transaction rollback.', $exception->getMessage());
         }
 
