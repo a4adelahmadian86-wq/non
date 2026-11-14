@@ -110,7 +110,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
     {
         $createdAt = Carbon::parse('2026-11-17 10:00:00', 'Asia/Tehran');
         $assignedAgent = User::factory()->create();
-        $responder = User::factory()->create();
+        $responder = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $delays = [10, 20, 30, 40];
 
         foreach ($delays as $index => $delay) {
@@ -130,7 +130,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
                 'user_id' => $responder->id,
                 'body' => 'Public response '.$index,
                 'is_internal' => false,
-                'is_staff' => true,
+                'is_staff' => false,
             ]);
         }
 
