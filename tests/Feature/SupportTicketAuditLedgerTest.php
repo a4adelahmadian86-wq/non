@@ -371,6 +371,38 @@ class SupportTicketAuditLedgerTest extends TestCase
         );
     }
 
+
+    public function test_message_audit_failure_rolls_back_the_reply_and_status_transition(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Reply audit rollback',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->addMessage($ticket, $customer, 'Reply must not persist', [
+                'is_staff' => false,
+            ]);
+            $this->fail('Reply and status must roll back when the message audit append fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertSame('open', $ticket->fresh()->status);
+        $this->assertSame(0, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+        ]);
+    }
+
     public function test_reassigning_ticket_to_the_same_agent_does_not_append_duplicate_history(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
