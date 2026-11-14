@@ -86,7 +86,7 @@ class StoreCourseEnrollmentService
             }
 
             $course = StoreCourse::query()->where('product_id', $product->id)->lockForUpdate()->first();
-            if (! $course) {
+            if (! $course || ! $course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
                 throw new RuntimeException('ساختار دوره برای تحویل دسترسی آماده نیست.');
             }
 
