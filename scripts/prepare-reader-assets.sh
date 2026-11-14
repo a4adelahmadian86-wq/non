@@ -20,11 +20,14 @@ if [ "$PACKAGE_VERSION" != "$PDFJS_VERSION" ]; then
   exit 1
 fi
 
-case "$PACKAGE_INTEGRITY" in
-  sha512-*) ;;
-  *) echo "PDF.js package integrity metadata is missing or unsupported: $PACKAGE_INTEGRITY" >&2; exit 1 ;;
-esac
-echo "Verified npm integrity for PDF.js $PDFJS_VERSION: $PACKAGE_INTEGRITY"
+EXPECTED_PACKAGE_INTEGRITY="sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA=="
+if [ "$PACKAGE_INTEGRITY" != "$EXPECTED_PACKAGE_INTEGRITY" ]; then
+  echo "PDF.js package integrity mismatch for $PDFJS_VERSION" >&2
+  echo "Expected: $EXPECTED_PACKAGE_INTEGRITY" >&2
+  echo "Received: $PACKAGE_INTEGRITY" >&2
+  exit 1
+fi
+echo "Verified pinned npm integrity for PDF.js $PDFJS_VERSION: $PACKAGE_INTEGRITY"
 
 for required in \
   "$PACKAGE_DIR/legacy/build/pdf.mjs" \
@@ -75,6 +78,7 @@ printf '%s\n' "$PACKAGE_INTEGRITY" > "$STAGING_DIR/NPM_INTEGRITY"
 (
   cd "$STAGING_DIR"
   find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+  sha256sum -c SHA256SUMS >/dev/null
 )
 
 # Swap only after the full, verified payload is ready. Restore the previous
