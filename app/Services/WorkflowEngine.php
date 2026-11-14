@@ -84,8 +84,12 @@ class WorkflowEngine
             throw new \InvalidArgumentException('Unsupported workflow event.');
         }
 
-        if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
+        if (empty($context['user_id']) || ! is_numeric($context['user_id'])) {
             return 0;
+        }
+
+        if (! Schema::hasTable('farast_workflow_events')) {
+            throw new \\RuntimeException('Workflow event storage is unavailable.');
         }
 
         $userId = (int) $context['user_id'];
@@ -132,6 +136,12 @@ class WorkflowEngine
      */
     public function dispatch(string $eventType, array $context, string $idempotencyKey): int
     {
+        // Preserve the historical no-op behavior for optional legacy callers;
+        // transactional business operations use enqueue() and fail closed.
+        if (! Schema::hasTable('farast_workflow_events')) {
+            return 0;
+        }
+
         $eventId = $this->enqueue($eventType, $context, $idempotencyKey);
         if ($eventId < 1) {
             return 0;
