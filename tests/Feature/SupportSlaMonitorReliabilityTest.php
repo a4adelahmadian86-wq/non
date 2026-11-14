@@ -309,8 +309,11 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         }
 
         $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
-
-
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticketId,
+            'event_type' => 'support.ticket.sla_alert_queued',
+        ]);
     }
 
 }
