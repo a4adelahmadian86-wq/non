@@ -834,6 +834,7 @@ class SupportController extends Controller
     {
         return app(SupportTicketService::class)->claimGuestTickets($user);
     }
+
     private function parseInboxDateFilter(mixed $value): ?Carbon
     {
         if (! is_string($value) || ! preg_match('/^\\d{4}-\\d{2}-\\d{2}$/D', $value)) {
