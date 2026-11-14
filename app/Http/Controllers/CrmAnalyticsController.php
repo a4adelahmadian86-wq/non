@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Order;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AdminConsoleService;
@@ -25,19 +24,27 @@ class CrmAnalyticsController extends Controller
         $newCustomers = (clone $customers)->where('users.created_at', '>=', now()->subDays(30))->count();
         $blockedCustomers = (clone $customers)->where('users.is_blocked', true)->count();
 
-        $paidOrders = Order::query()->where('status', 'paid');
+        $paidPayments = DB::table('payments')
+            ->join('orders', 'orders.id', '=', 'payments.order_id')
+            ->where('payments.status', 'paid')
+            ->whereNotNull('payments.paid_at');
         if ($visibleIds !== null) {
-            $paidOrders->whereIn('user_id', $visibleIds);
+            $paidPayments->whereIn('orders.user_id', $visibleIds);
         }
 
-        $paidRevenue = (clone $paidOrders)->sum('total_rials');
-        $paidOrderCount = (clone $paidOrders)->count();
-        $payingCustomers = (clone $paidOrders)->distinct('user_id')->count('user_id');
+        $paidRevenue = (clone $paidPayments)->sum('payments.amount_rials');
+        $paidOrderCount = (clone $paidPayments)->distinct()->count('payments.order_id');
+        $payingCustomers = (clone $paidPayments)->distinct()->count('orders.user_id');
 
-        $repeatQuery = DB::table('orders')->select('user_id')
-            ->where('status', 'paid')->groupBy('user_id')->havingRaw('COUNT(*) >= 2');
+        $repeatQuery = DB::table('payments')
+            ->join('orders', 'orders.id', '=', 'payments.order_id')
+            ->select('orders.user_id')
+            ->where('payments.status', 'paid')
+            ->whereNotNull('payments.paid_at')
+            ->groupBy('orders.user_id')
+            ->havingRaw('COUNT(DISTINCT orders.id) >= 2');
         if ($visibleIds !== null) {
-            $repeatQuery->whereIn('user_id', $visibleIds);
+            $repeatQuery->whereIn('orders.user_id', $visibleIds);
         }
         $repeatCustomers = DB::query()->fromSub($repeatQuery, 'repeat_customers')->count();
 
@@ -62,10 +69,17 @@ class CrmAnalyticsController extends Controller
         $recipientCount = (clone $campaignRecipients)->count();
         $readCount = (clone $campaignRecipients)->whereNotNull('farast_notifications.read_at')->count();
 
-        $topCustomers = DB::table('orders')
+        $topCustomers = DB::table('payments')
+            ->join('orders', 'orders.id', '=', 'payments.order_id')
             ->join('users', 'users.id', '=', 'orders.user_id')
-            ->where('orders.status', 'paid')
-            ->select('users.id', 'users.name', DB::raw('COUNT(orders.id) as paid_orders_count'), DB::raw('SUM(orders.total_rials) as paid_revenue_rials'))
+            ->where('payments.status', 'paid')
+            ->whereNotNull('payments.paid_at')
+            ->select(
+                'users.id',
+                'users.name',
+                DB::raw('COUNT(DISTINCT orders.id) as paid_orders_count'),
+                DB::raw('SUM(payments.amount_rials) as paid_revenue_rials')
+            )
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('paid_revenue_rials')
             ->limit(10);
