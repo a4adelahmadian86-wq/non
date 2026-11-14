@@ -197,9 +197,9 @@ class SupportSlaService
 
         if ($ticket->status === 'closed') {
             return [
-                'state' => 'met',
-                'label' => 'بسته شده',
-                'color' => 'ok',
+                'state' => 'unknown',
+                'label' => 'بسته شده؛ زمان حل ثبت نشده',
+                'color' => 'muted',
                 'breached' => false,
             ];
         }
