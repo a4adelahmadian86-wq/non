@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Ticket;
-use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
+use App\Services\SupportSlaAlertOutboxService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -15,7 +15,7 @@ class CheckSupportSlaCommand extends Command
 
     protected $description = 'پایش SLA تیکت‌ها و ارسال هشدار نزدیک‌به‌نقض / نقض';
 
-    public function handle(SupportSlaService $sla, SupportNotificationService $notifier): int
+    public function handle(SupportSlaService $sla, SupportSlaAlertOutboxService $outbox): int
     {
         if (! config('support.monitor_enabled', true)) {
             $this->info('پایش SLA غیرفعال است.');
@@ -49,12 +49,12 @@ class CheckSupportSlaCommand extends Command
         Ticket::query()
             ->openQueue()
             ->with(['assignee', 'user'])
-            ->chunkById(200, function ($tickets) use ($sla, $notifier, $dry, $warnBefore, &$stats): void {
+            ->chunkById(200, function ($tickets) use ($sla, $outbox, $dry, $warnBefore, &$stats): void {
                 foreach ($tickets as $snapshot) {
                     foreach (['first_response', 'resolution'] as $kind) {
                         $alert = $dry
                             ? $this->pendingAlert($snapshot, $kind, $warnBefore, $sla)
-                            : $this->dispatchAlert((int) $snapshot->id, $kind, $warnBefore, $sla, $notifier);
+                            : $this->dispatchAlert((int) $snapshot->id, $kind, $warnBefore, $sla, $outbox);
 
                         if (! $alert) {
                             continue;
@@ -80,9 +80,8 @@ class CheckSupportSlaCommand extends Command
                             continue;
                         }
 
-                        // dispatchAlert() sends the notification and writes its marker
-                        // in one transaction. A failed notifier rolls back the marker
-                        // and propagates the exception so the scheduler can retry.
+                        // The durable outbox row and ticket marker were committed together.
+                        // A separate worker delivers it without holding the ticket row lock.
                     }
                 }
             });
@@ -155,7 +154,7 @@ class CheckSupportSlaCommand extends Command
     }
 
     /**
-     * Atomically claim an alert against the latest persisted ticket state.
+     * Atomically persist alert intent and its ticket marker against the latest state.
      *
      * @return array{ticket:Ticket,event:string,minutes:int}|null
      */
@@ -164,9 +163,9 @@ class CheckSupportSlaCommand extends Command
         string $kind,
         int $warnBefore,
         SupportSlaService $sla,
-        SupportNotificationService $notifier
+        SupportSlaAlertOutboxService $outbox
     ): ?array {
-        return DB::transaction(function () use ($ticketId, $kind, $warnBefore, $sla, $notifier): ?array {
+        return DB::transaction(function () use ($ticketId, $kind, $warnBefore, $sla, $outbox): ?array {
             $ticket = Ticket::query()->lockForUpdate()->find($ticketId);
             if (! $ticket) {
                 return null;
@@ -177,14 +176,9 @@ class CheckSupportSlaCommand extends Command
                 return null;
             }
 
-            // Keep the row locked until delivery succeeds and the marker commits.
-            // If a provider throws, the transaction rolls back and a later run can retry.
-            if ($alert['event'] === 'breached') {
-                $notifier->slaBreached($ticket, $kind);
-            } else {
-                $notifier->slaWarning($ticket, $kind, (int) $alert['minutes']);
-            }
-
+            // Persist delivery intent in the same transaction as the one-time marker.
+            // Provider calls happen later, after this ticket row lock has been released.
+            $outbox->enqueue($ticket, $kind, $alert);
             $ticket->forceFill([$alert['column'] => now()])->saveQuietly();
 
             return [
