@@ -238,7 +238,7 @@ class SupportController extends Controller
     public function csat(Request $request, Ticket $ticket, CapabilityService $capabilities)
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
-        $this->authorize('view', $ticket);
+        $this->authorize('rate', $ticket);
 
         $data = $request->validate([
             'score' => 'required|integer|min:1|max:5',
