@@ -228,7 +228,7 @@ class StoreCourseLearningTest extends TestCase
         $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
 
         $engine = Mockery::mock(WorkflowEngine::class);
-        $engine->shouldReceive('enqueue')
+        $engine->shouldReceive('enqueuePaidOrder')
             ->once()
             ->andThrow(new RuntimeException('workflow outbox unavailable'));
         $this->app->instance(WorkflowEngine::class, $engine);
