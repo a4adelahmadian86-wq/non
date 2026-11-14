@@ -15,6 +15,7 @@
         'source' => request('source'),
         'topic_area' => request('topic_area'),
         'sla' => request('sla'),
+        'assigned' => request('assigned'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
@@ -62,8 +63,8 @@
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
             <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
             <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'sla'=>request('sla')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'priority'=>request('priority'),'sla'=>request('sla')]), ['department'=>'billing'])) }}">مالی</a>
+            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['department'=>'billing'])) }}">مالی</a>
             <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
             <a class="sd-chip {{ request('source')==='dashboard'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'dashboard'])) }}">ثبت از پنل</a>
             <a class="sd-chip {{ request('source')==='widget'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'widget'])) }}">ثبت از ویجت</a>
