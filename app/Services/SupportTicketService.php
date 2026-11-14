@@ -25,6 +25,10 @@ class SupportTicketService
 
     public const PRIORITIES = ['low', 'normal', 'high'];
 
+    public const SOURCES = ['dashboard', 'widget'];
+
+    public const TOPIC_AREAS = ['services', 'store'];
+
     public function __construct(
         private readonly SupportNotificationService $notifier,
         private readonly SupportSlaService $sla,
