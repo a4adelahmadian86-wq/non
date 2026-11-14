@@ -12,6 +12,7 @@ use App\Models\StoreCourseSection;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Models\User;
+use App\Services\StoreOrderFulfillmentService;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -173,4 +174,130 @@ class ZarinpalCommerceWorkflowOutboxTest extends TestCase
         $this->assertSame(0, $engine->retryFailedEvents());
         $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->count());
     }
+
+    public function test_captured_gateway_payment_is_not_rolled_back_when_course_delivery_needs_recovery(): void
+    {
+        $user = User::factory()->create();
+        $category = StoreCategory::create([
+            'name' => 'دسته بازیابی تحویل',
+            'slug' => 'zarinpal-fulfillment-recovery-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'دوره در انتظار آماده‌سازی',
+            'slug' => 'zarinpal-fulfillment-recovery-course',
+            'sku' => 'ZP-OUTBOX-COURSE-002',
+            'type' => 'course',
+            'price_rials' => 45000,
+            'status' => 'published',
+            'published_at' => now()->subMinute(),
+        ]);
+        $course = StoreCourse::create([
+            'product_id' => $product->id,
+            'level' => 'beginner',
+            'language' => 'fa',
+            'drip_enabled' => false,
+        ]);
+        $section = StoreCourseSection::create([
+            'course_id' => $course->id,
+            'title' => 'فصل در انتظار انتشار درس',
+            'sort_order' => 1,
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 45000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 45000,
+            'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+        $item = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 45000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 45000,
+            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
+        ]);
+        $authority = 'A000000000000000000000000000000098';
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => $authority,
+            'transaction_id' => $authority,
+            'amount_rials' => 45000,
+            'status' => 'pending',
+        ]);
+
+        SiteSetting::write('payment_gateway', 'zarinpal');
+        SiteSetting::write('gateway_merchant_id', 'test-merchant-id');
+        SiteSetting::write('zarinpal_sandbox', true);
+        Http::fake([
+            'https://sandbox.zarinpal.com/pg/v4/payment/verify.json' => Http::response([
+                'data' => ['code' => 100, 'ref_id' => 987654322],
+            ], 200),
+        ]);
+
+        $this->actingAs($user)
+            ->withSession([
+                'zarinpal_order_id' => $order->id,
+                'zarinpal_authority' => $authority,
+            ])
+            ->get(route('checkout.zarinpal.callback').'?Authority='.$authority.'&Status=OK')
+            ->assertRedirect(route('library'));
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'paid']);
+        $this->assertDatabaseHas('payments', ['id' => $payment->id, 'status' => 'paid']);
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'gateway_response->fulfillment_reconciliation->status' => 'required',
+        ]);
+        $this->assertDatabaseMissing('store_library_items', [
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+        ]);
+
+        StoreCourseLesson::create([
+            'section_id' => $section->id,
+            'title' => 'درس آماده‌شده',
+            'slug' => 'zarinpal-fulfillment-recovery-lesson',
+            'lesson_type' => 'article',
+            'content' => 'محتوای درس اکنون آماده تحویل است.',
+            'is_published' => true,
+            'is_preview' => false,
+            'sort_order' => 1,
+        ]);
+
+        $this->assertSame(1, app(StoreOrderFulfillmentService::class)->retryPendingFulfillments());
+
+        $libraryItem = \App\Models\StoreLibraryItem::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->where('order_id', $order->id)
+            ->firstOrFail();
+        $this->assertSame($item->id, (int) $libraryItem->order_item_id);
+        $this->assertDatabaseHas('store_course_enrollments', [
+            'library_item_id' => $libraryItem->id,
+            'course_id' => $course->id,
+            'product_id' => $product->id,
+            'user_id' => $user->id,
+        ]);
+        $this->assertSame(
+            'completed',
+            data_get(Payment::query()->findOrFail($payment->id)->gateway_response, 'fulfillment_reconciliation.status'),
+        );
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'type' => 'order_fulfilled',
+        ]);
+        $this->assertSame(0, app(StoreOrderFulfillmentService::class)->retryPendingFulfillments());
+    }
+
 }
