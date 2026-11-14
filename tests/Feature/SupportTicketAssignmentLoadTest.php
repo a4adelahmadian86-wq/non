@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Organization;
-use App\\Models\\Permission;
-use App\\Models\\RolePermission;
-use App\\Models\\Team;
-use App\\Models\\Ticket;
-use App\\Models\\User;
-use App\\Services\\AuthorizationService;
-use App\\Services\\SupportTicketService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\DB;
-use Tests\\TestCase;
+use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\RolePermission;
+use App\Models\Team;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use App\Services\SupportTicketService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
 class SupportTicketAssignmentLoadTest extends TestCase
 {
