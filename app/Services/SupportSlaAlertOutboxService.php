@@ -1,11 +1,11 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\SupportSlaAlertOutbox;
-use App\\Models\\Ticket;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Log;
+use App\Models\SupportSlaAlertOutbox;
+use App\Models\Ticket;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
