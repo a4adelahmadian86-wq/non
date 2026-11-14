@@ -149,7 +149,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
                 Mockery::on(fn (array $context): bool => (int) ($context['user_id'] ?? 0) === (int) $customer->id),
                 Mockery::type('string'),
             )
-            ->andThrow(new \\RuntimeException('Workflow outbox unavailable.'));
+            ->andThrow(new \RuntimeException('Workflow outbox unavailable.'));
         $this->instance(WorkflowEngine::class, $workflow);
 
         try {
@@ -160,7 +160,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
                 'department' => 'support',
             ]);
             $this->fail('Ticket creation must fail when the event cannot be persisted.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Workflow outbox unavailable.', $exception->getMessage());
         }
 
