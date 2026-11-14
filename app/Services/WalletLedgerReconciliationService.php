@@ -168,7 +168,15 @@ class WalletLedgerReconciliationService
 
         if (in_array($transaction->reference_type, ['order', 'store_order', 'typing_deposit', 'wallet_topup'], true)) {
             $order = $references['orders']->get($referenceId);
-            if (! $order || ! $order->isPaid()) {
+            if (! $order) {
+                return false;
+            }
+
+            $orderStateIsValid = $transaction->reference_type === 'typing_deposit'
+                ? $order->status === 'deposit_paid' && $order->paid_at !== null
+                : $order->isPaid();
+
+            if (! $orderStateIsValid || (int) $order->total_rials !== (int) $transaction->amount_rials) {
                 return false;
             }
 
