@@ -12,7 +12,7 @@ use App\Http\Middleware\ResolveAdminScope;
 use App\Services\AuthorizationService;
 use App\Services\SupportAssignmentMutex;
 use App\Services\SupportTicketService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
