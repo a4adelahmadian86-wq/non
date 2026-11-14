@@ -579,7 +579,9 @@
       pdfPage=target;
       setPageControls(target,pdfDoc.numPages);
       const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
-      wrapper?.scrollIntoView({behavior:'smooth',block:'start'});
+      // Avoid a smooth-scroll window in which IntersectionObserver can report
+      // the previous page after the requested page has already been selected.
+      wrapper?.scrollIntoView({behavior:'auto',block:'start'});
       await renderContinuousPage(target);
     }else{
       await renderPdfPage(target);
