@@ -29,7 +29,7 @@ class SupportAssignmentMutexTest extends TestCase
 
         $workflow = Mockery::mock(WorkflowEngine::class);
         $workflow->shouldReceive('enqueueTicketCreated')->twice()->andReturnUsing(
-            function () use ($probe, &$lockObservations): void {
+            function () use ($probe, &$lockObservations): int {
                 $row = $probe->selectOne(
                     'SELECT GET_LOCK(?, 0) AS acquired',
                     [SupportAssignmentMutex::LOCK_NAME],
@@ -41,6 +41,8 @@ class SupportAssignmentMutexTest extends TestCase
                 if ($acquired === 1) {
                     $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
                 }
+
+                return 1;
             }
         );
         $this->app->instance(WorkflowEngine::class, $workflow);
