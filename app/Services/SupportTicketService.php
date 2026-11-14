@@ -171,6 +171,8 @@ class SupportTicketService
      */
     public function pickLeastLoadedAgent(Ticket $ticket): ?User
     {
+        app(SupportAssignmentMutex::class)->assertHeld();
+
         $agents = $this->eligibleAgentsFor($ticket);
         if ($agents->isEmpty()) {
             return null;
