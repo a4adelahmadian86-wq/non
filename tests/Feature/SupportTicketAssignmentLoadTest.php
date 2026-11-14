@@ -103,8 +103,10 @@ class SupportTicketAssignmentLoadTest extends TestCase
         $this->assertContains($insideCustomer->id, $agentVisibleUserIds);
         $this->assertNotContains($outsideCustomer->id, $agentVisibleUserIds);
 
-        $picked = DB::transaction(
-            fn () => app(SupportTicketService::class)->pickLeastLoadedAgent($target)
+        $picked = app(SupportAssignmentMutex::class)->synchronized(
+            fn () => DB::transaction(
+                fn () => app(SupportTicketService::class)->pickLeastLoadedAgent($target)
+            )
         );
 
         $this->assertNotNull($picked);
