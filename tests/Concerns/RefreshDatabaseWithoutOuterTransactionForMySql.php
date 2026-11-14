@@ -38,7 +38,7 @@ trait RefreshDatabaseWithoutOuterTransactionForMySql
         $connection->statement('SET FOREIGN_KEY_CHECKS=0');
 
         try {
-            foreach ($connection->select('SHOW TABLES', [], false) as $row) {
+            foreach ($connection->select("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'", [], false) as $row) {
                 $table = array_values((array) $row)[0] ?? null;
 
                 if (! is_string($table) || $table === 'migrations') {
