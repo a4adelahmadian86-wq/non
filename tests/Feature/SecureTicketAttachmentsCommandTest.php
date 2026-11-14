@@ -70,6 +70,56 @@ class SecureTicketAttachmentsCommandTest extends TestCase
             ->assertOk();
     }
 
+    public function test_shared_legacy_source_is_kept_until_every_message_has_a_managed_reference(): void
+    {
+        Storage::fake('public');
+        Storage::fake('private');
+
+        $ticket = Ticket::create([
+            'subject' => 'Shared legacy attachment',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        Storage::disk('public')->put('legacy/shared.txt', 'shared attachment body');
+
+        $first = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'body' => 'First reference',
+            'attachments' => [[
+                'name' => 'shared.txt',
+                'path' => 'legacy/shared.txt',
+                'disk' => 'public',
+                'mime' => 'text/plain',
+                'size' => 22,
+            ]],
+        ]);
+        $second = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'body' => 'Second reference',
+            'attachments' => [[
+                'name' => 'shared.txt',
+                'path' => 'legacy/shared.txt',
+                'disk' => 'public',
+                'mime' => 'text/plain',
+                'size' => 22,
+            ]],
+        ]);
+
+        Artisan::call('farast:secure-ticket-attachments', ['--limit' => 1]);
+
+        $this->assertNotEmpty($first->fresh()->attachments[0]['managed_file_id']);
+        $this->assertTrue(Storage::disk('public')->exists('legacy/shared.txt'));
+
+        Artisan::call('farast:secure-ticket-attachments', ['--limit' => 1]);
+
+        $this->assertNotEmpty($second->fresh()->attachments[0]['managed_file_id']);
+        $this->assertFalse(Storage::disk('public')->exists('legacy/shared.txt'));
+
+        Artisan::call('farast:secure-ticket-attachments', ['--limit' => 1]);
+        $this->assertArrayNotHasKey('legacy_source_path_b64', $first->fresh()->attachments[0]);
+    }
+
     public function test_unmanaged_public_attachment_fails_closed_before_migration(): void
     {
         Storage::fake('public');
