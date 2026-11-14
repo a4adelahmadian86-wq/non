@@ -48,4 +48,28 @@ class SupportAdminInboxQueryTest extends TestCase
 
         $this->assertStringContainsString('Latest public preview sentinel', $response->getContent());
     }
+
+    public function test_admin_polling_is_non_overlapping_and_preserves_reader_scroll_position(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Admin polling behavior',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id]))
+            ->assertOk();
+
+        $html = $response->getContent();
+        $this->assertStringContainsString('let pollInFlight = false;', $html);
+        $this->assertStringContainsString('if (pollInFlight || document.hidden) return;', $html);
+        $this->assertStringContainsString('const serverCursor = Number(data.last_id);', $html);
+        $this->assertStringContainsString('const shouldStickToBottom = box', $html);
+        $this->assertStringContainsString('finally {', $html);
+        $this->assertStringContainsString('pollInFlight = false;', $html);
+    }
+
 }
