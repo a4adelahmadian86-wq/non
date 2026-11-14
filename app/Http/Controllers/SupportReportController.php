@@ -12,8 +12,6 @@ class SupportReportController extends Controller
 {
     public function __invoke(Request $request, SupportSlaService $sla)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-
         $from = $request->date('from') ?: now()->subDays(30)->toDateString();
         $to = $request->date('to') ?: now()->toDateString();
 
