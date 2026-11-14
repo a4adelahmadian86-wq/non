@@ -7,6 +7,7 @@ use App\Models\SiteSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CheckoutPaymentClarityTest extends TestCase
@@ -149,6 +150,18 @@ class CheckoutPaymentClarityTest extends TestCase
 
         Wallet::create(['user_id' => $user->id, 'balance_rials' => 50000]);
 
+        DB::table('farast_workflows')->insert([
+            'user_id' => $user->id,
+            'name' => 'پیگیری پیش‌پرداخت تایپ',
+            'enabled' => true,
+            'trigger_type' => 'order.deposit_paid',
+            'steps' => json_encode([
+                ['action' => 'create_follow_up', 'title' => 'پیگیری پیش‌پرداخت', 'priority' => 'normal'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $response = $this->actingAs($user)->post(route('checkout.wallet', $order), [
             'accept_terms' => '1',
         ]);
@@ -161,6 +174,35 @@ class CheckoutPaymentClarityTest extends TestCase
             'id' => $order->id,
             'status' => 'deposit_paid',
         ]);
+
+        $eventKey = 'order:'.$order->id.':order.deposit_paid';
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'event_type' => 'order.deposit_paid',
+            'idempotency_key' => $eventKey,
+            'user_id' => $user->id,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => $eventKey,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $user->id,
+            'created_by' => $user->id,
+            'title' => 'پیگیری پیش‌پرداخت',
+        ]);
+
+        // Re-entering an already-settled deposit repairs a missing outbox event
+        // without creating a second event or follow-up.
+        $this->actingAs($user)->post(route('checkout.wallet', $order), [
+            'accept_terms' => '1',
+        ])->assertRedirect(route('editor', ['project' => $project->id]));
+        $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->count());
+        $this->assertSame(1, DB::table('crm_follow_up_tasks')
+            ->where('customer_id', $user->id)
+            ->where('title', 'پیگیری پیش‌پرداخت')
+            ->count());
     }
 
     public function test_preflight_acceptance_binds_the_quote_to_the_authenticated_project(): void
