@@ -47,7 +47,6 @@ class SecureTicketAttachments extends Command
                     $createdManaged = [];
                     $createdQuarantine = [];
                     $createdStaging = [];
-                    $quarantineRollback = [];
                     $sourceCleanup = [];
 
                     foreach ($attachments as $index => $attachment) {
@@ -142,12 +141,15 @@ class SecureTicketAttachments extends Command
 
                             try {
                                 Storage::disk('private')->makeDirectory(dirname($quarantinePath));
-                                if (! Storage::disk('private')->move($stagingPath, $quarantinePath)) {
+                                $quarantineStored = $sourceDisk === 'private'
+                                    ? Storage::disk('private')->copy($stagingPath, $quarantinePath)
+                                    : Storage::disk('private')->move($stagingPath, $quarantinePath);
+                                if (! $quarantineStored) {
                                     throw new \RuntimeException('legacy_attachment_quarantine_failed');
                                 }
 
                                 $createdQuarantine[] = $quarantinePath;
-                                if ($stagingCreated) {
+                                if ($stagingCreated && $sourceDisk !== 'private') {
                                     $createdStaging = array_values(array_diff($createdStaging, [$stagingPath]));
                                 }
                                 $attachments[$index] = array_merge($attachment, [
@@ -156,7 +158,6 @@ class SecureTicketAttachments extends Command
                                     'quarantined' => true,
                                     'quarantine_reason' => 'security_inspection_failed',
                                 ]);
-                                $quarantineRollback[] = [$sourceDisk, $sourcePath, $quarantinePath];
                                 $sourceCleanup[] = [$sourceDisk, $sourcePath];
                                 $changed = true;
                                 $quarantinedAttachments++;
@@ -237,12 +238,6 @@ class SecureTicketAttachments extends Command
                                 $storage->delete((string) $disk, (string) $path);
                             } catch (Throwable $cleanupException) {
                                 report($cleanupException);
-                            }
-                        }
-                        foreach ($quarantineRollback as [$sourceDisk, $sourcePath, $quarantinePath]) {
-                            if ($sourceDisk === 'private' && Storage::disk('private')->exists($quarantinePath)) {
-                                Storage::disk('private')->move($quarantinePath, $sourcePath);
-                                $createdQuarantine = array_values(array_diff($createdQuarantine, [$quarantinePath]));
                             }
                         }
                         foreach (array_unique(array_merge($createdQuarantine, $createdStaging)) as $path) {
