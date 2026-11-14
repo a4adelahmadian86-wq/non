@@ -249,7 +249,7 @@ class SecureTicketAttachments extends Command
                             ]);
 
                             $createdManaged[] = [$managed['disk'], $managed['path']];
-                            $sourceCleanup[] = [$sourceDisk, $sourcePath];
+                            $sourceCleanup[] = [$index, $sourceDisk, $sourcePath];
                             $changed = true;
                             $migratedAttachments++;
                         } catch (Throwable $exception) {
