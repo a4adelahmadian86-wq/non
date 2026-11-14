@@ -270,7 +270,7 @@
                             </label>
                             <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:.82rem;color:var(--sd-blue)">
                                 <i class="fa-solid fa-paperclip"></i> پیوست
-                                <input type="file" name="attachment" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.doc,.docx" hidden>
+                                <input type="file" name="attachment" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.docx" hidden>
                             </label>
                         </div>
                         <button type="submit" class="sd-btn sd-btn-primary">ارسال پاسخ</button>
