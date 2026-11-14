@@ -463,18 +463,6 @@
                                                 };
                                             @endphp
                                             ثبت {{ $messageTypeLabel }} در گفتگو
-                                        @elseif($auditEvent->event_type === 'support.ticket.message_added')
-                                            @php
-                                                $messageTypeLabel = match ($auditMeta['message_type'] ?? null) {
-                                                    'internal_note' => 'یادداشت داخلی',
-                                                    'system_note' => 'یادداشت سیستمی',
-                                                    'staff_reply' => 'پاسخ کارشناس',
-                                                    'customer_reply' => 'پاسخ مشتری',
-                                                    'guest_reply' => 'پاسخ مهمان',
-                                                    default => 'پیام',
-                                                };
-                                            @endphp
-                                            ثبت {{ $messageTypeLabel }} در گفتگو
                                         @elseif($auditEvent->event_type === 'support.ticket.csat_submitted')
                                             ثبت امتیاز رضایت مشتری
                                         @else
@@ -512,13 +500,6 @@
                                         @else
                                             عمومی
                                         @endif
-                                        @if(!empty($auditMeta['attachment_count']))
-                                            · پیوست: {{ (int) $auditMeta['attachment_count'] }}
-                                        @endif
-                                    </div>
-                                @elseif($auditEvent->event_type === 'support.ticket.message_added')
-                                    <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
-                                        {{ !empty($auditMeta['is_internal']) ? 'داخلی' : 'عمومی' }}
                                         @if(!empty($auditMeta['attachment_count']))
                                             · پیوست: {{ (int) $auditMeta['attachment_count'] }}
                                         @endif
