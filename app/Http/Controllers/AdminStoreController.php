@@ -464,17 +464,52 @@ class AdminStoreController extends Controller
 
     public function destroy(StoreProduct $product)
     {
-        if ($product->libraryItems()->exists() || $product->orderItems()->exists()) {
-            $product->update(['status' => 'archived', 'published_at' => null]);
-            $this->audit('store.product.archived', $product, ['reason' => 'historical_orders_or_entitlements']);
+        $outcome = DB::transaction(function () use ($product): array {
+            $lockedProduct = StoreProduct::query()
+                ->whereKey($product->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            return redirect()->route('admin.store.index')->with('status', 'این محصول سابقه سفارش یا دسترسی مشتری دارد؛ برای حفظ سوابق و حقوق خریداران بایگانی شد.');
+            // A catalog row must not be hard-deleted while any child asset or
+            // managed storage reference can still own physical bytes.
+            $preservation = [
+                'orders' => $lockedProduct->orderItems()->exists(),
+                'entitlements' => $lockedProduct->libraryItems()->exists(),
+                'files' => $lockedProduct->files()->exists(),
+                'images' => $lockedProduct->images()->exists(),
+                'previews' => $lockedProduct->previews()->exists(),
+                'course' => $lockedProduct->course()->exists(),
+                'cover' => filled($lockedProduct->cover_path),
+                'documents' => DB::table('store_product_documents')->where('product_id', $lockedProduct->id)->exists(),
+                'ingestions' => DB::table('store_product_ingestions')->where('product_id', $lockedProduct->id)->exists(),
+                'managed_files' => StorageManagedFile::query()->where('product_id', $lockedProduct->id)->exists(),
+            ];
+
+            if (in_array(true, $preservation, true)) {
+                $lockedProduct->update(['status' => 'archived', 'published_at' => null]);
+                $this->audit('store.product.archived', $lockedProduct, [
+                    'reason' => 'preserve_business_or_storage_assets',
+                    'preservation' => $preservation,
+                ]);
+
+                return ['status' => 'archived'];
+            }
+
+            $this->audit('store.product.deleted', $lockedProduct, [
+                'type' => $lockedProduct->type,
+                'reason' => 'empty_draft_without_assets',
+            ]);
+            $lockedProduct->delete();
+
+            return ['status' => 'deleted'];
+        }, 3);
+
+        if ($outcome['status'] === 'archived') {
+            return redirect()->route('admin.store.index')
+                ->with('status', 'این محصول دارای سابقه یا دارایی ذخیره‌شده است؛ برای حفظ سوابق و جلوگیری از فایل‌های یتیم، بایگانی شد.');
         }
 
-        $this->audit('store.product.deleted', $product, ['type' => $product->type]);
-        $product->delete();
-
-        return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
+        return redirect()->route('admin.store.index')->with('status', 'پیش‌نویس خالی و بدون دارایی حذف شد.');
     }
 
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
