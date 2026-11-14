@@ -20,13 +20,6 @@ class SupportSlaBusinessMinuteTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function runSlaCommandDirectly(): void
-    {
-        $command = app(CheckSupportSlaCommand::class);
-        $command->setLaravel($this->app);
-        $command->run(new ArrayInput([]), new BufferedOutput());
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -111,11 +104,10 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertSame(30, $report['agents'][0]['avg_first_response_minutes']);
     }
 
-    public function test_sla_monitor_sends_warning_when_business_time_reaches_threshold(): void
+    public function test_sla_monitor_persists_warning_when_business_time_reaches_threshold(): void
     {
         $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
-        $sla = app(SupportSlaService::class);
-        $deadline = $sla->addSlaMinutes(now(), 30);
+        $deadline = app(SupportSlaService::class)->addSlaMinutes(now(), 30);
 
         $ticket = Ticket::create([
             'subject' => 'Business-hour warning',
@@ -125,19 +117,19 @@ class SupportSlaBusinessMinuteTest extends TestCase
             'sla_first_due_at' => $deadline,
         ]);
 
-        $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaWarning')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response', 30);
-        $notifier->shouldNotReceive('slaBreached');
-        $this->app->instance(SupportNotificationService::class, $notifier);
-
         Artisan::call('support:check-sla');
 
         $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'first_response',
+            'event' => 'warning',
+            'minutes_left' => 30,
+            'status' => 'pending',
+        ]);
     }
 
-    public function test_failed_sla_notification_does_not_mark_the_event_as_sent(): void
+    public function test_failed_sla_outbox_delivery_keeps_alert_retryable_after_marker_commit(): void
     {
         $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
         $deadline = app(SupportSlaService::class)->addSlaMinutes(now(), 30);
@@ -149,21 +141,29 @@ class SupportSlaBusinessMinuteTest extends TestCase
             'sla_first_due_at' => $deadline,
         ]);
 
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')->where('ticket_id', $ticket->id)->first();
+        $this->assertNotNull($outbox);
+        $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
+
         $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaWarning')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response', 30)
-            ->andThrow(new \RuntimeException('temporary notification failure'));
+        $notifier->shouldReceive('slaWarning')->once()->withArgs(
+            fn ($candidate, $kind, $minutes, $identity): bool => $candidate instanceof Ticket
+                && $candidate->is($ticket)
+                && $kind === 'first_response'
+                && $minutes === 30
+                && is_string($identity)
+        )->andThrow(new \RuntimeException('temporary notification failure'));
         $this->app->instance(SupportNotificationService::class, $notifier);
 
-        try {
-            $this->runSlaCommandDirectly();
-            $this->fail('The notifier failure should be surfaced to the command runner.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('temporary notification failure', $exception->getMessage());
-        }
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
 
-        $this->assertNull($ticket->fresh()->sla_first_warned_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'failed',
+            'attempts' => 1,
+        ]);
+        $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
     }
 
     public function test_sla_monitor_does_not_starve_tickets_after_the_first_batch(): void
@@ -189,16 +189,15 @@ class SupportSlaBusinessMinuteTest extends TestCase
             'sla_first_due_at' => $deadline,
         ]);
 
-        $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaWarning')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($lastTicket)), 'first_response', 30);
-        $notifier->shouldNotReceive('slaBreached');
-        $this->app->instance(SupportNotificationService::class, $notifier);
-
         Artisan::call('support:check-sla');
 
         $this->assertNotNull($lastTicket->fresh()->sla_first_warned_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $lastTicket->id,
+            'kind' => 'first_response',
+            'event' => 'warning',
+            'minutes_left' => 30,
+        ]);
     }
 
     public function test_late_closed_ticket_remains_in_historical_sla_breach_scope(): void
@@ -249,7 +248,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertSame('breached', app(SupportSlaService::class)->firstResponseStatus($ticket)['state']);
     }
 
-    public function test_sla_monitor_notifies_for_a_late_first_response_already_sent(): void
+    public function test_sla_monitor_persists_breach_for_a_late_first_response_already_sent(): void
     {
         $deadline = now()->subMinutes(20);
         $ticket = Ticket::create([
@@ -261,16 +260,15 @@ class SupportSlaBusinessMinuteTest extends TestCase
             'first_response_at' => $deadline->copy()->addMinutes(5),
         ]);
 
-        $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaBreached')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response');
-        $notifier->shouldNotReceive('slaWarning');
-        $this->app->instance(SupportNotificationService::class, $notifier);
-
         Artisan::call('support:check-sla');
 
         $this->assertNotNull($ticket->fresh()->sla_first_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'first_response',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
