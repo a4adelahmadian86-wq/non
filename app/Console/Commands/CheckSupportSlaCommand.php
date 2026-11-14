@@ -40,46 +40,47 @@ class CheckSupportSlaCommand extends Command
             ->with(['assignee', 'user'])
             ->chunkById(500, function ($tickets) use ($sla, $notifier, $dry, $warnBefore, &$stats): void {
                 foreach ($tickets as $ticket) {
-            // —— اولین پاسخ ——
-            if (! $ticket->first_response_at && $ticket->sla_first_due_at) {
-                $mins = $sla->minutesUntilDeadline($ticket->sla_first_due_at);
+                    // First-response SLA keeps running while a ticket is pending.
+                    if (! $ticket->first_response_at && $ticket->sla_first_due_at) {
+                        $mins = $sla->minutesUntilDeadline($ticket->sla_first_due_at);
 
-                if ($mins < 0 && empty($ticket->sla_first_breached_at)) {
-                    $stats['breached_first']++;
-                    $this->line("BREACH first #{$ticket->id} {$ticket->displayCode()}");
-                    if (! $dry) {
-                        $ticket->forceFill(['sla_first_breached_at' => now()])->saveQuietly();
-                        $notifier->slaBreached($ticket, 'first_response');
+                        if ($mins < 0 && empty($ticket->sla_first_breached_at)) {
+                            $stats['breached_first']++;
+                            $this->line("BREACH first #{$ticket->id} {$ticket->displayCode()}");
+                            if (! $dry) {
+                                $ticket->forceFill(['sla_first_breached_at' => now()])->saveQuietly();
+                                $notifier->slaBreached($ticket, 'first_response');
+                            }
+                        } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_first_warned_at)) {
+                            $stats['warned_first']++;
+                            $this->line("WARN first #{$ticket->id} ({$mins}m left)");
+                            if (! $dry) {
+                                $ticket->forceFill(['sla_first_warned_at' => now()])->saveQuietly();
+                                $notifier->slaWarning($ticket, 'first_response', $mins);
+                            }
+                        }
                     }
-                } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_first_warned_at)) {
-                    $stats['warned_first']++;
-                    $this->line("WARN first #{$ticket->id} ({$mins}m left)");
-                    if (! $dry) {
-                        $ticket->forceFill(['sla_first_warned_at' => now()])->saveQuietly();
-                        $notifier->slaWarning($ticket, 'first_response', $mins);
-                    }
-                }
-            }
 
-            // —— حل کامل (pending = ساعت متوقف) ——
-            if ($ticket->status !== 'closed' && $ticket->status !== 'pending' && $ticket->sla_resolve_due_at) {
-                $mins = $sla->minutesUntilDeadline($ticket->sla_resolve_due_at);
+                    // Resolution SLA is paused only while waiting for the customer.
+                    if ($ticket->status !== 'closed' && $ticket->status !== 'pending' && $ticket->sla_resolve_due_at) {
+                        $mins = $sla->minutesUntilDeadline($ticket->sla_resolve_due_at);
 
-                if ($mins < 0 && empty($ticket->sla_resolve_breached_at)) {
-                    $stats['breached_resolve']++;
-                    $this->line("BREACH resolve #{$ticket->id} {$ticket->displayCode()}");
-                    if (! $dry) {
-                        $ticket->forceFill(['sla_resolve_breached_at' => now()])->saveQuietly();
-                        $notifier->slaBreached($ticket, 'resolution');
+                        if ($mins < 0 && empty($ticket->sla_resolve_breached_at)) {
+                            $stats['breached_resolve']++;
+                            $this->line("BREACH resolve #{$ticket->id} {$ticket->displayCode()}");
+                            if (! $dry) {
+                                $ticket->forceFill(['sla_resolve_breached_at' => now()])->saveQuietly();
+                                $notifier->slaBreached($ticket, 'resolution');
+                            }
+                        } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_resolve_warned_at)) {
+                            $stats['warned_resolve']++;
+                            $this->line("WARN resolve #{$ticket->id} ({$mins}m left)");
+                            if (! $dry) {
+                                $ticket->forceFill(['sla_resolve_warned_at' => now()])->saveQuietly();
+                                $notifier->slaWarning($ticket, 'resolution', $mins);
+                            }
+                        }
                     }
-                } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_resolve_warned_at)) {
-                    $stats['warned_resolve']++;
-                    $this->line("WARN resolve #{$ticket->id} ({$mins}m left)");
-                    if (! $dry) {
-                        $ticket->forceFill(['sla_resolve_warned_at' => now()])->saveQuietly();
-                        $notifier->slaWarning($ticket, 'resolution', $mins);
-                    }
-                }
                 }
             });
 
