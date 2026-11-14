@@ -34,14 +34,9 @@ class SupportSlaAlertOutboxService
         }
 
         $dueAt = $kind === 'first_response' ? $ticket->sla_first_due_at : $ticket->sla_resolve_due_at;
-        $eventIdentity = implode(':', [
-            'sla',
-            $kind,
-            $alert['event'],
-            'deadline',
-            $dueAt?->format('YmdHis.u') ?? 'unknown',
-        ]);
-        $idempotencyKey = 'support-sla:'.$ticket->id.':'.substr(hash('sha256', $eventIdentity), 0, 40);
+        $deadlineIdentity = substr(hash('sha256', $dueAt?->format('U.u') ?? 'unknown'), 0, 24);
+        $eventIdentity = 'sla:'.$kind.':'.$alert['event'].':'.$deadlineIdentity;
+        $idempotencyKey = 'support-sla:'.$ticket->id.':'.$eventIdentity;
 
         DB::table('support_sla_alert_outbox')->insertOrIgnore([
             'ticket_id' => $ticket->id,
