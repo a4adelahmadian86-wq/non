@@ -43,6 +43,70 @@ class WorkflowEventDispatchTest extends TestCase
 
 
 
+    public function test_enqueued_event_is_durable_idempotent_and_processed_by_the_scheduled_worker(): void
+    {
+        $user = $this->user('09152223360');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Transactional outbox receipt',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'پرداخت ثبت شد']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $context = ['user_id' => $user->id, 'customer_id' => $user->id, 'order_id' => 991, 'amount_rials' => 250000];
+        $eventId = $engine->enqueue('order.paid', $context, 'order:991:order.paid');
+        $duplicateId = $engine->enqueue('order.paid', $context, 'order:991:order.paid');
+
+        $this->assertGreaterThan(0, $eventId);
+        $this->assertSame($eventId, $duplicateId);
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'pending']);
+        $this->assertSame(0, DB::table('farast_notifications')->where('user_id', $user->id)->count());
+        $this->assertSame(0, DB::table('farast_workflow_runs')->where('workflow_id', $workflow)->count());
+
+        $this->assertSame(1, $engine->retryFailedEvents());
+        $this->assertDatabaseHas('farast_workflow_events', ['id' => $eventId, 'status' => 'completed']);
+        $this->assertDatabaseHas('farast_workflow_runs', ['workflow_id' => $workflow, 'status' => 'completed']);
+        $this->assertSame(1, DB::table('farast_notifications')->where('user_id', $user->id)->count());
+        $this->assertSame(0, $engine->enqueue('order.paid', $context, 'order:991:order.paid'));
+    }
+
+    public function test_enqueued_event_rolls_back_with_its_business_transaction(): void
+    {
+        $user = $this->user('09152223361');
+        $engine = app(WorkflowEngine::class);
+
+        try {
+            DB::transaction(function () use ($engine, $user): void {
+                $engine->enqueue(
+                    'ticket.created',
+                    ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 992],
+                    'ticket:992:created',
+                );
+                throw new \RuntimeException('business transaction rolled back');
+            });
+            $this->fail('The business transaction should roll back.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('business transaction rolled back', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'ticket:992:created']);
+    }
+
+    public function test_event_idempotency_key_is_bound_to_the_full_payload(): void
+    {
+        $user = $this->user('09152223362');
+        $engine = app(WorkflowEngine::class);
+        $engine->enqueue('document.saved', ['user_id' => $user->id, 'document_id' => 1], 'document:payload-bound');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already bound to another event payload');
+        $engine->enqueue('document.saved', ['user_id' => $user->id, 'document_id' => 2], 'document:payload-bound');
+    }
+
     public function test_verified_order_paid_event_runs_customer_workflow_once(): void
     {
         $user = $this->user('09152223348');
