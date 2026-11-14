@@ -15,8 +15,11 @@ use App\Models\Wallet;
 use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
+use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class StoreCourseLearningTest extends TestCase
@@ -208,6 +211,41 @@ class StoreCourseLearningTest extends TestCase
         $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
         $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
         $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', 'order:'.$order->id.':order.paid')->count());
+    }
+
+    public function test_wallet_checkout_rolls_back_when_paid_order_outbox_cannot_be_persisted(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('wallet-outbox-failure', 12000);
+        $wallet = Wallet::create(['user_id' => $user->id, 'balance_rials' => 100000]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+
+        $engine = Mockery::mock(WorkflowEngine::class);
+        $engine->shouldReceive('enqueue')
+            ->once()
+            ->andThrow(new RuntimeException('workflow outbox unavailable'));
+        $this->app->instance(WorkflowEngine::class, $engine);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect()
+            ->assertSessionHasErrors('payment');
+
+        $this->assertSame('pending', $order->fresh()->status);
+        $this->assertSame(100000, (int) $wallet->fresh()->balance_rials);
+        $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
+        $this->assertDatabaseMissing('wallet_transactions', [
+            'reference_type' => 'store_order',
+            'reference_id' => $order->id,
+        ]);
+        $this->assertDatabaseMissing('store_library_items', ['order_id' => $order->id]);
+        $this->assertDatabaseMissing('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$order->id.':order.paid',
+        ]);
     }
 
     public function test_course_enrollment_rejects_paid_order_without_matching_payment_ledger(): void
