@@ -65,7 +65,7 @@
 
         <div class="sd-list" id="ticketList">
             @forelse($tickets as $t)
-                @php $last = $t->messages->filter(fn($m)=>!$m->is_internal)->last(); @endphp
+                @php $lastPublicPreview = $t->last_public_message_body; @endphp
                 <a href="{{ route('admin.support.management', $filterQs + ['ticket' => $t->id]) }}"
                    class="sd-item {{ $active && $active->id === $t->id ? 'is-active' : '' }}">
                     <div class="sd-item-top">
