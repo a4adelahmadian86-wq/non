@@ -84,7 +84,7 @@
                         <span class="sla-pill sla-{{ $sla['color'] }}">{{ $sla['label'] }}</span>
                     </div>
                     @if(filled($lastPublicPreview))
-                        <div class="sd-item-preview">{{ \\Illuminate\\Support\\Str::limit($lastPublicPreview, 55) }}</div>
+                        <div class="sd-item-preview">{{ \Illuminate\Support\Str::limit($lastPublicPreview, 55) }}</div>
                     @endif
                 </a>
             @empty
