@@ -228,47 +228,8 @@ class PaymentController extends Controller
                     throw new \RuntimeException('سفارش فروشگاه فاقد محصول است.');
                 }
 
-                // The order totals and per-item prices are immutable checkout snapshots.
-                // Repricing here would make wallet and gateway payments disagree.
-                $validatedItems = [];
-                foreach ($items as $item) {
-                    $product = $item->product;
-                    if (! $product || ! app(\App\Services\StoreCartService::class)->isPurchasable($product)) {
-                        throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
-                    }
-
-                    $file = null;
-                    if ($product->type === 'course') {
-                        if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
-                            throw new \RuntimeException('برنامه آموزشی این دوره هنوز برای تحویل آماده نیست.');
-                        }
-                    } else {
-                        $snapshot = $item->product_snapshot ?? [];
-                        $fileId = (int) ($snapshot['file_id'] ?? 0);
-                        $file = $fileId > 0
-                            ? \App\Models\StoreProductFile::query()
-                                ->whereKey($fileId)
-                                ->where('product_id', $product->id)
-                                ->where('purpose', 'product_download')
-                                ->first()
-                            : $product->files()->where('purpose', 'product_download')
-                                ->where('is_active', true)
-                                ->whereIn('scan_status', ['clean', 'legacy'])
-                                ->orderByDesc('is_primary')
-                                ->first();
-
-                        if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
-                            throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
-                        }
-
-                        $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
-                        if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
-                            throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
-                        }
-                    }
-
-                    $validatedItems[] = [$item, $product, $file];
-                }
+                // Validate the immutable checkout snapshot and exact deliverables before debiting.
+                app(\App\Services\StoreOrderFulfillmentService::class)->assertReady($locked, true);
 
                 // Charge exactly the amount confirmed on the checkout page.
                 $total = (int) $locked->total_rials;
@@ -312,19 +273,7 @@ class PaymentController extends Controller
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
 
-                foreach ($validatedItems as [$item, $product, $file]) {
-                    $libraryItem = StoreLibraryItem::firstOrCreate(
-                        ['user_id' => auth()->id(), 'product_id' => $product->id, 'order_id' => $locked->id],
-                        [
-                            'order_item_id' => $item->id,
-                            'product_file_id' => $file?->id,
-                            'license_code' => null,
-                            'granted_at' => now(),
-                            'revoked_at' => null,
-                        ]
-                    );
-                    app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
-                }
+                app(\App\Services\StoreOrderFulfillmentService::class)->fulfill($locked);
 
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
