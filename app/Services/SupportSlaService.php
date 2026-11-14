@@ -461,15 +461,20 @@ class SupportSlaService
                         fn ($message) => $message->isFromStaff() && ! $message->is_internal
                     );
 
-                    if (! $firstStaff) {
+                    // Prefer the persisted first-response timestamp when legacy messages
+                    // are unavailable; retain the actual message author when a message exists.
+                    $firstResponseAt = $firstStaff?->created_at
+                        ?? ($ticket->first_response_at ? Carbon::parse($ticket->first_response_at) : null);
+
+                    if (! $firstResponseAt) {
                         continue;
                     }
 
-                    $minutes = $this->businessMinutesBetween($ticket->created_at, $firstStaff->created_at);
+                    $minutes = $this->businessMinutesBetween($ticket->created_at, $firstResponseAt);
                     $allFirst[] = $minutes;
                     $totals['first_response_total']++;
                     $met = ! $ticket->sla_first_due_at
-                        || $firstStaff->created_at->lte($ticket->sla_first_due_at);
+                        || $firstResponseAt->lte($ticket->sla_first_due_at);
 
                     if ($met) {
                         $totals['first_response_met']++;
@@ -477,10 +482,10 @@ class SupportSlaService
 
                     // If a legacy/system public response has no actor ID, retain
                     // the previous fallback to the assigned agent.
-                    $responderId = (int) ($firstStaff->user_id ?: $assignedId);
+                    $responderId = (int) (($firstStaff?->user_id) ?: $assignedId);
                     if ($responderId > 0) {
-                        $responderName = $firstStaff->user?->name
-                            ?? $firstStaff->user?->email
+                        $responderName = $firstStaff?->user?->name
+                            ?? $firstStaff?->user?->email
                             ?? $assignedName;
                         $ensureAgent($responderId, $responderName);
                         $agents[$responderId]['first_response_total']++;
