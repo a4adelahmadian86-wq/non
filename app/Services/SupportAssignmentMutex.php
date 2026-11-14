@@ -23,6 +23,29 @@ final class SupportAssignmentMutex
 
     private const LOCK_TIMEOUT_SECONDS = 15;
 
+    public function assertHeld(): void
+    {
+        $connection = DB::connection();
+
+        if ($connection->transactionLevel() < 1) {
+            throw new RuntimeException('انتخاب کارشناس باید داخل تراکنش انجام شود.');
+        }
+
+        if ($connection->getDriverName() !== 'mysql') {
+            return;
+        }
+
+        $row = $connection->selectOne(
+            'SELECT IS_USED_LOCK(?) = CONNECTION_ID() AS held',
+            [self::LOCK_NAME],
+            false
+        );
+
+        if ((int) ($row->held ?? 0) !== 1) {
+            throw new RuntimeException('انتخاب کارشناس بدون قفل هماهنگی مجاز نیست.');
+        }
+    }
+
     public function synchronized(callable $callback): mixed
     {
         $connection = DB::connection();
