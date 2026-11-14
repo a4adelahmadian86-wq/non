@@ -647,6 +647,9 @@
       try{
         alignTarget();
         await renderContinuousPage(target);
+        // A visibility observer may already own this page's render. The renderer
+        // returns early for in-flight work, so wait for its layout writes to finish.
+        while(wrapper.dataset.rendering==='1')await new Promise(resolve=>requestAnimationFrame(resolve));
         // Rendering can change a placeholder's measured height and trigger scroll
         // anchoring. Re-align after layout settles before releasing observer updates.
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
