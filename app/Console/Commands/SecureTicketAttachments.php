@@ -234,7 +234,11 @@ class SecureTicketAttachments extends Command
                     } catch (Throwable $exception) {
                         foreach ($createdManaged as [$disk, $path]) {
                             try {
+                                if ($disk === 'public') {
+                                Storage::disk('public')->delete((string) $path);
+                            } else {
                                 $storage->delete((string) $disk, (string) $path);
+                            }
                             } catch (Throwable $cleanupException) {
                                 report($cleanupException);
                             }
