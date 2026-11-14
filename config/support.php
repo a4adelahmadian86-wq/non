@@ -44,6 +44,9 @@ return [
 
     'monitor_enabled' => filter_var(env('SUPPORT_SLA_MONITOR', true), FILTER_VALIDATE_BOOLEAN),
 
+    // MySQL named-lock wait; configurable so lock-timeout behavior is testable.
+    'assignment_lock_timeout_seconds' => max(0, (int) env('SUPPORT_ASSIGNMENT_LOCK_TIMEOUT', 15)),
+
     /*
     |--------------------------------------------------------------------------
     | نام قالب‌های VerifyLookup کاوه‌نگار برای رویدادهای پشتیبانی
