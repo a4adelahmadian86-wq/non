@@ -199,7 +199,7 @@ class WorkflowEngine
                     }
 
                     $marker = data_get($payment->gateway_response, 'workflow_event_reconciliation', []);
-                    if (($marker['status'] ?? null) !== 'required') {
+                    if (! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
                         return false;
                     }
 
