@@ -327,19 +327,26 @@
   internalNote?.addEventListener('change', syncInternalNote);
   syncInternalNote();
 
-  // Poll for new messages on active ticket
+  // Poll for new messages on the active ticket without overlapping requests.
   const thread = document.getElementById('adminThread');
   if (thread && thread.dataset.pollUrl) {
     let lastId = parseInt(thread.dataset.lastId || '0', 10) || 0;
+    let pollInFlight = false;
     const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     setInterval(async () => {
+      if (pollInFlight || document.hidden) return;
+      pollInFlight = true;
       try {
         const url = thread.dataset.pollUrl + (thread.dataset.pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId;
         const res = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
         if (!res.ok) return;
         const data = await res.json();
-        if (!data.ok || !Array.isArray(data.messages) || !data.messages.length) return;
-        data.messages.forEach((m) => {
+        if (!data.ok) return;
+
+        const shouldStickToBottom = box
+          && (box.scrollHeight - box.scrollTop - box.clientHeight <= 96);
+
+        (Array.isArray(data.messages) ? data.messages : []).forEach((m) => {
           if (m.id <= lastId) return;
           lastId = m.id;
           const isStaff = !!m.is_staff;
@@ -361,9 +368,16 @@
             '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
           thread.appendChild(wrap);
         });
+
+        const serverCursor = Number(data.last_id);
+        if (Number.isFinite(serverCursor)) lastId = Math.max(lastId, serverCursor);
         thread.dataset.lastId = String(lastId);
-        if (box) box.scrollTop = box.scrollHeight;
-      } catch (e) {}
+
+        if (shouldStickToBottom && box) box.scrollTop = box.scrollHeight;
+      } catch (e) {
+      } finally {
+        pollInFlight = false;
+      }
     }, 8000);
   }
 })();
