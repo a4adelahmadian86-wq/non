@@ -20,7 +20,10 @@ class SupportSlaAlertOutboxService
 
     private const STALE_AFTER_MINUTES = 15;
 
-    public function __construct(private readonly SupportNotificationService $notifier) {}
+    public function __construct(
+        private readonly SupportNotificationService $notifier,
+        private readonly AuditEventService $audit,
+    ) {}
 
     /**
      * Persist an alert in the caller's ticket transaction.
@@ -43,7 +46,7 @@ class SupportSlaAlertOutboxService
         $eventIdentity = 'sla:'.$kind.':'.$alert['event'].':'.$deadlineIdentity;
         $idempotencyKey = 'support-sla:'.$ticket->id.':'.$eventIdentity;
 
-        DB::table('support_sla_alert_outbox')->insertOrIgnore([
+        $inserted = DB::table('support_sla_alert_outbox')->insertOrIgnore([
             'ticket_id' => $ticket->id,
             'kind' => $kind,
             'event' => $alert['event'],
@@ -68,6 +71,24 @@ class SupportSlaAlertOutboxService
             || $stored->event !== $alert['event']
             || $stored->event_identity !== $eventIdentity) {
             throw new RuntimeException('SLA alert idempotency key is bound to another event.');
+        }
+
+        if ($inserted > 0) {
+            $this->audit->record(
+                'support.ticket.sla_alert_queued',
+                null,
+                null,
+                'ticket',
+                (int) $ticket->id,
+                [
+                    'outbox_id' => (int) $stored->id,
+                    'kind' => $kind,
+                    'event' => $alert['event'],
+                    'minutes_left' => (int) $alert['minutes'],
+                    'event_identity' => $eventIdentity,
+                ],
+                'support'
+            );
         }
 
         return (int) $stored->id;
@@ -135,27 +156,65 @@ class SupportSlaAlertOutboxService
 
             try {
                 $ticket = Ticket::query()->with(['assignee', 'user'])->find($alert->ticket_id);
-                if ($ticket) {
-                    if ($alert->event === 'breached') {
-                        $this->notifier->slaBreached($ticket, $alert->kind, $alert->event_identity);
-                    } else {
-                        $this->notifier->slaWarning(
-                            $ticket,
-                            $alert->kind,
-                            (int) $alert->minutes_left,
-                            $alert->event_identity,
-                        );
-                    }
+                if (! $ticket) {
+                    SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
+                        'status' => 'skipped',
+                        'delivered_at' => now(),
+                        'locked_at' => null,
+                        'last_error' => 'Ticket no longer exists.',
+                        'updated_at' => now(),
+                    ]);
+                    continue;
                 }
 
-                SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
-                    'status' => 'delivered',
-                    'delivered_at' => now(),
-                    'locked_at' => null,
-                    'last_error' => null,
-                    'updated_at' => now(),
-                ]);
-                $delivered++;
+                if ($alert->event === 'breached') {
+                    $this->notifier->slaBreached($ticket, $alert->kind, $alert->event_identity);
+                } else {
+                    $this->notifier->slaWarning(
+                        $ticket,
+                        $alert->kind,
+                        (int) $alert->minutes_left,
+                        $alert->event_identity,
+                    );
+                }
+
+                // Commit the outbox completion and canonical audit event together.
+                // If audit append fails, this transaction rolls back and the alert
+                // remains retryable; channel-level idempotency prevents duplicate effects.
+                $updated = DB::transaction(function () use ($id, $alert): int {
+                    $changed = SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
+                        'status' => 'delivered',
+                        'delivered_at' => now(),
+                        'locked_at' => null,
+                        'last_error' => null,
+                        'updated_at' => now(),
+                    ]);
+
+                    if ($changed > 0) {
+                        $this->audit->record(
+                            'support.ticket.sla_alert_dispatched',
+                            null,
+                            null,
+                            'ticket',
+                            (int) $alert->ticket_id,
+                            [
+                                'outbox_id' => (int) $id,
+                                'kind' => $alert->kind,
+                                'event' => $alert->event,
+                                'minutes_left' => $alert->minutes_left,
+                                'attempts' => (int) $alert->attempts,
+                                'event_identity' => $alert->event_identity,
+                            ],
+                            'support'
+                        );
+                    }
+
+                    return $changed;
+                });
+
+                if ($updated > 0) {
+                    $delivered++;
+                }
             } catch (Throwable $exception) {
                 $attempts = (int) $alert->attempts;
                 $delayMinutes = min(60, 2 ** min($attempts, 6));
