@@ -145,6 +145,38 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertNotNull($lastTicket->fresh()->sla_first_warned_at);
     }
 
+    public function test_late_closed_ticket_remains_in_historical_sla_breach_scope(): void
+    {
+        $deadline = now()->subHour();
+        $ticket = Ticket::create([
+            'subject' => 'Closed after SLA deadline',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_resolve_due_at' => $deadline,
+            'closed_at' => now(),
+        ]);
+
+        $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+        $this->assertSame('breached', app(SupportSlaService::class)->resolutionStatus($ticket)['state']);
+    }
+
+    public function test_closed_ticket_without_resolution_timestamp_is_not_assumed_to_have_met_sla(): void
+    {
+        $ticket = Ticket::create([
+            'subject' => 'Missing resolution timestamp',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_resolve_due_at' => now()->subHour(),
+        ]);
+
+        $status = app(SupportSlaService::class)->resolutionStatus($ticket);
+
+        $this->assertSame('unknown', $status['state']);
+        $this->assertFalse(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+    }
+
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
     {
         $this->travelTo(Carbon::parse('2026-11-21 09:30:00', 'Asia/Tehran'));
