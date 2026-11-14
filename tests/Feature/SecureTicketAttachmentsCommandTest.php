@@ -20,7 +20,9 @@ class SecureTicketAttachmentsCommandTest extends TestCase
         Storage::fake('public');
         Storage::fake('private');
 
+        $customer = User::factory()->create();
         $ticket = Ticket::create([
+            'user_id' => $customer->id,
             'subject' => 'Legacy attachment migration',
             'status' => 'open',
             'priority' => 'normal',
@@ -29,6 +31,7 @@ class SecureTicketAttachmentsCommandTest extends TestCase
         Storage::disk('public')->put('legacy/ticket-proof.txt', 'safe attachment');
         $message = TicketMessage::create([
             'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
             'body' => 'Attachment is here',
             'is_staff' => false,
             'is_internal' => false,
@@ -56,6 +59,50 @@ class SecureTicketAttachmentsCommandTest extends TestCase
         $this->assertSame('private', $managed->visibility);
         $this->assertContains($managed->status, ['active', 'pending_transfer']);
         $this->assertFalse((bool) data_get($managed->metadata, 'reference_pending', true));
+
+        $this->actingAs($customer)
+            ->get(route('support.attachment', [
+                'ticket' => $ticket->id,
+                'message' => $message->id,
+                'index' => 0,
+            ]))
+            ->assertOk()
+            ->assertSee('safe attachment');
+    }
+
+    public function test_unmanaged_public_attachment_fails_closed_before_migration(): void
+    {
+        Storage::fake('public');
+        Storage::fake('private');
+
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Unmanaged attachment must not be served',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        Storage::disk('public')->put('legacy/unmanaged.txt', 'not served');
+        $message = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'body' => 'Legacy public file',
+            'attachments' => [[
+                'name' => 'unmanaged.txt',
+                'path' => 'legacy/unmanaged.txt',
+                'disk' => 'public',
+                'mime' => 'text/plain',
+            ]],
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.attachment', [
+                'ticket' => $ticket->id,
+                'message' => $message->id,
+                'index' => 0,
+            ]))
+            ->assertNotFound();
     }
 
     public function test_unsupported_legacy_attachment_is_quarantined_and_cannot_be_downloaded(): void
