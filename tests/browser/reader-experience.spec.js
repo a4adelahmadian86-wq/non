@@ -1900,6 +1900,11 @@ test('PDF reader notes preserve their internal page and jump to the selected pas
   await root.locator('#reader-page-number').fill('1');
   await root.locator('#reader-page-number').dispatchEvent('change');
   await expect(root.locator('#reader-page-number')).toHaveValue('1');
+  // Let delayed IntersectionObserver callbacks and scroll anchoring settle; an
+  // old visible-page report must not overwrite the explicit page selection.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForTimeout(100);
+  await expect(root.locator('#reader-page-number')).toHaveValue('1');
   await root.locator('.farast-reader-note:not(.farast-reader-highlight-entry) button').first().click();
   await expect(root.locator('#reader-page-number')).toHaveValue('2');
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain('FARAST PDF PAGE 2');
