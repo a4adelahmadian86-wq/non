@@ -17,6 +17,13 @@ class SupportSlaBusinessMinuteTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function runSlaCommand(): void
+    {
+        $command = app(CheckSupportSlaCommand::class);
+        $command->setLaravel($this->app);
+        $command->run(new ArrayInput([]), new BufferedOutput());
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -105,7 +112,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $notifier->shouldNotReceive('slaBreached');
         $this->app->instance(SupportNotificationService::class, $notifier);
 
-        Artisan::call('support:check-sla');
+        $this->runSlaCommand();
 
         $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
     }
