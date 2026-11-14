@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreLibraryItem;
+use App\Models\FarastAuditEvent;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
@@ -457,6 +458,30 @@ class SupportController extends Controller
             $activeHistory = $history;
         }
 
+        // Audit records are queried only after the active ticket has passed the
+        // same RBAC record-scope check used by the inbox.
+        $auditEvents = $active
+            ? FarastAuditEvent::query()
+                ->where('aggregate_type', 'ticket')
+                ->where('aggregate_id', $active->id)
+                ->where('source', 'support')
+                ->latest('id')
+                ->limit(50)
+                ->get()
+                ->reverse()
+                ->values()
+            : collect();
+
+        $auditUserIds = $auditEvents->flatMap(fn (FarastAuditEvent $event) => [
+            $event->user_id,
+            data_get($event->payload_meta, 'from_assigned_to'),
+            data_get($event->payload_meta, 'to_assigned_to'),
+        ])->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
+        $auditUsers = $auditUserIds->isNotEmpty()
+            ? User::query()->whereIn('id', $auditUserIds)->get(['id', 'name'])->keyBy('id')
+            : collect();
+
         $stats = [
             'needs_reply' => $scopeQuery(Ticket::query())->needsReply()->count(),
             'open' => $scopeQuery(Ticket::query())->where('status', 'open')->count(),
@@ -492,7 +517,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory', 'auditEvents', 'auditUsers'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)
