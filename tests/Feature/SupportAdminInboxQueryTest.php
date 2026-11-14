@@ -125,4 +125,46 @@ class SupportAdminInboxQueryTest extends TestCase
         }
     }
 
+
+    public function test_admin_thread_loads_only_the_latest_hundred_messages_and_pages_older_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Bounded admin history',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $ids = [];
+        for ($i = 1; $i <= 105; $i++) {
+            $message = TicketMessage::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $admin->id,
+                'body' => $i <= 5 ? 'OLD_ONLY_MESSAGE_'.$i : 'RECENT_MESSAGE_'.$i,
+                'is_internal' => false,
+                'is_staff' => true,
+            ]);
+            $ids[] = $message->id;
+        }
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id]))
+            ->assertOk()
+            ->assertSee('RECENT_MESSAGE_105')
+            ->assertDontSee('OLD_ONLY_MESSAGE_1')
+            ->assertSee('loadOlderAdminMessages');
+
+        $this->assertSame(100, substr_count($response->getContent(), 'data-msg-id='));
+
+        $this->actingAs($admin)
+            ->get(route('support.messages.poll', $ticket).'?before_id='.$ids[5])
+            ->assertOk()
+            ->assertJsonCount(5, 'messages')
+            ->assertJsonPath('messages.0.body', 'OLD_ONLY_MESSAGE_1')
+            ->assertJsonPath('messages.4.body', 'OLD_ONLY_MESSAGE_5')
+            ->assertJsonPath('next_before_id', $ids[0])
+            ->assertJsonPath('has_more', false);
+    }
+
 }
