@@ -39,7 +39,14 @@ class CrmController extends Controller
 
         $query = User::query()
             ->withCount(['orders', 'tickets', 'documents'])
-            ->withSum(['orders as paid_revenue_rials' => fn ($q) => $q->where('status', 'paid')], 'total_rials')
+            ->addSelect([
+                'paid_revenue_rials' => DB::table('payments')
+                    ->join('orders as paid_orders', 'paid_orders.id', '=', 'payments.order_id')
+                    ->whereColumn('paid_orders.user_id', 'users.id')
+                    ->where('payments.status', 'paid')
+                    ->whereNotNull('payments.paid_at')
+                    ->selectRaw('COALESCE(SUM(payments.amount_rials), 0)'),
+            ])
             ->latest('users.created_at');
 
         $visibleIds = $console->visibleUserIds($request->user());
@@ -80,8 +87,12 @@ class CrmController extends Controller
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
 
-        $user->loadCount(['orders', 'tickets', 'documents'])
-            ->loadSum(['orders as paid_revenue_rials' => fn ($q) => $q->where('status', 'paid')], 'total_rials');
+        $user->loadCount(['orders', 'tickets', 'documents']);
+        $paidRevenueRials = Payment::query()
+            ->whereHas('order', fn ($query) => $query->where('user_id', $user->id))
+            ->where('status', 'paid')
+            ->whereNotNull('paid_at')
+            ->sum('amount_rials');
 
         $orders = Order::query()->with('storeItems')
             ->where('user_id', $user->id)->latest()->limit(30)->get()
@@ -326,7 +337,7 @@ class CrmController extends Controller
                     ->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
-                'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
+                'paid_revenue_rials' => (int) $paidRevenueRials,
             ],
             'timeline' => $timeline,
             'notes' => $notes,
