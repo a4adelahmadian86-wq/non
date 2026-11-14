@@ -109,8 +109,9 @@ class ResolveAdminScope
      */
     private function hasManagedTeams(User $user): bool
     {
-        if (app(AuthorizationService::class)->effectiveTeamIds($user) !== null) {
-            return true;
+        $assignedTeamIds = app(AuthorizationService::class)->effectiveTeamIds($user);
+        if ($assignedTeamIds !== null) {
+            return $assignedTeamIds !== [];
         }
 
         $supervised = Team::where('supervisor_id', $user->id)->exists();

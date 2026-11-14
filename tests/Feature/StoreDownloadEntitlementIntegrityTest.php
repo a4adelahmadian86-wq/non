@@ -16,6 +16,7 @@ use App\Services\EmailService;
 use App\Services\ZarinpalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Mockery;
 use Tests\TestCase;
@@ -120,6 +121,18 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $user = $this->makeUser();
         [$product, $purchasedFile] = $this->makeProduct();
 
+        DB::table('farast_workflows')->insert([
+            'user_id' => $user->id,
+            'name' => 'پیگیری خرید فایل دیجیتال',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([
+                ['action' => 'create_follow_up', 'title' => 'پیگیری خرید فایل', 'priority' => 'normal'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $this->actingAs($user)
             ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
             ->assertOk();
@@ -176,12 +189,32 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
         $this->assertSame($purchasedFile->id, $libraryItem->product_file_id);
 
+        $eventKey = 'order:'.$order->id.':order.paid';
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'event_type' => 'order.paid',
+            'idempotency_key' => $eventKey,
+            'user_id' => $user->id,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $user->id,
+            'created_by' => $user->id,
+            'title' => 'پیگیری خرید فایل',
+        ]);
+
         // A repeated gateway callback must be idempotent and must not send a second receipt.
         $this->withSession([
             'zarinpal_order_id' => $order->id,
             'zarinpal_authority' => 'AUTH-SNAPSHOT',
         ])->get('/checkout/zarinpal/callback?Authority=AUTH-SNAPSHOT&Status=OK')
             ->assertRedirect(route('library'));
+
+        $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->count());
+        $this->assertSame(1, DB::table('crm_follow_up_tasks')
+            ->where('customer_id', $user->id)
+            ->where('title', 'پیگیری خرید فایل')
+            ->count());
     }
 
 

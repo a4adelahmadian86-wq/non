@@ -1,13 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
-@php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
+@php
+    $lastMsgId = $history['last_scanned_id'] ?? $ticket->messages->last()?->id ?? 0;
+    $oldestMsgId = $history['oldest_scanned_id'] ?? $ticket->messages->first()?->id ?? 0;
+@endphp
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114threadhistory">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114threadhistory">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
      data-last-id="{{ $lastMsgId }}"
+     data-oldest-id="{{ $oldestMsgId }}"
      data-ticket-status="{{ $ticket->status }}">
     <nav class="tk-breadcrumb">
         <div class="tk-breadcrumb-inner">
@@ -48,6 +52,9 @@
             <div class="tk-divider"></div>
 
             <div class="tk-thread" id="chatMessages">
+                @if($history['has_older'] ?? false)
+                    <button type="button" id="loadOlderTicketMessages" class="tk-btn" style="align-self:center;margin:8px auto;background:#eef4ff;color:#1769ff">نمایش پیام‌های قدیمی‌تر</button>
+                @endif
                 @php $prevDay = null; @endphp
                 @foreach($ticket->messages as $m)
                     @php
@@ -202,7 +209,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114managedattachments"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114pollcursor-managedattachments"></script>
 <script>
 (function () {
     const form = document.getElementById('csatForm');

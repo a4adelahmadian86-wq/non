@@ -120,6 +120,12 @@ trait PaysWithZarinpal
         }
 
         if ($order->isPaid() && $payment->status === 'paid') {
+            DB::transaction(function () use ($order): void {
+                $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+                if ($locked->isPaid()) {
+                    app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
+                }
+            });
             $request->session()->forget(['zarinpal_order_id', 'zarinpal_authority']);
             return redirect()->route('library')->with('status', 'این سفارش قبلاً پرداخت شده است.');
         }
@@ -158,6 +164,7 @@ trait PaysWithZarinpal
                 );
 
                 if ($locked->isPaid() && $lockedPayment->status === 'paid') {
+                    app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
                     return;
                 }
 
@@ -246,17 +253,7 @@ trait PaysWithZarinpal
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
                 );
-                app(\App\Services\WorkflowEngine::class)->enqueue(
-                    'order.paid',
-                    [
-                        'user_id' => (int) $locked->user_id,
-                        'customer_id' => (int) $locked->user_id,
-                        'order_id' => (int) $locked->id,
-                        'amount_rials' => (int) $locked->total_rials,
-                        'order_kind' => (string) ($locked->pricing_snapshot['kind'] ?? 'unknown'),
-                    ],
-                    'order:'.$locked->id.':order.paid',
-                );
+                app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
                 $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {

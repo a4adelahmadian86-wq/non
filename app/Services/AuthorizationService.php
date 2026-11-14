@@ -735,6 +735,13 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
+            // A scoped assignment is valid only while the subject still belongs
+            // to the assigned team (or remains its supervisor). This mirrors
+            // effectiveTeamIds() and prevents stale assignments after removal.
+            if ($teamId !== null && ! $this->userHasTeamAccess($user, (int) $teamId)) {
+                return false;
+            }
+
             $teamIds = $teamId !== null
                 ? collect([(int) $teamId])
                 : \App\Models\Team::query()

@@ -121,4 +121,237 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertOk()
             ->assertJsonMissing(['body' => 'private staff note']);
     }
+
+    public function test_customer_poll_cursor_advances_over_hidden_internal_notes(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Hidden-note polling cursor',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $firstInternal = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'private note one',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+        $public = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'body' => 'public response',
+            'is_internal' => false,
+            'is_staff' => false,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?after_id=0')
+            ->assertOk()
+            ->assertJsonPath('last_id', $public->id)
+            ->assertJsonFragment(['body' => 'public response'])
+            ->assertJsonMissing(['body' => 'private note one']);
+
+        $ticket->forceFill(['customer_last_seen_at' => null])->saveQuietly();
+        $secondInternal = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'private note two',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?after_id='.$public->id)
+            ->assertOk()
+            ->assertJsonPath('messages', [])
+            ->assertJsonPath('last_id', $secondInternal->id)
+            ->assertJsonMissing(['body' => 'private note two']);
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'customer_last_seen_at' => null,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?before_id='.$secondInternal->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'messages')
+            ->assertJsonPath('messages.0.body', 'public response')
+            ->assertJsonPath('next_before_id', $firstInternal->id)
+            ->assertJsonPath('has_more', false)
+            ->assertJsonMissing(['body' => 'private note one'])
+            ->assertJsonMissing(['body' => 'private note two']);
+    }
+
+    public function test_team_scoped_support_agent_only_sees_and_manages_tickets_owned_by_team_members(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+
+        $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $customer = User::factory()->create();
+        $outsideCustomer = User::factory()->create();
+
+        $organization = \App\Models\Organization::create([
+            'name' => 'Support scope organization',
+            'slug' => 'support-scope-organization',
+            'status' => 'active',
+        ]);
+        $team = \App\Models\Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Support team',
+            'slug' => 'support-team',
+            'supervisor_id' => $agent->id,
+        ]);
+        $team->members()->attach($agent->id, ['team_role' => 'manager']);
+        $team->members()->attach($customer->id, ['team_role' => 'employee']);
+
+        $permission = Permission::firstOrCreate(
+            ['key' => 'support.manage'],
+            ['label' => 'Support management', 'group' => 'support'],
+        );
+        DB::table('roles')->insert([
+            'key' => 'team_support_operator',
+            'name' => 'Team support operator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::firstOrCreate([
+            'role' => 'team_support_operator',
+            'permission_id' => $permission->id,
+        ]);
+        app(AuthorizationService::class)->assignRole(
+            $root,
+            $agent,
+            'team_support_operator',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $insideTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Team-owned support ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Other-team private ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $guestTicket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'Global-only guest ticket',
+            'guest_email' => 'guest@example.test',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        self::assertSame('team', app(AuthorizationService::class)->effectiveScope($agent));
+        $visibleUserIds = app(\App\Services\AdminConsoleService::class)->visibleUserIds($agent);
+        self::assertContains($customer->id, $visibleUserIds);
+        self::assertNotContains($outsideCustomer->id, $visibleUserIds);
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
+            ->assertOk()
+            ->assertSee('Team-owned support ticket')
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket')
+            ->assertDontSee('گزارش SLA');
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['ticket' => $outsideTicket->id]))
+            ->assertOk()
+            ->assertSee('Team-owned support ticket')
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket');
+
+        $searchResponse = $this->actingAs($agent)
+            ->get(route('admin.support.management', ['q' => 'Other-team private ticket']))
+            ->assertOk()
+            ->assertDontSee('Global-only guest ticket');
+
+        // The query text is echoed in the search input; assert the foreign ticket
+        // itself is not linked into the rendered inbox.
+        $this->assertStringNotContainsString('ticket='.$outsideTicket->id, $searchResponse->getContent());
+
+        $this->actingAs($agent)
+            ->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'Unauthorized reply'])
+            ->assertForbidden();
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.report'))
+            ->assertForbidden();
+
+        // A stale team assignment must not keep record-level access after removal.
+        $team->members()->detach($agent->id);
+        $team->update(['supervisor_id' => null]);
+        $this->actingAs($agent)
+            ->get(route('admin.support.management'))
+            ->assertForbidden();
+        $this->actingAs($agent)
+            ->post(route('admin.tickets.reply', $insideTicket), ['body' => 'Stale team access'])
+            ->assertForbidden();
+    }
+
+
+    public function test_customer_thread_loads_a_bounded_history_and_older_pages_never_expose_internal_notes(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Bounded customer history',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $ids = [];
+        for ($i = 1; $i <= 105; $i++) {
+            $internal = in_array($i, [1, 3], true);
+            $message = TicketMessage::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $internal ? null : $customer->id,
+                'body' => $internal ? 'SECRET_INTERNAL_'.$i : ($i <= 5 ? 'OLD_PUBLIC_'.$i : 'RECENT_PUBLIC_'.$i),
+                'is_internal' => $internal,
+                'is_staff' => $internal,
+            ]);
+            $ids[] = $message->id;
+        }
+
+        $response = $this->actingAs($customer)
+            ->get(route('support.show', $ticket))
+            ->assertOk()
+            ->assertSee('RECENT_PUBLIC_105')
+            ->assertDontSee('OLD_PUBLIC_2')
+            ->assertDontSee('SECRET_INTERNAL_3')
+            ->assertSee('loadOlderTicketMessages');
+
+        $this->assertSame(100, substr_count($response->getContent(), 'data-msg-id='));
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?before_id='.$ids[5])
+            ->assertOk()
+            ->assertJsonCount(3, 'messages')
+            ->assertJsonPath('messages.0.body', 'OLD_PUBLIC_2')
+            ->assertJsonPath('messages.1.body', 'OLD_PUBLIC_4')
+            ->assertJsonPath('messages.2.body', 'OLD_PUBLIC_5')
+            ->assertJsonPath('next_before_id', $ids[0])
+            ->assertJsonPath('has_more', false)
+            ->assertJsonMissing(['body' => 'SECRET_INTERNAL_1'])
+            ->assertJsonMissing(['body' => 'SECRET_INTERNAL_3']);
+    }
+
 }

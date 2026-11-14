@@ -8,6 +8,8 @@ use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\StorageManagedFile;
 use App\Models\User;
+use App\Services\AdminConsoleService;
+use App\Services\SupportSlaService;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
@@ -20,6 +22,8 @@ use Illuminate\Validation\Rule;
 
 class SupportController extends Controller
 {
+    private const THREAD_HISTORY_PAGE_SIZE = 100;
+
     public function __construct(private readonly SupportTicketService $tickets)
     {
     }
@@ -86,11 +90,12 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
         $this->authorize('view', $ticket);
 
-        $ticket->load(['publicMessages.user', 'relatedProduct', 'assignee']);
+        $ticket->load(['relatedProduct', 'assignee']);
+        $history = $this->initialThreadHistory($ticket, false);
+        $ticket->setRelation('messages', $history['messages']);
         $this->tickets->markCustomerSeen($ticket);
-        $ticket->setRelation('messages', $ticket->publicMessages);
 
-        return view('support.show', compact('ticket'));
+        return view('support.show', compact('ticket', 'history'));
     }
 
     public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities, AuthorizationService $authorization)
@@ -99,44 +104,81 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
-        $afterId = (int) $request->input('after_id', 0);
+        $formatMessage = function ($message) use ($ticket): array {
+            $isStaff = $message->isFromStaff();
 
-        $messages = $ticket->messages()
+            return [
+                'id' => $message->id,
+                'body' => $message->body,
+                'is_staff' => $isStaff,
+                'is_internal' => (bool) $message->is_internal,
+                'is_mine' => $message->user_id === auth()->id() && ! $isStaff,
+                'time' => $message->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
+                'attachments' => collect($message->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                    'name' => $attachment['name'] ?? 'پیوست',
+                    'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => $index]),
+                    'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                    'quarantined' => ! empty($attachment['quarantined']),
+                ])->all(),
+            ];
+        };
+
+        $beforeId = max(0, (int) $request->input('before_id', 0));
+        if ($beforeId > 0) {
+            $scannedMessages = $ticket->messages()
+                ->with('user')
+                ->where('id', '<', $beforeId)
+                ->reorder('id', 'desc')
+                ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+                ->get();
+
+            $nextBeforeId = (int) ($scannedMessages->last()?->id ?? $beforeId);
+            $hasMore = $nextBeforeId < $beforeId
+                && $ticket->messages()->where('id', '<', $nextBeforeId)->exists();
+
+            if (! $canSeeInternal) {
+                $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'messages' => $scannedMessages->reverse()->values()->map($formatMessage)->values(),
+                'next_before_id' => $nextBeforeId,
+                'has_more' => $hasMore,
+            ]);
+        }
+
+        $afterId = max(0, (int) $request->input('after_id', 0));
+
+        // Scan a bounded batch before applying visibility rules. Customer cursors
+        // must advance over private notes without receiving their contents.
+        $scannedMessages = $ticket->messages()
             ->with('user')
             ->where('id', '>', $afterId)
-            ->when(! $canSeeInternal, fn ($q) => $q->where(function ($w) {
-                $w->where('is_internal', false)->orWhereNull('is_internal');
-            }))
-            ->orderBy('created_at')
-            ->get()
-            ->map(function ($m) use ($ticket) {
-                $isStaff = $m->isFromStaff();
+            ->reorder('id')
+            ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+            ->get();
 
-                return [
-                    'id' => $m->id,
-                    'body' => $m->body,
-                    'is_staff' => $isStaff,
-                    'is_internal' => (bool) $m->is_internal,
-                    'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
-                    'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
-                    'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
-                        'name' => $attachment['name'] ?? 'پیوست',
-                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
-                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
-                        'quarantined' => ! empty($attachment['quarantined']),
-                    ])->all(),
-                ];
-            });
+        $lastScannedId = (int) ($scannedMessages->last()?->id ?? $afterId);
 
         if (! $canSeeInternal) {
+            $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        $messages = $scannedMessages->map($formatMessage)->values();
+
+        if (! $canSeeInternal && $messages->isNotEmpty()) {
             $this->tickets->markCustomerSeen($ticket);
         }
+
+        $freshTicket = $ticket->fresh();
 
         return response()->json([
             'ok' => true,
             'messages' => $messages,
-            'status' => $ticket->fresh()->status,
-            'status_label' => $ticket->fresh()->statusLabel(),
+            'last_id' => $lastScannedId,
+            'status' => $freshTicket->status,
+            'status_label' => $freshTicket->statusLabel(),
         ]);
     }
 
@@ -267,8 +309,25 @@ class SupportController extends Controller
         return back()->with('status', 'از امتیاز شما سپاسگزاریم.');
     }
 
-    public function adminIndex(Request $request)
+    public function adminIndex(Request $request, SupportSlaService $sla)
     {
+        // Apply the current RBAC data scope before filtering, searching, counting,
+        // pagination or resolving the active ticket. Guest tickets (user_id=null)
+        // remain visible only to global support operators.
+        $visibleUserIds = app(AdminConsoleService::class)->visibleUserIds(auth()->user());
+        $scopeQuery = static function ($query) use ($visibleUserIds) {
+            if ($visibleUserIds !== null) {
+                $query->whereIn('tickets.user_id', $visibleUserIds);
+            }
+
+            return $query;
+        };
+
+        $warningDeadline = $sla->addSlaMinutes(
+            now(),
+            max(0, (int) config('support.warn_before_minutes', 30))
+        );
+
         // Inbox rows need only the latest public preview. Loading every message
         // for every ticket on the page caused memory growth proportional to all
         // conversation history; the active thread is loaded separately below.
@@ -282,7 +341,7 @@ class SupportController extends Controller
             ->orderByDesc('id')
             ->limit(1);
 
-        $query = Ticket::query()
+        $query = $scopeQuery(Ticket::query())
             ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
             ->with(['user', 'relatedProduct', 'assignee']);
 
@@ -306,23 +365,22 @@ class SupportController extends Controller
             $query->slaBreached();
         }
         if ($request->filled('sla') && $request->sla === 'at_risk') {
-            $warn = (int) config('support.warn_before_minutes', 30);
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
-                $query->where(function ($q) use ($warn) {
+                $query->where(function ($q) use ($warningDeadline) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
-                            $q->where(function ($w) use ($warn) {
+                            $q->where(function ($w) use ($warningDeadline) {
                                 $w->whereNull('first_response_at')
                                     ->whereNotNull('sla_first_due_at')
                                     ->where('sla_first_due_at', '>', now())
-                                    ->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                                    ->where('sla_first_due_at', '<=', $warningDeadline);
                             });
                         }
                         if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
-                            $q->orWhere(function ($w) use ($warn) {
+                            $q->orWhere(function ($w) use ($warningDeadline) {
                                 $w->whereNotIn('status', ['closed', 'pending'])
                                     ->whereNotNull('sla_resolve_due_at')
                                     ->where('sla_resolve_due_at', '>', now())
-                                    ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                                    ->where('sla_resolve_due_at', '<=', $warningDeadline);
                             });
                         }
                     });
@@ -359,38 +417,55 @@ class SupportController extends Controller
         $tickets = $query->paginate(25)->withQueryString();
 
         $active = null;
+        $activeHistory = null;
         if ($request->filled('ticket')) {
-            $active = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
-                ->find($request->integer('ticket'));
+            $activeQuery = Ticket::with(['user', 'relatedProduct', 'assignee'])
+                ->whereKey($request->integer('ticket'));
+            $scopeQuery($activeQuery);
+            $active = $activeQuery->first();
+            if ($active) {
+                $this->authorize('manage', $active);
+            }
         }
         if (! $active) {
             $firstTicketId = $tickets->getCollection()->first()?->id;
-            $active = $firstTicketId
-                ? Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])->find($firstTicketId)
-                : null;
+            if ($firstTicketId) {
+                $activeQuery = Ticket::with(['user', 'relatedProduct', 'assignee'])
+                    ->whereKey($firstTicketId);
+                $scopeQuery($activeQuery);
+                $active = $activeQuery->first();
+                if ($active) {
+                    $this->authorize('manage', $active);
+                }
+            }
+        }
+
+        if ($active) {
+            $history = $this->initialThreadHistory($active, true);
+            $active->setRelation('messages', $history['messages']);
+            $activeHistory = $history;
         }
 
         $stats = [
-            'needs_reply' => Ticket::needsReply()->count(),
-            'open' => Ticket::where('status', 'open')->count(),
-            'user_replied' => Ticket::where('status', 'user_replied')->count(),
-            'answered' => Ticket::where('status', 'answered')->count(),
-            'pending' => Ticket::where('status', 'pending')->count(),
-            'closed' => Ticket::where('status', 'closed')->count(),
-            'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
+            'needs_reply' => $scopeQuery(Ticket::query())->needsReply()->count(),
+            'open' => $scopeQuery(Ticket::query())->where('status', 'open')->count(),
+            'user_replied' => $scopeQuery(Ticket::query())->where('status', 'user_replied')->count(),
+            'answered' => $scopeQuery(Ticket::query())->where('status', 'answered')->count(),
+            'pending' => $scopeQuery(Ticket::query())->where('status', 'pending')->count(),
+            'closed' => $scopeQuery(Ticket::query())->where('status', 'closed')->count(),
+            'high' => $scopeQuery(Ticket::query())->where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         
-            'sla_breached' => Ticket::query()->slaBreached()->count(),
+            'sla_breached' => $scopeQuery(Ticket::query())->slaBreached()->count(),
             'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
-                ? Ticket::query()->where(function ($q) {
-                    $warn = (int) config('support.warn_before_minutes', 30);
+                ? $scopeQuery(Ticket::query())->where(function ($q) use ($warningDeadline) {
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
-                        $q->where(function ($w) use ($warn) {
-                            $w->whereNull('first_response_at')->whereNotNull('sla_first_due_at')->where('sla_first_due_at', '>', now())->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                        $q->where(function ($w) use ($warningDeadline) {
+                            $w->whereNull('first_response_at')->whereNotNull('sla_first_due_at')->where('sla_first_due_at', '>', now())->where('sla_first_due_at', '<=', $warningDeadline);
                         });
                     }
                     if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
-                        $q->orWhere(function ($w) use ($warn) {
-                            $w->whereNotIn('status', ['closed', 'pending'])->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                        $q->orWhere(function ($w) use ($warningDeadline) {
+                            $w->whereNotIn('status', ['closed', 'pending'])->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', $warningDeadline);
                         });
                     }
                 })->count()
@@ -406,7 +481,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)
@@ -626,6 +701,38 @@ class SupportController extends Controller
         $disk = Storage::disk($diskName);
         abort_unless($disk->exists($path), 404);
         return $disk->download($path, $filename, $headers);
+    }
+
+    /**
+     * Load a bounded, newest-first slice of a ticket conversation.
+     * The cursor is based on all messages so hidden internal notes cannot trap
+     * customer pagination or cause repeated polling scans.
+     *
+     * @return array{messages: \Illuminate\Support\Collection, last_scanned_id: int, oldest_scanned_id: int, has_older: bool}
+     */
+    private function initialThreadHistory(Ticket $ticket, bool $includeInternal): array
+    {
+        $scanned = $ticket->messages()
+            ->with('user')
+            ->reorder('id', 'desc')
+            ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+            ->get();
+
+        $lastScannedId = (int) ($scanned->first()?->id ?? 0);
+        $oldestScannedId = (int) ($scanned->last()?->id ?? 0);
+        $hasOlder = $oldestScannedId > 0
+            && $ticket->messages()->where('id', '<', $oldestScannedId)->exists();
+
+        if (! $includeInternal) {
+            $scanned = $scanned->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        return [
+            'messages' => $scanned->reverse()->values(),
+            'last_scanned_id' => $lastScannedId,
+            'oldest_scanned_id' => $oldestScannedId,
+            'has_older' => $hasOlder,
+        ];
     }
 
     public static function claimGuestTickets(User $user): int

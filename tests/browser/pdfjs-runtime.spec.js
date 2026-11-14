@@ -10,10 +10,11 @@ test('PDF.js engine, viewer and worker are served from the application origin at
   await page.goto('/');
 
   const runtime = await page.evaluate(async () => {
-    const [engine, viewer] = await Promise.all([
-      import('/vendor/pdfjs/legacy/build/pdf.mjs'),
-      import('/vendor/pdfjs/legacy/web/pdf_viewer.mjs'),
-    ]);
+    const engine = await import('/vendor/pdfjs/legacy/build/pdf.mjs');
+    // The production reader exposes the engine before loading the viewer:
+    // PDF.js's viewer bundle reads globalThis.pdfjsLib during module evaluation.
+    window.pdfjsLib = engine;
+    const viewer = await import('/vendor/pdfjs/legacy/web/pdf_viewer.mjs');
     const workerResponse = await fetch('/vendor/pdfjs/legacy/build/pdf.worker.mjs', {
       credentials: 'same-origin',
       cache: 'no-store',

@@ -187,3 +187,66 @@ Commit مبنای مشاهده‌شده: `11a0427bf0a3beff9856d5790d6f97c3b1984b
 ### 8.9 آزمون سرتاسری چرخه خرید دوره پولی
 
 PR #365 یک آزمون Feature برای مسیر واقعی کاتالوگ تا ثبت‌نام دوره اضافه می‌کند: سبد، snapshot قیمت، سفارش، پرداخت کیف پول، دفتر تراکنش، کتابخانه، enrollment و اعلان. آزمون پس از checkout قیمت کاتالوگ را تغییر می‌دهد تا ثابت کند مبلغ سفارش تأییدشده دوباره قیمت‌گذاری نمی‌شود؛ سپس همان درخواست پرداخت را replay می‌کند و تعداد اثرهای مالی/دسترسی/اعلان را یک نگه می‌دارد. اجرای اول آزمون جدید موفق بود؛ شکست همان اجرای PR ناشی از پنج تست reader قدیمی روی مبنای پیش از PR #363 بود. پس از ادغام #363، اجرای مجدد روی مبنای جدید لازم است.
+
+
+## 9. تطبیق ممیزی با وضعیت فعلی main — 2026-11-14
+
+این بخش یافته‌های تاریخی بخش 3 و 8 را با کد فعلی `main` تطبیق می‌دهد. موارد زیر وضعیت فعلی کد هستند؛ شماره PRهای قدیمی که هنوز باز یا بسته‌نشده‌اند، مجوز ادغام مجدد یا cherry-pick آن شاخه‌ها نیستند.
+
+### 9.1 گیت‌های زیرساختی که اکنون در main قابل مشاهده‌اند
+
+| گیت | شاهد فعلی در main | نتیجه |
+|---|---|---|
+| RBAC | `AuthorizationService` دارای scopeهای `global/organization/team/own` و تصمیم دسترسی مرکزی است؛ مسیرهای مدیریت فروشگاه از `admin.section:store` استفاده می‌کنند. | مانع اولیه نسخه ساده AuthorizationService دیگر وضعیت فعلی main نیست. |
+| مالی | `Order` و `Payment` کلید idempotency دارند؛ مدل‌های settled immutable هستند؛ `WalletTransaction` append-only است؛ migrationهای `2026_11_11_000031_harden_order_payment_idempotency` و `2026_11_11_000032_preserve_financial_history_on_delete` وجود دارند. | قیود مالی و نگهداری سوابق در main حاضرند؛ آزمون‌های `FinancialIdempotencyTest`، `FinancialRecordImmutabilityTest` و `WalletLedgerReconciliationTest` پوشش می‌دهند. |
+| Storage | `StorageManager::storeUploadedFile` classification خارج از `critical/non_critical` را با `InvalidArgumentException` رد می‌کند؛ حذف مدیریت‌شده و `delete_pending` و cleanup deferred در همان هسته موجودند. | یافته fail-open بخش 8.2 برای وضعیت فعلی main حل شده است. |
+| Automation / Outbox | `WorkflowEngine` درگاه outbox تراکنشی موجود است؛ قراردادهای canonical سفارش پرداخت‌شده و ایجاد تیکت در PR #546 به آن افزوده و merge شده‌اند. | مسیرهای پرداخت و تیکت از payload و idempotency key مشترک استفاده می‌کنند. |
+| مسیرهای مدیریتی | گروه Store/Course در `routes/store_routes.php` با `admin.section:store` محدود شده است. | کنترل بخش فروشگاه در main قابل مشاهده است. |
+
+### 9.2 وضعیت یافته‌های تاریخی
+
+- **اعلان پاسخ تیکت (8.1 و 8.7):** اصلاح هویت رخداد در PR #358 merge شده است. شناسه پیام/transition در هویت اعلان لحاظ می‌شود و تست `SupportNotificationEventIdentityTest` مسیرهای retry و رخداد جدید را پوشش می‌دهد.
+- **classification ذخیره‌سازی (8.2):** ورودی نامعتبر اکنون fail-closed است و به سیاست non-critical تنزل داده نمی‌شود.
+- **هم‌پوشانی اعلان مستقیم و Workflow (8.3):** PR #546 قرارداد رویدادهای `order.paid`، `order.deposit_paid` و `ticket.created` را در WorkflowEngine متمرکز کرده است. آزمون خرید دوره، تعداد اعلان/رویداد/پیگیری را پس از replay کنترل می‌کند.
+- **بازیابی ZIP (8.6):** در `RestoreStorageBackup` بررسی `ZipArchive::locateName` با مقایسه صریح `=== false` انجام می‌شود؛ index معتبر صفر دیگر به‌عنوان فقدان فایل تفسیر نمی‌شود.
+- **CRM و پیشرفت دوره (8.8):** PR #368 merge شده است. CRM پیشرفت را از `StoreCourseEnrollment` و `StoreCourseLessonProgress` و سرویس مشترک پیشرفت دوره می‌خواند؛ منبع موازی ایجاد نشده است.
+- **چرخه خرید دوره (8.9):** سناریوی فعلی در `BusinessCommerceLifecycleTest` روی main اجرا می‌شود و مسیر کاتالوگ، snapshot قیمت، سفارش، پرداخت کیف پول، دفتر تراکنش، کتابخانه، enrollment، Workflow و replay را بررسی می‌کند. تست‌های reader نیز روی main جاری در CI اجرا شده‌اند.
+
+### 9.3 تغییرات اجرایی مرحله هفتم که در main ادغام شدند
+
+**PR #546 — merge commit `86338aebef7a8b0ef5754bac23acf4d0f0f6f78d`**
+
+- `WorkflowEngine::enqueuePaidOrder(Order)` قرارداد واحد رویدادهای پرداخت کامل و بیعانه را می‌سازد.
+- `WorkflowEngine::enqueueTicketCreated(Ticket)` قرارداد واحد ایجاد تیکت را می‌سازد.
+- پرداخت کیف پول، callback زرین‌پال و ایجاد تیکت از این قراردادها استفاده می‌کنند.
+- درخواست تکراری سفارش تسویه‌شده فقط outbox همان رخداد را reconcile می‌کند و پرداخت، رسید یا اعلان را دوباره اجرا نمی‌کند.
+- تست‌های خرید دوره، خرید فایل، بیعانه، retry و rollback با قرارداد جدید هماهنگ شده‌اند.
+
+**PR #548 — merge commit `32a46f3abc7d30fb299757b75610079f042fb45c`**
+
+- حذف محصول زیر قفل ردیف محصول انجام می‌شود.
+- وجود سفارش، entitlement، فایل، تصویر، preview، cover، دوره، سند، ingestion یا StorageManagedFile مانع hard-delete است.
+- محصول دارای دارایی/سابقه archive می‌شود؛ hard-delete فقط برای پیش‌نویس خالی و بدون دارایی باقی می‌ماند.
+- audit event علت تصمیم archive/delete و snapshot وابستگی‌ها را ثبت می‌کند.
+
+### 9.4 ماتریس شواهد آزمون برای 9 زیرسامانه
+
+| زیرسامانه | شواهد Feature / Browser موجود |
+|---|---|
+| محصولات | `AdminStoreProductWorkflowTest`، `ProductLifecycleHealthTest`، `admin-product-e2e` |
+| سفارش و پرداخت | `BusinessCommerceLifecycleTest`، `CheckoutPaymentClarityTest`، `StoreDownloadEntitlementIntegrityTest` |
+| کیف پول و مالی | `FinancialIdempotencyTest`، `FinancialRecordImmutabilityTest`، `WalletLedgerReconciliationTest`، `RefundIdempotencyIntegrityTest` |
+| دوره و یادگیری | `StoreCourseLearningTest`، `CrmCourseProgressTimelineTest` |
+| مشتری و CRM | `CrmCustomerWorkspaceTest`، `CrmProjectWorkspaceTest`، `CrmManagementAnalyticsTest` |
+| تیکتینگ | `SupportTicketAtomicWorkflowTest`، `SupportTicketScopedAgentAccessTest`، `SupportNotificationEventIdentityTest` |
+| پیام‌رسان | `InternalMessengerTest` |
+| اعلان‌ها | `NotificationCenterTest`، `NotificationRouteOwnershipTest` |
+| پروژه و اسناد | `ProjectDocumentCanonicalLinkageTest`، `WorkspaceDocumentManagementIntegrityTest`، `ProjectWorkflowTest` |
+
+### 9.5 نتیجه پذیرش و مرز ادعا
+
+در PR #546 و PR #548، اجرای CI روی commit نهایی شامل migration، lint، PHPUnit unit و feature، آزمون‌های قرارداد Product Supervisor، آزمون MySQL integrity و آزمون Browser محصول انجام شد و jobهای الزامی موفق بودند. jobهای `voice-model-smoke` و `reader-browser-regression` در آن اجراها skipped بودند و موفقیت برای آن‌ها ادعا نمی‌شود.
+
+بر این مبنا، **معیار کدنویسی و CI مرحله هفتم برای مسیرهای اصلی یکپارچه‌سازی‌شده قابل پذیرش است**: منبع حقیقت سفارش/پرداخت/محصول حفظ شده، تحویل به entitlement متصل است، رویدادهای پرداخت و تیکت قرارداد مشترک دارند، CRM از موجودیت‌های دامنه می‌خواند و دارایی‌های محصول با حذف رکورد والد یتیم نمی‌شوند.
+
+این پذیرش به معنی اجرای migration روی پایگاه داده production، تأیید callback واقعی درگاه بیرونی، آزمون بار/هم‌زمانی در مقیاس production یا تأیید backup عملیاتی نیست؛ این‌ها باید در مرحله استقرار و آزمون عملیاتی جداگانه تأیید شوند.
