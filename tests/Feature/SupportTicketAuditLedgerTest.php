@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FarastAuditEvent;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportTicketService;
