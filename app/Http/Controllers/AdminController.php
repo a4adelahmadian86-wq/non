@@ -572,8 +572,6 @@ class AdminController extends Controller
 
     public function updateSupportSms(Request $request)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-
         $request->validate(['support_alert_mobile' => ['nullable', 'string', 'max:20']]);
 
         SiteSetting::write('sms_enabled', $request->boolean('sms_enabled') ? '1' : '0');
