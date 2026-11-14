@@ -8,6 +8,8 @@ use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
 use App\Services\SupportTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Mockery;
 use Tests\TestCase;
@@ -64,6 +66,39 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         }
 
         $this->assertSame(0, $ticket->messages()->count());
+    }
+
+    public function test_ticket_creation_rollback_removes_managed_attachment_after_initial_message_succeeds(): void
+    {
+        Storage::fake('private');
+        $customer = User::factory()->create();
+
+        $sla = Mockery::mock(SupportSlaService::class);
+        $sla->shouldReceive('applyTargets')
+            ->once()
+            ->andThrow(new \RuntimeException('SLA target calculation failed'));
+
+        $service = new SupportTicketService(
+            Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing(),
+            $sla,
+        );
+
+        try {
+            $service->createTicket($customer, [
+                'subject' => 'Rollback with attachment',
+                'body' => 'Please inspect this document',
+                'priority' => 'normal',
+                'department' => 'support',
+            ], UploadedFile::fake()->createWithContent('note.txt', 'private payload'));
+
+            $this->fail('Ticket creation should roll back when SLA target calculation fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('SLA target calculation failed', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('tickets', 0);
+        $this->assertDatabaseCount('ticket_messages', 0);
+        $this->assertSame([], Storage::disk('private')->allFiles());
     }
 
     public function test_csat_can_only_be_submitted_once_even_from_a_stale_ticket_instance(): void

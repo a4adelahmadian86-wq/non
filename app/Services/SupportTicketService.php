@@ -42,68 +42,91 @@ class SupportTicketService
 
     public function createTicket(?User $user, array $data, ?UploadedFile $attachment = null): Ticket
     {
-        $ticket = DB::transaction(function () use ($user, $data, $attachment) {
-            $payload = [
-                'user_id' => $user?->id,
-                'subject' => $data['subject'],
-                'status' => 'open',
-                'priority' => $data['priority'] ?? 'normal',
-                'department' => $data['department'] ?? 'support',
-            ];
+        $initialMessage = null;
 
-            if (Schema::hasColumn('tickets', 'ticket_code')) {
-                $payload['ticket_code'] = $this->generateCode();
-            }
-            if (Schema::hasColumn('tickets', 'guest_name')) {
-                $payload['guest_name'] = $data['guest_name'] ?? null;
-            }
-            if (Schema::hasColumn('tickets', 'guest_email')) {
-                $payload['guest_email'] = isset($data['guest_email']) ? mb_strtolower(trim($data['guest_email'])) : null;
-            }
-            if (Schema::hasColumn('tickets', 'topic_area')) {
-                $payload['topic_area'] = $data['topic_area'] ?? null;
-            }
-            if (Schema::hasColumn('tickets', 'related_service')) {
-                $payload['related_service'] = $data['related_service'] ?? null;
-            }
-            if (Schema::hasColumn('tickets', 'related_product_id')) {
-                $payload['related_product_id'] = $data['related_product_id'] ?? null;
-            }
-            if (Schema::hasColumn('tickets', 'source')) {
-                $payload['source'] = $data['source'] ?? ($user ? 'dashboard' : 'widget');
-            }
-            if (Schema::hasColumn('tickets', 'last_reply_at')) {
-                $payload['last_reply_at'] = now();
-            }
+        try {
+            $ticket = DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
+                $payload = [
+                    'user_id' => $user?->id,
+                    'subject' => $data['subject'],
+                    'status' => 'open',
+                    'priority' => $data['priority'] ?? 'normal',
+                    'department' => $data['department'] ?? 'support',
+                ];
+    
+                if (Schema::hasColumn('tickets', 'ticket_code')) {
+                    $payload['ticket_code'] = $this->generateCode();
+                }
+                if (Schema::hasColumn('tickets', 'guest_name')) {
+                    $payload['guest_name'] = $data['guest_name'] ?? null;
+                }
+                if (Schema::hasColumn('tickets', 'guest_email')) {
+                    $payload['guest_email'] = isset($data['guest_email']) ? mb_strtolower(trim($data['guest_email'])) : null;
+                }
+                if (Schema::hasColumn('tickets', 'topic_area')) {
+                    $payload['topic_area'] = $data['topic_area'] ?? null;
+                }
+                if (Schema::hasColumn('tickets', 'related_service')) {
+                    $payload['related_service'] = $data['related_service'] ?? null;
+                }
+                if (Schema::hasColumn('tickets', 'related_product_id')) {
+                    $payload['related_product_id'] = $data['related_product_id'] ?? null;
+                }
+                if (Schema::hasColumn('tickets', 'source')) {
+                    $payload['source'] = $data['source'] ?? ($user ? 'dashboard' : 'widget');
+                }
+                if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                    $payload['last_reply_at'] = now();
+                }
+    
+                $ticket = Ticket::create($payload);
+    
+                // Assignment is resolved against the persisted ticket so RBAC scope
+                // checks always evaluate the actual record, not an incomplete payload.
+                if (Schema::hasColumn('tickets', 'assigned_to')) {
+                    $agent = ! empty($data['assigned_to'])
+                        ? User::query()->find((int) $data['assigned_to'])
+                        : $this->pickLeastLoadedAgent($ticket);
+    
+                    if ($agent) {
+                        abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
+                        $ticket->forceFill(['assigned_to' => $agent->id])->save();
+                    }
+                }
+    
+                $initialMessage = $this->addMessage($ticket, $user, $data['body'], [
+                    'is_staff' => false,
+                    'is_internal' => false,
+                    'attachment' => $attachment,
+                    'touch_status' => false,
+                    'notify' => false,
+                ]);
+    
+                $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+                $this->sla->applyTargets($ticket);
+    
+                return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+            });
+        } catch (\Throwable $exception) {
+            // addMessage owns cleanup for failures inside its own transaction.
+            // This outer catch covers failures after it returned but before the
+            // ticket transaction committed (for example SLA target calculation).
+            foreach ((array) ($initialMessage?->attachments ?? []) as $attachmentData) {
+                $disk = (string) ($attachmentData['disk'] ?? 'private');
+                $path = (string) ($attachmentData['path'] ?? '');
+                if ($path === '') {
+                    continue;
+                }
 
-            $ticket = Ticket::create($payload);
-
-            // Assignment is resolved against the persisted ticket so RBAC scope
-            // checks always evaluate the actual record, not an incomplete payload.
-            if (Schema::hasColumn('tickets', 'assigned_to')) {
-                $agent = ! empty($data['assigned_to'])
-                    ? User::query()->find((int) $data['assigned_to'])
-                    : $this->pickLeastLoadedAgent($ticket);
-
-                if ($agent) {
-                    abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
-                    $ticket->forceFill(['assigned_to' => $agent->id])->save();
+                try {
+                    app(StorageManager::class)->delete($disk, $path);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
                 }
             }
 
-            $this->addMessage($ticket, $user, $data['body'], [
-                'is_staff' => false,
-                'is_internal' => false,
-                'attachment' => $attachment,
-                'touch_status' => false,
-                'notify' => false,
-            ]);
-
-            $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
-            $this->sla->applyTargets($ticket);
-
-            return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
-        });
+            throw $exception;
+        }
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
 
