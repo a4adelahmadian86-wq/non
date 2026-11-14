@@ -68,7 +68,7 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
         $this->actingAs($agent)
             ->post(route('admin.support.sms.update'), [
                 'sms_enabled' => '1',
-                'ticket_reply_enabled' => '1',
+                'sms_ticket_reply_enabled' => '1',
                 'support_alert_mobile' => '09120000000',
             ])
             ->assertRedirect()
