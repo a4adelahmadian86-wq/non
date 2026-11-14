@@ -21,6 +21,8 @@ class SupportTicketService
 {
     public const STATUSES = ['open', 'pending', 'answered', 'user_replied', 'closed'];
 
+    public const STATUS_FILTER_NEEDS_REPLY = 'needs_reply';
+
     public const DEPARTMENTS = ['support', 'sales', 'billing', 'complaint'];
 
     public const PRIORITIES = ['low', 'normal', 'high'];
