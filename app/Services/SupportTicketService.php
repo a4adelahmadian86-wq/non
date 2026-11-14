@@ -338,28 +338,35 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        $attributes = ['status' => $targetStatus];
+        $attributes = [];
 
-        if ($targetStatus === 'closed') {
-            if (Schema::hasColumn('tickets', 'closed_at')) {
-                $attributes['closed_at'] = now();
+        // A reply that keeps the same status is not a lifecycle transition.
+        // In particular, it must not rewrite the historical close/resolve time
+        // or restart a paused SLA clock.
+        if ((string) $ticket->status !== $targetStatus) {
+            $attributes['status'] = $targetStatus;
+
+            if ($targetStatus === 'closed') {
+                if (Schema::hasColumn('tickets', 'closed_at')) {
+                    $attributes['closed_at'] = now();
+                }
+                if (Schema::hasColumn('tickets', 'resolved_at')) {
+                    $attributes['resolved_at'] = now();
+                }
+            } else {
+                if (Schema::hasColumn('tickets', 'closed_at')) {
+                    $attributes['closed_at'] = null;
+                }
+                if (Schema::hasColumn('tickets', 'resolved_at')) {
+                    $attributes['resolved_at'] = null;
+                }
             }
-            if (Schema::hasColumn('tickets', 'resolved_at')) {
-                $attributes['resolved_at'] = now();
-            }
-        } else {
-            if (Schema::hasColumn('tickets', 'closed_at')) {
-                $attributes['closed_at'] = null;
-            }
-            if (Schema::hasColumn('tickets', 'resolved_at')) {
-                $attributes['resolved_at'] = null;
-            }
+
+            $attributes = array_merge(
+                $attributes,
+                $this->sla->statusTransitionAttributes($ticket, $targetStatus)
+            );
         }
-
-        $attributes = array_merge(
-            $attributes,
-            $this->sla->statusTransitionAttributes($ticket, $targetStatus)
-        );
 
         return [
             'attributes' => $attributes,
