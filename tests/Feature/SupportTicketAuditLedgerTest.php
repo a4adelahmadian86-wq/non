@@ -76,6 +76,47 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertStringNotContainsString('message body', $encoded);
     }
 
+    public function test_noop_status_change_does_not_append_an_audit_event(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'No-op audit test',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        app(SupportTicketService::class)->changeStatus($ticket, 'open', $actor, false);
+
+        $this->assertDatabaseCount('farast_audit_events', 0);
+        $this->assertSame('open', $ticket->fresh()->status);
+    }
+
+    public function test_audit_ledger_failure_rolls_back_ticket_status_transition(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Audit rollback test',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $audit = Mockery::mock(\\App\\Services\\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \\RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\\App\\Services\\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->changeStatus($ticket, 'pending', $actor, false);
+            $this->fail('A failed audit append must abort the ticket transition.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertSame('open', $ticket->fresh()->status);
+        $this->assertDatabaseCount('farast_audit_events', 0);
+    }
+
     public function test_customer_reply_status_transition_is_audited_without_message_content(): void
     {
         $customer = User::factory()->create();
