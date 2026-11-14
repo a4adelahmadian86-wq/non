@@ -331,13 +331,15 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             $ids[] = $message->id;
         }
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->get(route('support.show', $ticket))
             ->assertOk()
             ->assertSee('RECENT_PUBLIC_105')
             ->assertDontSee('OLD_PUBLIC_2')
             ->assertDontSee('SECRET_INTERNAL_3')
             ->assertSee('loadOlderTicketMessages');
+
+        $this->assertSame(100, substr_count($response->getContent(), 'data-msg-id='));
 
         $this->actingAs($customer)
             ->get(route('support.messages.poll', $ticket).'?before_id='.$ids[5])
