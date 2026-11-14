@@ -83,8 +83,8 @@
                         @php $sla = $slaService->firstResponseStatus($t); @endphp
                         <span class="sla-pill sla-{{ $sla['color'] }}">{{ $sla['label'] }}</span>
                     </div>
-                    @if($last)
-                        <div class="sd-item-preview">{{ \Illuminate\Support\Str::limit($last->body, 55) }}</div>
+                    @if(filled($lastPublicPreview))
+                        <div class="sd-item-preview">{{ \\Illuminate\\Support\\Str::limit($lastPublicPreview, 55) }}</div>
                     @endif
                 </a>
             @empty
