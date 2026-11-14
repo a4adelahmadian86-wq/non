@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\AuditEventService;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
@@ -65,6 +66,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
 
         $this->assertSame(501, DB::table('tickets')->whereNotNull('sla_first_breached_at')->count());
         $this->assertSame(501, DB::table('support_sla_alert_outbox')->where('kind', 'first_response')->where('event', 'breached')->count());
+        $this->assertSame(501, DB::table('farast_audit_events')->where('event_type', 'support.ticket.sla_alert_queued')->count());
     }
 
     public function test_pending_ticket_keeps_first_response_monitoring_but_pauses_resolution_monitoring(): void
@@ -244,6 +246,36 @@ class SupportSlaMonitorReliabilityTest extends TestCase
     }
 
 
+
+    public function test_audit_append_failure_rolls_back_sla_marker_and_outbox_intent(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'SLA audit rollback',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        $audit = Mockery::mock(AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(AuditEventService::class, $audit);
+
+        try {
+            Artisan::call('support:check-sla');
+            $this->fail('SLA marker and outbox intent must roll back if the canonical audit append fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+    }
+
     public function test_outbox_enqueue_rolls_back_with_the_ticket_transaction(): void
     {
         $customer = User::factory()->create();
@@ -277,8 +309,11 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         }
 
         $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
-
-
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticketId,
+            'event_type' => 'support.ticket.sla_alert_queued',
+        ]);
     }
 
 }

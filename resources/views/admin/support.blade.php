@@ -441,6 +441,16 @@
                                                 $toAssignee = $toAssigneeId ? ($auditUserLabels[$toAssigneeId] ?? 'کارشناس دیگر') : 'بدون ارجاع';
                                             @endphp
                                             تغییر ارجاع: از {{ $fromAssignee }} به {{ $toAssignee }}
+                                        @elseif(in_array($auditEvent->event_type, ['support.ticket.sla_alert_queued', 'support.ticket.sla_alert_dispatched'], true))
+                                            @php
+                                                $slaKindLabel = match ($auditMeta['kind'] ?? null) {
+                                                    'first_response' => 'اولین پاسخ',
+                                                    'resolution' => 'حل تیکت',
+                                                    default => 'مهلت پشتیبانی',
+                                                };
+                                                $slaEventLabel = ($auditMeta['event'] ?? null) === 'breached' ? 'نقض مهلت' : 'نزدیک به پایان';
+                                            @endphp
+                                            {{ $auditEvent->event_type === 'support.ticket.sla_alert_queued' ? 'ثبت هشدار SLA در صف ارسال' : 'تحویل هشدار SLA به کانال‌های اطلاع‌رسانی' }}: {{ $slaKindLabel }} — {{ $slaEventLabel }}
                                         @else
                                             {{ $auditEvent->event_type }}
                                         @endif
@@ -460,6 +470,15 @@
                                     @elseif(!empty($slaBefore['resolution_paused_at']) && empty($slaAfter['resolution_paused_at']))
                                         <div style="margin-top:4px;font-size:.72rem;color:#047857">ساعت SLA حل از سر گرفته شد</div>
                                     @endif
+                                @elseif(in_array($auditEvent->event_type, ['support.ticket.sla_alert_queued', 'support.ticket.sla_alert_dispatched'], true))
+                                    <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
+                                        @if(($auditMeta['event'] ?? null) === 'warning' && isset($auditMeta['minutes_left']))
+                                            زمان باقی‌مانده هنگام ثبت: {{ (int) $auditMeta['minutes_left'] }} دقیقه
+                                        @endif
+                                        @if($auditEvent->event_type === 'support.ticket.sla_alert_dispatched' && isset($auditMeta['attempts']))
+                                            · تلاش ارسال: {{ (int) $auditMeta['attempts'] }}
+                                        @endif
+                                    </div>
                                 @endif
                             </li>
                         @endforeach
