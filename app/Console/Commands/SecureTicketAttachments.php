@@ -76,7 +76,7 @@ class SecureTicketAttachments extends Command
                             if (is_string($legacyPath) && $legacyPath !== '') {
                                 $stillReferenced = TicketMessage::query()
                                     ->where('id', '!=', $message->id)
-                                    ->where('attachments', 'like', '%'.$legacyPath.'%')
+                                    ->whereJsonContains('attachments', ['path' => $legacyPath])
                                     ->exists();
 
                                 if (! $stillReferenced) {
@@ -307,7 +307,7 @@ class SecureTicketAttachments extends Command
                         try {
                             $stillReferenced = TicketMessage::query()
                                 ->where('id', '!=', $message->id)
-                                ->where('attachments', 'like', '%'.$path.'%')
+                                ->whereJsonContains('attachments', ['path' => $path])
                                 ->exists();
 
                             if ($stillReferenced) {
