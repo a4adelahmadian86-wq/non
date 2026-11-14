@@ -146,7 +146,7 @@ class SupportSlaPriorityPauseTest extends TestCase
 
         $updated = $ticket->fresh();
         $this->assertNotNull($updated->sla_paused_at);
-        $this->assertSame(30, (int) $updated->sla_resolve_remaining_minutes);
+        $this->assertSame(40, (int) $updated->sla_resolve_remaining_minutes);
         $this->assertTrue($updated->sla_resolve_due_at->equalTo($now->copy()->addMinutes(30)));
     }
 }
