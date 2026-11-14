@@ -157,6 +157,7 @@ jobs:
           DB_DATABASE: farast_test
           DB_USERNAME: root
           DB_PASSWORD: root
+      # Run workload-sensitive support tests on a standalone MySQL connection, not inside an outer test transaction.
       - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
