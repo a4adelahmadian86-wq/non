@@ -122,6 +122,8 @@ class SupportController extends Controller
                     'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
                         'name' => $attachment['name'] ?? 'پیوست',
                         'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
+                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                        'quarantined' => ! empty($attachment['quarantined']),
                     ])->all(),
                 ];
             });
