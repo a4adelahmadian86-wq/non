@@ -17,6 +17,10 @@ class StoreOrderFulfillmentService
 {
     public function assertReady(Order $order, bool $requirePurchasable = false): void
     {
+        if ($order->status !== 'pending' || data_get($order->pricing_snapshot, 'kind') !== 'store') {
+            throw new RuntimeException('فقط سفارش فروشگاه در انتظار پرداخت قابل پیش‌بررسی است.');
+        }
+
         $this->resolveDeliverables($order, $requirePurchasable);
     }
 
@@ -30,8 +34,8 @@ class StoreOrderFulfillmentService
         return DB::transaction(function () use ($order): int {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
-            if (! $lockedOrder->isPaid() || data_get($lockedOrder->pricing_snapshot, 'kind') !== 'store') {
-                throw new RuntimeException('تحویل فقط برای سفارش فروشگاهِ تسویه‌شده مجاز است.');
+            if (! $lockedOrder->isPaid() || ! $lockedOrder->user_id || data_get($lockedOrder->pricing_snapshot, 'kind') !== 'store') {
+                throw new RuntimeException('تحویل فقط برای سفارش فروشگاهِ تسویه‌شده و دارای مالک مجاز است.');
             }
 
             $payments = Payment::query()
@@ -150,6 +154,19 @@ class StoreOrderFulfillmentService
 
                 $this->fulfill($order);
                 $this->markReconciled($payment);
+                try {
+                    app(NotificationService::class)->push(
+                        (int) $order->user_id,
+                        'order_fulfilled',
+                        'محتوای خرید شما آماده است',
+                        'تحویل سفارش شماره '.$order->id.' با موفقیت تکمیل شد و محتوا در کتابخانه شما قرار دارد.',
+                        ['order_id' => $order->id, 'url' => route('library')],
+                        true,
+                        'order:'.$order->id.':fulfilled:user:'.$order->user_id,
+                    );
+                } catch (Throwable $notificationException) {
+                    report($notificationException);
+                }
                 $completed++;
             } catch (Throwable $exception) {
                 $this->recordRetryFailure($payment, $exception);
@@ -164,6 +181,10 @@ class StoreOrderFulfillmentService
      */
     private function resolveDeliverables(Order $order, bool $requirePurchasable): array
     {
+        if (! $order->user_id || data_get($order->pricing_snapshot, 'kind') !== 'store') {
+            throw new RuntimeException('مرجع مالک یا نوع سفارش برای تحویل معتبر نیست.');
+        }
+
         $items = $order->storeItems()->orderBy('id')->lockForUpdate()->get();
         if ($items->isEmpty()) {
             throw new RuntimeException('سفارش فروشگاه فاقد قلم قابل تحویل است.');
