@@ -363,7 +363,7 @@ class SupportTicketService
                 $messageIsStaff = $isStaff || (bool) ($actor?->isAdmin() ?? false);
                 $actorType = $actor
                     ? ($messageIsStaff ? 'staff' : 'customer')
-                    : ($messageIsStaff ? 'system' : 'guest');
+                    : (($isInternal || $messageIsStaff) ? 'system' : 'guest');
                 $messageType = $isInternal
                     ? ($actor ? 'internal_note' : 'system_note')
                     : ($messageIsStaff ? 'staff_reply' : ($actor ? 'customer_reply' : 'guest_reply'));
