@@ -20,6 +20,7 @@ return Application::configure(basePath:dirname(__DIR__))
     )
     // Explicitly register first-party command classes used by scheduled operations.
     ->withCommands([
+        CheckSupportSlaCommand::class,
         __DIR__.'/../app/Console/Commands',
     ])
     ->withMiddleware(function(Middleware $middleware):void{
