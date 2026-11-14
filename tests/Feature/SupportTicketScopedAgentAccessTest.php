@@ -239,19 +239,35 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'priority' => 'normal',
             'department' => 'support',
         ]);
+        $guestTicket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'Global-only guest ticket',
+            'guest_email' => 'guest@example.test',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
 
         $this->actingAs($agent)
             ->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
             ->assertOk()
             ->assertSee('Team-owned support ticket')
             ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket')
             ->assertDontSee('گزارش SLA');
 
         $this->actingAs($agent)
             ->get(route('admin.support.management', ['ticket' => $outsideTicket->id]))
             ->assertOk()
             ->assertSee('Team-owned support ticket')
-            ->assertDontSee('Other-team private ticket');
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket');
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['q' => 'Other-team private ticket']))
+            ->assertOk()
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket');
 
         $this->actingAs($agent)
             ->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'Unauthorized reply'])
