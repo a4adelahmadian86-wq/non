@@ -87,7 +87,7 @@ class SupportSlaService
         while ($remaining > 0 && $guard < 20000) {
             $guard++;
 
-            if (in_array((int) $cursor->dayOfWeek, $weekend, true)) {
+            if (! $this->isBusinessDay($cursor, $weekend)) {
                 $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
 
                 continue;
@@ -325,6 +325,22 @@ class SupportSlaService
     }
 
     /**
+     * Whether a local calendar date is eligible for SLA working-time accrual.
+     *
+     * @param array<int, int> $weekend
+     */
+    private function isBusinessDay(Carbon $date, array $weekend): bool
+    {
+        if (in_array((int) $date->dayOfWeek, $weekend, true)) {
+            return false;
+        }
+
+        $holidays = (array) config('support.business_hours.holidays', []);
+
+        return ! in_array($date->toDateString(), $holidays, true);
+    }
+
+    /**
      * Count working minutes in [from, to), using the same calendar as SLA deadlines.
      */
     public function businessMinutesBetween(Carbon $from, Carbon $to): int
@@ -348,7 +364,7 @@ class SupportSlaService
 
         while ($cursor->lt($end) && $guard < 20000) {
             $guard++;
-            if (in_array((int) $cursor->dayOfWeek, $weekend, true)) {
+            if (! $this->isBusinessDay($cursor, $weekend)) {
                 $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
                 continue;
             }
