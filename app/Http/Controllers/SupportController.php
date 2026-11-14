@@ -99,42 +99,50 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
-        $afterId = (int) $request->input('after_id', 0);
+        $afterId = max(0, (int) $request->input('after_id', 0));
 
-        $messages = $ticket->messages()
+        // Scan a bounded batch before applying visibility rules. Customer cursors
+        // must advance over private notes without receiving their contents.
+        $scannedMessages = $ticket->messages()
             ->with('user')
             ->where('id', '>', $afterId)
-            ->when(! $canSeeInternal, fn ($q) => $q->where(function ($w) {
-                $w->where('is_internal', false)->orWhereNull('is_internal');
-            }))
-            ->orderBy('created_at')
-            ->get()
-            ->map(function ($m) use ($ticket) {
-                $isStaff = $m->isFromStaff();
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
 
-                return [
-                    'id' => $m->id,
-                    'body' => $m->body,
-                    'is_staff' => $isStaff,
-                    'is_internal' => (bool) $m->is_internal,
-                    'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
-                    'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
-                    'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
-                        'name' => $attachment['name'] ?? 'پیوست',
-                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
-                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
-                        'quarantined' => ! empty($attachment['quarantined']),
-                    ])->all(),
-                ];
-            });
+        $lastScannedId = (int) ($scannedMessages->last()?->id ?? $afterId);
 
         if (! $canSeeInternal) {
+            $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        $messages = $scannedMessages->map(function ($m) use ($ticket) {
+            $isStaff = $m->isFromStaff();
+
+            return [
+                'id' => $m->id,
+                'body' => $m->body,
+                'is_staff' => $isStaff,
+                'is_internal' => (bool) $m->is_internal,
+                'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
+                'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
+                'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                    'name' => $attachment['name'] ?? 'پیوست',
+                    'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
+                    'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                    'quarantined' => ! empty($attachment['quarantined']),
+                ])->all(),
+            ];
+        });
+
+        if (! $canSeeInternal && $messages->isNotEmpty()) {
             $this->tickets->markCustomerSeen($ticket);
         }
 
         return response()->json([
             'ok' => true,
             'messages' => $messages,
+            'last_id' => $lastScannedId,
             'status' => $ticket->fresh()->status,
             'status_label' => $ticket->fresh()->statusLabel(),
         ]);
