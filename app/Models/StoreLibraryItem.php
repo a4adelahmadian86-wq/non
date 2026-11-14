@@ -12,8 +12,22 @@ class StoreLibraryItem extends Model
     protected static function booted(): void
     {
         static::updating(function (StoreLibraryItem $item): void {
-            if ($item->isDirty(['user_id', 'product_id', 'order_id', 'order_item_id', 'product_file_id', 'license_code', 'granted_at'])) {
+            if ($item->isDirty(['user_id', 'product_id', 'order_id', 'product_file_id', 'license_code', 'granted_at'])) {
                 throw new LogicException('store_library_entitlement_identity_is_immutable');
+            }
+
+            if ($item->isDirty('order_item_id')) {
+                $isOneTimeLegacyBinding = $item->getOriginal('order_item_id') === null
+                    && $item->order_item_id !== null
+                    && StoreOrderItem::query()
+                        ->whereKey($item->order_item_id)
+                        ->where('order_id', $item->order_id)
+                        ->where('product_id', $item->product_id)
+                        ->exists();
+
+                if (! $isOneTimeLegacyBinding) {
+                    throw new LogicException('store_library_entitlement_order_item_binding_is_immutable');
+                }
             }
         });
 
