@@ -163,6 +163,70 @@ class WorkflowEngine
     }
 
     /**
+     * Reconcile verified external payments whose workflow outbox write had to
+     * be deferred after capture. This is intentionally marker-scoped: it never
+     * backfills workflow events for historical paid orders.
+     */
+    private function reconcileMissingPaidOrderEvents(int $limit = 50): int
+    {
+        if (! Schema::hasTable('payments') || ! Schema::hasTable('orders')) {
+            return 0;
+        }
+
+        $payments = DB::table('payments')
+            ->where('status', 'paid')
+            ->where('gateway_response->workflow_event_reconciliation->status', 'required')
+            ->orderBy('id')
+            ->limit(max(1, min($limit, 200)))
+            ->get(['id', 'order_id', 'gateway_response']);
+
+        $reconciled = 0;
+        foreach ($payments as $payment) {
+            $order = DB::table('orders')->where('id', $payment->order_id)->first();
+            if (! $order || $order->status !== 'paid' || $order->paid_at === null || (int) $order->user_id < 1) {
+                continue;
+            }
+
+            $snapshot = json_decode((string) $order->pricing_snapshot, true);
+            $snapshot = is_array($snapshot) ? $snapshot : [];
+            $eventKey = 'order:'.$order->id.':order.paid';
+
+            try {
+                $this->enqueue('order.paid', [
+                    'user_id' => (int) $order->user_id,
+                    'customer_id' => (int) $order->user_id,
+                    'order_id' => (int) $order->id,
+                    'amount_rials' => (int) $order->total_rials,
+                    'order_kind' => (string) ($snapshot['kind'] ?? 'unknown'),
+                    'status' => 'paid',
+                ], $eventKey);
+
+                if (! DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->exists()) {
+                    continue;
+                }
+
+                $gatewayResponse = json_decode((string) $payment->gateway_response, true);
+                $gatewayResponse = is_array($gatewayResponse) ? $gatewayResponse : [];
+                $marker = $gatewayResponse['workflow_event_reconciliation'] ?? [];
+                $marker = is_array($marker) ? $marker : [];
+                $marker['status'] = 'reconciled';
+                $marker['reconciled_at'] = now()->toIso8601String();
+                $gatewayResponse['workflow_event_reconciliation'] = $marker;
+
+                DB::table('payments')->where('id', $payment->id)->update([
+                    'gateway_response' => json_encode($gatewayResponse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'updated_at' => now(),
+                ]);
+                $reconciled++;
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return $reconciled;
+    }
+
+    /**
      * Retry incomplete events from the scheduler. Completed workflow steps are
      * skipped, failed steps are retried up to five times, and active leases are
      * not claimed by another worker.
@@ -172,6 +236,10 @@ class WorkflowEngine
         if (! Schema::hasTable('farast_workflow_events') || ! Schema::hasTable('farast_workflow_event_workflows')) {
             return 0;
         }
+
+        // Queue recovered external-payment events before claiming the pending
+        // batch so they can be processed in this same scheduler invocation.
+        $this->reconcileMissingPaidOrderEvents($limit);
 
         $events = DB::table('farast_workflow_events')
             ->where('status', '!=', 'completed')
