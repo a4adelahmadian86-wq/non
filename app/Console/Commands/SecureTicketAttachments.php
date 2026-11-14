@@ -104,7 +104,7 @@ class SecureTicketAttachments extends Command
                         if ($sourcePath === ''
                             || str_starts_with($sourcePath, '/')
                             || preg_match('~(^|/)\.\.?(/|$)~', $sourcePath) === 1
-                            || (! in_array($sourceDisk, ['public', 'private'], true) && ! $isVolume)) {
+                            || (! in_array($sourceDisk, ['public', 'private', 'local'], true) && ! $isVolume)) {
                             continue;
                         }
 
