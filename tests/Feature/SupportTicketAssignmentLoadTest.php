@@ -12,13 +12,13 @@ use App\Http\Middleware\ResolveAdminScope;
 use App\Services\AuthorizationService;
 use App\Services\SupportAssignmentMutex;
 use App\Services\SupportTicketService;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SupportTicketAssignmentLoadTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     public function test_auto_assignment_ignores_workload_outside_each_agents_rbac_scope(): void
     {
