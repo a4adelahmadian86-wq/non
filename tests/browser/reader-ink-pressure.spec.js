@@ -58,3 +58,27 @@ test('personal ink strokes are repainted after durable IndexedDB restoration',as
     return visible;
   })).toBeGreaterThan(0);
 });
+
+test('a delayed durable restore cannot overwrite personal-tool changes made during startup',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="personal-tools-race-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Restore race</span></div></div></article></section>');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  const key='farast.reader.personal-tools.v1:personal-tools-race-test';
+  const oldState=JSON.stringify({light:false,font:'system',size:100,lineHeight:1.7,measure:'normal',paragraphSpacing:1,focusMode:false,readingRuler:false,highlightColor:'yellow',highlights:[],notes:[],inkStrokes:[]});
+  await page.evaluate(async({key,oldState})=>{
+    await window.FarastReaderDurableStore.set(key,oldState);
+    let releaseRestore;
+    const delayed=new Promise(resolve=>{releaseRestore=resolve;});
+    window.__releasePersonalToolsRestore=()=>releaseRestore(oldState);
+    const durableStore=window.FarastReaderDurableStore;
+    Object.defineProperty(window,'FarastReaderDurableStore',{configurable:true,value:{...durableStore,migrate:()=>delayed,set:durableStore.set.bind(durableStore),requestPersistence:durableStore.requestPersistence.bind(durableStore),restore:durableStore.restore.bind(durableStore)}});
+  },{key,oldState});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-personal-tools.js')});
+  await page.locator('.farast-reader-preferences-panel > summary').click();
+  await page.locator('[data-reading-light]').click();
+  await expect(page.locator('[data-reading-light]')).toHaveAttribute('aria-pressed','true');
+  await page.evaluate(()=>window.__releasePersonalToolsRestore());
+  await page.evaluate(()=>window.FarastReaderPersonalToolsReady);
+  await expect(page.locator('[data-reading-light]')).toHaveAttribute('aria-pressed','true');
+  await expect.poll(()=>page.evaluate(async key=>JSON.parse(await window.FarastReaderDurableStore.restore(key)).light,key)).toBe(true);
+});
