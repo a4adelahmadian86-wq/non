@@ -45,8 +45,14 @@
         \App\Services\SupportTicketService::PRIORITY_NORMAL => 'متوسط',
         \App\Services\SupportTicketService::PRIORITY_HIGH => 'زیاد',
     ];
-    $sourceLabels = ['dashboard'=>'پنل','widget'=>'ویجت'];
-    $topicAreaLabels = ['services'=>'خدمات','store'=>'فروشگاه'];
+    $sourceLabels = [
+        \App\Services\SupportTicketService::SOURCE_DASHBOARD => 'پنل',
+        \App\Services\SupportTicketService::SOURCE_WIDGET => 'ویجت',
+    ];
+    $topicAreaLabels = [
+        \App\Services\SupportTicketService::TOPIC_AREA_SERVICES => 'خدمات',
+        \App\Services\SupportTicketService::TOPIC_AREA_STORE => 'فروشگاه',
+    ];
     $slaFilterLabels = [
         \App\Services\SupportTicketService::SLA_FILTER_AT_RISK => 'نزدیک نقض',
         \App\Services\SupportTicketService::SLA_FILTER_BREACHED => 'نقض‌شده',
