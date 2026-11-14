@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Database\QueryException;
+use LogicException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -46,7 +47,7 @@ class FinancialRetentionTest extends TestCase
         try {
             $order->delete();
             self::fail('An order with payment history must not be deleted.');
-        } catch (QueryException) {
+        } catch (QueryException|LogicException) {
             $this->assertDatabaseHas('orders', ['id' => $order->id]);
             $this->assertDatabaseHas('payments', ['id' => $payment->id]);
         }
