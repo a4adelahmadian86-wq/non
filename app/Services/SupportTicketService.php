@@ -92,6 +92,11 @@ class SupportTicketService
                     if ($agent) {
                         abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
                         $ticket->forceFill(['assigned_to' => $agent->id])->save();
+
+                        $this->recordSupportAuditEvent($ticket, null, 'support.ticket.assignment_changed', [
+                            'from_assigned_to' => null,
+                            'to_assigned_to' => (int) $agent->id,
+                        ]);
                     }
                 }
     
