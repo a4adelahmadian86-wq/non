@@ -196,16 +196,27 @@ class SupportSlaService
     /** @return array{state:string,label:string,color:string,breached:bool} */
     public function resolutionStatus(Ticket $ticket): array
     {
-        if ($ticket->status === 'pending') {
-            $breachedBeforePause = ! empty($ticket->sla_resolve_breached_at);
+        $hasResolutionBreach = ! empty($ticket->sla_resolve_breached_at);
 
+        if ($ticket->status === 'pending') {
             return [
                 'state' => 'paused',
-                'label' => $breachedBeforePause
-                    ? 'متوقف؛ مهلت پیش از توقف نقض شده'
+                'label' => $hasResolutionBreach
+                    ? 'متوقف؛ نقض SLA حل ثبت شده'
                     : 'متوقف (منتظر کاربر)',
-                'color' => $breachedBeforePause ? 'danger' : 'muted',
-                'breached' => $breachedBeforePause,
+                'color' => $hasResolutionBreach ? 'danger' : 'muted',
+                'breached' => $hasResolutionBreach,
+            ];
+        }
+
+        // A recorded breach is historical evidence and must not disappear
+        // when a paused ticket resumes or is eventually closed.
+        if ($hasResolutionBreach) {
+            return [
+                'state' => 'breached',
+                'label' => 'نقض SLA حل ثبت شده',
+                'color' => 'danger',
+                'breached' => true,
             ];
         }
 
