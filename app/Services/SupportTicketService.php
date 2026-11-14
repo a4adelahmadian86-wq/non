@@ -141,9 +141,6 @@ class SupportTicketService
     }
 
     /**
-     * انتخاب کارشناس با کمترین تیکت باز.
-     */
-    /**
      * Active users who can manage this exact ticket under the central RBAC scope.
      *
      * @return \Illuminate\Support\Collection<int, User>
@@ -162,22 +159,17 @@ class SupportTicketService
         return ($this->agentDirectory ?? app(SupportAgentDirectory::class))->allows($agent, $ticket);
     }
 
+    /**
+     * Select the eligible agent with the lowest active workload visible in their
+     * own effective RBAC scope. Global agents include guest tickets; scoped
+     * agents are not penalized for tickets they cannot access.
+     */
     public function pickLeastLoadedAgent(Ticket $ticket): ?User
     {
         $agents = $this->eligibleAgentsFor($ticket);
         if ($agents->isEmpty()) {
             return null;
         }
-
-        // createTicket calls this inside its transaction. Lock candidate rows
-        // in a stable order so concurrent creations do not all observe the same
-        // stale workload and assign to the same agent.
-        $agentIds = $agents->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
-        DB::table('users')
-            ->whereIn('id', $agentIds)
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->get(['id']);
 
         // Count only active tickets visible to each candidate under that
         // candidate's own effective scope. A team agent must not be penalized
