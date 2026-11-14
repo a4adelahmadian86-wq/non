@@ -81,7 +81,7 @@ class WorkflowEngine
     public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
-            throw new \\InvalidArgumentException('Unsupported workflow event.');
+            throw new \InvalidArgumentException('Unsupported workflow event.');
         }
 
         if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
@@ -91,7 +91,7 @@ class WorkflowEngine
         $userId = (int) $context['user_id'];
         $idempotencyKey = trim($idempotencyKey);
         if ($userId < 1 || $idempotencyKey === '' || mb_strlen($idempotencyKey) > 190) {
-            throw new \\InvalidArgumentException('Workflow event identity is invalid.');
+            throw new \InvalidArgumentException('Workflow event identity is invalid.');
         }
 
         $encodedContext = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -113,11 +113,11 @@ class WorkflowEngine
 
         $event = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
         if (! $event) {
-            throw new \\RuntimeException('Workflow event could not be persisted.');
+            throw new \RuntimeException('Workflow event could not be persisted.');
         }
 
         if ((int) $event->user_id !== $userId || $event->event_type !== $eventType) {
-            throw new \\RuntimeException('Workflow event idempotency key is already bound to another event.');
+            throw new \RuntimeException('Workflow event idempotency key is already bound to another event.');
         }
 
         return ($event->status ?? null) === 'completed' ? 0 : (int) $event->id;
@@ -146,7 +146,7 @@ class WorkflowEngine
         // caller's payload when an idempotency key is replayed.
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
-            throw new \\RuntimeException('Stored workflow event context is invalid.');
+            throw new \RuntimeException('Stored workflow event context is invalid.');
         }
 
         return $this->processEvent($event, $storedContext);
