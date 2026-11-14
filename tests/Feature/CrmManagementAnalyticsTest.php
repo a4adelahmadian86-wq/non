@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,10 +47,18 @@ class CrmManagementAnalyticsTest extends TestCase
         $outside->save();
 
         foreach ([$inside, $outside] as $customer) {
-            Order::create([
+            $order = Order::create([
                 'user_id' => $customer->id, 'subtotal_rials' => 100000,
                 'discount_rials' => 0, 'tax_rials' => 0, 'total_rials' => 100000,
                 'status' => 'paid', 'pricing_snapshot' => ['kind' => 'test'], 'paid_at' => now(),
+            ]);
+            Payment::create([
+                'order_id' => $order->id,
+                'gateway' => 'wallet',
+                'amount_rials' => 100000,
+                'status' => 'paid',
+                'transaction_id' => 'CRM-ANALYTICS-'.uniqid(),
+                'paid_at' => now(),
             ]);
         }
 
