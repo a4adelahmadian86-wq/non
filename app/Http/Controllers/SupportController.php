@@ -194,9 +194,9 @@ class SupportController extends Controller
             'body' => 'required|string|max:5000',
             'department' => 'required|string|in:'.implode(',', SupportTicketService::DEPARTMENTS),
             'priority' => 'required|string|in:'.implode(',', SupportTicketService::PRIORITIES),
-            'topic_area' => 'required|string|in:services,store',
-            'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'services'), 'nullable', 'string', 'max:80'],
-            'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'store'), 'nullable', 'integer', Rule::exists('store_products', 'id')],
+            'topic_area' => ['required', 'string', Rule::in(SupportTicketService::TOPIC_AREAS)],
+            'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_SERVICES), 'nullable', 'string', 'max:80'],
+            'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_STORE), 'nullable', 'integer', Rule::exists('store_products', 'id')],
             'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
         ], [
             'department.required' => 'دپارتمان را انتخاب کنید.',
@@ -208,11 +208,11 @@ class SupportController extends Controller
 
         $body = $data['body'];
         $meta = [];
-        if ($data['topic_area'] === 'services' && ! empty($data['related_service'])) {
+        if ($data['topic_area'] === SupportTicketService::TOPIC_AREA_SERVICES && ! empty($data['related_service'])) {
             $labels = ['typing' => 'تایپ آنلاین', 'convert' => 'تبدیل فایل', 'edit' => 'ویرایش هوشمند', 'ocr' => 'OCR / استخراج متن', 'voice' => 'ورود صوتی', 'other' => 'سایر خدمات'];
             $meta[] = 'حوزه: خدمات — '.($labels[$data['related_service']] ?? $data['related_service']);
         }
-        if ($data['topic_area'] === 'store' && ! empty($data['related_product_id'])) {
+        if ($data['topic_area'] === SupportTicketService::TOPIC_AREA_STORE && ! empty($data['related_product_id'])) {
             $product = StoreProduct::find($data['related_product_id']);
             $meta[] = 'حوزه: فروشگاه — محصول: '.($product?->title ?? ('#'.$data['related_product_id']));
         }
@@ -226,9 +226,9 @@ class SupportController extends Controller
             'department' => $data['department'],
             'priority' => $data['priority'],
             'topic_area' => $data['topic_area'],
-            'related_service' => $data['topic_area'] === 'services' ? ($data['related_service'] ?? null) : null,
-            'related_product_id' => $data['topic_area'] === 'store' ? ($data['related_product_id'] ?? null) : null,
-            'source' => 'dashboard',
+            'related_service' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_SERVICES ? ($data['related_service'] ?? null) : null,
+            'related_product_id' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_STORE ? ($data['related_product_id'] ?? null) : null,
+            'source' => SupportTicketService::SOURCE_DASHBOARD,
         ], $request->file('attachment'));
 
         return redirect()->route('support.show', $ticket)->with('status', 'تیکت '.$ticket->displayCode().' ثبت شد.');
@@ -667,14 +667,14 @@ class SupportController extends Controller
             }
             if (! $ticket) {
                 $ticket = Ticket::where('user_id', $user->id)->where('status', '!=', 'closed')
-                    ->when(Schema::hasColumn('tickets', 'source'), fn ($q) => $q->where('source', 'widget'))
+                    ->when(Schema::hasColumn('tickets', 'source'), fn ($q) => $q->where('source', SupportTicketService::SOURCE_WIDGET))
                     ->latest()->first();
             }
             if (! $ticket) {
                 $ticket = $this->tickets->createTicket($user, [
                     'subject' => Str::limit($data['body'], 80),
                     'body' => $data['body'],
-                    'source' => 'widget',
+                    'source' => SupportTicketService::SOURCE_WIDGET,
                     'department' => 'support',
                     'priority' => 'normal',
                 ]);
@@ -718,7 +718,7 @@ class SupportController extends Controller
                 'body' => $data['body'],
                 'guest_name' => $name,
                 'guest_email' => $email,
-                'source' => 'widget',
+                'source' => SupportTicketService::SOURCE_WIDGET,
                 'department' => 'support',
                 'priority' => 'normal',
             ]);
