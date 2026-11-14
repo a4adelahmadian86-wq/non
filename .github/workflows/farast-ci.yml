@@ -157,7 +157,7 @@ jobs:
           DB_DATABASE: farast_test
           DB_USERNAME: root
           DB_PASSWORD: root
-      # Support lock tests use one MySQL schema migration, per-test table truncation, and no outer transaction.
+      # MySQL support checks cover lock lifetime, scoped active workload, and duplicate no-op transitions.
       - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
