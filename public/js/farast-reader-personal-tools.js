@@ -35,7 +35,29 @@
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
   group.setAttribute('aria-label', 'ابزارهای شخصی مطالعه');
-  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><label class="reader-personal-label">فاصله خطوط <select data-reader-line-height aria-label="فاصله خطوط"><option value="1.4">فشرده</option><option value="1.6">کم</option><option value="1.7">معمولی</option><option value="1.9">باز</option><option value="2.1">خیلی باز</option></select></label><label class="reader-personal-label">عرض متن <select data-reader-measure aria-label="عرض ستون متن"><option value="narrow">باریک</option><option value="normal">معمولی</option><option value="wide">عریض</option></select></label><label class="reader-personal-label">فاصله بندها <select data-reader-paragraph-spacing aria-label="فاصله بندها"><option value="0.5">کم</option><option value="1">معمولی</option><option value="1.5">زیاد</option><option value="2">خیلی زیاد</option></select></label><button type="button" class="reader-tool reader-tool-wide" data-reader-focus aria-pressed="false">حالت تمرکز</button><button type="button" class="reader-tool reader-tool-wide" data-reader-ruler aria-pressed="false">خط‌نمای مطالعه</button><label class="reader-personal-label" data-reader-legacy-annotation>رنگ <select data-reader-highlight-color aria-label="رنگ هایلایت"><option value="yellow">زرد</option><option value="green">سبز</option><option value="blue">آبی</option><option value="pink">صورتی</option></select></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
+  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><label class="reader-personal-label">فاصله خطوط <select data-reader-line-height aria-label="فاصله خطوط"><option value="1.4">فشرده</option><option value="1.6">کم</option><option value="1.7">معمولی</option><option value="1.9">باز</option><option value="2.1">خیلی باز</option></select></label><label class="reader-personal-label">عرض متن <select data-reader-measure aria-label="عرض ستون متن"><option value="narrow">باریک</option><option value="normal">معمولی</option><option value="wide">عریض</option></select></label><label class="reader-personal-label">فاصله بندها <select data-reader-paragraph-spacing aria-label="فاصله بندها"><option value="0.5">کم</option><option value="1">معمولی</option><option value="1.5">زیاد</option><option value="2">خیلی زیاد</option></select></label><button type="button" class="reader-tool reader-tool-wide" data-reader-focus aria-pressed="false">حالت تمرکز</button><button type="button" class="reader-tool reader-tool-wide" data-reader-ruler aria-pressed="false">خط‌نمای مطالعه</button><label class="reader-personal-label" data-reader-legacy-annotation>رنگ <select data-reader-highlight-color aria-label="رنگ هایلایت"><option value="yellow">زرد</option><option value="green">سبز</option><option value="blue">آبی</option><option value="pink">صورتی</option></select></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter" aria-hidden="true"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
+
+  const applyIconButton=(button,icon,label)=>{
+    if(!button)return;
+    const visibleLabel=button.querySelector('.reader-tool-label')?.textContent||button.querySelector('span')?.textContent||button.textContent.trim()||label;
+    button.title=label;
+    button.setAttribute('aria-label',label);
+    const glyph=document.createElement('i');glyph.className=icon;glyph.setAttribute('aria-hidden','true');
+    const caption=document.createElement('span');caption.className='reader-tool-label';caption.textContent=visibleLabel;
+    button.replaceChildren(glyph,caption);button.classList.add('reader-tool-icon-only');
+  };
+  [
+    ['[data-reading-light]','fa-solid fa-lightbulb','نور مطالعه'],
+    ['[data-reader-focus]','fa-solid fa-bullseye','حالت تمرکز'],
+    ['[data-reader-ruler]','fa-solid fa-ruler-horizontal','خط‌نمای مطالعه'],
+    ['[data-reader-note]','fa-regular fa-note-sticky','حاشیه‌نویسی'],
+    ['[data-reader-notes]','fa-solid fa-list','نمایش یادداشت‌ها'],
+    ['[data-reader-export]','fa-solid fa-file-export','خروجی یادداشت‌ها'],
+    ['[data-reader-import]','fa-solid fa-file-import','بازیابی یادداشت‌ها']
+  ].forEach(([selector,icon,label])=>applyIconButton(group.querySelector(selector),icon,label));
+  const personalIconStyle=document.createElement('style');
+  personalIconStyle.textContent='.farast-reader-personal-tools .reader-tool-icon-only,.farast-reader-ink-tools .reader-tool-icon-only{width:38px;min-width:38px;flex:0 0 38px;min-height:36px;padding:0;gap:0;position:relative;justify-content:center}.farast-reader-personal-tools .reader-tool-icon-only i,.farast-reader-ink-tools .reader-tool-icon-only i{font-size:.92rem;line-height:1}.farast-reader-personal-tools .reader-tool-label,.farast-reader-ink-tools .reader-tool-label{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}';
+  document.head.append(personalIconStyle);
   const status = document.createElement('span');
   status.className = 'sr-only';
   status.setAttribute('role', 'status');
@@ -410,6 +432,8 @@
   notesButton.addEventListener('click', () => {
     notesPanel.hidden = !notesPanel.hidden;
     notesButton.setAttribute('aria-expanded', String(!notesPanel.hidden));
+    notesButton.title=notesPanel.hidden?'نمایش یادداشت‌ها':'بستن یادداشت‌ها';
+    notesButton.setAttribute('aria-label',notesButton.title);
     renderNotes();
   });
   root.addEventListener('keydown', event => {
@@ -430,6 +454,13 @@
   inkControls.className = 'farast-reader-ink-tools';
   inkControls.setAttribute('aria-label', 'قلم نوری و ترسیم روی صفحه');
   inkControls.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-ink-toggle aria-pressed="false">قلم نوری</button><button type="button" class="reader-tool" data-ink-pen aria-pressed="true">قلم</button><button type="button" class="reader-tool" data-ink-eraser aria-pressed="false">پاک‌کن</button><label class="reader-personal-label">رنگ قلم <input type="color" data-ink-color value="#e11d48" aria-label="رنگ قلم"></label><label class="reader-personal-label">ضخامت <input type="range" data-ink-width min="1" max="16" value="3" aria-label="ضخامت قلم"></label><button type="button" class="reader-tool" data-ink-undo>واگرد</button><button type="button" class="reader-tool" data-ink-clear>پاک‌کردن صفحه</button>';
+  [
+    ['[data-ink-toggle]','fa-solid fa-pen-ruler','قلم نوری'],
+    ['[data-ink-pen]','fa-solid fa-pen','قلم'],
+    ['[data-ink-eraser]','fa-solid fa-eraser','پاک‌کن'],
+    ['[data-ink-undo]','fa-solid fa-rotate-left','واگرد قلم'],
+    ['[data-ink-clear]','fa-solid fa-trash','پاک‌کردن ترسیم‌های صفحه']
+  ].forEach(([selector,icon,label])=>applyIconButton(inkControls.querySelector(selector),icon,label));
   const inkHelp = document.createElement('p');
   inkHelp.className = 'farast-reader-ink-help';
   inkHelp.id = 'farast-reader-ink-help-' + Math.random().toString(36).slice(2);
