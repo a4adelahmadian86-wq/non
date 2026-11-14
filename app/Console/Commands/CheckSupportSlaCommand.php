@@ -13,7 +13,7 @@ class CheckSupportSlaCommand extends Command
 {
     protected $signature = 'support:check-sla {--dry-run : فقط گزارش بدون ارسال اعلان}';
 
-    protected $description = 'پایش SLA تیکت‌ها و ارسال هشدار نزدیک‌به‌نقض / نقض';
+    protected $description = 'پایش SLA تیکت‌ها و ثبت هشدارها در صف پایدار';
 
     public function handle(SupportSlaService $sla, SupportSlaAlertOutboxService $outbox): int
     {
@@ -45,7 +45,7 @@ class CheckSupportSlaCommand extends Command
         $stats = ['warned_first' => 0, 'breached_first' => 0, 'warned_resolve' => 0, 'breached_resolve' => 0];
 
         // Process the complete active queue in bounded batches. Every alert is
-        // re-evaluated and claimed under a row lock to prevent duplicate sends.
+        // re-evaluated and claimed under a row lock to prevent duplicate alert intents.
         Ticket::query()
             ->openQueue()
             ->with(['assignee', 'user'])
@@ -73,8 +73,8 @@ class CheckSupportSlaCommand extends Command
 
                         $label = $kind === 'resolution' ? 'resolve' : 'first';
                         $this->line($event === 'breached'
-                            ? "BREACH {$label} #{$ticket->id} {$ticket->displayCode()}"
-                            : "WARN {$label} #{$ticket->id} ({$minutes}m left)");
+                            ? "QUEUED BREACH {$label} #{$ticket->id} {$ticket->displayCode()}"
+                            : "QUEUED WARN {$label} #{$ticket->id} ({$minutes}m left)");
 
                         if ($dry) {
                             continue;
@@ -87,7 +87,7 @@ class CheckSupportSlaCommand extends Command
             });
 
         $this->info(sprintf(
-            'SLA check done. first(warn=%d,breach=%d) resolve(warn=%d,breach=%d)%s',
+            'SLA scan done. queued first(warn=%d,breach=%d) resolve(warn=%d,breach=%d)%s',
             $stats['warned_first'],
             $stats['breached_first'],
             $stats['warned_resolve'],
