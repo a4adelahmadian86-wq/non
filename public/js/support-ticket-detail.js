@@ -119,8 +119,15 @@
     let attachHtml = '';
     if (Array.isArray(m.attachments) && m.attachments.length) {
       attachHtml = '<div class="tk-attach-list">' + m.attachments.map((a) => {
-        const url = a.url || '#';
-        return '<a href="' + url + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + escapeHtml(a.name || 'پیوست') + '</a>';
+        const name = escapeHtml(a.name || 'پیوست');
+        if (a.quarantined) {
+          return '<span class="tk-attach-unavailable"><i class="fa-solid fa-shield-halved"></i> ' + name + ' · قرنطینه امنیتی</span>';
+        }
+        if (!a.available) {
+          return '<span class="tk-attach-pending"><i class="fa-solid fa-hourglass-half"></i> ' + name + ' · در حال انتقال به فضای امن</span>';
+        }
+        const url = escapeHtml(a.url || '#');
+        return '<a href="' + url + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + name + '</a>';
       }).join('') + '</div>';
     }
 

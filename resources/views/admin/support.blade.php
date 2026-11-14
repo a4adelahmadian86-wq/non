@@ -15,8 +15,8 @@
         'sla' => request('sla'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019pro">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019pro">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 <link rel="stylesheet" href="{{ asset('css/support-sla.css') }}?v=20261019sla">
 
 <div class="sd-shell" dir="rtl">
@@ -218,9 +218,19 @@
                                 @if(!empty($m->attachments))
                                     <div class="tk-attach-list">
                                         @foreach((array)$m->attachments as $index => $att)
-                                            <a href="{{ route('support.attachment', ['ticket' => $active->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
-                                                <i class="fa-solid fa-paperclip"></i> {{ $att['name'] ?? 'پیوست' }}
-                                            </a>
+                                            @if(!empty($att['quarantined']))
+                                                <span class="tk-attach-unavailable" title="فایل در بررسی امنیتی پذیرفته نشده است">
+                                                    <i class="fa-solid fa-shield-halved"></i> {{ $att['name'] ?? 'پیوست' }} · قرنطینه امنیتی
+                                                </span>
+                                            @elseif(empty($att['managed_file_id']))
+                                                <span class="tk-attach-pending">
+                                                    <i class="fa-solid fa-hourglass-half"></i> {{ $att['name'] ?? 'پیوست' }} · در حال انتقال به فضای امن
+                                                </span>
+                                            @else
+                                                <a href="{{ route('support.attachment', ['ticket' => $active->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
+                                                    <i class="fa-solid fa-paperclip"></i> {{ $att['name'] ?? 'پیوست' }}
+                                                </a>
+                                            @endif
                                         @endforeach
                                     </div>
                                 @endif
@@ -334,12 +344,20 @@
           lastId = m.id;
           const isStaff = !!m.is_staff;
           const isInternal = !!m.is_internal;
+          const attachmentsHtml = Array.isArray(m.attachments) && m.attachments.length
+            ? '<div class="tk-attach-list">' + m.attachments.map((a) => {
+                const name = esc(a.name || 'پیوست');
+                if (a.quarantined) return '<span class="tk-attach-unavailable"><i class="fa-solid fa-shield-halved"></i> ' + name + ' · قرنطینه امنیتی</span>';
+                if (!a.available) return '<span class="tk-attach-pending"><i class="fa-solid fa-hourglass-half"></i> ' + name + ' · در حال انتقال به فضای امن</span>';
+                return '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + name + '</a>';
+              }).join('') + '</div>'
+            : '';
           const wrap = document.createElement('div');
           wrap.className = 'sd-msg ' + (isStaff ? 'sd-msg-user' : 'sd-msg-staff');
           wrap.innerHTML = (isStaff ? '' : '<div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>') +
             '<div class="sd-msg-col"><div class="sd-bubble"' + (isInternal ? ' style="border:1px dashed #f59e0b;background:#fffbeb;color:#78350f"' : '') + '>' +
             (isInternal ? '<div style="font-size:.72rem;font-weight:800;margin-bottom:4px">یادداشت داخلی</div>' : '') +
-            '<pre>' + esc(m.body) + '</pre></div>' +
+            '<pre>' + esc(m.body) + '</pre>' + attachmentsHtml + '</div>' +
             '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
           thread.appendChild(wrap);
         });

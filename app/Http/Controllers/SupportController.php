@@ -122,6 +122,8 @@ class SupportController extends Controller
                     'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
                         'name' => $attachment['name'] ?? 'پیوست',
                         'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
+                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                        'quarantined' => ! empty($attachment['quarantined']),
                     ])->all(),
                 ];
             });
@@ -215,6 +217,8 @@ class SupportController extends Controller
                     'attachments' => collect($msg->attachments ?? [])->values()->map(fn ($attachment, $index) => [
                         'name' => $attachment['name'] ?? 'پیوست',
                         'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $msg->id, 'index' => $index]),
+                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                        'quarantined' => ! empty($attachment['quarantined']),
                     ])->all(),
                 ],
             ]);
@@ -572,36 +576,37 @@ class SupportController extends Controller
         abort_unless(isset($attachments[$index]) && is_array($attachments[$index]), 404);
 
         $attachment = $attachments[$index];
+        abort_if(! empty($attachment['quarantined']), 404);
+        abort_unless(! empty($attachment['managed_file_id']), 404);
+
         $path = (string) ($attachment['path'] ?? '');
         abort_unless($path !== '', 404);
-        $diskName = (string) ($attachment['disk'] ?? 'public');
+        $diskName = (string) ($attachment['disk'] ?? 'private');
         $isManagedVolume = preg_match('/^storage_volume:[0-9]+$/', $diskName) === 1;
-        abort_unless(in_array($diskName, ['private', 'public'], true) || $isManagedVolume, 404);
+        abort_unless($diskName === 'private' || $isManagedVolume, 404);
 
-        // New support uploads must still be live, private and bound to this
-        // exact message. Never serve a deleted, detached or reclassified object.
-        if (! empty($attachment['managed_file_id'])) {
-            $managed = StorageManagedFile::query()
-                ->whereKey((int) $attachment['managed_file_id'])
-                ->where('source_module', 'support')
-                ->where('source_type', TicketMessage::class)
-                ->where('source_id', $message->id)
-                ->where('visibility', 'private')
-                ->whereIn('status', ['active', 'pending_transfer'])
-                ->first();
+        // Every support attachment must be a live private managed object
+        // bound to this exact message. Legacy/unmanaged files fail closed.
+        $managed = StorageManagedFile::query()
+            ->whereKey((int) $attachment['managed_file_id'])
+            ->where('source_module', 'support')
+            ->where('source_type', TicketMessage::class)
+            ->where('source_id', $message->id)
+            ->where('visibility', 'private')
+            ->whereIn('status', ['active', 'pending_transfer'])
+            ->first();
 
-            $expectedDisk = $managed?->storage_volume_id
-                ? 'storage_volume:'.$managed->storage_volume_id
-                : 'private';
+        $expectedDisk = $managed?->storage_volume_id
+            ? 'storage_volume:'.$managed->storage_volume_id
+            : 'private';
 
-            abort_unless(
-                $managed
-                && $managed->file_key === $path
-                && (string) data_get($managed->metadata, 'disk', $expectedDisk) === $diskName
-                && $expectedDisk === $diskName,
-                404
-            );
-        }
+        abort_unless(
+            $managed
+            && $managed->file_key === $path
+            && (string) data_get($managed->metadata, 'disk', $expectedDisk) === $diskName
+            && $expectedDisk === $diskName,
+            404
+        );
 
         $filename = basename((string) ($attachment['name'] ?? 'attachment'));
         $filename = preg_replace('/[\r\n"]+/', '_', $filename) ?: 'attachment';
