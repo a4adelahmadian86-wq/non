@@ -80,6 +80,23 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonFragment(['body' => 'یادداشت داخلی کارشناس']);
     }
 
+    public function test_support_agent_can_view_ticket_but_cannot_submit_customer_csat(): void
+    {
+        $agent = $this->supportAgent();
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Customer-owned feedback',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->assertTrue(Gate::forUser($agent)->allows('view', $ticket));
+        $this->assertFalse(Gate::forUser($agent)->allows('rate', $ticket));
+        $this->assertTrue(Gate::forUser($customer)->allows('rate', $ticket));
+    }
+
     public function test_customer_can_never_read_staff_internal_notes(): void
     {
         $customer = User::factory()->create();
