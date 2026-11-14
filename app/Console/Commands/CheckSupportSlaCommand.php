@@ -51,8 +51,8 @@ class CheckSupportSlaCommand extends Command
                             $stats['breached_first']++;
                             $this->line("BREACH first #{$ticket->id} {$ticket->displayCode()}");
                             if (! $dry) {
-                                $ticket->forceFill(['sla_first_breached_at' => now()])->saveQuietly();
                                 $notifier->slaBreached($ticket, 'first_response');
+                                $ticket->forceFill(['sla_first_breached_at' => now()])->saveQuietly();
                             }
                         } elseif (! $ticket->first_response_at
                             && $mins >= 0
@@ -61,8 +61,8 @@ class CheckSupportSlaCommand extends Command
                             $stats['warned_first']++;
                             $this->line("WARN first #{$ticket->id} ({$mins}m left)");
                             if (! $dry) {
-                                $ticket->forceFill(['sla_first_warned_at' => now()])->saveQuietly();
                                 $notifier->slaWarning($ticket, 'first_response', $mins);
+                                $ticket->forceFill(['sla_first_warned_at' => now()])->saveQuietly();
                             }
                         }
                     }
@@ -75,15 +75,15 @@ class CheckSupportSlaCommand extends Command
                             $stats['breached_resolve']++;
                             $this->line("BREACH resolve #{$ticket->id} {$ticket->displayCode()}");
                             if (! $dry) {
-                                $ticket->forceFill(['sla_resolve_breached_at' => now()])->saveQuietly();
                                 $notifier->slaBreached($ticket, 'resolution');
+                                $ticket->forceFill(['sla_resolve_breached_at' => now()])->saveQuietly();
                             }
                         } elseif ($mins >= 0 && $mins <= $warnBefore && empty($ticket->sla_resolve_warned_at)) {
                             $stats['warned_resolve']++;
                             $this->line("WARN resolve #{$ticket->id} ({$mins}m left)");
                             if (! $dry) {
-                                $ticket->forceFill(['sla_resolve_warned_at' => now()])->saveQuietly();
                                 $notifier->slaWarning($ticket, 'resolution', $mins);
+                                $ticket->forceFill(['sla_resolve_warned_at' => now()])->saveQuietly();
                             }
                         }
                     }
