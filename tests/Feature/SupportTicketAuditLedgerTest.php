@@ -1,0 +1,109 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\FarastAuditEvent;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Services\SupportNotificationService;
+use App\Services\SupportTicketService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
+use Tests\TestCase;
+
+class SupportTicketAuditLedgerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_status_metadata_and_assignment_changes_append_sanitized_audit_events(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Audit ledger support ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('statusChanged')->once();
+        $notifier->shouldReceive('assigned')->once();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $service = app(SupportTicketService::class);
+        $service->changeStatus($ticket, 'pending', $actor, false);
+        $service->updateMeta($ticket, ['priority' => 'high', 'department' => 'billing'], $actor);
+        $service->assign($ticket, $agent, $actor);
+
+        $events = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->orderBy('id')
+            ->get();
+
+        $this->assertSame([
+            'support.ticket.status_transitioned',
+            'support.ticket.metadata_changed',
+            'support.ticket.assignment_changed',
+        ], $events->pluck('event_type')->all());
+
+        $status = $events[0]->payload_meta;
+        $this->assertSame('open', $status['from_status']);
+        $this->assertSame('pending', $status['to_status']);
+        $this->assertNotNull($status['sla_after']['resolution_paused_at']);
+
+        $metadata = $events[1]->payload_meta;
+        $this->assertSame('normal', $metadata['before']['priority']);
+        $this->assertSame('high', $metadata['after']['priority']);
+        $this->assertSame('support', $metadata['before']['department']);
+        $this->assertSame('billing', $metadata['after']['department']);
+        $this->assertNotNull($metadata['sla_after']['resolution_due_at']);
+
+        $assignment = $events[2]->payload_meta;
+        $this->assertNull($assignment['from_assigned_to']);
+        $this->assertSame($agent->id, $assignment['to_assigned_to']);
+
+        $encoded = json_encode($events->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('Audit ledger support ticket', $encoded);
+        $this->assertStringNotContainsString('message body', $encoded);
+    }
+
+    public function test_customer_reply_status_transition_is_audited_without_message_content(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Customer reply audit',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('customerReplied')->once();
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        app(SupportTicketService::class)->addMessage(
+            $ticket,
+            $customer,
+            'محتوای محرمانه پیام مشتری',
+            ['is_staff' => false]
+        );
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.status_transitioned')
+            ->firstOrFail();
+
+        $this->assertSame($customer->id, $event->user_id);
+        $this->assertSame('open', $event->payload_meta['from_status']);
+        $this->assertSame('user_replied', $event->payload_meta['to_status']);
+        $this->assertStringNotContainsString(
+            'محتوای محرمانه پیام مشتری',
+            json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+    }
+}
