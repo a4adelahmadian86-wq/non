@@ -119,6 +119,35 @@ class SupportAssignmentMutexTest extends TestCase
         $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
     }
 
+    public function test_mysql_workload_lock_rejects_calls_inside_an_existing_transaction(): void
+    {
+        $this->requireMySql();
+        $probe = $this->probeConnection();
+
+        DB::beginTransaction();
+
+        try {
+            try {
+                app(SupportAssignmentMutex::class)->synchronized(
+                    fn () => $this->fail('A nested workload lock must not execute its callback.')
+                );
+                $this->fail('A nested workload lock must be rejected.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('تراکنش بیرونی', $exception->getMessage());
+            }
+
+            $available = $probe->selectOne(
+                'SELECT GET_LOCK(?, 0) AS acquired',
+                [SupportAssignmentMutex::LOCK_NAME],
+                false
+            );
+            $this->assertSame(1, (int) $available->acquired);
+            $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
+        } finally {
+            DB::rollBack();
+        }
+    }
+
     private function requireMySql(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
