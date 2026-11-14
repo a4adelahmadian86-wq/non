@@ -154,6 +154,8 @@ class SupportTicketAuditTimelineTest extends TestCase
 
     public function test_sla_alert_queue_and_delivery_are_visible_in_the_canonical_ticket_timeline(): void
     {
+        config(['support.business_hours_only' => false, 'support.warn_before_minutes' => 30]);
+
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $customer = User::factory()->create();
         $ticket = Ticket::create([
