@@ -62,7 +62,7 @@ Schedule::command('queue:work backups --queue=backups --stop-when-empty --max-ti
     ->when(fn () => (bool) config('queue.scheduled_worker', true));
 
 // Deliver durable SLA alerts outside ticket transactions; failed deliveries are retried with backoff.
-Artisan::command('support:deliver-sla-alerts {--limit=10}', function (\\App\\Services\\SupportSlaAlertOutboxService $outbox) {
+Artisan::command('support:deliver-sla-alerts {--limit=10}', function (\App\Services\SupportSlaAlertOutboxService $outbox) {
     $delivered = $outbox->processPending((int) $this->option('limit'));
     $this->info("Delivered {$delivered} SLA alert(s).");
 
