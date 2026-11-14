@@ -344,12 +344,20 @@
           lastId = m.id;
           const isStaff = !!m.is_staff;
           const isInternal = !!m.is_internal;
+          const attachmentsHtml = Array.isArray(m.attachments) && m.attachments.length
+            ? '<div class="tk-attach-list">' + m.attachments.map((a) => {
+                const name = esc(a.name || 'پیوست');
+                if (a.quarantined) return '<span class="tk-attach-unavailable"><i class="fa-solid fa-shield-halved"></i> ' + name + ' · قرنطینه امنیتی</span>';
+                if (!a.available) return '<span class="tk-attach-pending"><i class="fa-solid fa-hourglass-half"></i> ' + name + ' · در حال انتقال به فضای امن</span>';
+                return '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + name + '</a>';
+              }).join('') + '</div>'
+            : '';
           const wrap = document.createElement('div');
           wrap.className = 'sd-msg ' + (isStaff ? 'sd-msg-user' : 'sd-msg-staff');
           wrap.innerHTML = (isStaff ? '' : '<div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>') +
             '<div class="sd-msg-col"><div class="sd-bubble"' + (isInternal ? ' style="border:1px dashed #f59e0b;background:#fffbeb;color:#78350f"' : '') + '>' +
             (isInternal ? '<div style="font-size:.72rem;font-weight:800;margin-bottom:4px">یادداشت داخلی</div>' : '') +
-            '<pre>' + esc(m.body) + '</pre></div>' +
+            '<pre>' + esc(m.body) + '</pre>' + attachmentsHtml + '</div>' +
             '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
           thread.appendChild(wrap);
         });
