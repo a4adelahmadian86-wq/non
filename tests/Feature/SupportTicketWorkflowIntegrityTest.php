@@ -104,7 +104,8 @@ class SupportTicketWorkflowIntegrityTest extends TestCase
             'status' => 'pending',
             'priority' => 'normal',
             'department' => 'support',
-            'first_response_at' => now()->subHour(),
+            // First response was on time; this test isolates the paused resolution clock.
+            'first_response_at' => now()->subHours(3),
             'sla_first_due_at' => now()->subHours(2),
             'sla_resolve_due_at' => now()->subMinutes(5),
             'sla_paused_at' => now()->subMinutes(10),
