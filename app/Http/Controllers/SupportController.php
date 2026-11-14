@@ -274,6 +274,7 @@ class SupportController extends Controller
             ->where(function ($q) {
                 $q->where('is_internal', false)->orWhereNull('is_internal');
             })
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit(1);
 
