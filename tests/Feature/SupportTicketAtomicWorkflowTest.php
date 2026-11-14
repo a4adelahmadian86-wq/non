@@ -126,7 +126,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
     {
         $customer = User::factory()->create();
         $engine = Mockery::mock(WorkflowEngine::class);
-        $engine->shouldReceive('enqueue')
+        $engine->shouldReceive('enqueueTicketCreated')
             ->once()
             ->andThrow(new \RuntimeException('workflow outbox unavailable'));
         $this->app->instance(WorkflowEngine::class, $engine);
