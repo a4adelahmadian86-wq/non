@@ -106,7 +106,7 @@ class SupportController extends Controller
         $scannedMessages = $ticket->messages()
             ->with('user')
             ->where('id', '>', $afterId)
-            ->orderBy('id')
+            ->reorder('id')
             ->limit(100)
             ->get();
 
