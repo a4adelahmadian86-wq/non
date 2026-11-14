@@ -202,7 +202,7 @@ class SupportNotificationService
         foreach ($this->staffTargets($ticket) as $staff) {
             try {
                 $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $failures[] = 'in-app:'.$staff->id;
             }
 
@@ -211,7 +211,7 @@ class SupportNotificationService
                 if ($queued === false) {
                     $failures[] = 'email:'.$staff->id;
                 }
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $failures[] = 'email:'.$staff->id;
             }
         }
@@ -229,12 +229,12 @@ class SupportNotificationService
                     $failures[] = 'sms';
                 }
             }
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $failures[] = 'sms';
         }
 
         if ($failures !== []) {
-            throw new \\RuntimeException('SLA warning delivery incomplete: '.implode(',', array_unique($failures)));
+            throw new \RuntimeException('SLA warning delivery incomplete: '.implode(',', array_unique($failures)));
         }
     }
 
@@ -251,7 +251,7 @@ class SupportNotificationService
         foreach ($this->staffTargets($ticket) as $staff) {
             try {
                 $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $failures[] = 'in-app:'.$staff->id;
             }
 
@@ -260,7 +260,7 @@ class SupportNotificationService
                 if ($queued === false) {
                     $failures[] = 'email:'.$staff->id;
                 }
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $failures[] = 'email:'.$staff->id;
             }
         }
@@ -278,12 +278,12 @@ class SupportNotificationService
                     $failures[] = 'sms';
                 }
             }
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $failures[] = 'sms';
         }
 
         if ($failures !== []) {
-            throw new \\RuntimeException('SLA breach delivery incomplete: '.implode(',', array_unique($failures)));
+            throw new \RuntimeException('SLA breach delivery incomplete: '.implode(',', array_unique($failures)));
         }
     }
 
