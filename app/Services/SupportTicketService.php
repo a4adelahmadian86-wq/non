@@ -723,11 +723,14 @@ class SupportTicketService
     private function slaAuditSnapshot(Ticket $ticket): array
     {
         return [
+            'first_response_at' => $ticket->first_response_at?->toIso8601String(),
             'first_response_due_at' => $ticket->sla_first_due_at?->toIso8601String(),
+            'first_response_warned_at' => $ticket->sla_first_warned_at?->toIso8601String(),
+            'first_response_breached_at' => $ticket->sla_first_breached_at?->toIso8601String(),
             'resolution_due_at' => $ticket->sla_resolve_due_at?->toIso8601String(),
+            'resolution_warned_at' => $ticket->sla_resolve_warned_at?->toIso8601String(),
             'resolution_paused_at' => $ticket->sla_paused_at?->toIso8601String(),
             'resolution_remaining_minutes' => $ticket->sla_resolve_remaining_minutes,
-            'first_response_breached_at' => $ticket->sla_first_breached_at?->toIso8601String(),
             'resolution_breached_at' => $ticket->sla_resolve_breached_at?->toIso8601String(),
             'resolved_at' => $ticket->resolved_at?->toIso8601String(),
             'closed_at' => $ticket->closed_at?->toIso8601String(),
