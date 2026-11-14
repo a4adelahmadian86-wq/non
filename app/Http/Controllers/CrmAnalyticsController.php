@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AdminConsoleService;
