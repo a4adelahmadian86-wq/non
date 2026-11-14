@@ -158,7 +158,7 @@
                     <form method="post" action="{{ route('admin.tickets.status', $active) }}">
                         @csrf
                         <input type="hidden" name="status" value="pending">
-                        <button type="submit" class="sd-btn" style="background:#fef3c7;color:#92400e;font-size:.78rem">در بررسی</button>
+                        <button type="submit" class="sd-btn" style="background:#fef3c7;color:#92400e;font-size:.78rem">منتظر پاسخ کاربر</button>
                     </form>
                     <form method="post" action="{{ route('admin.tickets.status', $active) }}">
                         @csrf
