@@ -300,8 +300,8 @@
                                             @php
                                                 $fromAssigneeId = $auditMeta['from_assigned_to'] ?? null;
                                                 $toAssigneeId = $auditMeta['to_assigned_to'] ?? null;
-                                                $fromAssignee = $fromAssigneeId ? ($auditUserLabels[$fromAssigneeId] ?? 'کارشناس خارج از محدوده') : 'بدون ارجاع';
-                                                $toAssignee = $toAssigneeId ? ($auditUserLabels[$toAssigneeId] ?? 'کارشناس خارج از محدوده') : 'بدون ارجاع';
+                                                $fromAssignee = $fromAssigneeId ? ($auditUserLabels[$fromAssigneeId] ?? 'کارشناس دیگر') : 'بدون ارجاع';
+                                                $toAssignee = $toAssigneeId ? ($auditUserLabels[$toAssigneeId] ?? 'کارشناس دیگر') : 'بدون ارجاع';
                                             @endphp
                                             تغییر ارجاع: از {{ $fromAssignee }} به {{ $toAssignee }}
                                         @else
