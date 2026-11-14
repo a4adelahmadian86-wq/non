@@ -19,6 +19,7 @@ use App\Services\ProductKnowledgeService;
 use App\Services\ProductContentGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
