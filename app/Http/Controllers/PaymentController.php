@@ -105,7 +105,10 @@ class PaymentController extends Controller
 
             DB::transaction(function () use ($order, $pricing, $free, &$paidOrder) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                if ($locked->isPaid()) {\n                    app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($locked);\n                    return;\n                }
+                if ($locked->isPaid()) {
+                    app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($locked);
+                    return;
+                }
 
                 $document = TypingDocument::whereKey($locked->document_id)
                     ->where('user_id', auth()->id())
@@ -336,7 +339,7 @@ class PaymentController extends Controller
                     true,
                 );
                 $paidOrder = $locked->fresh();
-                $this->enqueuePaidOrderWorkflow($paidOrder);
+                app(\App\Services\WorkflowEngine::class)->enqueuePaidOrder($paidOrder);
             });
 
             if ($paidOrder) {
