@@ -255,7 +255,9 @@
   };
   const saveReaderProgress=()=>{
     if(restoringInitial)return;
-    readerState.progress=currentPosition();
+    const current=currentPosition();
+    if(samePosition(readerState.progress,current))return;
+    readerState.progress=current;
     persistReaderState();
     refreshResumeButton();
     queueRemoteSync();
