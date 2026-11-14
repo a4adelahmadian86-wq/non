@@ -133,7 +133,7 @@ class SupportController extends Controller
                 ];
             });
 
-        if (! $canSeeInternal) {
+        if (! $canSeeInternal && $messages->isNotEmpty()) {
             $this->tickets->markCustomerSeen($ticket);
         }
 
