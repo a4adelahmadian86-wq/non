@@ -22,6 +22,8 @@ use Illuminate\Validation\Rule;
 
 class SupportController extends Controller
 {
+    private const THREAD_HISTORY_PAGE_SIZE = 100;
+
     public function __construct(private readonly SupportTicketService $tickets)
     {
     }
@@ -88,9 +90,13 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
         $this->authorize('view', $ticket);
 
-        $ticket->load(['publicMessages.user', 'relatedProduct', 'assignee']);
+        $ticket->load(['relatedProduct', 'assignee']);
+        $history = $this->initialThreadHistory($ticket, false);
+        $ticket->setRelation('messages', $history['messages']);
+        $ticket->setAttribute('last_scanned_message_id', $history['last_scanned_id']);
+        $ticket->setAttribute('oldest_scanned_message_id', $history['oldest_scanned_id']);
+        $ticket->setAttribute('has_older_messages', $history['has_older']);
         $this->tickets->markCustomerSeen($ticket);
-        $ticket->setRelation('messages', $ticket->publicMessages);
 
         return view('support.show', compact('ticket'));
     }
@@ -101,6 +107,50 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
+        $formatMessage = function ($message) use ($ticket): array {
+            $isStaff = $message->isFromStaff();
+
+            return [
+                'id' => $message->id,
+                'body' => $message->body,
+                'is_staff' => $isStaff,
+                'is_internal' => (bool) $message->is_internal,
+                'is_mine' => $message->user_id === auth()->id() && ! $isStaff,
+                'time' => $message->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
+                'attachments' => collect($message->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                    'name' => $attachment['name'] ?? 'پیوست',
+                    'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => $index]),
+                    'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                    'quarantined' => ! empty($attachment['quarantined']),
+                ])->all(),
+            ];
+        };
+
+        $beforeId = max(0, (int) $request->input('before_id', 0));
+        if ($beforeId > 0) {
+            $scannedMessages = $ticket->messages()
+                ->with('user')
+                ->where('id', '<', $beforeId)
+                ->reorder('id', 'desc')
+                ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+                ->get();
+
+            $nextBeforeId = (int) ($scannedMessages->last()?->id ?? $beforeId);
+            $hasMore = $nextBeforeId < $beforeId
+                && $ticket->messages()->where('id', '<', $nextBeforeId)->exists();
+
+            if (! $canSeeInternal) {
+                $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'messages' => $scannedMessages->reverse()->values()->map($formatMessage)->values(),
+                'next_before_id' => $nextBeforeId,
+                'has_more' => $hasMore,
+            ]);
+        }
+
         $afterId = max(0, (int) $request->input('after_id', 0));
 
         // Scan a bounded batch before applying visibility rules. Customer cursors
@@ -109,7 +159,7 @@ class SupportController extends Controller
             ->with('user')
             ->where('id', '>', $afterId)
             ->reorder('id')
-            ->limit(100)
+            ->limit(self::THREAD_HISTORY_PAGE_SIZE)
             ->get();
 
         $lastScannedId = (int) ($scannedMessages->last()?->id ?? $afterId);
@@ -118,35 +168,20 @@ class SupportController extends Controller
             $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
         }
 
-        $messages = $scannedMessages->map(function ($m) use ($ticket) {
-            $isStaff = $m->isFromStaff();
-
-            return [
-                'id' => $m->id,
-                'body' => $m->body,
-                'is_staff' => $isStaff,
-                'is_internal' => (bool) $m->is_internal,
-                'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
-                'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
-                'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
-                    'name' => $attachment['name'] ?? 'پیوست',
-                    'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
-                    'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
-                    'quarantined' => ! empty($attachment['quarantined']),
-                ])->all(),
-            ];
-        });
+        $messages = $scannedMessages->map($formatMessage)->values();
 
         if (! $canSeeInternal && $messages->isNotEmpty()) {
             $this->tickets->markCustomerSeen($ticket);
         }
 
+        $freshTicket = $ticket->fresh();
+
         return response()->json([
             'ok' => true,
             'messages' => $messages,
             'last_id' => $lastScannedId,
-            'status' => $ticket->fresh()->status,
-            'status_label' => $ticket->fresh()->statusLabel(),
+            'status' => $freshTicket->status,
+            'status_label' => $freshTicket->statusLabel(),
         ]);
     }
 
@@ -386,7 +421,7 @@ class SupportController extends Controller
 
         $active = null;
         if ($request->filled('ticket')) {
-            $activeQuery = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
+            $activeQuery = Ticket::with(['user', 'relatedProduct', 'assignee'])
                 ->whereKey($request->integer('ticket'));
             $scopeQuery($activeQuery);
             $active = $activeQuery->first();
@@ -397,7 +432,7 @@ class SupportController extends Controller
         if (! $active) {
             $firstTicketId = $tickets->getCollection()->first()?->id;
             if ($firstTicketId) {
-                $activeQuery = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
+                $activeQuery = Ticket::with(['user', 'relatedProduct', 'assignee'])
                     ->whereKey($firstTicketId);
                 $scopeQuery($activeQuery);
                 $active = $activeQuery->first();
@@ -405,6 +440,14 @@ class SupportController extends Controller
                     $this->authorize('manage', $active);
                 }
             }
+        }
+
+        if ($active) {
+            $history = $this->initialThreadHistory($active, true);
+            $active->setRelation('messages', $history['messages']);
+            $active->setAttribute('last_scanned_message_id', $history['last_scanned_id']);
+            $active->setAttribute('oldest_scanned_message_id', $history['oldest_scanned_id']);
+            $active->setAttribute('has_older_messages', $history['has_older']);
         }
 
         $stats = [
@@ -662,6 +705,38 @@ class SupportController extends Controller
         $disk = Storage::disk($diskName);
         abort_unless($disk->exists($path), 404);
         return $disk->download($path, $filename, $headers);
+    }
+
+    /**
+     * Load a bounded, newest-first slice of a ticket conversation.
+     * The cursor is based on all messages so hidden internal notes cannot trap
+     * customer pagination or cause repeated polling scans.
+     *
+     * @return array{messages: \Illuminate\Support\Collection, last_scanned_id: int, oldest_scanned_id: int, has_older: bool}
+     */
+    private function initialThreadHistory(Ticket $ticket, bool $includeInternal): array
+    {
+        $scanned = $ticket->messages()
+            ->with('user')
+            ->reorder('id', 'desc')
+            ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+            ->get();
+
+        $lastScannedId = (int) ($scanned->first()?->id ?? 0);
+        $oldestScannedId = (int) ($scanned->last()?->id ?? 0);
+        $hasOlder = $oldestScannedId > 0
+            && $ticket->messages()->where('id', '<', $oldestScannedId)->exists();
+
+        if (! $includeInternal) {
+            $scanned = $scanned->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        return [
+            'messages' => $scanned->reverse()->values(),
+            'last_scanned_id' => $lastScannedId,
+            'oldest_scanned_id' => $oldestScannedId,
+            'has_older' => $hasOlder,
+        ];
     }
 
     public static function claimGuestTickets(User $user): int
