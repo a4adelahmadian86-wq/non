@@ -208,7 +208,14 @@ class SupportAdminInboxQueryTest extends TestCase
         $from = Carbon::today()->subDays(10);
         $to = Carbon::today()->subDays(2);
 
-        $matching = Ticket::create([
+        $createTicketAt = function (array $attributes, Carbon $createdAt): Ticket {
+            $ticket = Ticket::create($attributes);
+            $ticket->forceFill(['created_at' => $createdAt])->save();
+
+            return $ticket;
+        };
+
+        $createTicketAt([
             'subject' => 'Unassigned date-range match',
             'status' => 'open',
             'priority' => 'high',
@@ -216,9 +223,8 @@ class SupportAdminInboxQueryTest extends TestCase
             'assigned_to' => null,
             'source' => 'widget',
             'topic_area' => 'store',
-            'created_at' => $from->copy()->addDays(3)->setTime(12, 0),
-        ]);
-        Ticket::create([
+        ], $from->copy()->addDays(3)->setTime(12, 0));
+        $createTicketAt([
             'subject' => 'Assigned same date range',
             'status' => 'open',
             'priority' => 'high',
@@ -226,9 +232,8 @@ class SupportAdminInboxQueryTest extends TestCase
             'assigned_to' => $admin->id,
             'source' => 'widget',
             'topic_area' => 'store',
-            'created_at' => $from->copy()->addDays(4)->setTime(12, 0),
-        ]);
-        Ticket::create([
+        ], $from->copy()->addDays(4)->setTime(12, 0));
+        $createTicketAt([
             'subject' => 'Outside date range',
             'status' => 'open',
             'priority' => 'high',
@@ -236,9 +241,8 @@ class SupportAdminInboxQueryTest extends TestCase
             'assigned_to' => null,
             'source' => 'widget',
             'topic_area' => 'store',
-            'created_at' => $to->copy()->addDay()->setTime(12, 0),
-        ]);
-        Ticket::create([
+        ], $to->copy()->addDay()->setTime(12, 0));
+        $createTicketAt([
             'subject' => 'Other channel in date range',
             'status' => 'open',
             'priority' => 'high',
@@ -246,8 +250,7 @@ class SupportAdminInboxQueryTest extends TestCase
             'assigned_to' => null,
             'source' => 'dashboard',
             'topic_area' => 'store',
-            'created_at' => $from->copy()->addDays(5)->setTime(12, 0),
-        ]);
+        ], $from->copy()->addDays(5)->setTime(12, 0));
 
         $response = $this->actingAs($admin)
             ->get(route('admin.support.management', [
