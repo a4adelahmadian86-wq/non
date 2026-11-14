@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\RolePermission;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
