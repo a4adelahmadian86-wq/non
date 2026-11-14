@@ -285,12 +285,12 @@ class EmailService
         string $body,
         string $type = 'ticket_sla_warning',
         ?string $eventIdentity = null,
-    ): void {
+    ): ?bool {
         if (! $staff->email || ! in_array($type, ['ticket_sla_warning', 'ticket_sla_breach'], true) || ! $this->isEnabled($type)) {
-            return;
+            return null;
         }
 
-        $this->sendSupportMail(
+        return $this->sendSupportMail(
             type: $type,
             to: $staff->email,
             user: $staff,
@@ -448,7 +448,7 @@ class EmailService
         array $viewData = [],
         array $meta = [],
         ?string $idempotencyKey = null,
-    ): void {
+    ): bool {
         $this->mailConfig->apply();
 
         $provider = $this->mailConfig->currentProvider();
