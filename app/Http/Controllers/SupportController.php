@@ -482,6 +482,19 @@ class SupportController extends Controller
             ? User::query()->whereIn('id', $auditUserIds)->get(['id', 'name'])->keyBy('id')
             : collect();
 
+        $auditUserLabels = collect();
+        foreach ($auditUsers as $auditUser) {
+            if ((int) $auditUser->id === (int) $active?->user_id) {
+                $auditUserLabels[$auditUser->id] = 'مشتری';
+            } elseif (app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)) {
+                $auditUserLabels[$auditUser->id] = $auditUser->name;
+            } else {
+                // A visible ticket can have historical assignments to an agent
+                // outside the current operator's team/organization scope.
+                $auditUserLabels[$auditUser->id] = 'کارشناس خارج از محدوده';
+            }
+        }
+
         $stats = [
             'needs_reply' => $scopeQuery(Ticket::query())->needsReply()->count(),
             'open' => $scopeQuery(Ticket::query())->where('status', 'open')->count(),
@@ -517,7 +530,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory', 'auditEvents', 'auditUsers'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory', 'auditEvents', 'auditUserLabels'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)
