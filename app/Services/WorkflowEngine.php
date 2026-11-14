@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Order;
+use App\Models\Ticket;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -126,6 +128,53 @@ class WorkflowEngine
         }
 
         return $event->status === 'completed' ? 0 : (int) $event->id;
+    }
+
+    /**
+     * Canonical payload and idempotency identity for every paid-order transition.
+     * Wallet and gateway paths must use this method so they cannot drift apart.
+     */
+    public function enqueuePaidOrder(Order $order): int
+    {
+        if ($order->status === 'deposit_paid' && $order->paid_at !== null) {
+            $eventType = 'order.deposit_paid';
+        } elseif ($order->isPaid()) {
+            $eventType = 'order.paid';
+        } else {
+            throw new \InvalidArgumentException('Only a settled order can emit a paid-order workflow event.');
+        }
+
+        return $this->enqueue(
+            $eventType,
+            [
+                'user_id' => (int) $order->user_id,
+                'customer_id' => (int) $order->user_id,
+                'order_id' => (int) $order->id,
+                'amount_rials' => (int) $order->total_rials,
+                'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+            ],
+            'order:'.$order->id.':'.$eventType,
+        );
+    }
+
+    /** Canonical creation event for a customer-owned support ticket. */
+    public function enqueueTicketCreated(Ticket $ticket): int
+    {
+        if (! $ticket->user_id) {
+            return 0;
+        }
+
+        return $this->enqueue(
+            'ticket.created',
+            [
+                'user_id' => (int) $ticket->user_id,
+                'customer_id' => (int) $ticket->user_id,
+                'ticket_id' => (int) $ticket->id,
+                'ticket_code' => (string) $ticket->ticket_code,
+                'status' => (string) $ticket->status,
+            ],
+            'ticket:'.$ticket->id.':created',
+        );
     }
 
     /** Dispatch synchronously for explicit callers; business transactions should use enqueue(). */
