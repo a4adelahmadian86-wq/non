@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -327,6 +329,71 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertDatabaseMissing('farast_workflow_events', [
             'idempotency_key' => 'ticket:93:created',
         ]);
+    }
+
+
+    public function test_retry_worker_reconciles_verified_gateway_payment_with_missing_outbox_event(): void
+    {
+        $user = $this->user('09152223356');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Gateway paid-order follow-up',
+            'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([
+                ['action' => 'create_follow_up', 'title' => 'پیگیری پرداخت درگاه', 'priority' => 'high'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 45000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 45000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now(),
+        ]);
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'amount_rials' => 45000,
+            'status' => 'paid',
+            'transaction_id' => 'ZP-RECONCILE-45000',
+            'gateway_response' => [
+                'verification_code' => 100,
+                'workflow_event_reconciliation' => [
+                    'status' => 'required',
+                    'event_type' => 'order.paid',
+                    'idempotency_key' => 'order:'.$order->id.':order.paid',
+                    'reason_code' => 'outbox_persist_failed',
+                ],
+            ],
+            'paid_at' => now(),
+        ]);
+
+        $this->assertSame(1, app(WorkflowEngine::class)->retryFailedEvents());
+
+        $eventKey = 'order:'.$order->id.':order.paid';
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'event_type' => 'order.paid',
+            'idempotency_key' => $eventKey,
+            'user_id' => $user->id,
+            'status' => 'completed',
+        ]);
+        $this->assertSame('reconciled', data_get($payment->fresh()->gateway_response, 'workflow_event_reconciliation.status'));
+        $this->assertSame(1, DB::table('farast_workflow_runs')->where('workflow_id', $workflow)->count());
+        $this->assertSame(1, DB::table('crm_follow_up_tasks')
+            ->where('customer_id', $user->id)
+            ->where('title', 'پیگیری پرداخت درگاه')
+            ->count());
+
+        // A second scheduler pass must not recreate the same paid-order event.
+        $this->assertSame(0, app(WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->count());
     }
 
 }
