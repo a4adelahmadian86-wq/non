@@ -153,6 +153,7 @@
 
   const olderButton = document.getElementById('loadOlderTicketMessages');
   let olderInFlight = false;
+  let pollInFlight = false;
   olderButton?.addEventListener('click', async () => {
     if (olderInFlight || pollInFlight || !messages || !pollUrl) return;
     let beforeId = Number(page?.dataset.oldestId || 0);
@@ -201,8 +202,6 @@
       if (!olderButton.hidden) olderButton.textContent = 'نمایش پیام‌های قدیمی‌تر';
     }
   });
-
-  let pollInFlight = false;
 
   async function poll() {
     if (!pollUrl || document.hidden || pollInFlight || olderInFlight) return;
