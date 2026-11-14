@@ -17,6 +17,13 @@ class SupportSlaBusinessMinuteTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function runSlaCommandDirectly(): void
+    {
+        $command = app(CheckSupportSlaCommand::class);
+        $command->setLaravel($this->app);
+        $command->run(new ArrayInput([]), new BufferedOutput());
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -108,6 +115,35 @@ class SupportSlaBusinessMinuteTest extends TestCase
         Artisan::call('support:check-sla');
 
         $this->assertNotNull($ticket->fresh()->sla_first_warned_at);
+    }
+
+    public function test_failed_sla_notification_does_not_mark_the_event_as_sent(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
+        $deadline = app(SupportSlaService::class)->addSlaMinutes(now(), 30);
+        $ticket = Ticket::create([
+            'subject' => 'Retry SLA warning after provider failure',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => $deadline,
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaWarning')
+            ->once()
+            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response', 30)
+            ->andThrow(new RuntimeException('temporary notification failure'));
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        try {
+            $this->runSlaCommandDirectly();
+            $this->fail('The notifier failure should be surfaced to the command runner.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('temporary notification failure', $exception->getMessage());
+        }
+
+        $this->assertNull($ticket->fresh()->sla_first_warned_at);
     }
 
     public function test_sla_monitor_does_not_starve_tickets_after_the_first_batch(): void
