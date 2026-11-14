@@ -366,7 +366,7 @@ class SupportTicketService
                     : (($isInternal || $messageIsStaff) ? 'system' : 'guest');
                 $messageType = $isInternal
                     ? ($actor ? 'internal_note' : 'system_note')
-                    : ($messageIsStaff ? 'staff_reply' : ($actor ? 'customer_reply' : 'guest_reply'));
+                    : ($messageIsStaff ? ($actor ? 'staff_reply' : 'system_reply') : ($actor ? 'customer_reply' : 'guest_reply'));
                 $attachmentCount = count((array) $message->attachments);
 
                 $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.message_added', [
