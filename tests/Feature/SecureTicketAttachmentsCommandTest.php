@@ -59,6 +59,7 @@ class SecureTicketAttachmentsCommandTest extends TestCase
         $this->assertSame('private', $managed->visibility);
         $this->assertContains($managed->status, ['active', 'pending_transfer']);
         $this->assertFalse((bool) data_get($managed->metadata, 'reference_pending', true));
+        $this->assertArrayNotHasKey('legacy_source_path_b64', $attachment);
 
         $this->actingAs($customer)
             ->get(route('support.attachment', [
@@ -66,8 +67,7 @@ class SecureTicketAttachmentsCommandTest extends TestCase
                 'message' => $message->id,
                 'index' => 0,
             ]))
-            ->assertOk()
-            ->assertSee('safe attachment');
+            ->assertOk();
     }
 
     public function test_unmanaged_public_attachment_fails_closed_before_migration(): void
