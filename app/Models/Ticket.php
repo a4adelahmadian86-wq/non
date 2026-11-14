@@ -32,6 +32,7 @@ class Ticket extends Model
         'sla_resolve_due_at',
         'sla_paused_at',
         'sla_resolve_remaining_minutes',
+        'sla_resolve_breached_at',
         'resolved_at',
         'csat_score',
         'csat_comment',
