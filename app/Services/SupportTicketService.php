@@ -42,7 +42,10 @@ class SupportTicketService
 
     public function createTicket(?User $user, array $data, ?UploadedFile $attachment = null): Ticket
     {
-        $ticket = DB::transaction(function () use ($user, $data, $attachment) {
+        $initialMessage = null;
+
+        try {
+            $ticket = DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
             $payload = [
                 'user_id' => $user?->id,
                 'subject' => $data['subject'],
@@ -91,7 +94,7 @@ class SupportTicketService
                 }
             }
 
-            $this->addMessage($ticket, $user, $data['body'], [
+            $initialMessage = $this->addMessage($ticket, $user, $data['body'], [
                 'is_staff' => false,
                 'is_internal' => false,
                 'attachment' => $attachment,
@@ -103,7 +106,27 @@ class SupportTicketService
             $this->sla->applyTargets($ticket);
 
             return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
-        });
+            });
+        } catch (\Throwable $exception) {
+            // addMessage owns cleanup for failures inside its own transaction.
+            // This outer catch covers failures after it returned but before the
+            // ticket transaction committed (for example SLA target calculation).
+            foreach ((array) ($initialMessage?->attachments ?? []) as $attachmentData) {
+                $disk = (string) ($attachmentData['disk'] ?? 'private');
+                $path = (string) ($attachmentData['path'] ?? '');
+                if ($path === '') {
+                    continue;
+                }
+
+                try {
+                    app(StorageManager::class)->delete($disk, $path);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
+        }
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
 
