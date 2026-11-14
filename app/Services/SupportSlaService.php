@@ -10,7 +10,12 @@ class SupportSlaService
 {
     public function applyTargets(Ticket $ticket): void
     {
-        if (! Schema::hasColumn('tickets', 'sla_first_due_at')) {
+        $hasFirstDueAt = Schema::hasColumn('tickets', 'sla_first_due_at');
+        $hasResolveDueAt = Schema::hasColumn('tickets', 'sla_resolve_due_at');
+
+        if ((! $hasFirstDueAt && ! $hasResolveDueAt) || $ticket->status === 'closed') {
+            // Closed-ticket SLA deadlines are historical evidence and must not
+            // be rewritten by a later priority edit.
             return;
         }
 
@@ -18,23 +23,31 @@ class SupportSlaService
         $firstMins = (int) config("support.sla_first_response_minutes.{$priority}", 240);
         $resolveMins = (int) config("support.sla_resolution_minutes.{$priority}", 1440);
         $base = $ticket->created_at ? Carbon::parse($ticket->created_at) : now();
+        $targets = [];
 
-        $firstDueAt = $this->addSlaMinutes($base->copy(), $firstMins);
-        $resolveDueAt = $this->addSlaMinutes($base->copy(), $resolveMins);
-        $targets = [
-            'sla_first_due_at' => $firstDueAt,
-            'sla_resolve_due_at' => $resolveDueAt,
-        ];
+        // Once a public first response exists, its original deadline is immutable.
+        if ($hasFirstDueAt && ! $ticket->first_response_at) {
+            $targets['sla_first_due_at'] = $this->addSlaMinutes($base->copy(), $firstMins);
+        }
+
+        $resolveDueAt = null;
+        if ($hasResolveDueAt) {
+            $resolveDueAt = $this->addSlaMinutes($base->copy(), $resolveMins);
+            $targets['sla_resolve_due_at'] = $resolveDueAt;
+        }
 
         // A priority change while waiting for the customer must also update
         // the frozen resolution budget, without restarting the paused clock.
         if ($ticket->status === 'pending'
             && $ticket->sla_paused_at
+            && $resolveDueAt
             && Schema::hasColumn('tickets', 'sla_resolve_remaining_minutes')) {
             $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween(now(), $resolveDueAt);
         }
 
-        $ticket->forceFill($targets)->saveQuietly();
+        if ($targets !== []) {
+            $ticket->forceFill($targets)->saveQuietly();
+        }
     }
 
     public function addSlaMinutes(Carbon $from, int $minutes): Carbon
