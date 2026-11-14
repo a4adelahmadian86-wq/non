@@ -140,3 +140,17 @@ test('IndexedDB read failures emit a visible storage warning event',async({page}
  expect(await page.evaluate(()=>window.__storageReadErrors[0].key)).toBe('farast-reader:blocked-read');
 });
 
+
+test('legacy migration cannot overwrite a newer concurrent IndexedDB write',async({page})=>{
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const result=await page.evaluate(async()=>{
+  const store=window.FarastReaderDurableStore;
+  const key='farast-reader:migration-race-test';
+  const migration=store.migrate(key,'legacy-stale-state');
+  await store.set(key,'new-user-state');
+  return {migration:await migration,restored:await store.restore(key)};
+ });
+ expect(result.migration).toBe('legacy-stale-state');
+ expect(result.restored).toBe('new-user-state');
+});
