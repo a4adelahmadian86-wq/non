@@ -144,7 +144,10 @@ trait PaysWithZarinpal
         try {
             DB::transaction(function () use ($order, $payment, $authority, $verify, &$paymentProcessed) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
+                // The order lock serializes callbacks for this order; keep Payment
+                // unlocked until the canonical Order -> LibraryItem -> OrderItem ->
+                // Payment -> Course fulfillment lock sequence is acquired.
+                $lockedPayment = Payment::query()->whereKey($payment->id)->firstOrFail();
 
                 abort_unless(
                     (int) $lockedPayment->order_id === (int) $locked->id
