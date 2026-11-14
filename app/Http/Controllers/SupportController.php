@@ -350,8 +350,8 @@ class SupportController extends Controller
         $statusFilter = $request->input('status');
         if (is_string($statusFilter)
             && $statusFilter !== 'all'
-            && in_array($statusFilter, array_merge(['needs_reply'], SupportTicketService::STATUSES), true)) {
-            if ($statusFilter === 'needs_reply') {
+            && in_array($statusFilter, array_merge([SupportTicketService::STATUS_FILTER_NEEDS_REPLY], SupportTicketService::STATUSES), true)) {
+            if ($statusFilter === SupportTicketService::STATUS_FILTER_NEEDS_REPLY) {
                 $query->needsReply();
             } else {
                 $query->where('status', $statusFilter);
