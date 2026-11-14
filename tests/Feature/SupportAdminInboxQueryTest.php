@@ -307,4 +307,26 @@ class SupportAdminInboxQueryTest extends TestCase
             ->assertSee('Invalid filter values must not hide this ticket');
     }
 
+    public function test_quick_filter_links_preserve_zero_search_term_and_other_filters(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.support.management', [
+                'q' => '0',
+                'assigned' => 'unassigned',
+                'created_from' => '2026-11-01',
+                'created_to' => '2026-11-14',
+            ]))
+            ->assertOk();
+
+        preg_match('/href="([^"]*status=needs_reply[^"]*)"/', $response->getContent(), $statusChipMatch);
+
+        $this->assertNotEmpty($statusChipMatch[1] ?? null);
+        $this->assertStringContainsString('q=0', $statusChipMatch[1]);
+        $this->assertStringContainsString('assigned=unassigned', $statusChipMatch[1]);
+        $this->assertStringContainsString('created_from=2026-11-01', $statusChipMatch[1]);
+        $this->assertStringContainsString('created_to=2026-11-14', $statusChipMatch[1]);
+    }
+
 }
