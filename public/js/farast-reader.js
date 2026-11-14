@@ -150,7 +150,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
-  let continuousNavigationTarget=null;
+  let continuousNavigationTarget=null,continuousNavigationSequence=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -631,6 +631,7 @@
     if(continuousMode){
       const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
       if(!wrapper)return;
+      const navigationSequence=++continuousNavigationSequence;
       continuousNavigationTarget=target;
       pdfPage=target;
       setPageControls(target,pdfDoc.numPages);
@@ -649,13 +650,14 @@
         // Rendering can change a placeholder's measured height and trigger scroll
         // anchoring. Re-align after layout settles before releasing observer updates.
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        if(navigationSequence!==continuousNavigationSequence)return;
         alignTarget();
         pdfPage=target;
         setPageControls(target,pdfDoc.numPages);
       }finally{
-        continuousNavigationTarget=null;
+        if(navigationSequence===continuousNavigationSequence)continuousNavigationTarget=null;
       }
-      updateContinuousPageFromViewport();
+      if(navigationSequence===continuousNavigationSequence)updateContinuousPageFromViewport();
     }else{
       await renderPdfPage(target);
     }
