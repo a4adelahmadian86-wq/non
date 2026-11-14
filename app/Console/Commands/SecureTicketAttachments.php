@@ -47,6 +47,7 @@ class SecureTicketAttachments extends Command
                     $createdManaged = [];
                     $createdQuarantine = [];
                     $createdStaging = [];
+                    $quarantineRollback = [];
                     $sourceCleanup = [];
 
                     foreach ($attachments as $index => $attachment) {
@@ -155,9 +156,8 @@ class SecureTicketAttachments extends Command
                                     'quarantined' => true,
                                     'quarantine_reason' => 'security_inspection_failed',
                                 ]);
-                                if ($sourceDisk !== 'private') {
-                                    $sourceCleanup[] = [$sourceDisk, $sourcePath];
-                                }
+                                $quarantineRollback[] = [$sourceDisk, $sourcePath, $quarantinePath];
+                                $sourceCleanup[] = [$sourceDisk, $sourcePath];
                                 $changed = true;
                                 $quarantinedAttachments++;
                             } catch (Throwable $quarantineException) {
@@ -239,6 +239,12 @@ class SecureTicketAttachments extends Command
                                 report($cleanupException);
                             }
                         }
+                        foreach ($quarantineRollback as [$sourceDisk, $sourcePath, $quarantinePath]) {
+                            if ($sourceDisk === 'private' && Storage::disk('private')->exists($quarantinePath)) {
+                                Storage::disk('private')->move($quarantinePath, $sourcePath);
+                                $createdQuarantine = array_values(array_diff($createdQuarantine, [$quarantinePath]));
+                            }
+                        }
                         foreach (array_unique(array_merge($createdQuarantine, $createdStaging)) as $path) {
                             Storage::disk('private')->delete($path);
                         }
@@ -249,10 +255,13 @@ class SecureTicketAttachments extends Command
 
                     foreach ($sourceCleanup as [$disk, $path]) {
                         try {
-                            if (str_starts_with((string) $disk, 'storage_volume:')) {
+                            $stillReferenced = TicketMessage::query()
+                                ->where('id', '!=', $message->id)
+                                ->where('attachments', 'like', '%'.$path.'%')
+                                ->exists();
+
+                            if (! $stillReferenced) {
                                 $storage->delete((string) $disk, (string) $path);
-                            } else {
-                                Storage::disk((string) $disk)->delete((string) $path);
                             }
                         } catch (Throwable $exception) {
                             $failedAttachments++;
