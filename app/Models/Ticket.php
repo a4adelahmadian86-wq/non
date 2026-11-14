@@ -108,7 +108,7 @@ class Ticket extends Model
             'open' => 'باز',
             'answered' => 'پاسخ داده شده',
             'closed' => 'بسته شده',
-            'pending' => 'در حال بررسی',
+            'pending' => 'منتظر پاسخ کاربر',
             'user_replied' => 'پاسخ کاربر',
             default => (string) $this->status,
         };

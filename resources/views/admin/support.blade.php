@@ -32,7 +32,7 @@
         <div class="sd-admin-stats" style="grid-template-columns:repeat(3,1fr)">
             <div class="sd-admin-stat"><b>{{ $stats['needs_reply'] ?? 0 }}</b><span>نیازمند پاسخ</span></div>
             <div class="sd-admin-stat"><b>{{ $stats['high'] ?? 0 }}</b><span>اولویت بالا</span></div>
-            <div class="sd-admin-stat"><b>{{ $stats['pending'] ?? 0 }}</b><span>در بررسی</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['pending'] ?? 0 }}</b><span>منتظر کاربر</span></div>
             <div class="sd-admin-stat"><b>{{ $stats['user_replied'] ?? 0 }}</b><span>پاسخ کاربر</span></div>
             <div class="sd-admin-stat"><b>{{ $stats['answered'] ?? 0 }}</b><span>پاسخ‌شده</span></div>
             <div class="sd-admin-stat"><b>{{ $stats['closed'] ?? 0 }}</b><span>بسته</span></div>
@@ -53,7 +53,7 @@
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
             <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
             <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
-            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">بررسی</a>
+            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">منتظر کاربر</a>
             <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
             <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
@@ -158,7 +158,7 @@
                     <form method="post" action="{{ route('admin.tickets.status', $active) }}">
                         @csrf
                         <input type="hidden" name="status" value="pending">
-                        <button type="submit" class="sd-btn" style="background:#fef3c7;color:#92400e;font-size:.78rem">در بررسی</button>
+                        <button type="submit" class="sd-btn" style="background:#fef3c7;color:#92400e;font-size:.78rem">منتظر پاسخ کاربر</button>
                     </form>
                     <form method="post" action="{{ route('admin.tickets.status', $active) }}">
                         @csrf
@@ -249,7 +249,7 @@
                         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                             <select name="status" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
                                 <option value="answered">پاسخ داده‌شده</option>
-                                <option value="pending">در حال بررسی</option>
+                                <option value="pending">منتظر پاسخ کاربر</option>
                                 <option value="open">باز نگه دار</option>
                                 <option value="closed">بستن تیکت</option>
                             </select>

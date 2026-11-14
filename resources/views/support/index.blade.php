@@ -49,7 +49,7 @@
                                     'closed' => 'بسته شده',
                                     'answered' => 'پاسخ داده شده',
                                     'user_replied' => 'پاسخ کاربر',
-                                    'pending' => 'در حال بررسی',
+                                    'pending' => 'منتظر پاسخ کاربر',
                                     default => 'بدون فیلتر',
                                 };
                             @endphp
@@ -62,7 +62,7 @@
                         <a href="{{ route('support', $base + ['status' => 'open']) }}" class="{{ request('status')==='open' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-open"></span>باز</a>
                         <a href="{{ route('support', $base + ['status' => 'answered']) }}" class="{{ request('status')==='answered' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-answered"></span>پاسخ داده شده</a>
                         <a href="{{ route('support', $base + ['status' => 'user_replied']) }}" class="{{ request('status')==='user_replied' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-user"></span>پاسخ کاربر</a>
-                        <a href="{{ route('support', $base + ['status' => 'pending']) }}" class="{{ request('status')==='pending' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-pending"></span>در حال بررسی</a>
+                        <a href="{{ route('support', $base + ['status' => 'pending']) }}" class="{{ request('status')==='pending' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-pending"></span>منتظر پاسخ کاربر</a>
                         <a href="{{ route('support', $base + ['status' => 'closed']) }}" class="{{ request('status')==='closed' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-closed"></span>بسته شده</a>
                     </div>
                 </div>
