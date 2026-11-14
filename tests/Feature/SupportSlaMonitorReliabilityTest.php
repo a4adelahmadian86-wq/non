@@ -241,4 +241,51 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
     }
 
+
+    public function test_outbox_enqueue_requires_the_ticket_transaction_and_rolls_back_with_it(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Transactional SLA outbox',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $this->app->instance(SupportNotificationService::class, $notifier);
+        $outbox = app(SupportSlaAlertOutboxService::class);
+
+        try {
+            DB::transaction(function () use ($outbox, $ticket): void {
+                $outbox->enqueue($ticket, 'first_response', [
+                    'event' => 'breached',
+                    'minutes' => -5,
+                    'column' => 'sla_first_breached_at',
+                ]);
+                throw new \RuntimeException('rollback outbox with ticket marker');
+            });
+            $this->fail('The surrounding ticket transaction should roll back.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('rollback outbox with ticket marker', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+
+        try {
+            $outbox->enqueue($ticket, 'first_response', [
+                'event' => 'breached',
+                'minutes' => -5,
+                'column' => 'sla_first_breached_at',
+            ]);
+            $this->fail('Outbox enqueue must reject calls outside a transaction.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('inside the ticket transaction', $exception->getMessage());
+        }
+    }
+
 }
