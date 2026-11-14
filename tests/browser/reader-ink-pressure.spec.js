@@ -40,3 +40,21 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   expect(rejected).toBe(true);
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
 });
+test('personal ink strokes are repainted after durable IndexedDB restoration',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="personal-ink-restore-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0" style="width:600px;height:800px"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Durable personal ink</span></div></div></article></section>');
+  await page.addStyleTag({content:'.farast-reader-page-item{position:relative;width:600px;height:800px}.farast-pdf-document{width:100%;height:100%}'});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  const key='farast.reader.personal-tools.v1:personal-ink-restore-test';
+  await page.evaluate(async key=>{
+    await window.FarastReaderDurableStore.set(key,JSON.stringify({inkStrokes:[{id:'restored-stroke',page:1,tool:'pen',color:'#ff0000',width:8,points:[{x:.1,y:.1},{x:.9,y:.9}]}]}));
+    localStorage.clear();
+  },key);
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-personal-tools.js')});
+  await page.evaluate(()=>window.FarastReaderPersonalToolsReady);
+  await expect.poll(()=>page.locator('.farast-reader-ink-canvas').evaluate(canvas=>{
+    const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+    let visible=0;for(let i=3;i<pixels.length;i+=4)if(pixels[i]>0)visible++;
+    return visible;
+  })).toBeGreaterThan(0);
+});
