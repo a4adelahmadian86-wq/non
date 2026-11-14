@@ -99,15 +99,23 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
-        $afterId = (int) $request->input('after_id', 0);
+        $afterId = max(0, (int) $request->input('after_id', 0));
 
-        $messages = $ticket->messages()
+        // Scan a bounded batch before applying visibility rules so customer
+        // cursors can advance over private notes without receiving their data.
+        $scannedMessages = $ticket->messages()
             ->where('id', '>', $afterId)
-            ->when(! $canSeeInternal, fn ($q) => $q->where(function ($w) {
-                $w->where('is_internal', false)->orWhereNull('is_internal');
-            }))
-            ->orderBy('created_at')
-            ->get()
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+
+        $lastScannedId = (int) ($scannedMessages->last()?->id ?? $afterId);
+
+        if (! $canSeeInternal) {
+            $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        $messages = $scannedMessages
             ->map(function ($m) use ($ticket) {
                 $isStaff = $m->isFromStaff();
 
@@ -132,6 +140,7 @@ class SupportController extends Controller
         return response()->json([
             'ok' => true,
             'messages' => $messages,
+            'last_id' => $lastScannedId,
             'status' => $ticket->fresh()->status,
             'status_label' => $ticket->fresh()->statusLabel(),
         ]);
