@@ -9,7 +9,7 @@ const storageKey='farast-reader:pressure-ink:v1:'+product;
 const state={strokes:[],undo:[],redo:[],drawing:null,pressureEnabled:true,sensitivity:1.35,smoothing:true,tool:'select'};
 const settingsKey='farast-reader:pressure-settings:v1:'+product;
 const status=toolbar.querySelector('.farast-annotation-status');
-const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/css/farast-reader-ink-pressure.css?v=20261110pressure1';document.head.append(stylesheet);
+const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/css/farast-reader-ink-pressure.css?v=20261114icons1';document.head.append(stylesheet);
 const settings=document.createElement('div');
 settings.className='farast-pressure-ink-settings';
 settings.innerHTML='<label class="farast-pressure-toggle"><input type="checkbox" data-pressure-enabled> حساسیت فشار قلم</label><label class="farast-pressure-smooth-toggle"><input type="checkbox" data-pressure-smoothing> هموارسازی دست‌خط</label><label>پاسخ فشار <input type="range" data-pressure-sensitivity min="60" max="240" step="5"><output data-pressure-value>۱٫۳۵×</output></label><span class="farast-pressure-capability" data-pressure-capability>فشار واقعی فقط با قلم سازگار دریافت می‌شود</span><button type="button" data-pressure-action="undo" aria-label="واگرد قلم" title="واگرد قلم" disabled><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span class="farast-pressure-tool-label">واگرد قلم</span></button><button type="button" data-pressure-action="redo" aria-label="بازانجام قلم" title="بازانجام قلم" disabled><i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span class="farast-pressure-tool-label">بازانجام قلم</span></button>';
