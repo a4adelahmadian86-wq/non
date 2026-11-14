@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 class SupportTicketAssignmentLoadTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     public function test_auto_assignment_ignores_workload_outside_each_agents_rbac_scope(): void
     {
