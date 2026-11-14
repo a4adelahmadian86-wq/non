@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Ticket;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SupportSlaService
