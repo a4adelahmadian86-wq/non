@@ -38,6 +38,14 @@
     $priorityLabels = ['low'=>'کم','normal'=>'متوسط','high'=>'زیاد'];
     $sourceLabels = ['dashboard'=>'پنل','widget'=>'ویجت'];
     $topicAreaLabels = ['services'=>'خدمات','store'=>'فروشگاه'];
+    $slaFilterLabels = [
+        \App\Services\SupportTicketService::SLA_FILTER_AT_RISK => 'نزدیک نقض',
+        \App\Services\SupportTicketService::SLA_FILTER_BREACHED => 'نقض‌شده',
+    ];
+    $assignmentFilterLabels = [
+        \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME => 'ارجاع به من',
+        \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED => 'بدون ارجاع',
+    ];
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114inboxfilters">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
@@ -146,16 +154,18 @@
                 <span>وضعیت SLA</span>
                 <select name="sla">
                     <option value="">همه وضعیت‌های SLA</option>
-                    <option value="{{ \App\Services\SupportTicketService::SLA_FILTER_AT_RISK }}" @selected(request('sla') === \App\Services\SupportTicketService::SLA_FILTER_AT_RISK)>نزدیک نقض</option>
-                    <option value="{{ \App\Services\SupportTicketService::SLA_FILTER_BREACHED }}" @selected(request('sla') === \App\Services\SupportTicketService::SLA_FILTER_BREACHED)>نقض‌شده</option>
+                    @foreach(\App\Services\SupportTicketService::SLA_FILTERS as $slaFilter)
+                        <option value="{{ $slaFilter }}" @selected(request('sla') === $slaFilter)>{{ $slaFilterLabels[$slaFilter] ?? $slaFilter }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>ارجاع</span>
                 <select name="assigned">
                     <option value="">همه تیکت‌ها</option>
-                    <option value="{{ \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME }}" @selected(request('assigned') === \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME)>ارجاع به من</option>
-                    <option value="{{ \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED }}" @selected(request('assigned') === \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED)>بدون ارجاع</option>
+                    @foreach(\App\Services\SupportTicketService::ASSIGNMENT_FILTERS as $assignmentFilter)
+                        <option value="{{ $assignmentFilter }}" @selected(request('assigned') === $assignmentFilter)>{{ $assignmentFilterLabels[$assignmentFilter] ?? $assignmentFilter }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
