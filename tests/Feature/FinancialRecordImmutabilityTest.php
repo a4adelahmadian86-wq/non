@@ -57,6 +57,13 @@ class FinancialRecordImmutabilityTest extends TestCase
         }
 
         try {
+            $order->delete();
+            $this->fail('Settled orders must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('settled_order_cannot_be_deleted', $exception->getMessage());
+        }
+
+        try {
             $snapshot = $order->fresh()->pricing_snapshot;
             $snapshot['total_rials'] = 9000;
             $order->update(['pricing_snapshot' => $snapshot]);
