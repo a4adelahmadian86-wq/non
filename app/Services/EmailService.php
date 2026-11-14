@@ -486,7 +486,7 @@ class EmailService
                     ]);
 
                 if ($claimed === 0) {
-                    return;
+                    return true;
                 }
             }
         } else {
