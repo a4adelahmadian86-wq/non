@@ -26,8 +26,7 @@ class AdminProductSupervisorController extends Controller
         abort_unless((bool) data_get($settings, 'enabled', false), 409, 'ناظر هوشمند برای این محصول فعال نیست.');
         abort_unless($supervisor->configured(), 503, 'سرویس مستقل ناظر هنوز متصل نشده است.');
 
-        $snapshot = $snapshotBuilder->build($product, $settings);
-        $snapshot['document_knowledge'] = app(\App\Services\ProductKnowledgeService::class)->contextForProduct($product, 12000);
+        $snapshot = $snapshotBuilder->buildReviewSnapshot($product, $settings);
         if ($snapshot['checks'] === []) {
             return back()->withErrors(['ai_supervisor' => 'حداقل یک حوزه بررسی را فعال کنید.']);
         }
