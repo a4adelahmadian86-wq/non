@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
+use App\Services\AuthorizationService;
 use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
@@ -527,6 +528,59 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertDatabaseHas('farast_audit_events', [
             'event_type' => 'store.product.published',
             'user_id' => $admin->id,
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $product->id,
+        ]);
+    }
+
+    public function test_publication_requires_the_separate_store_products_publish_permission(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول نیازمند مجوز انتشار',
+            'slug' => 'product-publish-permission',
+            'sku' => 'PRODUCT-PUBLISH-PERMISSION-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'short_description' => 'شرح محصول',
+            'status' => 'draft',
+        ]);
+
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/permission-primary.pdf',
+            'original_name' => 'permission-primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 17,
+            'sha256' => hash('sha256', 'safe-test-content'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $authorization = Mockery::mock(AuthorizationService::class)->makePartial();
+        $authorization->shouldReceive('allows')
+            ->andReturnUsing(fn ($user, string $permission): bool => $permission === 'store.manage');
+        $this->app->instance(AuthorizationService::class, $authorization);
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertForbidden();
+
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'event_type' => 'store.product.published',
             'aggregate_type' => 'store_product',
             'aggregate_id' => $product->id,
         ]);
