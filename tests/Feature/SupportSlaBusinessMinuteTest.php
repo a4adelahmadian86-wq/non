@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Ticket;
+use App\Models\TicketMessage;
+use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
 use Carbon\Carbon;
@@ -20,6 +22,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
         parent::setUp();
 
         config([
+            'app.timezone' => 'Asia/Tehran',
             'support.business_hours_only' => true,
             'support.business_hours.timezone' => 'Asia/Tehran',
             'support.business_hours.start' => 9,
@@ -47,6 +50,38 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
         $this->assertSame('warning', $status['state']);
         $this->assertSame(30, $status['minutes_left']);
+    }
+
+    public function test_agent_report_measures_first_response_in_business_minutes(): void
+    {
+        $createdAt = Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran');
+        $this->travelTo($createdAt);
+
+        $agent = User::factory()->create();
+        $ticket = Ticket::create([
+            'subject' => 'Business-time agent metric',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agent->id,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-11-18 09:15:00', 'Asia/Tehran'));
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'body' => 'First public response',
+            'is_internal' => false,
+            'is_staff' => true,
+        ]);
+
+        $report = app(SupportSlaService::class)->agentReport(
+            $createdAt->copy()->subMinute(),
+            now()->copy()->addMinute()
+        );
+
+        $this->assertSame(30, $report['totals']['avg_first_response_minutes']);
+        $this->assertSame(30, $report['agents'][0]['avg_first_response_minutes']);
     }
 
     public function test_sla_monitor_sends_warning_when_business_time_reaches_threshold(): void
