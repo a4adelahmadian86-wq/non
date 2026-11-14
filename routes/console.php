@@ -61,6 +61,19 @@ Schedule::command('queue:work backups --queue=backups --stop-when-empty --max-ti
     ->withoutOverlapping(300)
     ->when(fn () => (bool) config('queue.scheduled_worker', true));
 
+// Deliver durable SLA alerts outside ticket transactions; failed deliveries are retried with backoff.
+Artisan::command('support:deliver-sla-alerts {--limit=10}', function (\\App\\Services\\SupportSlaAlertOutboxService $outbox) {
+    $delivered = $outbox->processPending((int) $this->option('limit'));
+    $this->info("Delivered {$delivered} SLA alert(s).");
+
+    return 0;
+})->purpose('Deliver and retry durable support SLA alert outbox entries');
+
+Schedule::command('support:deliver-sla-alerts --limit=10')
+    ->everyMinute()
+    ->withoutOverlapping(10)
+    ->when(fn () => config('support.monitor_enabled', true));
+
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
     ->everyFifteenMinutes()
