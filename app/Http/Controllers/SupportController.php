@@ -44,6 +44,309 @@ class SupportController extends Controller
                     ->orWhere('ticket_code', 'like', '%'.$q.'%');
             });
         }
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $query->orderByDesc('last_reply_at');
+        }
+
+        $perPage = (int) $request->input('per_page', 10);
+        if (! in_array($perPage, [5, 10, 15, 20, 25, 50, 100], true)) {
+            $perPage = 10;
+        }
+
+        $tickets = $query->latest()->paginate($perPage)->withQueryString();
+
+        return view('support.index', compact('tickets'));
+    }
+
+    public function createForm(CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+
+        $purchasedProducts = collect();
+        if (Schema::hasTable('store_library_items')) {
+            $purchasedProducts = StoreLibraryItem::query()
+                ->where('user_id', auth()->id())->whereNull('revoked_at')
+                ->with('product:id,title,slug')->latest('granted_at')->get()
+                ->filter(fn ($item) => $item->product)->unique('product_id')->take(5)->values()
+                ->map(fn ($item) => $item->product);
+        }
+
+        $catalogProducts = collect();
+        if (Schema::hasTable('store_products')) {
+            $catalogProducts = StoreProduct::query()->published()->orderBy('title')->limit(80)->get(['id', 'title', 'slug']);
+        }
+
+        $services = [
+            'typing' => 'تایپ آنلاین', 'convert' => 'تبدیل فایل', 'edit' => 'ویرایش هوشمند',
+            'ocr' => 'OCR / استخراج متن', 'voice' => 'ورود صوتی', 'other' => 'سایر خدمات',
+        ];
+
+        return view('support.create', compact('purchasedProducts', 'catalogProducts', 'services'));
+    }
+
+    public function show(Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('view', $ticket);
+
+        $ticket->load(['relatedProduct', 'assignee']);
+        $history = $this->initialThreadHistory($ticket, false);
+        $ticket->setRelation('messages', $history['messages']);
+        $this->tickets->markCustomerSeen($ticket);
+
+        return view('support.show', compact('ticket', 'history'));
+    }
+
+    public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities, AuthorizationService $authorization)
+    {
+        $canSeeInternal = $authorization->allowsRecord(auth()->user(), 'support.manage', $ticket);
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
+        $this->authorize('view', $ticket);
+
+        $formatMessage = function ($message) use ($ticket): array {
+            $isStaff = $message->isFromStaff();
+
+            return [
+                'id' => $message->id,
+                'body' => $message->body,
+                'is_staff' => $isStaff,
+                'is_internal' => (bool) $message->is_internal,
+                'is_mine' => $message->user_id === auth()->id() && ! $isStaff,
+                'time' => $message->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
+                'attachments' => collect($message->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                    'name' => $attachment['name'] ?? 'پیوست',
+                    'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => $index]),
+                    'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                    'quarantined' => ! empty($attachment['quarantined']),
+                ])->all(),
+            ];
+        };
+
+        $beforeId = max(0, (int) $request->input('before_id', 0));
+        if ($beforeId > 0) {
+            $scannedMessages = $ticket->messages()
+                ->with('user')
+                ->where('id', '<', $beforeId)
+                ->reorder('id', 'desc')
+                ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+                ->get();
+
+            $nextBeforeId = (int) ($scannedMessages->last()?->id ?? $beforeId);
+            $hasMore = $nextBeforeId < $beforeId
+                && $ticket->messages()->where('id', '<', $nextBeforeId)->exists();
+
+            if (! $canSeeInternal) {
+                $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'messages' => $scannedMessages->reverse()->values()->map($formatMessage)->values(),
+                'next_before_id' => $nextBeforeId,
+                'has_more' => $hasMore,
+            ]);
+        }
+
+        $afterId = max(0, (int) $request->input('after_id', 0));
+
+        // Scan a bounded batch before applying visibility rules. Customer cursors
+        // must advance over private notes without receiving their contents.
+        $scannedMessages = $ticket->messages()
+            ->with('user')
+            ->where('id', '>', $afterId)
+            ->reorder('id')
+            ->limit(self::THREAD_HISTORY_PAGE_SIZE)
+            ->get();
+
+        $lastScannedId = (int) ($scannedMessages->last()?->id ?? $afterId);
+
+        if (! $canSeeInternal) {
+            $scannedMessages = $scannedMessages->reject(fn ($message) => (bool) $message->is_internal);
+        }
+
+        $messages = $scannedMessages->map($formatMessage)->values();
+
+        if (! $canSeeInternal && $messages->isNotEmpty()) {
+            $this->tickets->markCustomerSeen($ticket);
+        }
+
+        $freshTicket = $ticket->fresh();
+
+        return response()->json([
+            'ok' => true,
+            'messages' => $messages,
+            'last_id' => $lastScannedId,
+            'status' => $freshTicket->status,
+            'status_label' => $freshTicket->statusLabel(),
+        ]);
+    }
+
+    public function create(Request $request, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('create', Ticket::class);
+
+        $data = $request->validate([
+            'subject' => 'required|string|max:160',
+            'body' => 'required|string|max:5000',
+            'department' => 'required|string|in:'.implode(',', SupportTicketService::DEPARTMENTS),
+            'priority' => 'required|string|in:'.implode(',', SupportTicketService::PRIORITIES),
+            'topic_area' => 'required|string|in:services,store',
+            'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'services'), 'nullable', 'string', 'max:80'],
+            'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'store'), 'nullable', 'integer', Rule::exists('store_products', 'id')],
+            'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
+        ], [
+            'department.required' => 'دپارتمان را انتخاب کنید.',
+            'priority.required' => 'اولویت را انتخاب کنید.',
+            'topic_area.required' => 'حوزه موضوع را انتخاب کنید.',
+            'related_service.required' => 'نوع خدمت را انتخاب کنید.',
+            'related_product_id.required' => 'یک محصول مرتبط انتخاب کنید.',
+        ]);
+
+        $body = $data['body'];
+        $meta = [];
+        if ($data['topic_area'] === 'services' && ! empty($data['related_service'])) {
+            $labels = ['typing' => 'تایپ آنلاین', 'convert' => 'تبدیل فایل', 'edit' => 'ویرایش هوشمند', 'ocr' => 'OCR / استخراج متن', 'voice' => 'ورود صوتی', 'other' => 'سایر خدمات'];
+            $meta[] = 'حوزه: خدمات — '.($labels[$data['related_service']] ?? $data['related_service']);
+        }
+        if ($data['topic_area'] === 'store' && ! empty($data['related_product_id'])) {
+            $product = StoreProduct::find($data['related_product_id']);
+            $meta[] = 'حوزه: فروشگاه — محصول: '.($product?->title ?? ('#'.$data['related_product_id']));
+        }
+        if ($meta) {
+            $body = implode("\n", $meta)."\n\n".$body;
+        }
+
+        $ticket = $this->tickets->createTicket(auth()->user(), [
+            'subject' => $data['subject'],
+            'body' => $body,
+            'department' => $data['department'],
+            'priority' => $data['priority'],
+            'topic_area' => $data['topic_area'],
+            'related_service' => $data['topic_area'] === 'services' ? ($data['related_service'] ?? null) : null,
+            'related_product_id' => $data['topic_area'] === 'store' ? ($data['related_product_id'] ?? null) : null,
+            'source' => 'dashboard',
+        ], $request->file('attachment'));
+
+        return redirect()->route('support.show', $ticket)->with('status', 'تیکت '.$ticket->displayCode().' ثبت شد.');
+    }
+
+    public function message(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('reply', $ticket);
+
+        $data = $request->validate([
+            'body' => 'required|string|max:5000',
+            'attachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,gif,pdf,txt,zip',
+        ]);
+
+        $msg = $this->tickets->addMessage($ticket, auth()->user(), $data['body'], [
+            'is_staff' => false,
+            'attachment' => $request->file('attachment'),
+        ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'message' => [
+                    'id' => $msg->id,
+                    'body' => $msg->body,
+                    'is_staff' => false,
+                    'created_at' => $msg->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    'time' => $msg->created_at->format('H:i'),
+                    'attachments' => collect($msg->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                        'name' => $attachment['name'] ?? 'پیوست',
+                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $msg->id, 'index' => $index]),
+                        'available' => ! empty($attachment['managed_file_id']) && empty($attachment['quarantined']),
+                        'quarantined' => ! empty($attachment['quarantined']),
+                    ])->all(),
+                ],
+            ]);
+        }
+
+        return back();
+    }
+
+    public function close(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('close', $ticket);
+
+        $this->tickets->changeStatus($ticket, 'closed', auth()->user(), true);
+
+        return redirect()->route('support.show', $ticket)->with('status', 'تیکت بسته شد. لطفاً به کیفیت پشتیبانی امتیاز دهید.');
+    }
+
+    /**
+     * رضایت‌سنجی پس از بستن تیکت (CSAT 1–5).
+     */
+    public function csat(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('rate', $ticket);
+
+        $data = $request->validate([
+            'score' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $this->tickets->submitCsat($ticket, (int) $data['score'], $data['comment'] ?? null);
+        } catch (\InvalidArgumentException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            return back()->withErrors(['csat' => $e->getMessage()]);
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['ok' => true, 'message' => 'از بازخورد شما سپاسگزاریم.']);
+        }
+
+        return back()->with('status', 'از امتیاز شما سپاسگزاریم.');
+    }
+
+    public function adminIndex(Request $request, SupportSlaService $sla)
+    {
+        // Apply the current RBAC data scope before filtering, searching, counting,
+        // pagination or resolving the active ticket. Guest tickets (user_id=null)
+        // remain visible only to global support operators.
+        $visibleUserIds = app(AdminConsoleService::class)->visibleUserIds(auth()->user());
+        $scopeQuery = static function ($query) use ($visibleUserIds) {
+            if ($visibleUserIds !== null) {
+                $query->whereIn('tickets.user_id', $visibleUserIds);
+            }
+
+            return $query;
+        };
+
+        $warningDeadline = $sla->addSlaMinutes(
+            now(),
+            max(0, (int) config('support.warn_before_minutes', 30))
+        );
+
+        // Inbox rows need only the latest public preview. Loading every message
+        // for every ticket on the page caused memory growth proportional to all
+        // conversation history; the active thread is loaded separately below.
+        $latestPublicMessageBody = TicketMessage::query()
+            ->select('body')
+            ->whereColumn('ticket_id', 'tickets.id')
+            ->where(function ($q) {
+                $q->where('is_internal', false)->orWhereNull('is_internal');
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(1);
+
+        $query = $scopeQuery(Ticket::query())
+            ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
+            ->with(['user', 'relatedProduct', 'assignee']);
+
         $statusFilter = $request->input('status');
         if (is_string($statusFilter)
             && $statusFilter !== 'all'
