@@ -16,6 +16,18 @@ test('reader data survives clearing localStorage and reloading through IndexedDB
  const restored=await page.evaluate(key=>window.FarastReaderDurableStore.restore(key),key);
  expect(JSON.parse(restored)).toEqual({progress:{section:2,page:7},bookmarks:[{section:2,page:4}]});
 });
+test('legacy migration cannot overwrite a newer concurrent IndexedDB write',async({page})=>{
+  await page.goto('/');
+  await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+  const result=await page.evaluate(async()=>{
+    const store=window.FarastReaderDurableStore;
+    const key='farast-reader:migration-race-test';
+    const migration=store.migrate(key,'legacy-stale-state');
+    await store.set(key,'new-user-state');
+    return {migration:await migration,restored:await store.restore(key)};
+  });
+  expect(result.restored).toBe('new-user-state');
+});
 test('legacy reader local storage is migrated once into IndexedDB',async({page})=>{
  await page.goto('/');
  await page.evaluate(()=>localStorage.setItem('farast-reader:migration-test','legacy-data'));
