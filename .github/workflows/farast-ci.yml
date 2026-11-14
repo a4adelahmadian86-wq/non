@@ -354,3 +354,13 @@ jobs:
           name: admin-product-e2e-diagnostics
           path: test-results/
           if-no-files-found: ignore
+
+  coordination-workflow-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint FARAST coordination workflow
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color .github/workflows/farast-agent-coordination.yml
