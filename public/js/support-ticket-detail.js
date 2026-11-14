@@ -154,7 +154,7 @@
   const olderButton = document.getElementById('loadOlderTicketMessages');
   let olderInFlight = false;
   olderButton?.addEventListener('click', async () => {
-    if (olderInFlight || !messages || !pollUrl) return;
+    if (olderInFlight || pollInFlight || !messages || !pollUrl) return;
     let beforeId = Number(page?.dataset.oldestId || 0);
     if (!beforeId) return;
 
