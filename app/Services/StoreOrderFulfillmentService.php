@@ -116,19 +116,26 @@ class StoreOrderFulfillmentService
      */
     public function markReconciliationRequired(Payment $payment, Throwable $exception): void
     {
-        $payment->refresh();
-        $gatewayResponse = $payment->gateway_response ?? [];
-        $marker = $gatewayResponse['fulfillment_reconciliation'] ?? [];
-        $marker = is_array($marker) ? $marker : [];
-        $marker['status'] = 'required';
-        $marker['attempts'] = (int) ($marker['attempts'] ?? 0);
-        $marker['reason_code'] = 'post_capture_fulfillment_failed';
-        $marker['last_error'] = mb_substr($exception->getMessage(), 0, 180);
-        $marker['recorded_at'] = $marker['recorded_at'] ?? now()->toIso8601String();
-        $marker['last_attempt_at'] = now()->toIso8601String();
-        $gatewayResponse['fulfillment_reconciliation'] = $marker;
+        DB::transaction(function () use ($payment, $exception): void {
+            // Keep the shared lock order consistent with settlement and fulfillment:
+            // Order first, then Payment.
+            if ($payment->order_id) {
+                Order::query()->whereKey($payment->order_id)->lockForUpdate()->first();
+            }
+            $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
+            $gatewayResponse = $lockedPayment->gateway_response ?? [];
+            $marker = $gatewayResponse['fulfillment_reconciliation'] ?? [];
+            $marker = is_array($marker) ? $marker : [];
+            $marker['status'] = 'required';
+            $marker['attempts'] = (int) ($marker['attempts'] ?? 0);
+            $marker['reason_code'] = 'post_capture_fulfillment_failed';
+            $marker['last_error'] = mb_substr($exception->getMessage(), 0, 180);
+            $marker['recorded_at'] = $marker['recorded_at'] ?? now()->toIso8601String();
+            $marker['last_attempt_at'] = now()->toIso8601String();
+            $gatewayResponse['fulfillment_reconciliation'] = $marker;
 
-        $payment->forceFill(['gateway_response' => $gatewayResponse])->save();
+            $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
+        }, 3);
     }
 
     /**
@@ -147,34 +154,48 @@ class StoreOrderFulfillmentService
             ->where('gateway_response->fulfillment_reconciliation->status', 'required')
             ->orderBy('id')
             ->limit(max(1, min($limit, 200)))
-            ->get();
+            ->get(['id', 'order_id']);
 
         $completed = 0;
-        foreach ($payments as $payment) {
+        foreach ($payments as $candidate) {
             try {
-                $order = Order::query()->whereKey($payment->order_id)->first();
-                if (! $order) {
-                    throw new RuntimeException('سفارش مربوط به پرداخت بازیابی‌پذیر نیست.');
-                }
+                $didComplete = DB::transaction(function () use ($candidate): bool {
+                    $order = Order::query()->whereKey($candidate->order_id)->lockForUpdate()->first();
+                    $payment = Payment::query()->whereKey($candidate->id)->lockForUpdate()->first();
+                    if (! $order || ! $payment) {
+                        throw new RuntimeException('سفارش یا پرداخت مربوط به بازیابی تحویل پیدا نشد.');
+                    }
 
-                $this->fulfill($order);
-                $this->markReconciled($payment);
-                try {
-                    app(NotificationService::class)->push(
-                        (int) $order->user_id,
-                        'order_fulfilled',
-                        'محتوای خرید شما آماده است',
-                        'تحویل سفارش شماره '.$order->id.' با موفقیت تکمیل شد و محتوا در کتابخانه شما قرار دارد.',
-                        ['order_id' => $order->id, 'url' => route('library')],
-                        true,
-                        'order:'.$order->id.':fulfilled:user:'.$order->user_id,
-                    );
-                } catch (Throwable $notificationException) {
-                    report($notificationException);
+                    $marker = data_get($payment->gateway_response, 'fulfillment_reconciliation', []);
+                    if ($payment->status !== 'paid' || ($marker['status'] ?? null) !== 'required') {
+                        return false;
+                    }
+
+                    $this->fulfill($order);
+                    $this->markReconciled($payment);
+
+                    try {
+                        app(NotificationService::class)->push(
+                            (int) $order->user_id,
+                            'order_fulfilled',
+                            'محتوای خرید شما آماده است',
+                            'تحویل سفارش شماره '.$order->id.' با موفقیت تکمیل شد و محتوا در کتابخانه شما قرار دارد.',
+                            ['order_id' => $order->id, 'url' => route('library')],
+                            true,
+                            'order:'.$order->id.':fulfilled:user:'.$order->user_id,
+                        );
+                    } catch (Throwable $notificationException) {
+                        report($notificationException);
+                    }
+
+                    return true;
+                }, 3);
+
+                if ($didComplete) {
+                    $completed++;
                 }
-                $completed++;
             } catch (Throwable $exception) {
-                $this->recordRetryFailure($payment, $exception);
+                $this->recordRetryFailure($candidate, $exception);
             }
         }
 
@@ -266,7 +287,6 @@ class StoreOrderFulfillmentService
 
     private function markReconciled(Payment $payment): void
     {
-        $payment->refresh();
         $gatewayResponse = $payment->gateway_response ?? [];
         $marker = $gatewayResponse['fulfillment_reconciliation'] ?? [];
         if (! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
@@ -282,19 +302,28 @@ class StoreOrderFulfillmentService
 
     private function recordRetryFailure(Payment $payment, Throwable $exception): void
     {
-        $payment->refresh();
-        $gatewayResponse = $payment->gateway_response ?? [];
-        $marker = $gatewayResponse['fulfillment_reconciliation'] ?? [];
-        if (! is_array($marker)) {
-            $marker = [];
-        }
+        DB::transaction(function () use ($payment, $exception): void {
+            if ($payment->order_id) {
+                Order::query()->whereKey($payment->order_id)->lockForUpdate()->first();
+            }
+            $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->first();
+            if (! $lockedPayment) {
+                return;
+            }
 
-        $attempts = (int) ($marker['attempts'] ?? 0) + 1;
-        $marker['attempts'] = $attempts;
-        $marker['status'] = $attempts >= 10 ? 'manual_review' : 'required';
-        $marker['last_error'] = mb_substr($exception->getMessage(), 0, 180);
-        $marker['last_attempt_at'] = now()->toIso8601String();
-        $gatewayResponse['fulfillment_reconciliation'] = $marker;
-        $payment->forceFill(['gateway_response' => $gatewayResponse])->save();
+            $gatewayResponse = $lockedPayment->gateway_response ?? [];
+            $marker = $gatewayResponse['fulfillment_reconciliation'] ?? [];
+            if (! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
+                return;
+            }
+
+            $attempts = (int) ($marker['attempts'] ?? 0) + 1;
+            $marker['attempts'] = $attempts;
+            $marker['status'] = $attempts >= 10 ? 'manual_review' : 'required';
+            $marker['last_error'] = mb_substr($exception->getMessage(), 0, 180);
+            $marker['last_attempt_at'] = now()->toIso8601String();
+            $gatewayResponse['fulfillment_reconciliation'] = $marker;
+            $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
+        }, 3);
     }
 }
