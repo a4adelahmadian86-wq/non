@@ -2,8 +2,8 @@
 
 @section('content')
 @php
-    $lastMsgId = $ticket->last_scanned_message_id ?? $ticket->messages->last()?->id ?? 0;
-    $oldestMsgId = $ticket->oldest_scanned_message_id ?? $ticket->messages->first()?->id ?? 0;
+    $lastMsgId = $history['last_scanned_id'] ?? $ticket->messages->last()?->id ?? 0;
+    $oldestMsgId = $history['oldest_scanned_id'] ?? $ticket->messages->first()?->id ?? 0;
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114threadhistory">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114threadhistory">
@@ -52,7 +52,7 @@
             <div class="tk-divider"></div>
 
             <div class="tk-thread" id="chatMessages">
-                @if($ticket->has_older_messages)
+                @if($history['has_older'] ?? false)
                     <button type="button" id="loadOlderTicketMessages" class="tk-btn" style="align-self:center;margin:8px auto;background:#eef4ff;color:#1769ff">نمایش پیام‌های قدیمی‌تر</button>
                 @endif
                 @php $prevDay = null; @endphp
