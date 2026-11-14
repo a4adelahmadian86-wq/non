@@ -141,7 +141,7 @@ class WorkflowEngine
         } elseif ($order->isPaid()) {
             $eventType = 'order.paid';
         } else {
-            throw new \\InvalidArgumentException('Only a settled order can emit a paid-order workflow event.');
+            throw new \InvalidArgumentException('Only a settled order can emit a paid-order workflow event.');
         }
 
         return $this->enqueue(
