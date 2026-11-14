@@ -246,6 +246,38 @@ trait PaysWithZarinpal
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
                 );
+
+                // Zarinpal has already captured external funds. Persist the event
+                // in the same transaction when possible; if the outbox is
+                // temporarily unavailable, retain an explicit reconciliation
+                // marker on the settled payment instead of rolling back capture.
+                try {
+                    app(\App\Services\WorkflowEngine::class)->enqueue(
+                        'order.paid',
+                        [
+                            'user_id' => (int) $locked->user_id,
+                            'customer_id' => (int) $locked->user_id,
+                            'order_id' => (int) $locked->id,
+                            'amount_rials' => (int) $locked->total_rials,
+                            'order_kind' => (string) data_get($locked->pricing_snapshot, 'kind', 'unknown'),
+                            'status' => 'paid',
+                        ],
+                        'order:'.$locked->id.':order.paid',
+                    );
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $gatewayResponse = $lockedPayment->gateway_response ?? [];
+                    $gatewayResponse['workflow_event_reconciliation'] = [
+                        'status' => 'required',
+                        'event_type' => 'order.paid',
+                        'idempotency_key' => 'order:'.$locked->id.':order.paid',
+                        'reason_code' => 'outbox_persist_failed',
+                        'reason' => mb_substr($exception->getMessage(), 0, 180),
+                        'recorded_at' => now()->toIso8601String(),
+                    ];
+                    $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
+                }
+
                 $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {
@@ -258,18 +290,6 @@ trait PaysWithZarinpal
             try {
                 $emailService->sendOrderPaid(auth()->user(), $order->fresh());
             } catch (\Throwable) {
-            }
-        }
-
-        if ($paymentProcessed) {
-            try {
-                app(\App\Services\WorkflowEngine::class)->dispatch(
-                    'order.paid',
-                    ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
-                    'order:'.$order->id.':paid',
-                );
-            } catch (\Throwable $exception) {
-                report($exception);
             }
         }
 
