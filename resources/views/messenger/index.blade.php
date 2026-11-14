@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/messenger.css') }}?v=20261110">
+<link rel="stylesheet" href="{{ asset('css/messenger.css') }}?v=20261114managedattachments">
 <div class="fm-page" dir="rtl">
     <header class="fm-header">
         <div><span class="fm-eyebrow">FARAST • COMMUNICATIONS</span><h1>مرکز پیام‌رسانی</h1><p>گفت‌وگوهای خصوصی و گروهی در فضای امن داخلی فراست</p></div>
@@ -35,5 +35,5 @@
         <button class="fm-primary" type="submit">ایجاد گفت‌وگو</button>
     </form>
 </dialog>
-<script src="{{ asset('js/messenger.js') }}?v=20261110" defer></script>
+<script src="{{ asset('js/messenger.js') }}?v=20261114managedattachments" defer></script>
 @endsection
