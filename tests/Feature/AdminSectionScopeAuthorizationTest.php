@@ -277,4 +277,33 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+
+    public function test_store_management_requires_global_store_section_access(): void
+    {
+        $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
+        $employee = $this->makeUser('09123456792', User::ROLE_EMPLOYEE, $organization->id);
+        $manager = $this->makeUser('09123456793', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        RolePermission::firstOrCreate(['role' => User::ROLE_ORGANIZATION_MANAGER, 'permission_id' => $storePermission->id]);
+
+        $this->actingAs($employee)->get('/admin/store')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/store')->assertForbidden();
+    }
+
+    public function test_product_operations_and_support_report_require_global_admin_sections(): void
+    {
+        $organization = Organization::create(['name' => 'Restricted Admin Org', 'slug' => 'restricted-admin-org', 'status' => 'active']);
+        $employee = $this->makeUser('09123456794', User::ROLE_EMPLOYEE, $organization->id);
+        $manager = $this->makeUser('09123456795', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        $supportPermission = Permission::query()->where('key', 'support.manage')->firstOrFail();
+        RolePermission::firstOrCreate(['role' => User::ROLE_ORGANIZATION_MANAGER, 'permission_id' => $storePermission->id]);
+        RolePermission::firstOrCreate(['role' => User::ROLE_ORGANIZATION_MANAGER, 'permission_id' => $supportPermission->id]);
+
+        $this->actingAs($employee)->get('/admin/store/operations')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/store/operations')->assertForbidden();
+        $this->actingAs($employee)->get('/admin/support-report')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/support-report')->assertForbidden();
+    }
+
 }
