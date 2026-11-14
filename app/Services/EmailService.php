@@ -285,12 +285,12 @@ class EmailService
         string $body,
         string $type = 'ticket_sla_warning',
         ?string $eventIdentity = null,
-    ): void {
+    ): ?bool {
         if (! $staff->email || ! in_array($type, ['ticket_sla_warning', 'ticket_sla_breach'], true) || ! $this->isEnabled($type)) {
-            return;
+            return null;
         }
 
-        $this->sendSupportMail(
+        return $this->sendSupportMail(
             type: $type,
             to: $staff->email,
             user: $staff,
@@ -388,7 +388,7 @@ class EmailService
         bool $staffUrl,
         ?string $name = null,
         ?string $idempotencyKey = null,
-    ): void {
+    ): bool {
         $url = $this->ticketUrl($ticket, $staffUrl);
         $status = $ticket->statusLabel();
         $code = $ticket->displayCode();
@@ -405,7 +405,7 @@ class EmailService
             'ticketCode' => $code,
         ];
 
-        $this->dispatch(
+        return $this->dispatch(
             type: $type,
             to: $to,
             user: $user,
@@ -448,7 +448,7 @@ class EmailService
         array $viewData = [],
         array $meta = [],
         ?string $idempotencyKey = null,
-    ): void {
+    ): bool {
         $this->mailConfig->apply();
 
         $provider = $this->mailConfig->currentProvider();
@@ -486,7 +486,7 @@ class EmailService
                     ]);
 
                 if ($claimed === 0) {
-                    return;
+                    return true;
                 }
             }
         } else {
@@ -521,7 +521,11 @@ class EmailService
             if ($type === 'test' || $type === 'otp') {
                 throw new \RuntimeException($message, 0, $e);
             }
+
+            return false;
         }
+
+        return true;
     }
 
     protected function hash(string $email): string

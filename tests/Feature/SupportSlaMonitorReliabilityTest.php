@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Ticket;
 use App\Models\User;
 use App\Services\SupportNotificationService;
+use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -54,9 +56,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         }
 
         $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaBreached')->times(501)->withArgs(
-            fn ($ticket, $kind): bool => $kind === 'first_response'
-        );
+        $notifier->shouldNotReceive('slaBreached');
         $notifier->shouldNotReceive('slaWarning');
         $this->app->instance(SupportNotificationService::class, $notifier);
 
@@ -64,6 +64,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         Artisan::call('support:check-sla');
 
         $this->assertSame(501, DB::table('tickets')->whereNotNull('sla_first_breached_at')->count());
+        $this->assertSame(501, DB::table('support_sla_alert_outbox')->where('kind', 'first_response')->where('event', 'breached')->count());
     }
 
     public function test_pending_ticket_keeps_first_response_monitoring_but_pauses_resolution_monitoring(): void
@@ -84,9 +85,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         ]);
 
         $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaBreached')->once()->withArgs(
-            fn ($ticket, $kind): bool => (int) $ticket->id === $ticketId && $kind === 'first_response'
-        );
+        $notifier->shouldNotReceive('slaBreached');
         $notifier->shouldNotReceive('slaWarning');
         $this->app->instance(SupportNotificationService::class, $notifier);
 
@@ -94,6 +93,8 @@ class SupportSlaMonitorReliabilityTest extends TestCase
 
         $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
         $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_resolve_breached_at'));
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'breached']);
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'resolution']);
     }
 
     public function test_late_first_response_is_still_recorded_as_a_breach(): void
@@ -112,15 +113,14 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         ]);
 
         $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('slaBreached')->once()->withArgs(
-            fn ($ticket, $kind): bool => (int) $ticket->id === $ticketId && $kind === 'first_response'
-        );
+        $notifier->shouldNotReceive('slaBreached');
         $notifier->shouldNotReceive('slaWarning');
         $this->app->instance(SupportNotificationService::class, $notifier);
 
         Artisan::call('support:check-sla');
 
         $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'breached']);
     }
 
     public function test_business_hour_calendar_is_used_for_warning_thresholds(): void
@@ -152,17 +152,14 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             ]);
 
             $notifier = Mockery::mock(SupportNotificationService::class);
-            $notifier->shouldReceive('slaWarning')->once()->withArgs(
-                fn ($ticket, $kind, $minutes): bool => (int) $ticket->id === $ticketId
-                    && $kind === 'first_response'
-                    && $minutes === 15
-            );
+            $notifier->shouldNotReceive('slaWarning');
             $notifier->shouldNotReceive('slaBreached');
             $this->app->instance(SupportNotificationService::class, $notifier);
 
             Artisan::call('support:check-sla');
 
             $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_warned_at'));
+            $this->assertDatabaseHas('support_sla_alert_outbox', ['ticket_id' => $ticketId, 'kind' => 'first_response', 'event' => 'warning', 'minutes_left' => 15]);
         } finally {
             Carbon::setTestNow();
         }
@@ -191,6 +188,97 @@ class SupportSlaMonitorReliabilityTest extends TestCase
 
         $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
         $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_warned_at'));
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+    }
+
+
+    public function test_alert_delivery_is_outside_ticket_transaction_and_failed_attempt_is_retried(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Retryable SLA alert',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')->where('ticket_id', $ticketId)->first();
+        $this->assertNotNull($outbox);
+        $this->assertSame('pending', $outbox->status);
+        $this->assertSame(0, (int) $outbox->attempts);
+
+        $baselineTransactionLevel = DB::transactionLevel();
+        $failedNotifier = Mockery::mock(SupportNotificationService::class);
+        $failedNotifier->shouldReceive('slaBreached')->once()->withArgs(
+            function ($ticket, $kind, $identity) use ($ticketId, $baselineTransactionLevel): bool {
+                $this->assertSame($baselineTransactionLevel, DB::transactionLevel(), 'Delivery must not retain an additional ticket-claim transaction.');
+                return (int) $ticket->id === $ticketId && $kind === 'first_response' && str_contains($identity, 'sla:first_response:breached');
+            }
+        )->andThrow(new \RuntimeException('temporary provider failure'));
+        $this->app->instance(SupportNotificationService::class, $failedNotifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['id' => $outbox->id, 'status' => 'failed', 'attempts' => 1]);
+
+        DB::table('support_sla_alert_outbox')->where('id', $outbox->id)->update(['available_at' => now()->subMinute()]);
+        $successfulNotifier = Mockery::mock(SupportNotificationService::class);
+        $successfulNotifier->shouldReceive('slaBreached')->once()->withArgs(
+            fn ($ticket, $kind, $identity): bool => (int) $ticket->id === $ticketId
+                && $kind === 'first_response'
+                && $identity === $outbox->event_identity
+        );
+        $this->app->instance(SupportNotificationService::class, $successfulNotifier);
+
+        $this->assertSame(1, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'delivered',
+            'attempts' => 2,
+        ]);
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+    }
+
+
+    public function test_outbox_enqueue_rolls_back_with_the_ticket_transaction(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Transactional SLA outbox',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $this->app->instance(SupportNotificationService::class, $notifier);
+        $outbox = app(SupportSlaAlertOutboxService::class);
+
+        try {
+            DB::transaction(function () use ($outbox, $ticket): void {
+                $outbox->enqueue($ticket, 'first_response', [
+                    'event' => 'breached',
+                    'minutes' => -5,
+                    'column' => 'sla_first_breached_at',
+                ]);
+                throw new \RuntimeException('rollback outbox with ticket marker');
+            });
+            $this->fail('The surrounding ticket transaction should roll back.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('rollback outbox with ticket marker', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+
+
     }
 
 }

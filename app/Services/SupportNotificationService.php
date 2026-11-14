@@ -190,107 +190,103 @@ class SupportNotificationService
     }
 
     /** @param  'first_response'|'resolution'  $kind */
-    public function slaWarning(Ticket $ticket, string $kind, int $minutesLeft): void
+    public function slaWarning(Ticket $ticket, string $kind, int $minutesLeft, ?string $eventIdentity = null): void
     {
         $ticket->loadMissing(['assignee', 'user']);
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'هشدار SLA — '.$ticket->displayCode();
         $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
-        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown').':threshold:'.$minutesLeft;
+        $identity = $eventIdentity ?? 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown').':threshold:'.$minutesLeft;
+        $failures = [];
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
-                if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', $cycleIdentity);
+                $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
+            } catch (\Throwable $exception) {
+                $failures[] = 'in-app:'.$staff->id;
+            }
+
+            try {
+                $queued = $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', $identity);
+                if ($queued === false) {
+                    $failures[] = 'email:'.$staff->id;
                 }
             } catch (\Throwable $exception) {
-                Log::warning('farast.support.sla_email_notification_failed', [
-                    'ticket_id' => $ticket->id,
-                    'notification_type' => 'ticket_sla_warning',
-                    'kind' => $kind,
-                    'recipient_id' => $staff->id,
-                    'exception_class' => get_class($exception),
-                ]);
+                $failures[] = 'email:'.$staff->id;
             }
         }
 
         try {
             if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
                 $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-                if ($mobile) {
-                    $this->sms->sendEvent(
-                        $mobile,
-                        'ticket_sla_warning',
-                        'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
-                        [
-                            'token' => $ticket->displayCode(),
-                            'token2' => (string) $minutesLeft,
-                        ],
-                        'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$cycleIdentity
-                    );
+                if ($mobile && ! $this->sms->sendEvent(
+                    $mobile,
+                    'ticket_sla_warning',
+                    'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
+                    ['token' => $ticket->displayCode(), 'token2' => (string) $minutesLeft],
+                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$identity
+                )) {
+                    $failures[] = 'sms';
                 }
             }
         } catch (\Throwable $exception) {
-            Log::warning('farast.support.sla_sms_notification_failed', [
-                'ticket_id' => $ticket->id,
-                'notification_type' => 'ticket_sla_warning',
-                'kind' => $kind,
-                'exception_class' => get_class($exception),
-            ]);
+            $failures[] = 'sms';
+        }
+
+        if ($failures !== []) {
+            throw new \RuntimeException('SLA warning delivery incomplete: '.implode(',', array_unique($failures)));
         }
     }
 
     /** @param  'first_response'|'resolution'  $kind */
-    public function slaBreached(Ticket $ticket, string $kind): void
+    public function slaBreached(Ticket $ticket, string $kind, ?string $eventIdentity = null): void
     {
         $ticket->loadMissing(['assignee', 'user']);
         $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
         $title = 'نقض SLA — '.$ticket->displayCode();
         $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
-        $cycleIdentity = 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
+        $identity = $eventIdentity ?? 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
+        $failures = [];
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $cycleIdentity);
             try {
-                if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', 'sla-breached:'.$kind);
+                $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
+            } catch (\Throwable $exception) {
+                $failures[] = 'in-app:'.$staff->id;
+            }
+
+            try {
+                $queued = $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', $identity);
+                if ($queued === false) {
+                    $failures[] = 'email:'.$staff->id;
                 }
             } catch (\Throwable $exception) {
-                Log::warning('farast.support.sla_email_notification_failed', [
-                    'ticket_id' => $ticket->id,
-                    'notification_type' => 'ticket_sla_breach',
-                    'kind' => $kind,
-                    'recipient_id' => $staff->id,
-                    'exception_class' => get_class($exception),
-                ]);
+                $failures[] = 'email:'.$staff->id;
             }
         }
 
         try {
             if ($this->smsEnabled('ticket_sla_breach')) {
                 $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-                if ($mobile) {
-                    $this->sms->sendEvent(
-                        $mobile,
-                        'ticket_sla_breach',
-                        'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
-                        ['token' => $ticket->displayCode()],
-                        'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$cycleIdentity
-                    );
+                if ($mobile && ! $this->sms->sendEvent(
+                    $mobile,
+                    'ticket_sla_breach',
+                    'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
+                    ['token' => $ticket->displayCode()],
+                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$identity
+                )) {
+                    $failures[] = 'sms';
                 }
             }
         } catch (\Throwable $exception) {
-            Log::warning('farast.support.sla_sms_notification_failed', [
-                'ticket_id' => $ticket->id,
-                'notification_type' => 'ticket_sla_breach',
-                'kind' => $kind,
-                'exception_class' => get_class($exception),
-            ]);
+            $failures[] = 'sms';
+        }
+
+        if ($failures !== []) {
+            throw new \RuntimeException('SLA breach delivery incomplete: '.implode(',', array_unique($failures)));
         }
     }
 
-    /** @return \Illuminate\Support\Collection<int, User> */
     protected function staffTargets(Ticket $ticket)
     {
         if ($ticket->assignee
@@ -301,7 +297,7 @@ class SupportNotificationService
         return $this->staffUsers($ticket);
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null, bool $throwOnFailure = false): void
     {
         try {
             $url = $staff
@@ -318,11 +314,14 @@ class SupportNotificationService
                     'ticket_code' => $ticket->ticket_code,
                     'url' => $url,
                 ],
-                false,
+                $throwOnFailure,
                 'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).($eventIdentity ? ':identity:'.$eventIdentity : '').':user:'.$userId,
             );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
+            if ($throwOnFailure) {
+                throw $e;
+            }
         }
     }
 
