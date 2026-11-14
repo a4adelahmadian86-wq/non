@@ -319,7 +319,9 @@ class SupportNotificationService
             );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
-        }
+            if ($throwOnFailure) {
+                throw $e;
+            }
     }
 
     /** @return \Illuminate\Support\Collection<int, User> */
