@@ -101,6 +101,19 @@ class SupportSlaService
         return $cursor;
     }
 
+    /**
+     * Return signed remaining SLA minutes using the configured SLA calendar.
+     * Positive means time remains; negative means the deadline was exceeded.
+     */
+    public function minutesUntilDeadline(Carbon $deadline, ?Carbon $at = null): int
+    {
+        $at = ($at ?? now())->copy();
+
+        return $deadline->gte($at)
+            ? $this->businessMinutesBetween($at, $deadline)
+            : -$this->businessMinutesBetween($deadline, $at);
+    }
+
     /** @return array{state:string,label:string,color:string,minutes_left:?int,breached:bool} */
     public function firstResponseStatus(Ticket $ticket): array
     {
@@ -127,7 +140,7 @@ class SupportSlaService
             ];
         }
 
-        $mins = (int) now()->diffInMinutes($ticket->sla_first_due_at, false);
+        $mins = $this->minutesUntilDeadline($ticket->sla_first_due_at);
         if ($mins < 0) {
             return [
                 'state' => 'breached',
@@ -200,7 +213,7 @@ class SupportSlaService
             ];
         }
 
-        $mins = (int) now()->diffInMinutes($ticket->sla_resolve_due_at, false);
+        $mins = $this->minutesUntilDeadline($ticket->sla_resolve_due_at);
         if ($mins < 0) {
             return [
                 'state' => 'breached',
