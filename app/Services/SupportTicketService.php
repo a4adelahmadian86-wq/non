@@ -302,12 +302,22 @@ class SupportTicketService
                         $update['first_response_at'] = now();
                     }
 
+                    $slaBefore = $this->slaAuditSnapshot($locked);
                     $transition = $this->buildStatusTransitionUpdate($locked, $targetStatus);
                     $update = array_merge($update, $transition['attributes']);
                     $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
                     if ($update !== []) {
                         $locked->update($update);
+                    }
+
+                    if ($previousStatus !== $targetStatus) {
+                        $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
+                            'from_status' => $previousStatus,
+                            'to_status' => $targetStatus,
+                            'sla_before' => $slaBefore,
+                            'sla_after' => $this->slaAuditSnapshot($locked->fresh()),
+                        ]);
                     }
                 }
 
@@ -413,9 +423,17 @@ class SupportTicketService
                 return [$locked->fresh(), $old, null, false, false];
             }
 
+            $slaBefore = $this->slaAuditSnapshot($locked);
             $transition = $this->buildStatusTransitionUpdate($locked, $status);
             $locked->update($transition['attributes']);
             $resolutionBreachDetected = $transition['resolution_breach_detected'];
+
+            $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
+                'from_status' => $old,
+                'to_status' => $status,
+                'sla_before' => $slaBefore,
+                'sla_after' => $this->slaAuditSnapshot($locked->fresh()),
+            ]);
 
             $transitionMessage = null;
             if ($systemNote && $actor) {
@@ -466,7 +484,14 @@ class SupportTicketService
                 abort_unless($this->isEligibleSupportAgent($agent, $locked), 403);
             }
 
-            $locked->update(['assigned_to' => $agent?->id]);
+            $previousAssigneeId = $locked->assigned_to ? (int) $locked->assigned_to : null;
+            $nextAssigneeId = $agent?->id ? (int) $agent->id : null;
+            $locked->update(['assigned_to' => $nextAssigneeId]);
+
+            $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.assignment_changed', [
+                'from_assigned_to' => $previousAssigneeId,
+                'to_assigned_to' => $nextAssigneeId,
+            ]);
 
             $assignmentMessage = null;
             if ($actor) {
@@ -503,6 +528,11 @@ class SupportTicketService
         [$fresh, $resolutionBreachDetected] = DB::transaction(function () use ($ticket, $data, $actor): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             $wasResolutionBreached = ! empty($locked->sla_resolve_breached_at);
+            $beforeMeta = [
+                'priority' => $locked->priority,
+                'department' => $locked->department,
+            ];
+            $slaBefore = $this->slaAuditSnapshot($locked);
             $update = [];
             $notes = [];
 
@@ -535,6 +565,16 @@ class SupportTicketService
             if (isset($update['priority'])) {
                 $this->sla->applyTargets($locked);
             }
+
+            $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.metadata_changed', [
+                'before' => $beforeMeta,
+                'after' => [
+                    'priority' => $locked->priority,
+                    'department' => $locked->department,
+                ],
+                'sla_before' => $slaBefore,
+                'sla_after' => $this->slaAuditSnapshot($locked->fresh()),
+            ]);
 
             if ($actor && $notes) {
                 $this->addMessage($locked, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
@@ -655,6 +695,46 @@ class SupportTicketService
     public function needsAgentReply(Ticket $ticket): bool
     {
         return in_array($ticket->status, ['open', 'user_replied'], true);
+    }
+
+    /**
+     * Append a sanitized, checksummed audit event for a state-changing support
+     * operation. Message bodies, customer contact details and attachment data
+     * are deliberately excluded from this ledger metadata.
+     */
+    private function recordSupportAuditEvent(Ticket $ticket, ?User $actor, string $eventType, array $metadata): void
+    {
+        app(AuditEventService::class)->record(
+            $eventType,
+            $actor?->id,
+            null,
+            'ticket',
+            (int) $ticket->id,
+            $metadata,
+            'support'
+        );
+    }
+
+    /**
+     * Snapshot only SLA state needed to explain a transition later.
+     *
+     * @return array<string, mixed>
+     */
+    private function slaAuditSnapshot(Ticket $ticket): array
+    {
+        return [
+            'first_response_at' => $ticket->first_response_at?->toIso8601String(),
+            'first_response_due_at' => $ticket->sla_first_due_at?->toIso8601String(),
+            'first_response_warned_at' => $ticket->sla_first_warned_at?->toIso8601String(),
+            'first_response_breached_at' => $ticket->sla_first_breached_at?->toIso8601String(),
+            'resolution_due_at' => $ticket->sla_resolve_due_at?->toIso8601String(),
+            'resolution_warned_at' => $ticket->sla_resolve_warned_at?->toIso8601String(),
+            'resolution_paused_at' => $ticket->sla_paused_at?->toIso8601String(),
+            'resolution_remaining_minutes' => $ticket->sla_resolve_remaining_minutes,
+            'resolution_breached_at' => $ticket->sla_resolve_breached_at?->toIso8601String(),
+            'resolved_at' => $ticket->resolved_at?->toIso8601String(),
+            'closed_at' => $ticket->closed_at?->toIso8601String(),
+        ];
     }
 
     protected function safeNotify(callable $fn): void
