@@ -464,17 +464,37 @@ class AdminStoreController extends Controller
 
     public function destroy(StoreProduct $product)
     {
-        if ($product->libraryItems()->exists() || $product->orderItems()->exists()) {
-            $product->update(['status' => 'archived', 'published_at' => null]);
-            $this->audit('store.product.archived', $product, ['reason' => 'historical_orders_or_entitlements']);
+        // A catalog row must not be hard-deleted while any child asset or managed
+        // storage reference can still own physical bytes. Keep the complete graph
+        // available for audit, backup, and a possible later restore.
+        $preservation = [
+            'orders' => $product->orderItems()->exists(),
+            'entitlements' => $product->libraryItems()->exists(),
+            'files' => $product->files()->exists(),
+            'images' => $product->images()->exists(),
+            'previews' => $product->previews()->exists(),
+            'course' => $product->course()->exists(),
+            'cover' => filled($product->cover_path),
+            'documents' => DB::table('store_product_documents')->where('product_id', $product->id)->exists(),
+            'ingestions' => DB::table('store_product_ingestions')->where('product_id', $product->id)->exists(),
+            'managed_files' => StorageManagedFile::query()->where('product_id', $product->id)->exists(),
+        ];
 
-            return redirect()->route('admin.store.index')->with('status', 'این محصول سابقه سفارش یا دسترسی مشتری دارد؛ برای حفظ سوابق و حقوق خریداران بایگانی شد.');
+        if (in_array(true, $preservation, true)) {
+            $product->update(['status' => 'archived', 'published_at' => null]);
+            $this->audit('store.product.archived', $product, [
+                'reason' => 'preserve_business_or_storage_assets',
+                'preservation' => $preservation,
+            ]);
+
+            return redirect()->route('admin.store.index')
+                ->with('status', 'این محصول دارای سابقه یا دارایی ذخیره‌شده است؛ برای حفظ سوابق و جلوگیری از فایل‌های یتیم، بایگانی شد.');
         }
 
-        $this->audit('store.product.deleted', $product, ['type' => $product->type]);
+        $this->audit('store.product.deleted', $product, ['type' => $product->type, 'reason' => 'empty_draft_without_assets']);
         $product->delete();
 
-        return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
+        return redirect()->route('admin.store.index')->with('status', 'پیش‌نویس خالی و بدون دارایی حذف شد.');
     }
 
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
