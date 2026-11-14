@@ -105,9 +105,9 @@ class SupportGuestIsolationTest extends TestCase
             'support_guest_ticket_ids' => [$ticket->id],
         ]);
 
-        $audit = Mockery::mock(\App\\Services\\AuditEventService::class);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
         $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
-        $this->app->instance(\App\\Services\\AuditEventService::class, $audit);
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
 
         try {
             app(SupportTicketService::class)->claimGuestTickets($user);
