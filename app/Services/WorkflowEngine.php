@@ -83,8 +83,11 @@ class WorkflowEngine
         if (blank($idempotencyKey)) {
             throw new \InvalidArgumentException('Workflow event idempotency key is required.');
         }
-        if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
+        if (empty($context['user_id']) || ! is_numeric($context['user_id'])) {
             return 0;
+        }
+        if (! Schema::hasTable('farast_workflow_events') || ! Schema::hasTable('farast_workflow_event_workflows')) {
+            throw new \RuntimeException('Workflow outbox storage is not installed.');
         }
 
         $userId = (int) $context['user_id'];
