@@ -62,6 +62,18 @@ class SupportAssignmentMutexTest extends TestCase
         $this->assertSame($agents[1]->id, (int) $second->assigned_to);
         $this->assertSame([0, 0], $lockObservations, 'A second MySQL connection must not enter the workload-critical section.');
 
+        $autoAssignmentEvent = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $first->id)
+            ->where('event_type', 'support.ticket.assignment_changed')
+            ->where('source', 'support')
+            ->first();
+
+        $this->assertNotNull($autoAssignmentEvent);
+        $this->assertNull($autoAssignmentEvent->user_id);
+        $this->assertNull(data_get($autoAssignmentEvent->payload_meta, 'from_assigned_to'));
+        $this->assertSame($agents[0]->id, (int) data_get($autoAssignmentEvent->payload_meta, 'to_assigned_to'));
+
         $afterCommit = $probe->selectOne(
             'SELECT GET_LOCK(?, 0) AS acquired',
             [SupportAssignmentMutex::LOCK_NAME],
