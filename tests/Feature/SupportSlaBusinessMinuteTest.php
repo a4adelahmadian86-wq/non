@@ -142,7 +142,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
         try {
             $this->runSlaCommandDirectly();
             $this->fail('The notifier failure should be surfaced to the command runner.');
-        } catch (RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('temporary notification failure', $exception->getMessage());
         }
 
