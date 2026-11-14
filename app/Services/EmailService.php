@@ -388,7 +388,7 @@ class EmailService
         bool $staffUrl,
         ?string $name = null,
         ?string $idempotencyKey = null,
-    ): void {
+    ): bool {
         $url = $this->ticketUrl($ticket, $staffUrl);
         $status = $ticket->statusLabel();
         $code = $ticket->displayCode();
@@ -405,7 +405,7 @@ class EmailService
             'ticketCode' => $code,
         ];
 
-        $this->dispatch(
+        return $this->dispatch(
             type: $type,
             to: $to,
             user: $user,
