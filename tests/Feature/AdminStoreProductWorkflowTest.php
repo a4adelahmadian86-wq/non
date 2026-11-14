@@ -537,6 +537,10 @@ class AdminStoreProductWorkflowTest extends TestCase
     public function test_publication_requires_the_separate_store_products_publish_permission(): void
     {
         $admin = $this->admin();
+        $this->assertDatabaseHas('permissions', [
+            'key' => 'store.products.publish',
+            'label' => 'تأیید و انتشار محصول',
+        ]);
         $category = $this->category();
         $product = StoreProduct::create([
             'category_id' => $category->id,
