@@ -20,7 +20,7 @@
         'created_to' => request('created_to'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114inboxfilters">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
 <link rel="stylesheet" href="{{ asset('css/support-sla.css') }}?v=20261019sla">
 
