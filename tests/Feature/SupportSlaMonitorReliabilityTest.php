@@ -65,6 +65,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
 
         $this->assertSame(501, DB::table('tickets')->whereNotNull('sla_first_breached_at')->count());
         $this->assertSame(501, DB::table('support_sla_alert_outbox')->where('kind', 'first_response')->where('event', 'breached')->count());
+        $this->assertSame(501, DB::table('farast_audit_events')->where('event_type', 'support.ticket.sla_alert_queued')->count());
     }
 
     public function test_pending_ticket_keeps_first_response_monitoring_but_pauses_resolution_monitoring(): void
