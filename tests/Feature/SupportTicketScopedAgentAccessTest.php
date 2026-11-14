@@ -276,6 +276,13 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $this->actingAs($agent)
             ->get(route('admin.support.report'))
             ->assertForbidden();
+
+        // A stale team assignment must not keep record-level access after removal.
+        $team->members()->detach($agent->id);
+        $team->update(['supervisor_id' => null]);
+        $this->actingAs($agent)
+            ->post(route('admin.tickets.reply', $insideTicket), ['body' => 'Stale team access'])
+            ->assertForbidden();
     }
 
 }
