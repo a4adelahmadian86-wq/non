@@ -205,18 +205,20 @@ class WorkflowEngine
                     continue;
                 }
 
-                $gatewayResponse = json_decode((string) $payment->gateway_response, true);
-                $gatewayResponse = is_array($gatewayResponse) ? $gatewayResponse : [];
+                $paymentModel = \App\Models\Payment::query()->find($payment->id);
+                if (! $paymentModel) {
+                    continue;
+                }
+
+                $gatewayResponse = $paymentModel->gateway_response ?? [];
                 $marker = $gatewayResponse['workflow_event_reconciliation'] ?? [];
-                $marker = is_array($marker) ? $marker : [];
+                if (! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
+                    continue;
+                }
                 $marker['status'] = 'reconciled';
                 $marker['reconciled_at'] = now()->toIso8601String();
                 $gatewayResponse['workflow_event_reconciliation'] = $marker;
-
-                DB::table('payments')->where('id', $payment->id)->update([
-                    'gateway_response' => json_encode($gatewayResponse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'updated_at' => now(),
-                ]);
+                $paymentModel->forceFill(['gateway_response' => $gatewayResponse])->save();
                 $reconciled++;
             } catch (\Throwable $exception) {
                 report($exception);
