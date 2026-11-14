@@ -190,6 +190,16 @@ class UnifiedAuthorizationTest extends TestCase
             'reports.team',
             $this->record(['team_id' => $team->id + 100]),
         ));
+
+        // Removing the operator from the assigned team must revoke record access
+        // even while the role assignment itself remains active.
+        $user->teams()->detach($team->id);
+        self::assertSame([], app(AuthorizationService::class)->effectiveTeamIds($user));
+        self::assertFalse(app(AuthorizationService::class)->allowsRecord(
+            $user,
+            'reports.team',
+            $this->record(['team_id' => $team->id]),
+        ));
     }
 
     public function test_expired_direct_allow_does_not_grant_access(): void

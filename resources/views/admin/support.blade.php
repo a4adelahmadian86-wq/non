@@ -26,7 +26,9 @@
                 <h1>میز پشتیبانی</h1>
                 <p>مدیریت و پاسخ حرفه‌ای به تیکت‌ها</p>
             </div>
+            @if(app(\App\Services\AdminConsoleService::class)->sectionAllowed(auth()->user(), 'support_admin'))
             <a href="{{ route('admin.support.report') }}" class="sd-btn" style="background:#eef4ff;color:#1769ff;font-size:.78rem;text-decoration:none">گزارش SLA</a>
+            @endif
         </div>
 
         <div class="sd-admin-stats" style="grid-template-columns:repeat(3,1fr)">
