@@ -193,6 +193,56 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertDatabaseHas('store_products', ['id' => $draft->id]);
     }
 
+    public function test_product_with_storage_assets_is_archived_instead_of_hard_deleted(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'پیش‌نویس دارای فایل',
+            'slug' => 'draft-with-stored-file',
+            'sku' => 'DRAFT-STORED-FILE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $path = 'store/products/'.$product->id.'/preserved-source.pdf';
+        Storage::disk('private')->put($path, 'preserved-product-bytes');
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $path,
+            'original_name' => 'preserved-source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen('preserved-product-bytes'),
+            'sha256' => hash('sha256', 'preserved-product-bytes'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.store.destroy', $product))
+            ->assertRedirect(route('admin.store.index'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('store_products', [
+            'id' => $product->id,
+            'status' => 'archived',
+            'published_at' => null,
+        ]);
+        $this->assertDatabaseHas('store_product_files', [
+            'id' => $file->id,
+            'product_id' => $product->id,
+        ]);
+        Storage::disk('private')->assertExists($path);
+    }
+
     public function test_bulk_archive_requires_a_bounded_non_empty_selection(): void
     {
         $this->actingAs($this->admin())
