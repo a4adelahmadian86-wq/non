@@ -49,6 +49,10 @@ class Ticket extends Model
             'sla_resolve_due_at' => 'datetime',
             'sla_paused_at' => 'datetime',
             'sla_resolve_remaining_minutes' => 'integer',
+            'sla_first_warned_at' => 'datetime',
+            'sla_first_breached_at' => 'datetime',
+            'sla_resolve_warned_at' => 'datetime',
+            'sla_resolve_breached_at' => 'datetime',
             'resolved_at' => 'datetime',
             'csat_at' => 'datetime',
         ];
@@ -195,9 +199,11 @@ class Ticket extends Model
 
         $hasResolvedAt = Schema::hasColumn('tickets', 'resolved_at');
         $hasClosedAt = Schema::hasColumn('tickets', 'closed_at');
+        $hasResolveBreachedAt = Schema::hasColumn('tickets', 'sla_resolve_breached_at');
 
         // Pending pauses only the resolution clock. First-response SLA remains active.
-        return $query->where(function ($q) use ($hasResolvedAt, $hasClosedAt) {
+        // A resolution breach that occurred before the pause remains historical fact.
+        return $query->where(function ($q) use ($hasResolvedAt, $hasClosedAt, $hasResolveBreachedAt) {
             $q->where(function ($w) {
                 $w->whereNotNull('sla_first_due_at')
                     ->where(function ($first) {
@@ -214,6 +220,13 @@ class Ticket extends Model
                     ->whereNotNull('sla_resolve_due_at')
                     ->where('sla_resolve_due_at', '<', now());
             });
+
+            if ($hasResolveBreachedAt) {
+                $q->orWhere(function ($w) {
+                    $w->where('status', 'pending')
+                        ->whereNotNull('sla_resolve_breached_at');
+                });
+            }
 
             // Closed tickets are evaluated against their actual resolution time,
             // not now(). Otherwise the SLA breach disappears as soon as a late
