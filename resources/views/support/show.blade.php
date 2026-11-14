@@ -202,7 +202,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114managedattachments"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114pollcursor-managedattachments"></script>
 <script>
 (function () {
     const form = document.getElementById('csatForm');
