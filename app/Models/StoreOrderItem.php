@@ -10,11 +10,11 @@ class StoreOrderItem extends Model
 {
     protected static function booted(): void
     {
-        static::updating(function (): never {
+        static::updating(function (StoreOrderItem $item): never {
             throw new LogicException('store_order_item_snapshots_are_immutable');
         });
 
-        static::deleting(function (): never {
+        static::deleting(function (StoreOrderItem $item): never {
             throw new LogicException('store_order_item_snapshots_cannot_be_deleted');
         });
     }
