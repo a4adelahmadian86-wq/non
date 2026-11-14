@@ -484,14 +484,16 @@ class SupportController extends Controller
 
         $auditUserLabels = collect();
         foreach ($auditUsers as $auditUser) {
-            if ($active && (int) $auditUser->id === (int) $active->user_id) {
+            if ((int) $auditUser->id === (int) auth()->id()) {
+                $auditUserLabels[$auditUser->id] = $auditUser->name;
+            } elseif ($active && (int) $auditUser->id === (int) $active->user_id) {
                 $auditUserLabels[$auditUser->id] = 'مشتری';
             } elseif (app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
             } else {
-                // A visible ticket can have historical assignments to an agent
-                // outside the current operator's team/organization scope.
-                $auditUserLabels[$auditUser->id] = 'کارشناس خارج از محدوده';
+                // Do not disclose names of historical actors/assignees outside
+                // the current operator's effective record scope.
+                $auditUserLabels[$auditUser->id] = 'کارشناس دیگر';
             }
         }
 
