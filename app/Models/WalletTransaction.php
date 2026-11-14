@@ -10,11 +10,11 @@ class WalletTransaction extends Model
 {
     protected static function booted(): void
     {
-        static::updating(function (): never {
+        static::updating(function (WalletTransaction $transaction): never {
             throw new LogicException('wallet_ledger_entries_are_append_only');
         });
 
-        static::deleting(function (): never {
+        static::deleting(function (WalletTransaction $transaction): never {
             throw new LogicException('wallet_ledger_entries_cannot_be_deleted');
         });
     }
