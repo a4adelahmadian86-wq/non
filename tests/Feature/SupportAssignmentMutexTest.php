@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 class SupportAssignmentMutexTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     public function test_ticket_creation_holds_mysql_workload_lock_and_rebalances_after_each_ticket(): void
     {
