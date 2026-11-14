@@ -214,7 +214,7 @@ test.describe('Real admin product workflow', () => {
       await signInAsSeededAdmin(adminPage);
       const adminResponse = await adminPage.goto(`/admin/support-management?ticket=${ticketId}`);
       expect(adminResponse?.status()).toBe(200);
-      await expect(adminPage.locator('#adminThread')).toContainText(subject);
+      await expect(adminPage.getByRole('heading', { name: subject })).toBeVisible();
       await adminPage.locator('#adminReplyBody').fill(internalNote);
       await adminPage.locator('#adminInternalNote').check();
       await expect(adminPage.locator('#adminReplyStatus')).toBeDisabled();
