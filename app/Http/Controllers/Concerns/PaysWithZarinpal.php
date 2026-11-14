@@ -192,56 +192,23 @@ trait PaysWithZarinpal
                     $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
                 }
 
-                $items = $locked->storeItems()->with('product')->get();
-                foreach ($items as $item) {
-                    $product = $item->product;
-                    if (! $product || ! app(\App\Services\StoreCartService::class)->isPurchasable($product)) {
-                        throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
-                    }
-
-                    $snapshot = $item->product_snapshot ?? [];
-                    $file = null;
-                    if ($product->type === 'course') {
-                        if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
-                            throw new \RuntimeException('برنامه آموزشی این دوره برای تحویل آماده نیست.');
-                        }
-                    } else {
-                        $fileId = (int) ($snapshot['file_id'] ?? 0);
-                        // Preserve the exact file selected at checkout, including legacy pending orders.
-                        $file = $fileId > 0
-                            ? StoreProductFile::query()->whereKey($fileId)->where('product_id', $product->id)->where('purpose', 'product_download')->first()
-                            : ($product->files()->where('purpose', 'product_download')->where('is_primary', true)->first()
-                                ?: $product->files()->where('purpose', 'product_download')->where('is_active', true)->first());
-
-                        if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
-                            throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
-                        }
-                        $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
-                        if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
-                            throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
-                        }
-                    }
-                    $libraryItem = StoreLibraryItem::firstOrCreate(
-                        [
-                            'user_id' => $locked->user_id,
-                            'product_id' => $product->id,
-                            'order_id' => $locked->id,
-                        ],
-                        [
-                            'order_item_id' => $item->id,
-                            'product_file_id' => $file?->id,
-                            'granted_at' => now(),
-                            'revoked_at' => null,
-                        ]
-                    );
-                    app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+                $fulfillmentReady = true;
+                try {
+                    app(\App\Services\StoreOrderFulfillmentService::class)->fulfill($locked);
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    app(\App\Services\StoreOrderFulfillmentService::class)
+                        ->markReconciliationRequired($lockedPayment, $exception);
+                    $fulfillmentReady = false;
                 }
 
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
-                    'خرید شما با موفقیت ثبت شد',
-                    'سفارش فروشگاه شماره '.$locked->id.' از طریق زرین‌پال پرداخت شد و محتوای خریداری‌شده در کتابخانه شما قرار گرفت.',
+                    $fulfillmentReady ? 'خرید شما با موفقیت ثبت شد' : 'پرداخت ثبت شد؛ آماده‌سازی محصول در حال پیگیری است',
+                    $fulfillmentReady
+                        ? 'سفارش فروشگاه شماره '.$locked->id.' از طریق زرین‌پال پرداخت شد و محتوای خریداری‌شده در کتابخانه شما قرار گرفت.'
+                        : 'پرداخت سفارش شماره '.$locked->id.' تأیید شده است؛ تحویل محصول در حال بازیابی است و نتیجه جداگانه اطلاع‌رسانی می‌شود.',
                     ['order_id' => $locked->id, 'amount_rials' => (int) $locked->total_rials, 'url' => route('library')],
                     true,
                     'order:'.$locked->id.':paid:user:'.$locked->user_id,
