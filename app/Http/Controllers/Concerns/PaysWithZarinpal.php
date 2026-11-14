@@ -164,6 +164,34 @@ trait PaysWithZarinpal
                 abort_unless(in_array($locked->status, ['pending', 'gateway_pending'], true) && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
                 abort_unless((int) $lockedPayment->amount_rials === (int) $locked->total_rials, 409, 'مبلغ تراکنش با سفارش مطابقت ندارد.');
 
+                $lockedPayment->update([
+                    'status' => 'paid',
+                    'gateway_response' => [
+                        'verification_code' => (int) $verify['code'],
+                        'ref_id' => $verify['ref_id'] ?? null,
+                    ],
+                    'paid_at' => now(),
+                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
+                ]);
+
+                $locked->update(['status' => 'paid', 'paid_at' => now()]);
+
+                try {
+                    app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+                } catch (\RuntimeException $exception) {
+                    // External funds are already captured. Preserve the paid order and
+                    // expose a reconciliation marker instead of rolling payment back.
+                    report($exception);
+                    $snapshot = $locked->pricing_snapshot ?? [];
+                    $snapshot['coupon_redemption_reconciliation'] = [
+                        'status' => 'required',
+                        'reason_code' => 'post_capture_validation_failed',
+                        'reason' => mb_substr($exception->getMessage(), 0, 180),
+                        'recorded_at' => now()->toIso8601String(),
+                    ];
+                    $locked->forceFill(['pricing_snapshot' => $snapshot])->save();
+                }
+
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
@@ -209,19 +237,6 @@ trait PaysWithZarinpal
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
-
-                $lockedPayment->update([
-                    'status' => 'paid',
-                    'gateway_response' => [
-                        'verification_code' => (int) $verify['code'],
-                        'ref_id' => $verify['ref_id'] ?? null,
-                    ],
-                    'paid_at' => now(),
-                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
-                ]);
-
-                $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
