@@ -23,7 +23,7 @@ class Payment extends Model
                 return;
             }
 
-            if ($payment->isDirty(['order_id', 'gateway', 'authority', 'transaction_id', 'amount_rials', 'paid_at', 'idempotency_key'])) {
+            if ($payment->isDirty(['order_id', 'gateway', 'authority', 'transaction_id', 'amount_rials', 'status', 'paid_at', 'idempotency_key'])) {
                 throw new LogicException('settled_payment_financial_record_is_immutable');
             }
         });
