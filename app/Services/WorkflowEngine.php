@@ -78,10 +78,10 @@ class WorkflowEngine
     public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
-            throw new \\InvalidArgumentException('Unsupported workflow event.');
+            throw new \InvalidArgumentException('Unsupported workflow event.');
         }
         if (blank($idempotencyKey)) {
-            throw new \\InvalidArgumentException('Workflow event idempotency key is required.');
+            throw new \InvalidArgumentException('Workflow event idempotency key is required.');
         }
         if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
             return 0;
@@ -109,7 +109,7 @@ class WorkflowEngine
             ->first();
 
         if (! $event) {
-            throw new \\RuntimeException('Workflow event could not be persisted to the outbox.');
+            throw new \RuntimeException('Workflow event could not be persisted to the outbox.');
         }
 
         $storedContext = json_decode((string) $event->context, true);
@@ -119,7 +119,7 @@ class WorkflowEngine
             || ! is_array($storedContext)
             || ! hash_equals($this->canonicalPayload($storedContext), $canonicalContext)
         ) {
-            throw new \\RuntimeException('Workflow event idempotency key is already bound to another event payload.');
+            throw new \RuntimeException('Workflow event idempotency key is already bound to another event payload.');
         }
 
         return $event->status === 'completed' ? 0 : (int) $event->id;
@@ -140,7 +140,7 @@ class WorkflowEngine
 
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
-            throw new \\RuntimeException('Stored workflow event context is invalid.');
+            throw new \RuntimeException('Stored workflow event context is invalid.');
         }
 
         return $this->processEvent($event, $storedContext);
