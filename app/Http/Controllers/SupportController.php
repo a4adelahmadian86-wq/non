@@ -382,18 +382,18 @@ class SupportController extends Controller
 
         $assignedFilter = $request->input('assigned');
         if (Schema::hasColumn('tickets', 'assigned_to')) {
-            if ($assignedFilter === 'me') {
+            if ($assignedFilter === SupportTicketService::ASSIGNMENT_FILTER_ME) {
                 $query->where('assigned_to', auth()->id());
-            } elseif ($assignedFilter === 'unassigned') {
+            } elseif ($assignedFilter === SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED) {
                 $query->whereNull('assigned_to');
             }
         }
 
         $slaFilter = $request->input('sla');
-        if ($slaFilter === 'breached') {
+        if ($slaFilter === SupportTicketService::SLA_FILTER_BREACHED) {
             $query->slaBreached();
         }
-        if ($slaFilter === 'at_risk') {
+        if ($slaFilter === SupportTicketService::SLA_FILTER_AT_RISK) {
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                 $query->where(function ($q) use ($warningDeadline) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
