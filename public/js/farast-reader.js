@@ -175,6 +175,40 @@
     return count;
   };
 
+  const PDF_SEARCH_CACHE_MAX_PAGES=512;
+  const PDF_SEARCH_CACHE_MAX_CHARS=4000000;
+  const pdfSearchTextCache=new WeakMap();
+  const getPdfSearchPageText=async(pageNumber,document,onCacheHit)=>{
+    let cache=pdfSearchTextCache.get(document);
+    if(!cache){
+      cache={pages:new Map(),characters:0};
+      pdfSearchTextCache.set(document,cache);
+    }
+    if(cache.pages.has(pageNumber)){
+      const cached=cache.pages.get(pageNumber);
+      cache.pages.delete(pageNumber);
+      cache.pages.set(pageNumber,cached);
+      onCacheHit?.();
+      return cached;
+    }
+    const page=await document.getPage(pageNumber);
+    const content=await page.getTextContent();
+    const text=normalizePdfSearchText(content.items.map(item=>item.str||'').join(' '));
+    if(text.length<=PDF_SEARCH_CACHE_MAX_CHARS){
+      while(cache.pages.size>=PDF_SEARCH_CACHE_MAX_PAGES||cache.characters+text.length>PDF_SEARCH_CACHE_MAX_CHARS){
+        const oldest=cache.pages.keys().next().value;
+        if(oldest===undefined)break;
+        cache.characters-=cache.pages.get(oldest).length;
+        cache.pages.delete(oldest);
+      }
+      if(cache.characters+text.length<=PDF_SEARCH_CACHE_MAX_CHARS){
+        cache.pages.set(pageNumber,text);
+        cache.characters+=text.length;
+      }
+    }
+    return text;
+  };
+
   const productKey=String(root.dataset.productId||location.pathname);
   const storageKey='farast-reader:v1:'+productKey;
   const resumeButton=root.querySelector('#reader-resume');
@@ -1086,12 +1120,14 @@
     }
 
     pdfMatches=[];matchIndex=-1;searchTotalMatches=0;
-    const totalPages=pdfDoc.numPages;
+    const searchDocument=pdfDoc;
+    const totalPages=searchDocument.numPages;
     const pageResults=new Array(totalPages);
     const progressInterval=Math.max(1,Math.ceil(totalPages/20));
-    let nextPage=1,completedPages=0;
+    let nextPage=1,completedPages=0,cacheHits=0;
     const updateSearchProgress=()=>{
       if(searchCount)searchCount.textContent='جست‌وجو در '+faNumber(completedPages)+' از '+faNumber(totalPages)+' صفحه';
+      root.dispatchEvent(new CustomEvent('farast:reader-search-progress',{detail:{request,completed:completedPages,total:totalPages,cacheHits}}));
     };
     searchGroup?.setAttribute('aria-busy','true');
     updateSearchProgress();
@@ -1100,10 +1136,8 @@
       while(request===searchRequest){
         const pageNumber=nextPage++;
         if(pageNumber>totalPages)return;
-        const page=await pdfDoc.getPage(pageNumber);
-        const content=await page.getTextContent();
+        const pageText=await getPdfSearchPageText(pageNumber,searchDocument,()=>{cacheHits++;});
         if(request!==searchRequest)return;
-        const pageText=normalizePdfSearchText(content.items.map(item=>item.str||'').join(' '));
         const count=countPdfSearchMatches(pageText,query);
         if(count>0)pageResults[pageNumber-1]={page:pageNumber,count};
         completedPages++;
