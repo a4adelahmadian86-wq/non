@@ -8,6 +8,8 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   await page.locator('.farast-reader-annotation-panel > summary').click();
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-ink-pressure.js')});
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.pressureInkReady)).toBe('true');
+  await expect(page.locator('[data-pressure-action="undo"]')).toHaveAttribute('aria-label','واگرد قلم');
+  await expect(page.locator('[data-pressure-action="undo"] i')).toHaveAttribute('aria-hidden','true');
   await page.locator('[data-tool="pen"]').click();
   await expect(page.locator('[data-tool="pen"]')).toHaveAttribute('aria-pressed','true');
   const rect=await page.locator('.farast-pdf-document').boundingBox();
