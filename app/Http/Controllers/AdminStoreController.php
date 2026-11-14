@@ -425,6 +425,7 @@ class AdminStoreController extends Controller
                 }
                 $data['metadata'] = $metadata;
             }
+            $previousStatus = (string) $lockedProduct->status;
             $lockedProduct->update($data);
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
@@ -436,10 +437,15 @@ class AdminStoreController extends Controller
                 $lockedProduct->update(['metadata' => $freshMetadata]);
             }
             
-            $this->audit('store.product.updated', $lockedProduct, [
+            $eventType = $previousStatus !== 'published' && $lockedProduct->status === 'published'
+                ? 'store.product.published'
+                : 'store.product.updated';
+            $this->audit($eventType, $lockedProduct, [
                 'type' => $lockedProduct->type,
+                'previous_status' => $previousStatus,
                 'status' => $lockedProduct->status,
                 'price_rials' => $lockedProduct->price_rials,
+                'approval_action' => $eventType === 'store.product.published',
             ]);
         });
 
