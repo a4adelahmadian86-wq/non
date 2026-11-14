@@ -521,7 +521,11 @@ class EmailService
             if ($type === 'test' || $type === 'otp') {
                 throw new \RuntimeException($message, 0, $e);
             }
+
+            return false;
         }
+
+        return true;
     }
 
     protected function hash(string $email): string
