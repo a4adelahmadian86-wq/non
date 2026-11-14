@@ -89,7 +89,7 @@ class WorkflowEngine
         }
 
         if (! Schema::hasTable('farast_workflow_events')) {
-            throw new \\RuntimeException('Workflow event storage is unavailable.');
+            throw new \RuntimeException('Workflow event storage is unavailable.');
         }
 
         $userId = (int) $context['user_id'];
