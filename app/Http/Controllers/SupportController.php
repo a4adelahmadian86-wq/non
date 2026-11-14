@@ -93,12 +93,9 @@ class SupportController extends Controller
         $ticket->load(['relatedProduct', 'assignee']);
         $history = $this->initialThreadHistory($ticket, false);
         $ticket->setRelation('messages', $history['messages']);
-        $ticket->setAttribute('last_scanned_message_id', $history['last_scanned_id']);
-        $ticket->setAttribute('oldest_scanned_message_id', $history['oldest_scanned_id']);
-        $ticket->setAttribute('has_older_messages', $history['has_older']);
         $this->tickets->markCustomerSeen($ticket);
 
-        return view('support.show', compact('ticket'));
+        return view('support.show', compact('ticket', 'history'));
     }
 
     public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities, AuthorizationService $authorization)
@@ -420,6 +417,7 @@ class SupportController extends Controller
         $tickets = $query->paginate(25)->withQueryString();
 
         $active = null;
+        $activeHistory = null;
         if ($request->filled('ticket')) {
             $activeQuery = Ticket::with(['user', 'relatedProduct', 'assignee'])
                 ->whereKey($request->integer('ticket'));
@@ -445,9 +443,7 @@ class SupportController extends Controller
         if ($active) {
             $history = $this->initialThreadHistory($active, true);
             $active->setRelation('messages', $history['messages']);
-            $active->setAttribute('last_scanned_message_id', $history['last_scanned_id']);
-            $active->setAttribute('oldest_scanned_message_id', $history['oldest_scanned_id']);
-            $active->setAttribute('has_older_messages', $history['has_older']);
+            $activeHistory = $history;
         }
 
         $stats = [
