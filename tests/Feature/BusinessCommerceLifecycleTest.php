@@ -160,7 +160,7 @@ class BusinessCommerceLifecycleTest extends TestCase
             'user_id' => $customer->id,
             'status' => 'pending',
         ]);
-        $this->assertSame(1, app(\\App\\Services\\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => $workflowEventKey,
             'status' => 'completed',
