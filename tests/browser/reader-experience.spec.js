@@ -2091,3 +2091,38 @@ test('exposes and visually toggles PDF optional-content layers', async ({ page }
   await expect(layer).not.toBeChecked();
   await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(visibleRender);
 });
+
+test('searches multi-page PDFs concurrently, normalizes Unicode and reports accessible progress', async ({ page }) => {
+  await mountPdfReader(page, 5);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+
+  await page.evaluate(() => {
+    const output = document.querySelector('#reader-search-count');
+    const group = document.querySelector('.reader-search-group');
+    window.__readerSearchProgress = [];
+    window.__readerSearchBusyStates = [];
+    new MutationObserver(() => window.__readerSearchProgress.push(output.textContent))
+      .observe(output, { childList: true, subtree: true, characterData: true });
+    new MutationObserver(() => window.__readerSearchBusyStates.push(group.getAttribute('aria-busy')))
+      .observe(group, { attributes: true, attributeFilter: ['aria-busy'] });
+  });
+
+  await root.locator('#reader-search-input').fill('ＦＡＲＡＳＴ');
+  await root.locator('#reader-search').click();
+
+  await expect(root.locator('#reader-search-count')).toContainText('۵ تطبیق');
+  await expect(root.locator('.reader-search-group')).toHaveAttribute('aria-busy', 'false');
+  await expect(root.locator('#reader-search-count')).toHaveAttribute('aria-live', 'polite');
+  await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(1);
+
+  const observations = await page.evaluate(() => ({
+    progress: window.__readerSearchProgress,
+    busy: window.__readerSearchBusyStates,
+  }));
+  expect(observations.progress).toContain('جست‌وجو در ۴ از ۵ صفحه');
+  expect(observations.progress).toContain('جست‌وجو در ۵ از ۵ صفحه');
+  expect(observations.busy).toContain('true');
+  expect(observations.busy).toContain('false');
+});
+
