@@ -46,7 +46,8 @@ class SupportTicketService
         $initialMessage = null;
 
         try {
-            $ticket = app(SupportAssignmentMutex::class)->synchronized(fn () => DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
+            $ticket = app(SupportAssignmentMutex::class)->synchronized(function () use ($user, $data, $attachment, &$initialMessage) {
+                return DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
                 $payload = [
                     'user_id' => $user?->id,
                     'subject' => $data['subject'],
@@ -114,7 +115,8 @@ class SupportTicketService
                 app(WorkflowEngine::class)->enqueueTicketCreated($ticket);
 
                 return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
-            }));
+                });
+            });
         } catch (\Throwable $exception) {
             // addMessage owns cleanup for failures inside its own transaction.
             // This outer catch covers failures after it returned but before the
