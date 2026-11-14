@@ -8,7 +8,7 @@ use App\Services\SupportAssignmentMutex;
 use App\Services\SupportNotificationService;
 use App\Services\SupportTicketService;
 use App\Services\WorkflowEngine;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Mockery;
 use RuntimeException;
