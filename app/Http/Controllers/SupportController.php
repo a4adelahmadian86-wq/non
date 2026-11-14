@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreLibraryItem;
+use App\Models\FarastAuditEvent;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
@@ -457,6 +458,45 @@ class SupportController extends Controller
             $activeHistory = $history;
         }
 
+        // Audit records are queried only after the active ticket has passed the
+        // same RBAC record-scope check used by the inbox.
+        $auditEvents = $active
+            ? FarastAuditEvent::query()
+                ->where('aggregate_type', 'ticket')
+                ->where('aggregate_id', $active->id)
+                ->where('source', 'support')
+                ->latest('id')
+                ->limit(50)
+                ->get()
+                ->reverse()
+                ->values()
+            : collect();
+
+        $auditUserIds = $auditEvents->flatMap(fn (FarastAuditEvent $event) => [
+            $event->user_id,
+            data_get($event->payload_meta, 'from_assigned_to'),
+            data_get($event->payload_meta, 'to_assigned_to'),
+        ])->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
+        $auditUsers = $auditUserIds->isNotEmpty()
+            ? User::query()->whereIn('id', $auditUserIds)->get(['id', 'name'])->keyBy('id')
+            : collect();
+
+        $auditUserLabels = collect();
+        foreach ($auditUsers as $auditUser) {
+            if ((int) $auditUser->id === (int) auth()->id()) {
+                $auditUserLabels[$auditUser->id] = $auditUser->name;
+            } elseif ($active && (int) $auditUser->id === (int) $active->user_id) {
+                $auditUserLabels[$auditUser->id] = 'مشتری';
+            } elseif (app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)) {
+                $auditUserLabels[$auditUser->id] = $auditUser->name;
+            } else {
+                // Do not disclose names of historical actors/assignees outside
+                // the current operator's effective record scope.
+                $auditUserLabels[$auditUser->id] = 'کارشناس دیگر';
+            }
+        }
+
         $stats = [
             'needs_reply' => $scopeQuery(Ticket::query())->needsReply()->count(),
             'open' => $scopeQuery(Ticket::query())->where('status', 'open')->count(),
@@ -492,7 +532,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory', 'auditEvents', 'auditUserLabels'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)
