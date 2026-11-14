@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FarastAuditEvent;
 use App\Models\User;
 use App\Services\SupportAssignmentMutex;
 use App\Services\SupportNotificationService;
@@ -17,7 +18,7 @@ class SupportAssignmentMutexTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_ticket_creation_holds_mysql_workload_lock_and_rebalances_after_each_commit(): void
+    public function test_ticket_creation_holds_mysql_workload_lock_and_rebalances_after_each_ticket(): void
     {
         $this->requireMySql();
 
