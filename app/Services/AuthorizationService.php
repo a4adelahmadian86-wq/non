@@ -31,7 +31,7 @@ class AuthorizationService
         'settings.manage','integrations.manage','audit.view','access.manage','organization.manage',
         'team.view','team.manage','workflows.view','workflows.manage','reports.view','reports.users',
         'reports.team','reports.documents','reports.workflows','reports.ai','reports.resources',
-        'system.audit','documents.share','store.manage',
+        'system.audit','documents.share','store.manage','store.products.publish',
     ];
 
     /**
@@ -581,6 +581,7 @@ class AuthorizationService
             'reports.team'=>'گزارش تیم','reports.documents'=>'گزارش اسناد','reports.workflows'=>'گزارش گردش‌کار',
             'reports.ai'=>'گزارش AI','reports.resources'=>'گزارش منابع','system.audit'=>'نظارت سیستم',
             'documents.share'=>'اشتراک‌گذاری','store.manage'=>'مدیریت محصولات و دوره‌ها',
+            'store.products.publish'=>'تأیید و انتشار محصول',
         ];
 
         foreach (self::PERMISSIONS as $key) {
