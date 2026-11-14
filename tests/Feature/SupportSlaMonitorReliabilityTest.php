@@ -211,10 +211,11 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->assertSame('pending', $outbox->status);
         $this->assertSame(0, (int) $outbox->attempts);
 
+        $baselineTransactionLevel = DB::transactionLevel();
         $failedNotifier = Mockery::mock(SupportNotificationService::class);
         $failedNotifier->shouldReceive('slaBreached')->once()->withArgs(
-            function ($ticket, $kind, $identity) use ($ticketId): bool {
-                $this->assertSame(0, DB::transactionLevel(), 'Provider delivery must not run while a database transaction is open.');
+            function ($ticket, $kind, $identity) use ($ticketId, $baselineTransactionLevel): bool {
+                $this->assertSame($baselineTransactionLevel, DB::transactionLevel(), 'Delivery must not retain an additional ticket-claim transaction.');
                 return (int) $ticket->id === $ticketId && $kind === 'first_response' && str_contains($identity, 'sla:first_response:breached');
             }
         )->andThrow(new \RuntimeException('temporary provider failure'));
