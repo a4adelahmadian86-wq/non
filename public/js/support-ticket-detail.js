@@ -162,6 +162,7 @@
     olderInFlight = true;
     olderButton.disabled = true;
     olderButton.textContent = 'در حال بارگذاری...';
+    let loadFailed = false;
     const previousHeight = messages.scrollHeight;
     const previousTop = messages.scrollTop;
 
@@ -195,11 +196,11 @@
       if (!hasMore) olderButton.hidden = true;
       messages.scrollTop = previousTop + (messages.scrollHeight - previousHeight);
     } catch (_) {
-      olderButton.textContent = 'خطا؛ دوباره تلاش کنید';
+      loadFailed = true;
     } finally {
       olderInFlight = false;
       olderButton.disabled = false;
-      if (!olderButton.hidden) olderButton.textContent = 'نمایش پیام‌های قدیمی‌تر';
+      if (!olderButton.hidden) olderButton.textContent = loadFailed ? 'خطا؛ دوباره تلاش کنید' : 'نمایش پیام‌های قدیمی‌تر';
     }
   });
 
