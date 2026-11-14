@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
@@ -10,6 +11,7 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
+use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +73,34 @@ class StoreCourseLearningTest extends TestCase
         return [$product, $course, $section, $lesson];
     }
 
+    private function attachPaidStoreOrderRecords(Order $order, StoreProduct $product): StoreOrderItem
+    {
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => (int) $order->total_rials,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => (int) $order->total_rials,
+            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
+        ]);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'amount_rials' => (int) $order->total_rials,
+            'status' => 'paid',
+            'transaction_id' => 'TEST-COURSE-ORDER-'.$order->id,
+            'idempotency_key' => 'test-course-order-'.$order->id,
+            'paid_at' => now(),
+        ]);
+
+        return $orderItem;
+    }
+
     private function grantCourse(User $user, StoreProduct $product): StoreLibraryItem
     {
         $order = Order::create([
@@ -84,6 +114,7 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now(),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $item = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
@@ -167,6 +198,7 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now()->subDays(3),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $newerPurchase = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
