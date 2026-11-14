@@ -358,6 +358,17 @@ class SupportController extends Controller
         if ($request->filled('priority') && $request->priority !== 'all') {
             $query->where('priority', $request->priority);
         }
+        // These are the source and topic values currently emitted by the
+        // canonical ticket creation flows. Ignore unknown values rather than
+        // turning arbitrary query parameters into hidden/empty inbox states.
+        if (Schema::hasColumn('tickets', 'source')
+            && in_array($request->input('source'), ['dashboard', 'widget'], true)) {
+            $query->where('source', $request->input('source'));
+        }
+        if (Schema::hasColumn('tickets', 'topic_area')
+            && in_array($request->input('topic_area'), ['services', 'store'], true)) {
+            $query->where('topic_area', $request->input('topic_area'));
+        }
         if ($request->filled('assigned') && $request->assigned === 'me') {
             $query->where('assigned_to', auth()->id());
         }

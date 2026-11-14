@@ -51,6 +51,39 @@ class SupportAdminInboxQueryTest extends TestCase
         $this->assertStringContainsString('Latest public preview sentinel', $response->getContent());
     }
 
+    public function test_admin_inbox_filters_by_existing_ticket_source_and_topic_area(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Ticket::create([
+            'subject' => 'Dashboard origin filter sentinel',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'source' => 'dashboard',
+            'topic_area' => 'services',
+        ]);
+        Ticket::create([
+            'subject' => 'Widget origin filter sentinel',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['source' => 'widget']))
+            ->assertOk()
+            ->assertSee('Widget origin filter sentinel')
+            ->assertDontSee('Dashboard origin filter sentinel');
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['topic_area' => 'services']))
+            ->assertOk()
+            ->assertSee('Dashboard origin filter sentinel')
+            ->assertDontSee('Widget origin filter sentinel');
+    }
+
     public function test_admin_polling_is_non_overlapping_and_preserves_reader_scroll_position(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
