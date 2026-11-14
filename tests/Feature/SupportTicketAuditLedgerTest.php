@@ -145,9 +145,9 @@ class SupportTicketAuditLedgerTest extends TestCase
     public function test_ticket_creation_rolls_back_when_audit_append_fails(): void
     {
         $customer = User::factory()->create();
-        $audit = Mockery::mock(\\App\\Services\\AuditEventService::class);
-        $audit->shouldReceive('record')->once()->andThrow(new \\RuntimeException('audit ledger unavailable'));
-        $this->app->instance(\\App\\Services\\AuditEventService::class, $audit);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
 
         try {
             app(SupportTicketService::class)->createTicket($customer, [
@@ -157,7 +157,7 @@ class SupportTicketAuditLedgerTest extends TestCase
                 'department' => 'support',
             ]);
             $this->fail('Ticket creation must roll back when its audit event cannot be appended.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('audit ledger unavailable', $exception->getMessage());
         }
 
