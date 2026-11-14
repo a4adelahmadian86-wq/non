@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Services\SupportSlaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SupportReportController extends Controller
@@ -38,20 +39,28 @@ class SupportReportController extends Controller
         ];
 
         if (Schema::hasColumn('tickets', 'csat_score')) {
-            $rated = Ticket::query()
+            $ratings = DB::table('tickets')
                 ->whereNotNull('csat_score')
                 ->whereBetween('csat_at', [$fromAt, $toAt])
-                ->get(['csat_score']);
+                ->select('csat_score')
+                ->selectRaw('COUNT(*) as votes')
+                ->groupBy('csat_score')
+                ->get();
 
-            $csat['count'] = $rated->count();
-            if ($csat['count'] > 0) {
-                $csat['avg'] = round($rated->avg('csat_score'), 2);
-                foreach ($rated as $row) {
-                    $s = (int) $row->csat_score;
-                    if ($s >= 1 && $s <= 5) {
-                        $csat['distribution'][$s]++;
-                    }
+            $weightedScore = 0;
+            foreach ($ratings as $rating) {
+                $score = (int) $rating->csat_score;
+                $votes = (int) $rating->votes;
+                $csat['count'] += $votes;
+                $weightedScore += $score * $votes;
+
+                if ($score >= 1 && $score <= 5) {
+                    $csat['distribution'][$score] += $votes;
                 }
+            }
+
+            if ($csat['count'] > 0) {
+                $csat['avg'] = round($weightedScore / $csat['count'], 2);
             }
         }
 

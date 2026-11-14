@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import os
+import threading
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient, ReadTimeout, Request, Response
 from docx import Document
 from docx.shared import Inches
 from PIL import Image
@@ -280,6 +283,101 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
     def test_authenticated_readiness_rejects_missing_token(self):
         response = self.client.get("/v1/ready")
         self.assertEqual(response.status_code, 401)
+
+
+    def test_cpu_bound_file_inspection_does_not_block_the_asgi_event_loop(self):
+        from file_pipeline import Inspection
+
+        heartbeat_observed = []
+        loop_holder = {}
+
+        def slow_inspection(*args, **kwargs):
+            heartbeat = threading.Event()
+            loop_holder["loop"].call_soon_threadsafe(loop_holder["loop"].call_later, 0.03, heartbeat.set)
+            heartbeat_observed.append(heartbeat.wait(0.2))
+            return Inspection(
+                detected_type="text",
+                extracted_text="متن آزمایشی",
+                warnings=[],
+                upstream_scan_status="clean",
+            )
+
+        async def exercise():
+            loop_holder["loop"] = asyncio.get_running_loop()
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                with patch.dict(os.environ, {
+                    "GROQ_API_KEY": "",
+                    "GROQ_ZDR_CONFIRMED": "",
+                    "GEMINI_API_KEY": "",
+                }, clear=False), patch("file_pipeline.inspect_file", side_effect=slow_inspection):
+                    response = await client.post(
+                        "/v1/reviews/files",
+                        headers={"Authorization": "Bearer test-token"},
+                        data={
+                            "product_id": "p-threadpool",
+                            "product_title": "آزمون پردازش هم‌زمان",
+                            "product_type": "digital_file",
+                            "primary_scan_status": "clean",
+                        },
+                        files={"file": ("slow.txt", b"content", "text/plain")},
+                    )
+            return response
+
+        response = asyncio.run(exercise())
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(heartbeat_observed, [True])
+
+
+    def test_provider_timeout_is_recorded_as_failed_analysis_without_crashing(self):
+        from file_pipeline import analyze_extracted_content
+
+        with patch.dict(os.environ, {
+            "GROQ_API_KEY": "test-groq-key",
+            "GROQ_ZDR_CONFIRMED": "true",
+        }, clear=False), patch(
+            "file_pipeline.groq_provider_ready", return_value=True
+        ), patch(
+            "file_pipeline.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            side_effect=ReadTimeout("provider timeout"),
+        ) as provider_request:
+            result = asyncio.run(analyze_extracted_content("متن قابل بررسی", {}))
+
+        self.assertEqual(result["analysis_status"], "failed")
+        self.assertEqual(result["analysis_batch_count"], 1)
+        self.assertEqual(result["successful_analysis_batches"], 0)
+        self.assertEqual(result["failed_analysis_batches"], 1)
+        self.assertEqual(result["analysis_failure_categories"], {"provider_network_error": 1})
+        provider_request.assert_awaited_once()
+
+
+    def test_provider_rate_limit_is_recorded_as_failed_analysis_without_retrying_or_crashing(self):
+        from file_pipeline import analyze_extracted_content
+
+        provider_response = Response(
+            429,
+            request=Request("POST", "https://api.groq.com/openai/v1/chat/completions"),
+        )
+        with patch.dict(os.environ, {
+            "GROQ_API_KEY": "test-groq-key",
+            "GROQ_ZDR_CONFIRMED": "true",
+        }, clear=False), patch(
+            "file_pipeline.groq_provider_ready", return_value=True
+        ), patch(
+            "file_pipeline.httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=provider_response,
+        ) as provider_request:
+            result = asyncio.run(analyze_extracted_content("متن قابل بررسی", {}))
+
+        self.assertEqual(result["analysis_status"], "failed")
+        self.assertEqual(result["failed_analysis_batches"], 1)
+        self.assertEqual(result["analysis_failure_categories"], {"provider_rate_limited": 1})
+        provider_request.assert_awaited_once()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "services/product-supervisor/**"
+      - "scripts/performance/**"
       - "app/Http/Controllers/AdminProductSupervisorController.php"
       - "app/Http/Controllers/AdminStoreController.php"
       - "app/Http/Controllers/AdminCourseController.php"
@@ -40,6 +41,8 @@ jobs:
         working-directory: services/product-supervisor
     steps:
       - uses: actions/checkout@v4
+      - name: Check k6 scenario JavaScript syntax
+        run: node --input-type=module --check < ../../scripts/performance/critical-routes.js
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
