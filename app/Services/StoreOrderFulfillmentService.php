@@ -48,7 +48,6 @@ class StoreOrderFulfillmentService
                 ->where('status', 'paid')
                 ->whereNotNull('paid_at')
                 ->orderBy('id')
-                ->lockForUpdate()
                 ->get();
 
             if ($payments->isEmpty() || (int) $payments->sum('amount_rials') !== (int) $lockedOrder->total_rials) {
@@ -161,17 +160,23 @@ class StoreOrderFulfillmentService
             try {
                 $didComplete = DB::transaction(function () use ($candidate): bool {
                     $order = Order::query()->whereKey($candidate->order_id)->lockForUpdate()->first();
-                    $payment = Payment::query()->whereKey($candidate->id)->lockForUpdate()->first();
-                    if (! $order || ! $payment) {
-                        throw new RuntimeException('سفارش یا پرداخت مربوط به بازیابی تحویل پیدا نشد.');
+                    if (! $order) {
+                        throw new RuntimeException('سفارش مربوط به بازیابی تحویل پیدا نشد.');
                     }
 
+                    // Fulfillment acquires locks in the canonical order:
+                    // Order -> LibraryItem -> OrderItem -> Payment -> Course -> Enrollment.
+                    $this->fulfill($order);
+
+                    $payment = Payment::query()->whereKey($candidate->id)->lockForUpdate()->first();
+                    if (! $payment) {
+                        throw new RuntimeException('پرداخت مربوط به بازیابی تحویل پیدا نشد.');
+                    }
                     $marker = data_get($payment->gateway_response, 'fulfillment_reconciliation', []);
                     if ($payment->status !== 'paid' || ($marker['status'] ?? null) !== 'required') {
                         return false;
                     }
 
-                    $this->fulfill($order);
                     $this->markReconciled($payment);
 
                     try {
@@ -211,7 +216,7 @@ class StoreOrderFulfillmentService
             throw new RuntimeException('مرجع مالک یا نوع سفارش برای تحویل معتبر نیست.');
         }
 
-        $items = $order->storeItems()->orderBy('id')->lockForUpdate()->get();
+        $items = $order->storeItems()->orderBy('id')->get();
         if ($items->isEmpty()) {
             throw new RuntimeException('سفارش فروشگاه فاقد قلم قابل تحویل است.');
         }
@@ -225,7 +230,7 @@ class StoreOrderFulfillmentService
 
         $deliverables = [];
         foreach ($items as $item) {
-            $product = StoreProduct::query()->whereKey($item->product_id)->lockForUpdate()->first();
+            $product = StoreProduct::query()->whereKey($item->product_id)->first();
             if (! $product) {
                 throw new RuntimeException('محصول مرجع یکی از اقلام سفارش پیدا نشد.');
             }
@@ -236,7 +241,7 @@ class StoreOrderFulfillmentService
 
             $file = null;
             if ($product->type === 'course') {
-                $course = StoreCourse::query()->where('product_id', $product->id)->lockForUpdate()->first();
+                $course = StoreCourse::query()->where('product_id', $product->id)->first();
                 if (! $course || ! $course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
                     throw new RuntimeException('ساختار آموزشی دوره برای تحویل آماده نیست.');
                 }
@@ -248,11 +253,10 @@ class StoreOrderFulfillmentService
                     ->where('purpose', 'product_download');
 
                 $file = $fileId > 0
-                    ? $fileQuery->whereKey($fileId)->lockForUpdate()->first()
+                    ? $fileQuery->whereKey($fileId)->first()
                     : $fileQuery->where('is_active', true)
                         ->whereIn('scan_status', ['clean', 'legacy'])
                         ->orderByDesc('is_primary')
-                        ->lockForUpdate()
                         ->first();
 
                 if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
