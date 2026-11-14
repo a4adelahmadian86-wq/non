@@ -7,6 +7,7 @@
     $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0,'sla_breached'=>0,'sla_at_risk'=>0];
     $canned = $canned ?? [];
     $agents = $agents ?? collect();
+    $filterValue = static fn ($value) => $value !== null && $value !== '';
     $filterQs = array_filter([
         'q' => request('q'),
         'status' => request('status'),
@@ -18,7 +19,48 @@
         'assigned' => request('assigned'),
         'created_from' => request('created_from'),
         'created_to' => request('created_to'),
-    ], fn($v) => $v !== null && $v !== '');
+    ], $filterValue);
+    $base = array_filter([
+        'q' => request('q'),
+        'department' => request('department'),
+        'priority' => request('priority'),
+        'source' => request('source'),
+        'topic_area' => request('topic_area'),
+        'sla' => request('sla'),
+        'assigned' => request('assigned'),
+        'created_from' => request('created_from'),
+        'created_to' => request('created_to'),
+    ], $filterValue);
+    $statusBase = array_filter(['status' => request('status')], $filterValue);
+    $chipFilters = array_merge($base, $statusBase);
+    $statusLabels = ['open'=>'باز','user_replied'=>'پاسخ کاربر','pending'=>'منتظر کاربر','answered'=>'پاسخ‌شده','closed'=>'بسته'];
+    $departmentLabels = [
+        \App\Services\SupportTicketService::DEPARTMENT_SUPPORT => 'پشتیبانی',
+        \App\Services\SupportTicketService::DEPARTMENT_SALES => 'فروش',
+        \App\Services\SupportTicketService::DEPARTMENT_BILLING => 'مالی',
+        \App\Services\SupportTicketService::DEPARTMENT_COMPLAINT => 'شکایات',
+    ];
+    $priorityLabels = [
+        \App\Services\SupportTicketService::PRIORITY_LOW => 'کم',
+        \App\Services\SupportTicketService::PRIORITY_NORMAL => 'متوسط',
+        \App\Services\SupportTicketService::PRIORITY_HIGH => 'زیاد',
+    ];
+    $sourceLabels = [
+        \App\Services\SupportTicketService::SOURCE_DASHBOARD => 'پنل',
+        \App\Services\SupportTicketService::SOURCE_WIDGET => 'ویجت',
+    ];
+    $topicAreaLabels = [
+        \App\Services\SupportTicketService::TOPIC_AREA_SERVICES => 'خدمات',
+        \App\Services\SupportTicketService::TOPIC_AREA_STORE => 'فروشگاه',
+    ];
+    $slaFilterLabels = [
+        \App\Services\SupportTicketService::SLA_FILTER_AT_RISK => 'نزدیک نقض',
+        \App\Services\SupportTicketService::SLA_FILTER_BREACHED => 'نقض‌شده',
+    ];
+    $assignmentFilterLabels = [
+        \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME => 'ارجاع به من',
+        \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED => 'بدون ارجاع',
+    ];
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114inboxfilters">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
@@ -56,23 +98,23 @@
         </div>
 
         <div class="sd-filters">
-            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'assigned'=>request('assigned'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]); @endphp
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
-            <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
-            <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
-            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">منتظر کاربر</a>
-            <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
-            <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
-            <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['department'=>'billing'])) }}">مالی</a>
-            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
-            <a class="sd-chip {{ request('assigned')==='unassigned'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla'),'created_from'=>request('created_from'),'created_to'=>request('created_to')]), ['assigned'=>'unassigned'])) }}">بدون ارجاع</a>
-            <a class="sd-chip {{ request('source')==='dashboard'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'dashboard'])) }}">ثبت از پنل</a>
-            <a class="sd-chip {{ request('source')==='widget'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'widget'])) }}">ثبت از ویجت</a>
-            <a class="sd-chip {{ request('topic_area')==='services'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'services'])) }}">موضوع خدمات</a>
-            <a class="sd-chip {{ request('topic_area')==='store'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'store'])) }}">موضوع فروشگاه</a>
+            <a class="sd-chip {{ request('status')===\App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>\App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY]) }}">نیازمند پاسخ</a>
+            @foreach(\App\Services\SupportTicketService::STATUSES as $status)
+                <a class="sd-chip {{ request('status')===$status?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>$status]) }}">{{ $statusLabels[$status] ?? $status }}</a>
+            @endforeach
+            <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_AT_RISK?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_AT_RISK])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_BREACHED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_BREACHED])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('priority')===\App\Services\SupportTicketService::PRIORITY_HIGH?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['priority'=>\App\Services\SupportTicketService::PRIORITY_HIGH])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('department')===\App\Services\SupportTicketService::DEPARTMENT_BILLING?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['department'=>\App\Services\SupportTicketService::DEPARTMENT_BILLING])) }}">مالی</a>
+            <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED])) }}">بدون ارجاع</a>
+            @foreach(\App\Services\SupportTicketService::SOURCES as $source)
+                <a class="sd-chip {{ request('source')===$source?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['source'=>$source])) }}">ثبت از {{ $sourceLabels[$source] ?? $source }}</a>
+            @endforeach
+            @foreach(\App\Services\SupportTicketService::TOPIC_AREAS as $topicArea)
+                <a class="sd-chip {{ request('topic_area')===$topicArea?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['topic_area'=>$topicArea])) }}">موضوع {{ $topicAreaLabels[$topicArea] ?? $topicArea }}</a>
+            @endforeach
         </div>
 
         <form class="sd-filter-form" method="get" action="{{ route('admin.support.management') }}">
@@ -81,63 +123,64 @@
                 <span>وضعیت</span>
                 <select name="status">
                     <option value="">همه وضعیت‌ها</option>
-                    <option value="needs_reply" @selected(request('status') === 'needs_reply')>نیازمند پاسخ</option>
-                    <option value="open" @selected(request('status') === 'open')>باز</option>
-                    <option value="user_replied" @selected(request('status') === 'user_replied')>پاسخ کاربر</option>
-                    <option value="pending" @selected(request('status') === 'pending')>منتظر کاربر</option>
-                    <option value="answered" @selected(request('status') === 'answered')>پاسخ‌شده</option>
-                    <option value="closed" @selected(request('status') === 'closed')>بسته</option>
+                    <option value="{{ \App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY }}" @selected(request('status') === \App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY)>نیازمند پاسخ</option>
+                    @foreach(\App\Services\SupportTicketService::STATUSES as $status)
+                        <option value="{{ $status }}" @selected(request('status') === $status)>{{ $statusLabels[$status] ?? $status }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>دپارتمان</span>
                 <select name="department">
                     <option value="">همه دپارتمان‌ها</option>
-                    <option value="support" @selected(request('department') === 'support')>پشتیبانی</option>
-                    <option value="sales" @selected(request('department') === 'sales')>فروش</option>
-                    <option value="billing" @selected(request('department') === 'billing')>مالی</option>
-                    <option value="complaint" @selected(request('department') === 'complaint')>شکایات</option>
+                    @foreach(\App\Services\SupportTicketService::DEPARTMENTS as $department)
+                        <option value="{{ $department }}" @selected(request('department') === $department)>{{ $departmentLabels[$department] ?? $department }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>اولویت</span>
                 <select name="priority">
                     <option value="">همه اولویت‌ها</option>
-                    <option value="high" @selected(request('priority') === 'high')>زیاد</option>
-                    <option value="normal" @selected(request('priority') === 'normal')>متوسط</option>
-                    <option value="low" @selected(request('priority') === 'low')>کم</option>
+                    @foreach(\App\Services\SupportTicketService::PRIORITIES as $priority)
+                        <option value="{{ $priority }}" @selected(request('priority') === $priority)>{{ $priorityLabels[$priority] ?? $priority }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>کانال ثبت</span>
                 <select name="source">
                     <option value="">همه کانال‌ها</option>
-                    <option value="dashboard" @selected(request('source') === 'dashboard')>پنل</option>
-                    <option value="widget" @selected(request('source') === 'widget')>ویجت</option>
+                    @foreach(\App\Services\SupportTicketService::SOURCES as $source)
+                        <option value="{{ $source }}" @selected(request('source') === $source)>{{ $sourceLabels[$source] ?? $source }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>حوزه موضوع</span>
                 <select name="topic_area">
                     <option value="">همه حوزه‌ها</option>
-                    <option value="services" @selected(request('topic_area') === 'services')>خدمات</option>
-                    <option value="store" @selected(request('topic_area') === 'store')>فروشگاه</option>
+                    @foreach(\App\Services\SupportTicketService::TOPIC_AREAS as $topicArea)
+                        <option value="{{ $topicArea }}" @selected(request('topic_area') === $topicArea)>{{ $topicAreaLabels[$topicArea] ?? $topicArea }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>وضعیت SLA</span>
                 <select name="sla">
                     <option value="">همه وضعیت‌های SLA</option>
-                    <option value="at_risk" @selected(request('sla') === 'at_risk')>نزدیک نقض</option>
-                    <option value="breached" @selected(request('sla') === 'breached')>نقض‌شده</option>
+                    @foreach(\App\Services\SupportTicketService::SLA_FILTERS as $slaFilter)
+                        <option value="{{ $slaFilter }}" @selected(request('sla') === $slaFilter)>{{ $slaFilterLabels[$slaFilter] ?? $slaFilter }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>ارجاع</span>
                 <select name="assigned">
                     <option value="">همه تیکت‌ها</option>
-                    <option value="me" @selected(request('assigned') === 'me')>ارجاع به من</option>
-                    <option value="unassigned" @selected(request('assigned') === 'unassigned')>بدون ارجاع</option>
+                    @foreach(\App\Services\SupportTicketService::ASSIGNMENT_FILTERS as $assignmentFilter)
+                        <option value="{{ $assignmentFilter }}" @selected(request('assigned') === $assignmentFilter)>{{ $assignmentFilterLabels[$assignmentFilter] ?? $assignmentFilter }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">

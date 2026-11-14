@@ -21,9 +21,54 @@ class SupportTicketService
 {
     public const STATUSES = ['open', 'pending', 'answered', 'user_replied', 'closed'];
 
-    public const DEPARTMENTS = ['support', 'sales', 'billing', 'complaint'];
+    public const STATUS_FILTER_NEEDS_REPLY = 'needs_reply';
 
-    public const PRIORITIES = ['low', 'normal', 'high'];
+    public const DEPARTMENT_SUPPORT = 'support';
+
+    public const DEPARTMENT_SALES = 'sales';
+
+    public const DEPARTMENT_BILLING = 'billing';
+
+    public const DEPARTMENT_COMPLAINT = 'complaint';
+
+    public const DEPARTMENTS = [
+        self::DEPARTMENT_SUPPORT,
+        self::DEPARTMENT_SALES,
+        self::DEPARTMENT_BILLING,
+        self::DEPARTMENT_COMPLAINT,
+    ];
+
+    public const PRIORITY_LOW = 'low';
+
+    public const PRIORITY_NORMAL = 'normal';
+
+    public const PRIORITY_HIGH = 'high';
+
+    public const PRIORITIES = [self::PRIORITY_LOW, self::PRIORITY_NORMAL, self::PRIORITY_HIGH];
+
+    public const SOURCE_DASHBOARD = 'dashboard';
+
+    public const SOURCE_WIDGET = 'widget';
+
+    public const SOURCES = [self::SOURCE_DASHBOARD, self::SOURCE_WIDGET];
+
+    public const TOPIC_AREA_SERVICES = 'services';
+
+    public const TOPIC_AREA_STORE = 'store';
+
+    public const TOPIC_AREAS = [self::TOPIC_AREA_SERVICES, self::TOPIC_AREA_STORE];
+
+    public const ASSIGNMENT_FILTER_ME = 'me';
+
+    public const ASSIGNMENT_FILTER_UNASSIGNED = 'unassigned';
+
+    public const ASSIGNMENT_FILTERS = [self::ASSIGNMENT_FILTER_ME, self::ASSIGNMENT_FILTER_UNASSIGNED];
+
+    public const SLA_FILTER_AT_RISK = 'at_risk';
+
+    public const SLA_FILTER_BREACHED = 'breached';
+
+    public const SLA_FILTERS = [self::SLA_FILTER_AT_RISK, self::SLA_FILTER_BREACHED];
 
     public function __construct(
         private readonly SupportNotificationService $notifier,
@@ -52,8 +97,8 @@ class SupportTicketService
                     'user_id' => $user?->id,
                     'subject' => $data['subject'],
                     'status' => 'open',
-                    'priority' => $data['priority'] ?? 'normal',
-                    'department' => $data['department'] ?? 'support',
+                    'priority' => $data['priority'] ?? self::PRIORITY_NORMAL,
+                    'department' => $data['department'] ?? self::DEPARTMENT_SUPPORT,
                 ];
     
                 if (Schema::hasColumn('tickets', 'ticket_code')) {
@@ -75,7 +120,7 @@ class SupportTicketService
                     $payload['related_product_id'] = $data['related_product_id'] ?? null;
                 }
                 if (Schema::hasColumn('tickets', 'source')) {
-                    $payload['source'] = $data['source'] ?? ($user ? 'dashboard' : 'widget');
+                    $payload['source'] = $data['source'] ?? ($user ? self::SOURCE_DASHBOARD : self::SOURCE_WIDGET);
                 }
                 if (Schema::hasColumn('tickets', 'last_reply_at')) {
                     $payload['last_reply_at'] = now();

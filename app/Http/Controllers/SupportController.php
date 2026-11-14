@@ -194,9 +194,9 @@ class SupportController extends Controller
             'body' => 'required|string|max:5000',
             'department' => 'required|string|in:'.implode(',', SupportTicketService::DEPARTMENTS),
             'priority' => 'required|string|in:'.implode(',', SupportTicketService::PRIORITIES),
-            'topic_area' => 'required|string|in:services,store',
-            'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'services'), 'nullable', 'string', 'max:80'],
-            'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'store'), 'nullable', 'integer', Rule::exists('store_products', 'id')],
+            'topic_area' => ['required', 'string', Rule::in(SupportTicketService::TOPIC_AREAS)],
+            'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_SERVICES), 'nullable', 'string', 'max:80'],
+            'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_STORE), 'nullable', 'integer', Rule::exists('store_products', 'id')],
             'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
         ], [
             'department.required' => 'دپارتمان را انتخاب کنید.',
@@ -208,11 +208,11 @@ class SupportController extends Controller
 
         $body = $data['body'];
         $meta = [];
-        if ($data['topic_area'] === 'services' && ! empty($data['related_service'])) {
+        if ($data['topic_area'] === SupportTicketService::TOPIC_AREA_SERVICES && ! empty($data['related_service'])) {
             $labels = ['typing' => 'تایپ آنلاین', 'convert' => 'تبدیل فایل', 'edit' => 'ویرایش هوشمند', 'ocr' => 'OCR / استخراج متن', 'voice' => 'ورود صوتی', 'other' => 'سایر خدمات'];
             $meta[] = 'حوزه: خدمات — '.($labels[$data['related_service']] ?? $data['related_service']);
         }
-        if ($data['topic_area'] === 'store' && ! empty($data['related_product_id'])) {
+        if ($data['topic_area'] === SupportTicketService::TOPIC_AREA_STORE && ! empty($data['related_product_id'])) {
             $product = StoreProduct::find($data['related_product_id']);
             $meta[] = 'حوزه: فروشگاه — محصول: '.($product?->title ?? ('#'.$data['related_product_id']));
         }
@@ -226,9 +226,9 @@ class SupportController extends Controller
             'department' => $data['department'],
             'priority' => $data['priority'],
             'topic_area' => $data['topic_area'],
-            'related_service' => $data['topic_area'] === 'services' ? ($data['related_service'] ?? null) : null,
-            'related_product_id' => $data['topic_area'] === 'store' ? ($data['related_product_id'] ?? null) : null,
-            'source' => 'dashboard',
+            'related_service' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_SERVICES ? ($data['related_service'] ?? null) : null,
+            'related_product_id' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_STORE ? ($data['related_product_id'] ?? null) : null,
+            'source' => SupportTicketService::SOURCE_DASHBOARD,
         ], $request->file('attachment'));
 
         return redirect()->route('support.show', $ticket)->with('status', 'تیکت '.$ticket->displayCode().' ثبت شد.');
@@ -350,8 +350,8 @@ class SupportController extends Controller
         $statusFilter = $request->input('status');
         if (is_string($statusFilter)
             && $statusFilter !== 'all'
-            && in_array($statusFilter, array_merge(['needs_reply'], SupportTicketService::STATUSES), true)) {
-            if ($statusFilter === 'needs_reply') {
+            && in_array($statusFilter, array_merge([SupportTicketService::STATUS_FILTER_NEEDS_REPLY], SupportTicketService::STATUSES), true)) {
+            if ($statusFilter === SupportTicketService::STATUS_FILTER_NEEDS_REPLY) {
                 $query->needsReply();
             } else {
                 $query->where('status', $statusFilter);
@@ -372,28 +372,28 @@ class SupportController extends Controller
         // canonical ticket creation flows. Ignore unknown values rather than
         // turning arbitrary query parameters into hidden/empty inbox states.
         if (Schema::hasColumn('tickets', 'source')
-            && in_array($request->input('source'), ['dashboard', 'widget'], true)) {
+            && in_array($request->input('source'), SupportTicketService::SOURCES, true)) {
             $query->where('source', $request->input('source'));
         }
         if (Schema::hasColumn('tickets', 'topic_area')
-            && in_array($request->input('topic_area'), ['services', 'store'], true)) {
+            && in_array($request->input('topic_area'), SupportTicketService::TOPIC_AREAS, true)) {
             $query->where('topic_area', $request->input('topic_area'));
         }
 
         $assignedFilter = $request->input('assigned');
         if (Schema::hasColumn('tickets', 'assigned_to')) {
-            if ($assignedFilter === 'me') {
+            if ($assignedFilter === SupportTicketService::ASSIGNMENT_FILTER_ME) {
                 $query->where('assigned_to', auth()->id());
-            } elseif ($assignedFilter === 'unassigned') {
+            } elseif ($assignedFilter === SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED) {
                 $query->whereNull('assigned_to');
             }
         }
 
         $slaFilter = $request->input('sla');
-        if ($slaFilter === 'breached') {
+        if ($slaFilter === SupportTicketService::SLA_FILTER_BREACHED) {
             $query->slaBreached();
         }
-        if ($slaFilter === 'at_risk') {
+        if ($slaFilter === SupportTicketService::SLA_FILTER_AT_RISK) {
             if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                 $query->where(function ($q) use ($warningDeadline) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
@@ -456,7 +456,7 @@ class SupportController extends Controller
             WHEN status = 'pending' THEN 2
             WHEN status = 'answered' THEN 3
             ELSE 4 END")
-            ->orderByRaw("CASE WHEN priority = 'high' THEN 0 WHEN priority = 'normal' THEN 1 ELSE 2 END")
+            ->orderByRaw('CASE WHEN priority = ? THEN 0 WHEN priority = ? THEN 1 ELSE 2 END', [SupportTicketService::PRIORITY_HIGH, SupportTicketService::PRIORITY_NORMAL])
             ->orderByDesc('updated_at');
 
         $tickets = $query->paginate(25)->withQueryString();
@@ -667,16 +667,16 @@ class SupportController extends Controller
             }
             if (! $ticket) {
                 $ticket = Ticket::where('user_id', $user->id)->where('status', '!=', 'closed')
-                    ->when(Schema::hasColumn('tickets', 'source'), fn ($q) => $q->where('source', 'widget'))
+                    ->when(Schema::hasColumn('tickets', 'source'), fn ($q) => $q->where('source', SupportTicketService::SOURCE_WIDGET))
                     ->latest()->first();
             }
             if (! $ticket) {
                 $ticket = $this->tickets->createTicket($user, [
                     'subject' => Str::limit($data['body'], 80),
                     'body' => $data['body'],
-                    'source' => 'widget',
-                    'department' => 'support',
-                    'priority' => 'normal',
+                    'source' => SupportTicketService::SOURCE_WIDGET,
+                    'department' => SupportTicketService::DEPARTMENT_SUPPORT,
+                    'priority' => SupportTicketService::PRIORITY_NORMAL,
                 ]);
             } else {
                 $this->tickets->addMessage($ticket, $user, $data['body'], ['is_staff' => false]);
@@ -718,9 +718,9 @@ class SupportController extends Controller
                 'body' => $data['body'],
                 'guest_name' => $name,
                 'guest_email' => $email,
-                'source' => 'widget',
-                'department' => 'support',
-                'priority' => 'normal',
+                'source' => SupportTicketService::SOURCE_WIDGET,
+                'department' => SupportTicketService::DEPARTMENT_SUPPORT,
+                'priority' => SupportTicketService::PRIORITY_NORMAL,
             ]);
 
             $sessionTicketIds->push((int) $ticket->id);
