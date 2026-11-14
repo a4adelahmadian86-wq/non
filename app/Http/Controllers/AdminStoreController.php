@@ -231,8 +231,10 @@ class AdminStoreController extends Controller
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
+        $canPublish = app(\App\Services\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.products.publish');
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublish'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
@@ -334,6 +336,14 @@ class AdminStoreController extends Controller
             }
 
             if (($data['status'] ?? '') === 'published') {
+                if ($lockedProduct->status !== 'published') {
+                    abort_unless(
+                        app(\App\Services\AuthorizationService::class)->allows(request()->user(), 'store.products.publish'),
+                        403,
+                        'مجوز مستقل تأیید و انتشار محصول برای این حساب فعال نیست.'
+                    );
+                }
+
                 $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', []);
                 if ((bool) data_get($supervisorSettings, 'enabled', false)
                     && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
