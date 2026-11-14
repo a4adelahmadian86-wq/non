@@ -163,6 +163,36 @@ class SupportAssignmentMutexTest extends TestCase
         }
     }
 
+    public function test_mysql_session_loss_releases_the_named_workload_lock(): void
+    {
+        $this->requireMySql();
+
+        $probe = $this->probeConnection();
+        $connection = DB::connection();
+        $connectionId = (int) $connection->selectOne('SELECT CONNECTION_ID() AS id', [], false)->id;
+
+        try {
+            $result = app(SupportAssignmentMutex::class)->synchronized(function () use ($probe, $connectionId): string {
+                $probe->statement('KILL CONNECTION '.$connectionId);
+
+                return 'connection terminated';
+            });
+
+            $this->assertSame('connection terminated', $result);
+
+            // MySQL releases session-scoped named locks when the owning session dies.
+            $available = $probe->selectOne(
+                'SELECT GET_LOCK(?, 0) AS acquired',
+                [SupportAssignmentMutex::LOCK_NAME],
+                false
+            );
+            $this->assertSame(1, (int) $available->acquired);
+        } finally {
+            $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
+            DB::purge();
+        }
+    }
+
     public function test_mysql_workload_lock_rejects_calls_inside_an_existing_transaction(): void
     {
         $this->requireMySql();
