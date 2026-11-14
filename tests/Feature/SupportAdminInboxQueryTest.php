@@ -272,6 +272,11 @@ class SupportAdminInboxQueryTest extends TestCase
         $this->assertStringContainsString('name="assigned"', $html);
         $this->assertStringContainsString('assigned=unassigned', $html);
         $this->assertStringContainsString('created_from='.$from->toDateString(), $html);
+
+        preg_match('/href="([^"]*status=needs_reply[^"]*)"/', $html, $statusChipMatch);
+        $this->assertNotEmpty($statusChipMatch[1] ?? null);
+        $this->assertStringContainsString('assigned=unassigned', $statusChipMatch[1]);
+        $this->assertStringContainsString('created_from=', $statusChipMatch[1]);
     }
 
     public function test_unknown_inbox_filter_values_are_ignored_and_reversed_date_ranges_do_not_hide_tickets(): void
