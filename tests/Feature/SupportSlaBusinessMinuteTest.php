@@ -177,6 +177,46 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $this->assertFalse(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
     }
 
+    public function test_late_first_response_remains_a_historical_sla_breach(): void
+    {
+        $deadline = now()->subMinutes(20);
+        $ticket = Ticket::create([
+            'subject' => 'Late first response history',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => $deadline,
+            'first_response_at' => $deadline->copy()->addMinutes(5),
+        ]);
+
+        $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+        $this->assertSame('breached', app(SupportSlaService::class)->firstResponseStatus($ticket)['state']);
+    }
+
+    public function test_sla_monitor_notifies_for_a_late_first_response_already_sent(): void
+    {
+        $deadline = now()->subMinutes(20);
+        $ticket = Ticket::create([
+            'subject' => 'Notify late first response',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => $deadline,
+            'first_response_at' => $deadline->copy()->addMinutes(5),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaBreached')
+            ->once()
+            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response');
+        $notifier->shouldNotReceive('slaWarning');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        Artisan::call('support:check-sla');
+
+        $this->assertNotNull($ticket->fresh()->sla_first_breached_at);
+    }
+
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
     {
         $this->travelTo(Carbon::parse('2026-11-21 09:30:00', 'Asia/Tehran'));
