@@ -133,7 +133,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'department' => 'support',
         ]);
 
-        TicketMessage::create([
+        $firstInternal = TicketMessage::create([
             'ticket_id' => $ticket->id,
             'user_id' => null,
             'body' => 'private note one',
@@ -175,6 +175,16 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'id' => $ticket->id,
             'customer_last_seen_at' => null,
         ]);
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?before_id='.$secondInternal->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'messages')
+            ->assertJsonPath('messages.0.body', 'public response')
+            ->assertJsonPath('next_before_id', $firstInternal->id)
+            ->assertJsonPath('has_more', false)
+            ->assertJsonMissing(['body' => 'private note one'])
+            ->assertJsonMissing(['body' => 'private note two']);
     }
 
     public function test_team_scoped_support_agent_only_sees_and_manages_tickets_owned_by_team_members(): void
@@ -294,6 +304,52 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $this->actingAs($agent)
             ->post(route('admin.tickets.reply', $insideTicket), ['body' => 'Stale team access'])
             ->assertForbidden();
+    }
+
+
+    public function test_customer_thread_loads_a_bounded_history_and_older_pages_never_expose_internal_notes(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Bounded customer history',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $ids = [];
+        for ($i = 1; $i <= 105; $i++) {
+            $internal = in_array($i, [1, 3], true);
+            $message = TicketMessage::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $internal ? null : $customer->id,
+                'body' => $internal ? 'SECRET_INTERNAL_'.$i : ($i <= 5 ? 'OLD_PUBLIC_'.$i : 'RECENT_PUBLIC_'.$i),
+                'is_internal' => $internal,
+                'is_staff' => $internal,
+            ]);
+            $ids[] = $message->id;
+        }
+
+        $this->actingAs($customer)
+            ->get(route('support.show', $ticket))
+            ->assertOk()
+            ->assertSee('RECENT_PUBLIC_105')
+            ->assertDontSee('OLD_PUBLIC_2')
+            ->assertDontSee('SECRET_INTERNAL_3')
+            ->assertSee('loadOlderTicketMessages');
+
+        $this->actingAs($customer)
+            ->get(route('support.messages.poll', $ticket).'?before_id='.$ids[5])
+            ->assertOk()
+            ->assertJsonCount(3, 'messages')
+            ->assertJsonPath('messages.0.body', 'OLD_PUBLIC_2')
+            ->assertJsonPath('messages.1.body', 'OLD_PUBLIC_4')
+            ->assertJsonPath('messages.2.body', 'OLD_PUBLIC_5')
+            ->assertJsonPath('next_before_id', $ids[0])
+            ->assertJsonPath('has_more', false)
+            ->assertJsonMissing(['body' => 'SECRET_INTERNAL_1'])
+            ->assertJsonMissing(['body' => 'SECRET_INTERNAL_3']);
     }
 
 }
