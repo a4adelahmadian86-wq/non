@@ -109,7 +109,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'department' => 'support',
         ]);
 
-        $firstInternal = TicketMessage::create([
+        TicketMessage::create([
             'ticket_id' => $ticket->id,
             'user_id' => null,
             'body' => 'private note one',
