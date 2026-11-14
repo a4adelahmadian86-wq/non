@@ -42,7 +42,10 @@ class SupportSlaService
             && $ticket->sla_paused_at
             && $resolveDueAt
             && Schema::hasColumn('tickets', 'sla_resolve_remaining_minutes')) {
-            $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween(now(), $resolveDueAt);
+            // The clock stopped at sla_paused_at. Recalculate the budget from
+            // that instant, not from now(), which may be days later.
+            $pauseStartedAt = $ticket->sla_paused_at;
+            $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween($pauseStartedAt, $resolveDueAt);
         }
 
         if ($targets !== []) {
