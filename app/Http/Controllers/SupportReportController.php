@@ -37,20 +37,25 @@ class SupportReportController extends Controller
             'distribution' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0],
         ];
 
-        if (Schema::hasColumn('tickets', 'csat_score')) {
+        if (Schema::hasColumn('tickets', 'csat_score') && Schema::hasColumn('tickets', 'csat_at')) {
+            // Aggregate in SQL instead of hydrating every rated ticket into PHP.
+            // Report memory now stays constant as the historical rating volume grows.
             $rated = Ticket::query()
                 ->whereNotNull('csat_score')
                 ->whereBetween('csat_at', [$fromAt, $toAt])
-                ->get(['csat_score']);
+                ->selectRaw('COUNT(*) AS rated_count, AVG(csat_score) AS rated_average')
+                ->selectRaw('SUM(CASE WHEN csat_score = 1 THEN 1 ELSE 0 END) AS score_1')
+                ->selectRaw('SUM(CASE WHEN csat_score = 2 THEN 1 ELSE 0 END) AS score_2')
+                ->selectRaw('SUM(CASE WHEN csat_score = 3 THEN 1 ELSE 0 END) AS score_3')
+                ->selectRaw('SUM(CASE WHEN csat_score = 4 THEN 1 ELSE 0 END) AS score_4')
+                ->selectRaw('SUM(CASE WHEN csat_score = 5 THEN 1 ELSE 0 END) AS score_5')
+                ->first();
 
-            $csat['count'] = $rated->count();
+            $csat['count'] = (int) ($rated?->rated_count ?? 0);
             if ($csat['count'] > 0) {
-                $csat['avg'] = round($rated->avg('csat_score'), 2);
-                foreach ($rated as $row) {
-                    $s = (int) $row->csat_score;
-                    if ($s >= 1 && $s <= 5) {
-                        $csat['distribution'][$s]++;
-                    }
+                $csat['avg'] = round((float) $rated->rated_average, 2);
+                foreach (range(1, 5) as $score) {
+                    $csat['distribution'][$score] = (int) ($rated->{'score_'.$score} ?? 0);
                 }
             }
         }
