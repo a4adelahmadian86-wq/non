@@ -484,8 +484,9 @@ class SupportTicketService
      */
     public function updateMeta(Ticket $ticket, array $data, ?User $actor = null): Ticket
     {
-        return DB::transaction(function () use ($ticket, $data, $actor): Ticket {
+        [$fresh, $resolutionBreachDetected] = DB::transaction(function () use ($ticket, $data, $actor): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            $wasResolutionBreached = ! empty($locked->sla_resolve_breached_at);
             $update = [];
             $notes = [];
 
@@ -511,7 +512,7 @@ class SupportTicketService
             }
 
             if ($update === []) {
-                return $locked->fresh(['assignee', 'user']);
+                return [$locked->fresh(['assignee', 'user']), false];
             }
 
             $locked->update($update);
@@ -528,8 +529,16 @@ class SupportTicketService
                 ]);
             }
 
-            return $locked->fresh(['assignee', 'user']);
+            $resolutionBreachDetected = ! $wasResolutionBreached && ! empty($locked->sla_resolve_breached_at);
+
+            return [$locked->fresh(['assignee', 'user']), $resolutionBreachDetected];
         });
+
+        if ($resolutionBreachDetected) {
+            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
+        }
+
+        return $fresh;
     }
 
     /**
