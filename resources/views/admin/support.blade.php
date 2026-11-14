@@ -206,10 +206,10 @@
             @endif
 
             <div class="sd-messages" id="chatMessages">
-                @if($active->has_older_messages)
+                @if($activeHistory['has_older'] ?? false)
                     <button type="button" id="loadOlderAdminMessages" class="sd-btn" style="display:block;margin:8px auto;background:#eef4ff;color:#1769ff">نمایش پیام‌های قدیمی‌تر</button>
                 @endif
-                <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $active->last_scanned_message_id ?? $active->messages->last()?->id ?? 0 }}" data-oldest-id="{{ $active->oldest_scanned_message_id ?? $active->messages->first()?->id ?? 0 }}">
+                <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $activeHistory['last_scanned_id'] ?? $active->messages->last()?->id ?? 0 }}" data-oldest-id="{{ $activeHistory['oldest_scanned_id'] ?? $active->messages->first()?->id ?? 0 }}">
                 @foreach($active->messages as $m)
                     @php $isStaff = $m->isFromStaff(); $isInternal = (bool) $m->is_internal; @endphp
                     <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}" data-msg-id="{{ $m->id }}">
