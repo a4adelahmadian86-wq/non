@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\AuditEventService;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
@@ -244,6 +245,36 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
     }
 
+
+
+    public function test_audit_append_failure_rolls_back_sla_marker_and_outbox_intent(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'SLA audit rollback',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        $audit = Mockery::mock(AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(AuditEventService::class, $audit);
+
+        try {
+            Artisan::call('support:check-sla');
+            $this->fail('SLA marker and outbox intent must roll back if the canonical audit append fails.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_breached_at'));
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+    }
 
     public function test_outbox_enqueue_rolls_back_with_the_ticket_transaction(): void
     {
