@@ -121,6 +121,55 @@ class WalletLedgerReconciliationTest extends TestCase
         $this->assertSame('opening_balance_unverified', $result['wallets'][0]['issues'][0]['code']);
     }
 
+    public function test_financial_history_cannot_be_deleted_through_parent_cascades(): void
+    {
+        $user = User::factory()->create();
+        $wallet = Wallet::create(['user_id' => $user->id, 'balance_rials' => 500]);
+
+        $order = $this->paidOrder($user, 500, 'wallet_topup');
+        $payment = $this->payment($order, 'zarinpal', 500);
+        $transaction = WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => 'credit',
+            'amount_rials' => 500,
+            'balance_before' => 0,
+            'balance_after' => 500,
+            'reference_type' => 'wallet_topup',
+            'reference_id' => $order->id,
+            'description' => 'Retention test top-up',
+            'idempotency_key' => 'ledger-retention-'.$order->id,
+        ]);
+
+        try {
+            $wallet->delete();
+            $this->fail('A wallet with a balance or ledger entries must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('wallet_with_balance_or_ledger_cannot_be_deleted', $exception->getMessage());
+        }
+
+        try {
+            \\Illuminate\\Support\\Facades\\DB::table('wallets')->where('id', $wallet->id)->delete();
+            $this->fail('The database must prevent deleting a wallet referenced by ledger entries.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('wallet_transactions', ['id' => $transaction->id]);
+        }
+
+        try {
+            \\Illuminate\\Support\\Facades\\DB::table('orders')->where('id', $order->id)->delete();
+            $this->fail('The database must prevent deleting an order referenced by a payment.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('payments', ['id' => $payment->id]);
+        }
+
+        try {
+            \\Illuminate\\Support\\Facades\\DB::table('users')->where('id', $user->id)->delete();
+            $this->fail('The database must prevent deleting a customer with financial history.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('orders', ['id' => $order->id]);
+            $this->assertDatabaseHas('wallet_transactions', ['id' => $transaction->id]);
+        }
+    }
+
     public function test_typing_deposit_ledger_reference_uses_deposit_paid_state_not_full_order_paid_state(): void
     {
         $user = User::factory()->create();
