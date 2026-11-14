@@ -25,9 +25,17 @@ class SupportTicketService
 
     public const PRIORITIES = ['low', 'normal', 'high'];
 
-    public const SOURCES = ['dashboard', 'widget'];
+    public const SOURCE_DASHBOARD = 'dashboard';
 
-    public const TOPIC_AREAS = ['services', 'store'];
+    public const SOURCE_WIDGET = 'widget';
+
+    public const SOURCES = [self::SOURCE_DASHBOARD, self::SOURCE_WIDGET];
+
+    public const TOPIC_AREA_SERVICES = 'services';
+
+    public const TOPIC_AREA_STORE = 'store';
+
+    public const TOPIC_AREAS = [self::TOPIC_AREA_SERVICES, self::TOPIC_AREA_STORE];
 
     public function __construct(
         private readonly SupportNotificationService $notifier,
@@ -79,7 +87,7 @@ class SupportTicketService
                     $payload['related_product_id'] = $data['related_product_id'] ?? null;
                 }
                 if (Schema::hasColumn('tickets', 'source')) {
-                    $payload['source'] = $data['source'] ?? ($user ? 'dashboard' : 'widget');
+                    $payload['source'] = $data['source'] ?? ($user ? self::SOURCE_DASHBOARD : self::SOURCE_WIDGET);
                 }
                 if (Schema::hasColumn('tickets', 'last_reply_at')) {
                     $payload['last_reply_at'] = now();
