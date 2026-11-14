@@ -223,10 +223,9 @@ class Ticket extends Model
             });
 
             if ($hasResolveBreachedAt) {
-                $q->orWhere(function ($w) {
-                    $w->where('status', 'pending')
-                        ->whereNotNull('sla_resolve_breached_at');
-                });
+                // The breach marker survives resume and closure; it is historical,
+                // not merely a flag for the currently paused state.
+                $q->orWhereNotNull('sla_resolve_breached_at');
             }
 
             // Closed tickets are evaluated against their actual resolution time,
