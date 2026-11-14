@@ -13,7 +13,7 @@ use Tests\TestCase;
 
 class SupportTicketAuditLedgerTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     public function test_status_metadata_and_assignment_changes_append_sanitized_audit_events(): void
     {
