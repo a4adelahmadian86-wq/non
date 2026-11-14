@@ -718,11 +718,28 @@ class SupportTicketService
             return 0;
         }
 
-        $claimed = app(SupportAssignmentMutex::class)->synchronized(fn () => DB::transaction(fn () => Ticket::query()
-            ->whereNull('user_id')
-            ->whereIn('id', $ticketIds)
-            ->whereRaw('LOWER(guest_email) = ?', [$sessionEmail])
-            ->update(['user_id' => $user->id])));
+        $claimed = app(SupportAssignmentMutex::class)->synchronized(fn () => DB::transaction(function () use ($ticketIds, $sessionEmail, $user): int {
+            // Lock and claim each eligible row individually so the ownership
+            // mutation and its append-only audit event commit or roll back together.
+            $tickets = Ticket::query()
+                ->whereNull('user_id')
+                ->whereIn('id', $ticketIds)
+                ->whereRaw('LOWER(guest_email) = ?', [$sessionEmail])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($tickets as $ticket) {
+                $ticket->forceFill(['user_id' => $user->id])->save();
+
+                $this->recordSupportAuditEvent($ticket, $user, 'support.ticket.guest_claimed', [
+                    'from_user_id' => null,
+                    'to_user_id' => (int) $user->id,
+                ]);
+            }
+
+            return $tickets->count();
+        }));
 
         if ($claimed > 0) {
             session()->forget(['support_guest_ticket_ids', 'support_guest_email', 'support_guest_name']);

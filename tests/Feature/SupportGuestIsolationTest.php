@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FarastAuditEvent;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
@@ -10,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Artisan;
+use Mockery;
 use Tests\TestCase;
 
 class SupportGuestIsolationTest extends TestCase
@@ -79,6 +81,48 @@ class SupportGuestIsolationTest extends TestCase
         $this->assertSame(1, $claimed);
         $this->assertSame($user->id, (int) $ownedSessionTicket->fresh()->user_id);
         $this->assertNull($unrelatedTicket->fresh()->user_id);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ownedSessionTicket->id)
+            ->where('event_type', 'support.ticket.guest_claimed')
+            ->firstOrFail();
+
+        $this->assertSame($user->id, $event->user_id);
+        $this->assertNull($event->payload_meta['from_user_id']);
+        $this->assertSame($user->id, $event->payload_meta['to_user_id']);
+        $this->assertSame('support', $event->source);
+        $encoded = json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('claim@example.test', $encoded);
+    }
+
+    public function test_guest_ticket_claim_rolls_back_when_audit_append_fails(): void
+    {
+        $user = User::factory()->create(['email' => 'rollback-claim@example.test']);
+        $ticket = $this->guestTicket('rollback-claim@example.test');
+        session([
+            'support_guest_email' => 'rollback-claim@example.test',
+            'support_guest_ticket_ids' => [$ticket->id],
+        ]);
+
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->claimGuestTickets($user);
+            $this->fail('A failed audit append must roll back guest ticket ownership.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertNull($ticket->fresh()->user_id);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+            'event_type' => 'support.ticket.guest_claimed',
+        ]);
+        $this->assertSame([$ticket->id], session('support_guest_ticket_ids'));
     }
 
     public function test_legacy_public_ticket_attachments_are_migrated_to_private_storage(): void
