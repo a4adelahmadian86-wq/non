@@ -121,28 +121,6 @@ class CrmCourseProgressTimelineTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        StoreOrderItem::create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'title_snapshot' => $product->title,
-            'sku_snapshot' => $product->sku,
-            'quantity' => 1,
-            'unit_price_rials' => 300000,
-            'discount_rials' => 0,
-            'tax_rials' => 0,
-            'total_rials' => 300000,
-            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
-        ]);
-        Payment::create([
-            'order_id' => $order->id,
-            'gateway' => 'test',
-            'amount_rials' => 300000,
-            'status' => 'paid',
-            'transaction_id' => 'TEST-CRM-COURSE-'.$order->id,
-            'idempotency_key' => 'test-crm-course-'.$order->id,
-            'paid_at' => now(),
-        ]);
-
         $libraryItem = StoreLibraryItem::create([
             'user_id' => $customer->id,
             'product_id' => $product->id,
