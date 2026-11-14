@@ -177,4 +177,105 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         ]);
     }
 
+    public function test_team_scoped_support_agent_only_sees_and_manages_tickets_owned_by_team_members(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+
+        $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $customer = User::factory()->create();
+        $outsideCustomer = User::factory()->create();
+
+        $organization = \App\Models\Organization::create([
+            'name' => 'Support scope organization',
+            'slug' => 'support-scope-organization',
+            'status' => 'active',
+        ]);
+        $team = \App\Models\Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Support team',
+            'slug' => 'support-team',
+            'supervisor_id' => $agent->id,
+        ]);
+        $team->members()->attach($agent->id, ['team_role' => 'manager']);
+        $team->members()->attach($customer->id, ['team_role' => 'employee']);
+
+        $permission = Permission::firstOrCreate(
+            ['key' => 'support.manage'],
+            ['label' => 'Support management', 'group' => 'support'],
+        );
+        DB::table('roles')->insert([
+            'key' => 'team_support_operator',
+            'name' => 'Team support operator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::firstOrCreate([
+            'role' => 'team_support_operator',
+            'permission_id' => $permission->id,
+        ]);
+        app(AuthorizationService::class)->assignRole(
+            $root,
+            $agent,
+            'team_support_operator',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $insideTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Team-owned support ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Other-team private ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $guestTicket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'Global-only guest ticket',
+            'guest_email' => 'guest@example.test',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
+            ->assertOk()
+            ->assertSee('Team-owned support ticket')
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket')
+            ->assertDontSee('گزارش SLA');
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['ticket' => $outsideTicket->id]))
+            ->assertOk()
+            ->assertSee('Team-owned support ticket')
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket');
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.management', ['q' => 'Other-team private ticket']))
+            ->assertOk()
+            ->assertDontSee('Other-team private ticket')
+            ->assertDontSee('Global-only guest ticket');
+
+        $this->actingAs($agent)
+            ->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'Unauthorized reply'])
+            ->assertForbidden();
+
+        $this->actingAs($agent)
+            ->get(route('admin.support.report'))
+            ->assertForbidden();
+    }
+
 }
