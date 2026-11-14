@@ -81,12 +81,12 @@
             <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">منتظر کاربر</a>
             <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
-            <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
-            <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_AT_RISK?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_AT_RISK])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_BREACHED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_BREACHED])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
             <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
             <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['department'=>'billing'])) }}">مالی</a>
-            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>'me'])) }}">ارجاع به من</a>
-            <a class="sd-chip {{ request('assigned')==='unassigned'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>'unassigned'])) }}">بدون ارجاع</a>
+            <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('assigned')===\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['assigned'=>\App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED])) }}">بدون ارجاع</a>
             @foreach(\App\Services\SupportTicketService::SOURCES as $source)
                 <a class="sd-chip {{ request('source')===$source?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['source'=>$source])) }}">ثبت از {{ $sourceLabels[$source] ?? $source }}</a>
             @endforeach
@@ -147,16 +147,16 @@
                 <span>وضعیت SLA</span>
                 <select name="sla">
                     <option value="">همه وضعیت‌های SLA</option>
-                    <option value="at_risk" @selected(request('sla') === 'at_risk')>نزدیک نقض</option>
-                    <option value="breached" @selected(request('sla') === 'breached')>نقض‌شده</option>
+                    <option value="{{ \App\Services\SupportTicketService::SLA_FILTER_AT_RISK }}" @selected(request('sla') === \App\Services\SupportTicketService::SLA_FILTER_AT_RISK)>نزدیک نقض</option>
+                    <option value="{{ \App\Services\SupportTicketService::SLA_FILTER_BREACHED }}" @selected(request('sla') === \App\Services\SupportTicketService::SLA_FILTER_BREACHED)>نقض‌شده</option>
                 </select>
             </label>
             <label class="sd-filter-field">
                 <span>ارجاع</span>
                 <select name="assigned">
                     <option value="">همه تیکت‌ها</option>
-                    <option value="me" @selected(request('assigned') === 'me')>ارجاع به من</option>
-                    <option value="unassigned" @selected(request('assigned') === 'unassigned')>بدون ارجاع</option>
+                    <option value="{{ \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME }}" @selected(request('assigned') === \App\Services\SupportTicketService::ASSIGNMENT_FILTER_ME)>ارجاع به من</option>
+                    <option value="{{ \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED }}" @selected(request('assigned') === \App\Services\SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED)>بدون ارجاع</option>
                 </select>
             </label>
             <label class="sd-filter-field">
