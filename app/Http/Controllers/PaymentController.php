@@ -105,7 +105,7 @@ class PaymentController extends Controller
 
             DB::transaction(function () use ($order, $pricing, $free, &$paidOrder) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                if ($locked->isPaid()) return;
+                if ($locked->isPaid()) {\n                    app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($locked);\n                    return;\n                }
 
                 $document = TypingDocument::whereKey($locked->document_id)
                     ->where('user_id', auth()->id())
@@ -194,7 +194,7 @@ class PaymentController extends Controller
                     if ($project) $project->update(['paid_rials' => max((int)$project->paid_rials, (int)$total), 'billing_state' => array_merge($project->billing_state ?? [], ['status'=>'paid','amount_remaining'=>0]), 'output_state' => ['status'=>'unlocked','reason'=>'payment_verified']]);
                 }
                 $paidOrder = $locked->fresh();
-                $this->enqueuePaidOrderWorkflow($paidOrder);
+                app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($paidOrder);
             });
 
             if ($paidOrder) {
@@ -217,6 +217,7 @@ class PaymentController extends Controller
                 // A repeated wallet request for an already-paid order is a no-op.
                 // Do not redispatch receipts, notifications, or post-payment workflows.
                 if ($locked->isPaid()) {
+                    app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($locked);
                     return;
                 }
                 if ($locked->status !== 'pending') {
@@ -355,6 +356,7 @@ class PaymentController extends Controller
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
                 $snapshot = $locked->pricing_snapshot ?: [];
                 if ($locked->status === 'deposit_paid') {
+                    app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($locked);
                     $path = (string) ($snapshot['source_path'] ?? '');
                     $hash = (string) ($snapshot['source_hash'] ?? '');
                     abort_unless($path !== '' && Storage::disk('private')->exists($path), 404, 'فایل مربوط به این برآورد پیدا نشد.');
@@ -431,7 +433,7 @@ class PaymentController extends Controller
                     'project_id' => (int) ($snapshot['project_id'] ?? 0) ?: null,
                 ]);
                 $paidDeposit = $locked->fresh();
-                $this->enqueuePaidOrderWorkflow($paidDeposit);
+                app(\\App\\Services\\WorkflowEngine::class)->enqueuePaidOrder($paidDeposit);
             });
 
             $paidDeposit = $order->fresh();
@@ -486,21 +488,6 @@ class PaymentController extends Controller
             : 0;
     }
 
-    private function enqueuePaidOrderWorkflow(Order $order): void
-    {
-        $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
-        app(\App\Services\WorkflowEngine::class)->enqueue(
-            $eventType,
-            [
-                'user_id' => (int) $order->user_id,
-                'customer_id' => (int) $order->user_id,
-                'order_id' => (int) $order->id,
-                'amount_rials' => (int) $order->total_rials,
-                'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
-            ],
-            'order:'.$order->id.':'.$eventType,
-        );
-    }
 
 
 }
