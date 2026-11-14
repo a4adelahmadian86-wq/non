@@ -71,57 +71,106 @@ class WorkflowEngine
         return $runId;
     }
 
-    /** Dispatch a domain event once and retain failed workflow runs for safe retry. */
-    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    /**
+     * Persist a domain event inside the caller's business transaction.
+     * The scheduled retry worker processes this durable outbox after commit.
+     */
+    public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
             throw new \InvalidArgumentException('Unsupported workflow event.');
         }
-        if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
+        if (blank($idempotencyKey)) {
+            throw new \InvalidArgumentException('Workflow event idempotency key is required.');
+        }
+        if (empty($context['user_id']) || ! is_numeric($context['user_id'])) {
             return 0;
+        }
+        if (! Schema::hasTable('farast_workflow_events') || ! Schema::hasTable('farast_workflow_event_workflows')) {
+            throw new \RuntimeException('Workflow outbox storage is not installed.');
         }
 
         $userId = (int) $context['user_id'];
+        $canonicalContext = $this->canonicalPayload($context);
 
-        try {
-            $eventId = DB::table('farast_workflow_events')->insertGetId([
-                'event_type' => $eventType,
-                'idempotency_key' => $idempotencyKey,
-                'user_id' => $userId,
-                'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'status' => 'pending',
-                'attempts' => 0,
-                'matched_workflows' => 0,
-                'failed_workflows' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (\Illuminate\Database\QueryException $exception) {
-            $existing = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
-            if (! $existing) {
-                throw $exception;
-            }
-            if ((int) $existing->user_id !== $userId || $existing->event_type !== $eventType) {
-                throw new \RuntimeException('Workflow event idempotency key is already bound to another event.');
-            }
-            if (($existing->status ?? null) === 'completed') {
-                return 0;
-            }
-            $eventId = (int) $existing->id;
+        DB::table('farast_workflow_events')->insertOrIgnore([
+            'event_type' => $eventType,
+            'idempotency_key' => $idempotencyKey,
+            'user_id' => $userId,
+            'context' => $canonicalContext,
+            'status' => 'pending',
+            'attempts' => 0,
+            'matched_workflows' => 0,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $event = DB::table('farast_workflow_events')
+            ->where('idempotency_key', $idempotencyKey)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $event) {
+            throw new \RuntimeException('Workflow event could not be persisted to the outbox.');
         }
 
-        $event = DB::table('farast_workflow_events')->where('id', $eventId)->first();
-        if (! $event || ($event->status ?? null) === 'completed') {
+        $storedContext = json_decode((string) $event->context, true);
+        if (
+            (int) $event->user_id !== $userId
+            || $event->event_type !== $eventType
+            || ! is_array($storedContext)
+            || ! hash_equals($this->canonicalPayload($storedContext), $canonicalContext)
+        ) {
+            throw new \RuntimeException('Workflow event idempotency key is already bound to another event payload.');
+        }
+
+        return $event->status === 'completed' ? 0 : (int) $event->id;
+    }
+
+    /** Dispatch synchronously for explicit callers; business transactions should use enqueue(). */
+    public function dispatch(string $eventType, array $context, string $idempotencyKey): int
+    {
+        $eventId = $this->enqueue($eventType, $context, $idempotencyKey);
+        if ($eventId === 0) {
             return 0;
         }
 
-        // Always retry using the original immutable event payload, not a later caller's payload.
+        $event = DB::table('farast_workflow_events')->where('id', $eventId)->first();
+        if (! $event || $event->status === 'completed') {
+            return 0;
+        }
+
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
             throw new \RuntimeException('Stored workflow event context is invalid.');
         }
 
         return $this->processEvent($event, $storedContext);
+    }
+
+    private function canonicalPayload(array $payload): string
+    {
+        $normalize = function (mixed $value) use (&$normalize): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+
+            if (! array_is_list($value)) {
+                ksort($value);
+            }
+
+            foreach ($value as $key => $item) {
+                $value[$key] = $normalize($item);
+            }
+
+            return $value;
+        };
+
+        return json_encode(
+            $normalize($payload),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
     }
 
     /**
