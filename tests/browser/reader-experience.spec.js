@@ -2102,6 +2102,10 @@ test('searches multi-page PDFs concurrently, normalizes Unicode and reports acce
     const group = document.querySelector('.reader-search-group');
     window.__readerSearchProgress = [];
     window.__readerSearchBusyStates = [];
+    window.__readerSearchEvents = [];
+    document.querySelector('[data-reader-root]').addEventListener('farast:reader-search-progress', event => {
+      window.__readerSearchEvents.push(event.detail);
+    });
     new MutationObserver(() => window.__readerSearchProgress.push(output.textContent))
       .observe(output, { childList: true, subtree: true, characterData: true });
     new MutationObserver(() => window.__readerSearchBusyStates.push(group.getAttribute('aria-busy')))
@@ -2124,6 +2128,15 @@ test('searches multi-page PDFs concurrently, normalizes Unicode and reports acce
   expect(observations.progress).toContain('جست‌وجو در ۵ از ۵ صفحه');
   expect(observations.busy).toContain('true');
   expect(observations.busy).toContain('false');
+
+  await root.locator('#reader-search-input').fill('PDF');
+  await root.locator('#reader-search').click();
+  await expect(root.locator('#reader-search-count')).toContainText('۵ تطبیق');
+  await expect(root.locator('.reader-search-group')).toHaveAttribute('aria-busy', 'false');
+  const events = await page.evaluate(() => window.__readerSearchEvents);
+  const latestRequest = events[events.length - 1].request;
+  const latestSearchEvents = events.filter(event => event.request === latestRequest);
+  expect(latestSearchEvents[latestSearchEvents.length - 1].cacheHits).toBe(5);
 });
 
 
