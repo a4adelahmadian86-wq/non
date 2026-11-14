@@ -7,13 +7,13 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportTicketService;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Mockery;
 use Tests\TestCase;
 
 class SupportTicketAuditLedgerTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     public function test_status_metadata_and_assignment_changes_append_sanitized_audit_events(): void
     {
