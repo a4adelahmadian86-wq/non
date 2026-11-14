@@ -136,7 +136,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $notifier->shouldReceive('slaWarning')
             ->once()
             ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'first_response', 30)
-            ->andThrow(new RuntimeException('temporary notification failure'));
+            ->andThrow(new \RuntimeException('temporary notification failure'));
         $this->app->instance(SupportNotificationService::class, $notifier);
 
         try {
