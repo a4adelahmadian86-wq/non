@@ -173,53 +173,68 @@ class WorkflowEngine
             return 0;
         }
 
-        $payments = DB::table('payments')
+        $candidates = DB::table('payments')
             ->where('status', 'paid')
             ->where('gateway_response->workflow_event_reconciliation->status', 'required')
             ->orderBy('id')
             ->limit(max(1, min($limit, 200)))
-            ->get(['id', 'order_id', 'gateway_response']);
+            ->get(['id', 'order_id']);
 
         $reconciled = 0;
-        foreach ($payments as $payment) {
-            $order = DB::table('orders')->where('id', $payment->order_id)->first();
-            if (! $order || $order->status !== 'paid' || $order->paid_at === null || (int) $order->user_id < 1) {
-                continue;
-            }
-
-            $snapshot = json_decode((string) $order->pricing_snapshot, true);
-            $snapshot = is_array($snapshot) ? $snapshot : [];
-            $eventKey = 'order:'.$order->id.':order.paid';
-
+        foreach ($candidates as $candidate) {
             try {
-                $this->enqueue('order.paid', [
-                    'user_id' => (int) $order->user_id,
-                    'customer_id' => (int) $order->user_id,
-                    'order_id' => (int) $order->id,
-                    'amount_rials' => (int) $order->total_rials,
-                    'order_kind' => (string) ($snapshot['kind'] ?? 'unknown'),
-                    'status' => 'paid',
-                ], $eventKey);
+                $wasReconciled = DB::transaction(function () use ($candidate): bool {
+                    // Match the commerce lock order: Order before Payment.
+                    $order = \App\Models\Order::query()
+                        ->whereKey($candidate->order_id)
+                        ->lockForUpdate()
+                        ->first();
+                    $payment = \App\Models\Payment::query()
+                        ->whereKey($candidate->id)
+                        ->lockForUpdate()
+                        ->first();
 
-                if (! DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->exists()) {
-                    continue;
-                }
+                    if (! $order || ! $payment || $payment->status !== 'paid' || $order->status !== 'paid' || ! $order->paid_at) {
+                        return false;
+                    }
 
-                $paymentModel = \App\Models\Payment::query()->find($payment->id);
-                if (! $paymentModel) {
-                    continue;
-                }
+                    $marker = data_get($payment->gateway_response, 'workflow_event_reconciliation', []);
+                    if (($marker['status'] ?? null) !== 'required') {
+                        return false;
+                    }
 
-                $gatewayResponse = $paymentModel->gateway_response ?? [];
-                $marker = $gatewayResponse['workflow_event_reconciliation'] ?? [];
-                if (! is_array($marker) || ($marker['status'] ?? null) !== 'required') {
-                    continue;
+                    $userId = (int) $order->user_id;
+                    if ($userId < 1) {
+                        return false;
+                    }
+
+                    $eventKey = 'order:'.$order->id.':order.paid';
+                    $this->enqueue('order.paid', [
+                        'user_id' => $userId,
+                        'customer_id' => $userId,
+                        'order_id' => (int) $order->id,
+                        'amount_rials' => (int) $order->total_rials,
+                        'order_kind' => (string) data_get($order->pricing_snapshot, 'kind', 'unknown'),
+                        'status' => 'paid',
+                    ], $eventKey);
+
+                    if (! DB::table('farast_workflow_events')->where('idempotency_key', $eventKey)->exists()) {
+                        return false;
+                    }
+
+                    $gatewayResponse = $payment->gateway_response ?? [];
+                    $marker = $gatewayResponse['workflow_event_reconciliation'] ?? [];
+                    $marker['status'] = 'reconciled';
+                    $marker['reconciled_at'] = now()->toIso8601String();
+                    $gatewayResponse['workflow_event_reconciliation'] = $marker;
+                    $payment->forceFill(['gateway_response' => $gatewayResponse])->save();
+
+                    return true;
+                }, 3);
+
+                if ($wasReconciled) {
+                    $reconciled++;
                 }
-                $marker['status'] = 'reconciled';
-                $marker['reconciled_at'] = now()->toIso8601String();
-                $gatewayResponse['workflow_event_reconciliation'] = $marker;
-                $paymentModel->forceFill(['gateway_response' => $gatewayResponse])->save();
-                $reconciled++;
             } catch (\Throwable $exception) {
                 report($exception);
             }
