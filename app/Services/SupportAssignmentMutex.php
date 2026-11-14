@@ -21,7 +21,6 @@ final class SupportAssignmentMutex
 {
     public const LOCK_NAME = 'farast:support:assignment-workload';
 
-
     public function assertHeld(): void
     {
         $connection = DB::connection();
