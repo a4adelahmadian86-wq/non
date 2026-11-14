@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Ticket;
 use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaAlertOutboxService;
