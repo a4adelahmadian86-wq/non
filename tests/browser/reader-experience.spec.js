@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const PDF_OPTIONAL_CONTENT_FIXTURE_BASE64 = 'JVBERi0xLjcKJcK1wrYKCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDIgMCBSL09DUHJvcGVydGllczw8L09DR3NbNSAwIFJdL0Q8PC9PTls1IDAgUl0vT0ZGW10vT3JkZXJbNSAwIFJdL1JCR3JvdXBzW10+Pj4+Pj4KZW5kb2JqCgoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvQ291bnQgMS9LaWRzWzQgMCBSXT4+CmVuZG9iagoKMyAwIG9iago8PC9Gb250PDwvaGVsdiA2IDAgUj4+L1Byb3BlcnRpZXM8PC9NQzAgNSAwIFI+Pj4+CmVuZG9iagoKNCAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1JvdGF0ZSAwL1Jlc291cmNlcyAzIDAgUi9QYXJlbnQgMiAwIFIvQ29udGVudHNbNyAwIFIgOCAwIFJdPj4KZW5kb2JqCgo1IDAgb2JqCjw8L1R5cGUvT0NHL05hbWUoT3B0aW9uYWwgdGVzdCBsYXllcikvSW50ZW50Wy9WaWV3XS9Vc2FnZTw8L0NyZWF0b3JJbmZvPDwvQ3JlYXRvcihQeU11UERGKS9TdWJ0eXBlL0FydHdvcms+Pj4+Pj4KZW5kb2JqCgo2IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYS9FbmNvZGluZy9XaW5BbnNpRW5jb2Rpbmc+PgplbmRvYmoKCjcgMCBvYmoKPDwvTGVuZ3RoIDEwMi9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeNoVyTEKwkAQBdD+n+LfYHeGPyQBsciaRggiTCdWIYuFFjaeX+WVD2+US2NZW+V8apgTxvpjHJyDnPlCeezPD21kdt4O6lFDmtS1y7R51SaLSRHu/4kYQ8d7nrEklrXhii+ZqRb+CmVuZHN0cmVhbQplbmRvYmoKCjggMCBvYmoKPDwvTGVuZ3RoIDg5L0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nA3HMQqAMBBE0X5PsTfQjTMmAbEQbOyE7cQqKBZa2Hh+wy8eX16ZXEzbmmkM2ueo/khzHfenltRP3QYYCiOMmV1o2aOKjIAC1gfIRIy7LzK7rPIDKyES3QplbmRzdHJlYW0KZW5kb2JqCgp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTYgMDAwMDAgbiAKMDAwMDAwMDEzNyAwMDAwMCBuIAowMDAwMDAwMTg5IDAwMDAwIG4gCjAwMDAwMDAyNTUgMDAwMDAgbiAKMDAwMDAwMDM2OCAwMDAwMCBuIAowMDAwMDAwNDk3IDAwMDAwIG4gCjAwMDAwMDA1ODYgMDAwMDAgbiAKMDAwMDAwMDc1NyAwMDAwMCBuIAoKdHJhaWxlcgo8PC9TaXplIDkvUm9vdCAxIDAgUi9JRFs8M0ZDMkJEQzM4MzU2QzJCMUMyQkZDMkIyQzM4M0MyQUI+PDk0QkVDMTFBNzNDNkIyRDI2QjVBNzM3OUE0RDYzNDEzPl0+PgpzdGFydHhyZWYKOTE0CiUlRU9GCg==';;
+
 test.use({ serviceWorkers: 'block' });
 
 test('syncs authenticated reading progress to the account endpoint', async ({ page }) => {
@@ -173,7 +175,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false) {
   return Buffer.from(pdf, 'binary');
 }
 
-async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
+async function mountPdfReader(page, pageCount = 1, withAnnotations = false, withLayers = false) {
   page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
   page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
   page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
@@ -182,10 +184,17 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
     contentType: 'text/html',
     body: '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
   }));
+  const fixturePdf = withLayers ? Buffer.from(PDF_OPTIONAL_CONTENT_FIXTURE_BASE64, 'base64') : makePdfFixture(pageCount, withAnnotations);
+  if (withLayers) {
+    const fixtureText = fixturePdf.toString('binary');
+    if (!fixtureText.startsWith('%PDF-1.7') || !fixtureText.includes('/OCProperties') || !fixtureText.includes('/Type/OCG')) {
+      throw new Error('Known-good PDF 1.7 optional-content fixture is invalid');
+    }
+  }
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
-    body: makePdfFixture(pageCount, withAnnotations),
+    body: fixturePdf,
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
@@ -205,7 +214,8 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
         '<button id="reader-theme" type="button">پوسته</button><button id="reader-fs" type="button">تمام‌صفحه</button></nav>' +
       '<div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>' +
       '<div id="reader-stage"><aside id="reader-sidebar"><div class="farast-reader-thumbs"></div>' +
-        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section></aside>' +
+        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section>' +
+        '<section class="farast-reader-layers" id="reader-layers" hidden><strong>لایه‌های سند</strong><div id="reader-layers-list"></div></section></aside>' +
         '<main class="farast-reader-canvas"><article class="farast-reader-page-item is-active is-pdf" data-index="0">' +
           '<div class="farast-reader-page-content"><div class="farast-pdf-document" data-pdf-url="/reader-fixture.pdf">' +
             '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div><div class="farast-pdf-annotation-layer annotationLayer"></div>' +
@@ -214,6 +224,10 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
   );
   await page.addStyleTag({ url: new URL('/vendor/pdfjs/legacy/web/pdf_viewer.css', page.url()).href });
   await page.addStyleTag({ content: '.farast-pdf-document{position:relative}.farast-pdf-annotation-layer.annotationLayer{position:absolute;inset:0;z-index:4}#reader-stage{height:600px;max-height:600px;overflow-y:scroll!important;overflow-x:hidden;display:block}.farast-reader-canvas{height:auto;overflow:visible}.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-document.is-continuous .farast-pdf-continuous-pages{display:grid;grid-template-columns:1fr;gap:20px}.farast-pdf-cont-page{display:block;position:relative;min-height:792px;margin:0 auto 20px}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  await page.evaluate(() => {
+    window.__pdfLayerDiagnostics = [];
+    document.querySelector('[data-reader-root]')?.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
+  });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -2048,4 +2062,27 @@ test('personal reading controls use compact icons with accessible names and tool
   await expect(notes).toHaveAttribute('aria-label', 'نمایش یادداشت‌ها');
   await notes.click();
   await expect(notes).toHaveAttribute('aria-label', 'بستن یادداشت‌ها');
+});
+
+
+test('exposes and visually toggles PDF optional-content layers', async ({ page }) => {
+  await mountPdfReader(page, 1, false, true);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await expect.poll(() => page.evaluate(() => window.__pdfLayerDiagnostics.length)).toBe(1);
+  const diagnostics = await page.evaluate(() => window.__pdfLayerDiagnostics[0]);
+  expect(diagnostics.error).toBeUndefined();
+  expect(diagnostics.supported).toBe(true);
+  expect(diagnostics.count).toBe(1);
+  expect(diagnostics.groups[0].name).toBe('Optional test layer');
+  const panel = root.locator('#reader-layers');
+  await expect(panel).toBeVisible();
+  const layer = panel.locator('input[data-ocg-id]');
+  await expect(layer).toHaveCount(1);
+  await expect(layer).toBeChecked();
+  const canvas = root.locator('.farast-pdf-canvas');
+  const visibleRender = await canvas.evaluate(element => element.toDataURL());
+  await layer.uncheck();
+  await expect(layer).not.toBeChecked();
+  await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(visibleRender);
 });
