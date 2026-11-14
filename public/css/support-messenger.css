@@ -196,9 +196,6 @@
   text-decoration: none;
 }
 .sd-filter-actions a:hover { color: var(--sd-blue); text-decoration: underline; }
-@media (min-width: 960px) {
-  .sd-filter-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 420px) {
   .sd-filter-form { grid-template-columns: 1fr; }
   .sd-filter-actions { flex-direction: column; align-items: stretch; }
