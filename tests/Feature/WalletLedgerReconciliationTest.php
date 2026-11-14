@@ -9,6 +9,9 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Services\WalletLedgerReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 class WalletLedgerReconciliationTest extends TestCase
@@ -148,21 +151,21 @@ class WalletLedgerReconciliationTest extends TestCase
         }
 
         try {
-            \\Illuminate\\Support\\Facades\\DB::table('wallets')->where('id', $wallet->id)->delete();
+            DB::table('wallets')->where('id', $wallet->id)->delete();
             $this->fail('The database must prevent deleting a wallet referenced by ledger entries.');
         } catch (QueryException) {
             $this->assertDatabaseHas('wallet_transactions', ['id' => $transaction->id]);
         }
 
         try {
-            \\Illuminate\\Support\\Facades\\DB::table('orders')->where('id', $order->id)->delete();
+            DB::table('orders')->where('id', $order->id)->delete();
             $this->fail('The database must prevent deleting an order referenced by a payment.');
         } catch (QueryException) {
             $this->assertDatabaseHas('payments', ['id' => $payment->id]);
         }
 
         try {
-            \\Illuminate\\Support\\Facades\\DB::table('users')->where('id', $user->id)->delete();
+            DB::table('users')->where('id', $user->id)->delete();
             $this->fail('The database must prevent deleting a customer with financial history.');
         } catch (QueryException) {
             $this->assertDatabaseHas('orders', ['id' => $order->id]);
