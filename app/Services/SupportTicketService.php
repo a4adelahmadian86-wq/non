@@ -270,50 +270,17 @@ class SupportTicketService
                         $update['last_reply_at'] = now();
                     }
 
-                    if ($isStaff) {
-                        $targetStatus = (string) ($options['status'] ?? 'answered');
-                        if (! in_array($targetStatus, self::STATUSES, true)) {
-                            throw new \InvalidArgumentException('وضعیت نامعتبر است.');
-                        }
+                    $targetStatus = $isStaff
+                        ? (string) ($options['status'] ?? 'answered')
+                        : 'user_replied';
 
-                        $update['status'] = $targetStatus;
-                        if (Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
-                            $update['first_response_at'] = now();
-                        }
-
-                        if ($targetStatus === 'closed') {
-                            if (Schema::hasColumn('tickets', 'closed_at')) {
-                                $update['closed_at'] = now();
-                            }
-                            if (Schema::hasColumn('tickets', 'resolved_at')) {
-                                $update['resolved_at'] = now();
-                            }
-                        } else {
-                            if (Schema::hasColumn('tickets', 'closed_at')) {
-                                $update['closed_at'] = null;
-                            }
-                            if (Schema::hasColumn('tickets', 'resolved_at')) {
-                                $update['resolved_at'] = null;
-                            }
-                        }
-                    } else {
-                        $update['status'] = 'user_replied';
-                        if (Schema::hasColumn('tickets', 'closed_at')) {
-                            $update['closed_at'] = null;
-                        }
-                        if (Schema::hasColumn('tickets', 'resolved_at')) {
-                            $update['resolved_at'] = null;
-                        }
+                    if ($isStaff && Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
+                        $update['first_response_at'] = now();
                     }
 
-                    if (isset($update['status'])) {
-                        $update = array_merge(
-                            $update,
-                            $this->sla->statusTransitionAttributes($locked, (string) $update['status'])
-                        );
-                        $resolutionBreachDetected = ! empty($update['sla_resolve_breached_at'])
-                            && empty($locked->sla_resolve_breached_at);
-                    }
+                    $transition = $this->buildStatusTransitionUpdate($locked, $targetStatus);
+                    $update = array_merge($update, $transition['attributes']);
+                    $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
                     if ($update !== []) {
                         $locked->update($update);
@@ -358,6 +325,49 @@ class SupportTicketService
         return $message;
     }
 
+    /**
+     * Build the canonical lifecycle fields for every status change, whether
+     * initiated explicitly or as part of a conversation reply. This keeps
+     * timestamps and SLA pause/resume behavior consistent across both paths.
+     *
+     * @return array{attributes: array<string, mixed>, resolution_breach_detected: bool}
+     */
+    private function buildStatusTransitionUpdate(Ticket $ticket, string $targetStatus): array
+    {
+        if (! in_array($targetStatus, self::STATUSES, true)) {
+            throw new \\InvalidArgumentException('وضعیت نامعتبر است.');
+        }
+
+        $attributes = ['status' => $targetStatus];
+
+        if ($targetStatus === 'closed') {
+            if (Schema::hasColumn('tickets', 'closed_at')) {
+                $attributes['closed_at'] = now();
+            }
+            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                $attributes['resolved_at'] = now();
+            }
+        } else {
+            if (Schema::hasColumn('tickets', 'closed_at')) {
+                $attributes['closed_at'] = null;
+            }
+            if (Schema::hasColumn('tickets', 'resolved_at')) {
+                $attributes['resolved_at'] = null;
+            }
+        }
+
+        $attributes = array_merge(
+            $attributes,
+            $this->sla->statusTransitionAttributes($ticket, $targetStatus)
+        );
+
+        return [
+            'attributes' => $attributes,
+            'resolution_breach_detected' => ! empty($attributes['sla_resolve_breached_at'])
+                && empty($ticket->sla_resolve_breached_at),
+        ];
+    }
+
     public function changeStatus(Ticket $ticket, string $status, ?User $actor = null, bool $systemNote = true): Ticket
     {
         if (! in_array($status, self::STATUSES, true)) {
@@ -372,24 +382,9 @@ class SupportTicketService
                 return [$locked->fresh(), $old, null, false, false];
             }
 
-            $wasResolutionBreached = ! empty($locked->sla_resolve_breached_at);
-            $update = ['status' => $status];
-            if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-                $update['closed_at'] = now();
-            }
-            if ($status === 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-                $update['resolved_at'] = now();
-            }
-            if ($status !== 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
-                $update['closed_at'] = null;
-            }
-            if ($status !== 'closed' && Schema::hasColumn('tickets', 'resolved_at')) {
-                $update['resolved_at'] = null;
-            }
-
-            $update = array_merge($update, $this->sla->statusTransitionAttributes($locked, $status));
-            $locked->update($update);
-            $resolutionBreachDetected = ! $wasResolutionBreached && ! empty($update['sla_resolve_breached_at']);
+            $transition = $this->buildStatusTransitionUpdate($locked, $status);
+            $locked->update($transition['attributes']);
+            $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
             $transitionMessage = null;
             if ($systemNote && $actor) {
