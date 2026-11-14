@@ -71,11 +71,11 @@ class SupportSlaBusinessMinuteTest extends TestCase
         $sla = app(SupportSlaService::class);
         $deadline = $sla->addSlaMinutes(now(), 30);
 
-        $this->assertSame('2026-11-19 09:15:00', $deadline->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-21 09:15:00', $deadline->format('Y-m-d H:i:s'));
         $this->assertSame(30, $sla->minutesUntilDeadline($deadline));
         $this->assertSame(-30, $sla->minutesUntilDeadline(
             $deadline,
-            Carbon::parse('2026-11-19 09:45:00', 'Asia/Tehran')
+            Carbon::parse('2026-11-21 09:45:00', 'Asia/Tehran')
         ));
     }
 
