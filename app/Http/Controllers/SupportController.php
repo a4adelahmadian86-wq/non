@@ -372,11 +372,11 @@ class SupportController extends Controller
         // canonical ticket creation flows. Ignore unknown values rather than
         // turning arbitrary query parameters into hidden/empty inbox states.
         if (Schema::hasColumn('tickets', 'source')
-            && in_array($request->input('source'), ['dashboard', 'widget'], true)) {
+            && in_array($request->input('source'), SupportTicketService::SOURCES, true)) {
             $query->where('source', $request->input('source'));
         }
         if (Schema::hasColumn('tickets', 'topic_area')
-            && in_array($request->input('topic_area'), ['services', 'store'], true)) {
+            && in_array($request->input('topic_area'), SupportTicketService::TOPIC_AREAS, true)) {
             $query->where('topic_area', $request->input('topic_area'));
         }
 
