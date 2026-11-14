@@ -157,7 +157,7 @@ jobs:
           DB_DATABASE: farast_test
           DB_USERNAME: root
           DB_PASSWORD: root
-      # MySQL support checks cover lock lifetime, scoped active workload, and duplicate no-op transitions.
+      # MySQL support checks cover rollback release, nested-transaction rejection, scoped workload, and no-op validation.
       - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
