@@ -193,8 +193,11 @@ class Ticket extends Model
             return $query->whereRaw('0 = 1');
         }
 
+        $hasResolvedAt = Schema::hasColumn('tickets', 'resolved_at');
+        $hasClosedAt = Schema::hasColumn('tickets', 'closed_at');
+
         // Pending pauses only the resolution clock. First-response SLA remains active.
-        return $query->where(function ($q) {
+        return $query->where(function ($q) use ($hasResolvedAt, $hasClosedAt) {
             $q->where(function ($w) {
                 $w->whereNull('first_response_at')
                     ->whereNotNull('sla_first_due_at')
@@ -204,6 +207,24 @@ class Ticket extends Model
                     ->whereNotNull('sla_resolve_due_at')
                     ->where('sla_resolve_due_at', '<', now());
             });
+
+            // Closed tickets are evaluated against their actual resolution time,
+            // not now(). Otherwise the SLA breach disappears as soon as a late
+            // ticket is closed and historical reporting becomes misleading.
+            if ($hasResolvedAt || $hasClosedAt) {
+                $q->orWhere(function ($w) use ($hasResolvedAt, $hasClosedAt) {
+                    $w->where('status', 'closed')
+                        ->whereNotNull('sla_resolve_due_at');
+
+                    if ($hasResolvedAt && $hasClosedAt) {
+                        $w->whereRaw('COALESCE(resolved_at, closed_at) > sla_resolve_due_at');
+                    } elseif ($hasResolvedAt) {
+                        $w->whereNotNull('resolved_at')->whereColumn('resolved_at', '>', 'sla_resolve_due_at');
+                    } else {
+                        $w->whereNotNull('closed_at')->whereColumn('closed_at', '>', 'sla_resolve_due_at');
+                    }
+                });
+            }
         });
     }
 
