@@ -271,8 +271,8 @@
                         @foreach($auditEvents as $auditEvent)
                             @php
                                 $auditMeta = (array) ($auditEvent->payload_meta ?? []);
-                                $auditActor = $auditUsers[$auditEvent->user_id] ?? null;
-                                $auditActorLabel = $auditActor?->name ?? ($auditEvent->user_id ? 'کاربر #'.$auditEvent->user_id : 'سامانه');
+                                $auditActor = $auditUserLabels[$auditEvent->user_id] ?? null;
+                                $auditActorLabel = $auditActor ?? ($auditEvent->user_id ? 'کاربر حذف‌شده' : 'سامانه');
                             @endphp
                             <li style="padding:8px 10px;border-right:2px solid var(--sd-line);background:var(--sd-bg);border-radius:8px;list-style-position:outside">
                                 <div style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between">
@@ -300,8 +300,8 @@
                                             @php
                                                 $fromAssigneeId = $auditMeta['from_assigned_to'] ?? null;
                                                 $toAssigneeId = $auditMeta['to_assigned_to'] ?? null;
-                                                $fromAssignee = $fromAssigneeId ? ($auditUsers[$fromAssigneeId]->name ?? 'کاربر #'.$fromAssigneeId) : 'بدون ارجاع';
-                                                $toAssignee = $toAssigneeId ? ($auditUsers[$toAssigneeId]->name ?? 'کاربر #'.$toAssigneeId) : 'بدون ارجاع';
+                                                $fromAssignee = $fromAssigneeId ? ($auditUserLabels[$fromAssigneeId] ?? 'کارشناس خارج از محدوده') : 'بدون ارجاع';
+                                                $toAssignee = $toAssigneeId ? ($auditUserLabels[$toAssigneeId] ?? 'کارشناس خارج از محدوده') : 'بدون ارجاع';
                                             @endphp
                                             تغییر ارجاع: از {{ $fromAssignee }} به {{ $toAssignee }}
                                         @else
