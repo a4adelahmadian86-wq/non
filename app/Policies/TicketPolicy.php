@@ -39,6 +39,14 @@ class TicketPolicy
             || $this->canManageSupport($user, $ticket);
     }
 
+    /**
+     * Customer satisfaction scores are customer-owned feedback, not a staff action.
+     */
+    public function rate(User $user, Ticket $ticket): bool
+    {
+        return (int) $ticket->user_id === (int) $user->id;
+    }
+
     public function close(User $user, Ticket $ticket): bool
     {
         return (int) $ticket->user_id === (int) $user->id
