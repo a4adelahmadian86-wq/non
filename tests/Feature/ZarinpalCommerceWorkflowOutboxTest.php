@@ -140,6 +140,11 @@ class ZarinpalCommerceWorkflowOutboxTest extends TestCase
             'order_id' => $order->id,
             'order_item_id' => $item->id,
         ]);
+        $this->assertDatabaseHas('store_course_enrollments', [
+            'product_id' => $product->id,
+            'course_id' => $course->id,
+            'user_id' => $user->id,
+        ]);
         $this->assertDatabaseHas('payments', [
             'id' => $payment->id,
             'gateway_response->workflow_event_reconciliation->status' => 'required',
