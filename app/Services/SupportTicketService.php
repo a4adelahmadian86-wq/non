@@ -358,6 +358,27 @@ class SupportTicketService
                     }
                 }
 
+                // Record the message lifecycle without copying its body, attachment
+                // paths, names, checksums, or customer contact details into the ledger.
+                $messageIsStaff = $isStaff || (bool) ($actor?->isAdmin() ?? false);
+                $actorType = $actor
+                    ? ($messageIsStaff ? 'staff' : 'customer')
+                    : ($messageIsStaff ? 'system' : 'guest');
+                $messageType = $isInternal
+                    ? ($actor ? 'internal_note' : 'system_note')
+                    : ($messageIsStaff ? 'staff_reply' : ($actor ? 'customer_reply' : 'guest_reply'));
+                $attachmentCount = count((array) $message->attachments);
+
+                $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.message_added', [
+                    'message_id' => (int) $message->id,
+                    'message_type' => $messageType,
+                    'actor_type' => $actorType,
+                    'is_internal' => $isInternal,
+                    'is_staff' => $messageIsStaff,
+                    'has_attachments' => $attachmentCount > 0,
+                    'attachment_count' => $attachmentCount,
+                ]);
+
                 if ($touchStatus && ! $isInternal) {
                     $update = [];
                     if (Schema::hasColumn('tickets', 'last_reply_at')) {
@@ -677,7 +698,7 @@ class SupportTicketService
     /**
      * ثبت رضایت‌سنجی (CSAT) پس از بستن تیکت — امتیاز ۱ تا ۵.
      */
-    public function submitCsat(Ticket $ticket, int $score, ?string $comment = null): Ticket
+    public function submitCsat(Ticket $ticket, int $score, ?string $comment = null, ?User $actor = null): Ticket
     {
         if ($score < 1 || $score > 5) {
             throw new \InvalidArgumentException('امتیاز باید بین ۱ تا ۵ باشد.');
@@ -686,7 +707,7 @@ class SupportTicketService
             return $ticket;
         }
 
-        return DB::transaction(function () use ($ticket, $score, $comment): Ticket {
+        return DB::transaction(function () use ($ticket, $score, $comment, $actor): Ticket {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
             if ($locked->status !== 'closed') {
@@ -700,6 +721,14 @@ class SupportTicketService
                 'csat_score' => $score,
                 'csat_comment' => $comment ? Str::limit($comment, 500) : null,
                 'csat_at' => now(),
+            ]);
+
+            $auditActor = $actor ?: $locked->user;
+            $this->recordSupportAuditEvent($locked, $auditActor, 'support.ticket.csat_submitted', [
+                'score' => $score,
+                'initiator_type' => $auditActor
+                    ? ($auditActor->isAdmin() ? 'staff' : 'customer')
+                    : 'guest',
             ]);
 
             return $locked->fresh();
