@@ -5,19 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use LogicException;
 
 class Wallet extends Model
 {
-    protected static function booted(): void
-    {
-        static::deleting(function (Wallet $wallet): void {
-            if ((int) $wallet->balance_rials !== 0 || $wallet->transactions()->exists()) {
-                throw new LogicException('wallet_with_balance_or_ledger_cannot_be_deleted');
-            }
-        });
-    }
-
     protected $fillable = ['user_id', 'balance_rials'];
     protected $casts = ['balance_rials' => 'integer'];
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
