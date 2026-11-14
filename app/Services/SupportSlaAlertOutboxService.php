@@ -159,7 +159,7 @@ class SupportSlaAlertOutboxService
                 if (! $ticket) {
                     SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
                         'status' => 'skipped',
-                        'delivered_at' => now(),
+                        'delivered_at' => null,
                         'locked_at' => null,
                         'last_error' => 'Ticket no longer exists.',
                         'updated_at' => now(),
