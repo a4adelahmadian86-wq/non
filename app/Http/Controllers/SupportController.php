@@ -456,7 +456,7 @@ class SupportController extends Controller
             WHEN status = 'pending' THEN 2
             WHEN status = 'answered' THEN 3
             ELSE 4 END")
-            ->orderByRaw("CASE WHEN priority = 'high' THEN 0 WHEN priority = 'normal' THEN 1 ELSE 2 END")
+            ->orderByRaw('CASE WHEN priority = ? THEN 0 WHEN priority = ? THEN 1 ELSE 2 END', [SupportTicketService::PRIORITY_HIGH, SupportTicketService::PRIORITY_NORMAL])
             ->orderByDesc('updated_at');
 
         $tickets = $query->paginate(25)->withQueryString();
@@ -675,8 +675,8 @@ class SupportController extends Controller
                     'subject' => Str::limit($data['body'], 80),
                     'body' => $data['body'],
                     'source' => SupportTicketService::SOURCE_WIDGET,
-                    'department' => 'support',
-                    'priority' => 'normal',
+                    'department' => SupportTicketService::DEPARTMENT_SUPPORT,
+                    'priority' => SupportTicketService::PRIORITY_NORMAL,
                 ]);
             } else {
                 $this->tickets->addMessage($ticket, $user, $data['body'], ['is_staff' => false]);
@@ -719,8 +719,8 @@ class SupportController extends Controller
                 'guest_name' => $name,
                 'guest_email' => $email,
                 'source' => SupportTicketService::SOURCE_WIDGET,
-                'department' => 'support',
-                'priority' => 'normal',
+                'department' => SupportTicketService::DEPARTMENT_SUPPORT,
+                'priority' => SupportTicketService::PRIORITY_NORMAL,
             ]);
 
             $sessionTicketIds->push((int) $ticket->id);
