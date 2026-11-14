@@ -91,25 +91,27 @@ class SupportAssignmentMutexTest extends TestCase
         $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
     }
 
-    public function test_mysql_workload_lock_is_released_when_the_operation_throws(): void
+    public function test_mysql_workload_lock_is_released_after_transaction_rollback(): void
     {
         $this->requireMySql();
         $probe = $this->probeConnection();
 
         try {
             app(SupportAssignmentMutex::class)->synchronized(function () use ($probe): void {
-                $blocked = $probe->selectOne(
-                    'SELECT GET_LOCK(?, 0) AS acquired',
-                    [SupportAssignmentMutex::LOCK_NAME],
-                    false
-                );
-                $this->assertSame(0, (int) $blocked->acquired);
+                DB::transaction(function () use ($probe): void {
+                    $blocked = $probe->selectOne(
+                        'SELECT GET_LOCK(?, 0) AS acquired',
+                        [SupportAssignmentMutex::LOCK_NAME],
+                        false
+                    );
+                    $this->assertSame(0, (int) $blocked->acquired);
 
-                throw new RuntimeException('expected test failure');
+                    throw new RuntimeException('expected transaction rollback');
+                });
             });
-            $this->fail('The callback exception should be propagated.');
+            $this->fail('The transactional callback exception should be propagated.');
         } catch (RuntimeException $exception) {
-            $this->assertSame('expected test failure', $exception->getMessage());
+            $this->assertSame('expected transaction rollback', $exception->getMessage());
         }
 
         $released = $probe->selectOne(
