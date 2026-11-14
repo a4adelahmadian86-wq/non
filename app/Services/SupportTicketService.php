@@ -37,6 +37,18 @@ class SupportTicketService
 
     public const TOPIC_AREAS = [self::TOPIC_AREA_SERVICES, self::TOPIC_AREA_STORE];
 
+    public const ASSIGNMENT_FILTER_ME = 'me';
+
+    public const ASSIGNMENT_FILTER_UNASSIGNED = 'unassigned';
+
+    public const ASSIGNMENT_FILTERS = [self::ASSIGNMENT_FILTER_ME, self::ASSIGNMENT_FILTER_UNASSIGNED];
+
+    public const SLA_FILTER_AT_RISK = 'at_risk';
+
+    public const SLA_FILTER_BREACHED = 'breached';
+
+    public const SLA_FILTERS = [self::SLA_FILTER_AT_RISK, self::SLA_FILTER_BREACHED];
+
     public function __construct(
         private readonly SupportNotificationService $notifier,
         private readonly SupportSlaService $sla,
