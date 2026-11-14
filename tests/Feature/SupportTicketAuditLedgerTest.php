@@ -102,14 +102,14 @@ class SupportTicketAuditLedgerTest extends TestCase
             'department' => 'support',
         ]);
 
-        $audit = Mockery::mock(\\App\\Services\\AuditEventService::class);
-        $audit->shouldReceive('record')->once()->andThrow(new \\RuntimeException('audit ledger unavailable'));
-        $this->app->instance(\\App\\Services\\AuditEventService::class, $audit);
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
 
         try {
             app(SupportTicketService::class)->changeStatus($ticket, 'pending', $actor, false);
             $this->fail('A failed audit append must abort the ticket transition.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('audit ledger unavailable', $exception->getMessage());
         }
 
