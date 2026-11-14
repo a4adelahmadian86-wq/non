@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\FarastCharge;
+use App\Models\FarastRefund;
 use App\Models\FarastProject;
 use App\Models\FarastDocument;
 use App\Models\FarastDocumentVersion;
@@ -46,6 +48,12 @@ class CrmController extends Controller
                     ->where('payments.status', 'paid')
                     ->whereNotNull('payments.paid_at')
                     ->selectRaw('COALESCE(SUM(payments.amount_rials), 0)'),
+                'usage_charges_count' => DB::table('farast_charges')
+                    ->whereColumn('farast_charges.actor_id', 'users.id')
+                    ->selectRaw('COUNT(*)'),
+                'usage_refunds_count' => DB::table('farast_refunds')
+                    ->whereColumn('farast_refunds.actor_id', 'users.id')
+                    ->selectRaw('COUNT(*)'),
             ])
             ->latest('users.created_at');
 
@@ -137,6 +145,75 @@ class CrmController extends Controller
                 'amount_rials' => $payment->amount_rials,
                 'created_at' => $payment->created_at,
             ]);
+
+        // Usage charges and refunds belong to the same customer identity as orders,
+        // but remain a distinct commercial ledger and currency-aware projection.
+        $usageCharges = FarastCharge::query()
+            ->where('actor_id', $user->id)
+            ->latest()
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastCharge $charge) => [
+                'type' => 'usage_charge',
+                'id' => $charge->id,
+                'charge_id' => $charge->charge_id,
+                'invoice_id' => $charge->invoice_id,
+                'order_id' => $charge->order_id,
+                'title' => 'مصرف '.$charge->capability,
+                'capability' => $charge->capability,
+                'status' => $charge->status,
+                'quantity' => $charge->quantity,
+                'unit' => $charge->unit,
+                'currency' => $charge->currency,
+                'amount' => (int) $charge->total,
+                'created_at' => $charge->created_at,
+            ]);
+
+        $usageRefunds = FarastRefund::query()
+            ->where('actor_id', $user->id)
+            ->latest()
+            ->limit(30)
+            ->get()
+            ->map(fn (FarastRefund $refund) => [
+                'type' => 'usage_refund',
+                'id' => $refund->id,
+                'charge_id' => $refund->charge_id,
+                'title' => 'بازپرداخت اعتبار FARAST',
+                'status' => $refund->status,
+                'currency' => $refund->currency,
+                'amount' => (int) $refund->amount,
+                'reason' => $refund->reason,
+                'created_at' => $refund->created_at,
+            ]);
+
+        $usageChargedByCurrency = FarastCharge::query()
+            ->where('actor_id', $user->id)
+            ->whereIn('status', ['charged', 'refunded'])
+            ->select('currency')
+            ->selectRaw('COALESCE(SUM(total), 0) as total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->all();
+
+        $usageRefundedByCurrency = FarastRefund::query()
+            ->where('actor_id', $user->id)
+            ->where('status', 'completed')
+            ->select('currency')
+            ->selectRaw('COALESCE(SUM(amount), 0) as total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->all();
+
+        $usageFinancialsByCurrency = [];
+        foreach (array_unique(array_merge(array_keys($usageChargedByCurrency), array_keys($usageRefundedByCurrency))) as $currency) {
+            $charged = (int) ($usageChargedByCurrency[$currency] ?? 0);
+            $refunded = (int) ($usageRefundedByCurrency[$currency] ?? 0);
+            $usageFinancialsByCurrency[$currency] = [
+                'charged_total' => $charged,
+                'refunded_total' => $refunded,
+                'net_total' => $charged - $refunded,
+            ];
+        }
 
         $libraryItems = StoreLibraryItem::query()->with('product')->where('user_id', $user->id)
             ->latest()->limit(30)->get()->map(fn (StoreLibraryItem $item) => [
@@ -289,7 +366,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($documentVersions)->concat($courseEnrollments)->concat($ticketMessages)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($usageCharges)->concat($usageRefunds)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)->concat($projects)->concat($farastDocuments)->concat($documentVersions)->concat($courseEnrollments)->concat($ticketMessages)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -336,6 +413,9 @@ class CrmController extends Controller
                     ->whereHas('enrollment', fn ($query) => $query->where('user_id', $user->id))
                     ->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
+                'usage_charges_count' => FarastCharge::query()->where('actor_id', $user->id)->count(),
+                'usage_refunds_count' => FarastRefund::query()->where('actor_id', $user->id)->count(),
+                'usage_financials_by_currency' => $usageFinancialsByCurrency,
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) $paidRevenueRials,
             ],
