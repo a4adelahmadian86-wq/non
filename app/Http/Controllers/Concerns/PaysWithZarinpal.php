@@ -182,14 +182,14 @@ trait PaysWithZarinpal
                     // External funds are already captured. Preserve the paid order and
                     // expose a reconciliation marker instead of rolling payment back.
                     report($exception);
-                    $snapshot = $locked->pricing_snapshot ?? [];
-                    $snapshot['coupon_redemption_reconciliation'] = [
+                    $gatewayResponse = $lockedPayment->gateway_response ?? [];
+                    $gatewayResponse['coupon_redemption_reconciliation'] = [
                         'status' => 'required',
                         'reason_code' => 'post_capture_validation_failed',
                         'reason' => mb_substr($exception->getMessage(), 0, 180),
                         'recorded_at' => now()->toIso8601String(),
                     ];
-                    $locked->forceFill(['pricing_snapshot' => $snapshot])->save();
+                    $lockedPayment->forceFill(['gateway_response' => $gatewayResponse])->save();
                 }
 
                 $items = $locked->storeItems()->with('product')->get();
