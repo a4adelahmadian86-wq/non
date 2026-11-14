@@ -8,6 +8,7 @@ use App\Models\StoreCourse;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Services\Storage\StorageManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -15,6 +16,10 @@ use Throwable;
 
 class StoreOrderFulfillmentService
 {
+    public function __construct(private readonly StorageManager $storage)
+    {
+    }
+
     public function assertReady(Order $order, bool $requirePurchasable = false): void
     {
         if ($order->status !== 'pending' || data_get($order->pricing_snapshot, 'kind') !== 'store') {
@@ -236,6 +241,18 @@ class StoreOrderFulfillmentService
                 $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
                 if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
                     throw new RuntimeException('نسخه فایل محصول با snapshot سفارش مطابقت ندارد.');
+                }
+
+                $disk = $file->disk ?: 'private';
+                if (! $this->storage->exists($disk, $file->path)) {
+                    throw new RuntimeException('فایل مرجع سفارش در هسته ذخیره‌سازی قابل بازیابی نیست.');
+                }
+
+                if (filled($file->sha256)) {
+                    $actualHash = hash('sha256', $this->storage->get($disk, $file->path));
+                    if (! hash_equals((string) $file->sha256, $actualHash)) {
+                        throw new RuntimeException('محتوای فایل در هسته ذخیره‌سازی با checksum ثبت‌شده مطابقت ندارد.');
+                    }
                 }
             } else {
                 throw new RuntimeException('نوع محصول برای تحویل دیجیتال پشتیبانی نمی‌شود.');
