@@ -55,6 +55,12 @@ class Order extends Model
                 throw new LogicException('paid_order_pricing_snapshot_is_immutable');
             }
         });
+        static::deleting(function (Order $order): void {
+            if ($order->getOriginal('paid_at') !== null || in_array($order->getOriginal('status'), ['paid', 'deposit_paid'], true)) {
+                throw new LogicException('settled_order_cannot_be_deleted');
+            }
+        });
+
     }
 
     protected $fillable = [
