@@ -2040,6 +2040,7 @@ test('personal reading controls use compact icons with accessible names and tool
   await expect(focus.locator('i')).toHaveAttribute('aria-hidden', 'true');
   await expect(focus.locator('i')).toHaveClass(/fa-bullseye/);
   await expect(focus.locator('.reader-tool-label')).toHaveText('حالت تمرکز');
+  await expect(focus.locator('.reader-tool-label')).toBeHidden();
   const notes = page.locator('[data-reader-notes]');
   await expect(notes).toHaveAttribute('aria-label', 'نمایش یادداشت‌ها');
   await notes.click();
