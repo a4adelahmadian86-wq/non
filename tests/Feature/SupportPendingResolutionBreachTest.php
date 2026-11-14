@@ -107,7 +107,7 @@ class SupportPendingResolutionBreachTest extends TestCase
         $updated = $service->updateMeta($ticket, ['priority' => 'high']);
 
         $this->assertNotNull($updated->sla_resolve_breached_at);
-        $this->assertTrue($updated->sla_resolve_breached_at->equalTo($pausedAt));
+        $this->assertSame($pausedAt->format('Y-m-d H:i:s'), $updated->sla_resolve_breached_at->format('Y-m-d H:i:s'));
         $this->assertSame(0, (int) $updated->sla_resolve_remaining_minutes);
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
     }
