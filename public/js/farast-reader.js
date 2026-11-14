@@ -219,6 +219,7 @@
     if(available){
       const label='ادامه از بخش '+faNumber(saved.section+1)+(saved.page>1?' · صفحه '+faNumber(saved.page):'');
       resumeButton.title=label;
+      resumeButton.setAttribute('aria-label',label);
       resumeButton.querySelector('span')?.replaceChildren(document.createTextNode(label));
     }
   };
@@ -235,6 +236,7 @@
     const active=isCurrentBookmarked();
     bookmarkButton.setAttribute('aria-pressed',String(active));
     bookmarkButton.title=active?'حذف نشانک این صفحه':'ثبت نشانک این صفحه';
+    bookmarkButton.setAttribute('aria-label',bookmarkButton.title);
     const icon=bookmarkButton.querySelector('i');
     if(icon){icon.classList.toggle('fa-solid',active);icon.classList.toggle('fa-regular',!active);}
   };
@@ -949,6 +951,7 @@
       continuousMode=!continuousMode;
       scrollModeButton.setAttribute('aria-pressed',String(continuousMode));
       scrollModeButton.title=continuousMode?'بازگشت به تک‌صفحه‌ای':'پیمایش پیوسته';
+      scrollModeButton.setAttribute('aria-label',scrollModeButton.title);
       if(continuousMode){
         await buildContinuousPages();
         await navigatePdfPage(pdfPage);
@@ -981,6 +984,8 @@
     const open=bookmarksPanel?.hidden!==false;
     if(bookmarksPanel){bookmarksPanel.hidden=!open;if(open)renderBookmarks();}
     bookmarksOpenButton.setAttribute('aria-expanded',String(open));
+    bookmarksOpenButton.title=open?'بستن نشانک‌ها':'نمایش نشانک‌ها';
+    bookmarksOpenButton.setAttribute('aria-label',bookmarksOpenButton.title);
   });
   resumeButton?.addEventListener('click',async()=>{
     const saved=readerState.progress;
@@ -995,7 +1000,7 @@
   root.querySelector('#reader-search-prev')?.addEventListener('click',()=>moveSearchMatch(-1).catch(showPdfError));
   root.querySelector('#reader-search-next')?.addEventListener('click',()=>moveSearchMatch(1).catch(showPdfError));
   searchInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPdf().catch(showPdfError);}});
-  root.querySelector('#reader-thumbs-toggle')?.addEventListener('click',e=>{const hidden=root.classList.toggle('is-sidebar-hidden');e.currentTarget.setAttribute('aria-expanded',String(!hidden));});
+  root.querySelector('#reader-thumbs-toggle')?.addEventListener('click',e=>{const hidden=root.classList.toggle('is-sidebar-hidden');e.currentTarget.setAttribute('aria-expanded',String(!hidden));e.currentTarget.title=hidden?'نمایش فهرست صفحات':'پنهان‌کردن فهرست صفحات';e.currentTarget.setAttribute('aria-label',e.currentTarget.title);});
   root.querySelector('#reader-theme')?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';});
   root.querySelector('#reader-fs')?.addEventListener('click',async()=>{try{if(!document.fullscreenElement)await root.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){root.classList.toggle('is-fullscreen-fallback');}});
   const isEditableTarget=target=>target instanceof Element&&Boolean(target.closest('input,textarea,select,[contenteditable="true"]'));
