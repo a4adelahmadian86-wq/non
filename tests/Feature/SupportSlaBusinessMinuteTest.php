@@ -8,6 +8,7 @@ use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
+use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
