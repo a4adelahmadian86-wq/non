@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\FarastProject;
 use App\Models\FarastDocument;
 use App\Models\FarastDocumentVersion;
@@ -16,11 +17,13 @@ use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
+use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use App\Services\StoreCourseEnrollmentService;
 use App\Services\StoreCourseProgressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CrmCourseProgressTimelineTest extends TestCase
@@ -96,6 +99,28 @@ class CrmCourseProgressTimelineTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now(),
         ]);
+        StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 300000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 300000,
+            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
+        ]);
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'amount_rials' => 300000,
+            'status' => 'paid',
+            'transaction_id' => 'TEST-CRM-COURSE-'.Str::uuid(),
+            'idempotency_key' => (string) Str::uuid(),
+            'paid_at' => now(),
+        ]);
+
         $libraryItem = StoreLibraryItem::create([
             'user_id' => $customer->id,
             'product_id' => $product->id,

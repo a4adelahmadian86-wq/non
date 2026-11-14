@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
@@ -10,6 +11,8 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
+use App\Models\Wallet;
+use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +74,34 @@ class StoreCourseLearningTest extends TestCase
         return [$product, $course, $section, $lesson];
     }
 
+    private function attachPaidStoreOrderRecords(Order $order, StoreProduct $product): StoreOrderItem
+    {
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => (int) $order->total_rials,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => (int) $order->total_rials,
+            'product_snapshot' => ['title' => $product->title, 'sku' => $product->sku],
+        ]);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'amount_rials' => (int) $order->total_rials,
+            'status' => 'paid',
+            'transaction_id' => 'TEST-COURSE-ORDER-'.$order->id,
+            'idempotency_key' => 'test-course-order-'.$order->id,
+            'paid_at' => now(),
+        ]);
+
+        return $orderItem;
+    }
+
     private function grantCourse(User $user, StoreProduct $product): StoreLibraryItem
     {
         $order = Order::create([
@@ -84,6 +115,7 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now(),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $item = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
@@ -119,6 +151,100 @@ class StoreCourseLearningTest extends TestCase
             'user_id' => $user->id,
             'product_id' => $product->id,
         ]);
+    }
+
+    public function test_paid_course_wallet_checkout_grants_one_verified_entitlement(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('wallet-paid-course', 12000);
+        Wallet::create(['user_id' => $user->id, 'balance_rials' => 100000]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertSame('pending', $order->status);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $order->refresh();
+        $this->assertTrue($order->isPaid());
+        $payment = Payment::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame((int) $order->total_rials, (int) $payment->amount_rials);
+
+        $libraryItem = StoreLibraryItem::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->where('order_id', $order->id)
+            ->firstOrFail();
+        $this->assertNotNull($libraryItem->order_item_id);
+
+        $enrollment = StoreCourseEnrollment::query()
+            ->where('library_item_id', $libraryItem->id)
+            ->firstOrFail();
+        $this->assertSame($user->id, (int) $enrollment->user_id);
+        $this->assertSame($product->id, (int) $enrollment->product_id);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $this->assertSame(1, Payment::query()->where('order_id', $order->id)->count());
+        $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
+        $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
+    }
+
+    public function test_course_enrollment_rejects_paid_order_without_matching_payment_ledger(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('missing-payment-course', 15000);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 15000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 15000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now(),
+        ]);
+        $orderItem = StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 15000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 15000,
+            'product_snapshot' => ['title' => $product->title],
+        ]);
+        $libraryItem = StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'order_item_id' => $orderItem->id,
+            'granted_at' => now(),
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+    }
+
+    public function test_course_enrollment_rejects_revoked_library_entitlement(): void
+    {
+        $user = $this->makeUser();
+        [$product] = $this->makeCourse('revoked-course-regrant', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+        $libraryItem->update(['revoked_at' => now()]);
+
+        $this->expectException(\RuntimeException::class);
+        app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
     }
 
     public function test_enrolled_student_can_open_lesson_and_save_completion(): void
@@ -167,6 +293,7 @@ class StoreCourseLearningTest extends TestCase
             'pricing_snapshot' => ['kind' => 'store'],
             'paid_at' => now()->subDays(3),
         ]);
+        $this->attachPaidStoreOrderRecords($order, $product);
         $newerPurchase = StoreLibraryItem::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
