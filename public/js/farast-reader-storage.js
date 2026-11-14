@@ -128,10 +128,17 @@ document.addEventListener('keydown',retryPersistence,{once:true,capture:true});
 const estimate=async()=>{try{return await navigator.storage?.estimate?.()||null;}catch(_){return null;}};
 const restore=async key=>{const record=await get(key);return record&&Object.prototype.hasOwnProperty.call(record,'value')?record.value:null;};
 const migrate=async(key,legacyValue)=>{
- const existing=await restore(key);
- if(existing!==null)return existing;
- if(legacyValue!==null&&legacyValue!==undefined){await set(key,legacyValue);return legacyValue;}
- return null;
+ let migrated=false;
+ const record=await transaction('readwrite',store=>{
+  const request=store.get(String(key));
+  request.onsuccess=()=>{
+   if(request.result!==undefined&&request.result!==null)return;
+   if(legacyValue!==null&&legacyValue!==undefined){store.put({key:String(key),value:legacyValue,updatedAt:Date.now()});migrated=true;}
+  };
+  return request;
+ });
+ if(record&&Object.prototype.hasOwnProperty.call(record,'value'))return record.value;
+ return migrated?legacyValue:null;
 };
 window.FarastReaderDurableStore=Object.freeze({version:3,open,get,set,remove,restore,migrate,requestPersistence,estimate,entries,productRecords,exportProduct,importProduct});
 })();
