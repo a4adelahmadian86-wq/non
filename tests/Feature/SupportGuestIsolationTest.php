@@ -105,14 +105,14 @@ class SupportGuestIsolationTest extends TestCase
             'support_guest_ticket_ids' => [$ticket->id],
         ]);
 
-        $audit = Mockery::mock(\\App\\Services\\AuditEventService::class);
-        $audit->shouldReceive('record')->once()->andThrow(new \\RuntimeException('audit ledger unavailable'));
-        $this->app->instance(\\App\\Services\\AuditEventService::class, $audit);
+        $audit = Mockery::mock(\App\\Services\\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\\Services\\AuditEventService::class, $audit);
 
         try {
             app(SupportTicketService::class)->claimGuestTickets($user);
             $this->fail('A failed audit append must roll back guest ticket ownership.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('audit ledger unavailable', $exception->getMessage());
         }
 
