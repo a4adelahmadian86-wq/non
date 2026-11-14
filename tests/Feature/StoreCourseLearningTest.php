@@ -232,7 +232,7 @@ class StoreCourseLearningTest extends TestCase
             'granted_at' => now(),
         ]);
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
     }
 
@@ -243,7 +243,7 @@ class StoreCourseLearningTest extends TestCase
         $libraryItem = $this->grantCourse($user, $product);
         $libraryItem->update(['revoked_at' => now()]);
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
     }
 
