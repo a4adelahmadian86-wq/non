@@ -8,6 +8,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
 use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 class StoreCourseLearningTest extends TestCase
@@ -102,7 +104,7 @@ class StoreCourseLearningTest extends TestCase
         return $orderItem;
     }
 
-    private function grantCourse(User $user, StoreProduct $product): StoreLibraryItem
+    private function grantCourse(User $user, StoreProduct $product, $grantedAt = null): StoreLibraryItem
     {
         $order = Order::create([
             'user_id' => $user->id,
@@ -121,7 +123,7 @@ class StoreCourseLearningTest extends TestCase
             'product_id' => $product->id,
             'order_id' => $order->id,
             'product_file_id' => null,
-            'granted_at' => now(),
+            'granted_at' => $grantedAt ?? now(),
         ]);
         app(StoreCourseEnrollmentService::class)->grant($item, $product);
 
@@ -247,6 +249,90 @@ class StoreCourseLearningTest extends TestCase
         app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
     }
 
+    public function test_purchased_library_entitlement_identity_is_immutable_but_revocation_is_allowed(): void
+    {
+        $user = $this->makeUser();
+        $otherUser = User::create([
+            'name' => 'Other Student',
+            'mobile' => '09123456780',
+            'password' => 'secret',
+        ]);
+        [$product] = $this->makeCourse('immutable-entitlement', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+
+        try {
+            $libraryItem->update(['user_id' => $otherUser->id]);
+            $this->fail('A purchased entitlement must not be reassigned to another customer.');
+        } catch (LogicException $exception) {
+            $this->assertSame('store_library_entitlement_identity_is_immutable', $exception->getMessage());
+        }
+
+        $libraryItem->refresh();
+        $libraryItem->update(['revoked_at' => now()]);
+        $this->assertNotNull($libraryItem->fresh()->revoked_at);
+
+        try {
+            $libraryItem->delete();
+            $this->fail('A purchased entitlement must be revoked, not deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('purchased_library_entitlements_must_be_revoked_not_deleted', $exception->getMessage());
+        }
+    }
+
+    public function test_course_enrollment_and_progress_identity_are_immutable_while_progress_remains_mutable(): void
+    {
+        $user = $this->makeUser();
+        $otherUser = User::create([
+            'name' => 'Other Student',
+            'mobile' => '09123456781',
+            'password' => 'secret',
+        ]);
+        [$product, , , $lesson] = $this->makeCourse('immutable-course-progress', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+        $enrollment = StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->firstOrFail();
+
+        try {
+            $enrollment->update(['user_id' => $otherUser->id]);
+            $this->fail('A course enrollment must not be reassigned to another customer.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_enrollment_identity_is_immutable', $exception->getMessage());
+        }
+
+        try {
+            $enrollment->delete();
+            $this->fail('Course enrollment history must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_enrollment_history_cannot_be_deleted', $exception->getMessage());
+        }
+
+        $this->actingAs($user)
+            ->postJson(route('store.course.progress', [$product, $lesson]), ['completed' => true])
+            ->assertOk();
+
+        $progress = StoreCourseLessonProgress::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->where('lesson_id', $lesson->id)
+            ->firstOrFail();
+
+        try {
+            $progress->update(['enrollment_id' => $enrollment->id + 100]);
+            $this->fail('Progress must remain bound to its original enrollment.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_progress_identity_is_immutable', $exception->getMessage());
+        }
+
+        $progress->refresh();
+        $progress->update(['completed_at' => now()]);
+        $this->assertNotNull($progress->fresh()->completed_at);
+
+        try {
+            $progress->delete();
+            $this->fail('Course progress history must not be deleted.');
+        } catch (LogicException $exception) {
+            $this->assertSame('course_progress_history_cannot_be_deleted', $exception->getMessage());
+        }
+    }
+
     public function test_enrolled_student_can_open_lesson_and_save_completion(): void
     {
         $user = $this->makeUser();
@@ -278,8 +364,7 @@ class StoreCourseLearningTest extends TestCase
         $user = $this->makeUser();
         [$product, $course] = $this->makeCourse('multiple-entitlements', 10000);
 
-        $originalEntitlement = $this->grantCourse($user, $product); // Original enrollment has no expiry.
-        $originalEntitlement->update(['granted_at' => now()->subDays(10)]);
+        $originalEntitlement = $this->grantCourse($user, $product, now()->subDays(10)); // Original enrollment has no expiry.
         $course->update(['access_duration_days' => 1]);
 
         $order = Order::create([
