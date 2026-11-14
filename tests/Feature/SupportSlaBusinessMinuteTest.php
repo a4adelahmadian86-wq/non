@@ -38,6 +38,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
             'support.business_hours.start' => 9,
             'support.business_hours.end' => 18,
             'support.business_hours.weekend' => [4, 5],
+            'support.business_hours.holidays' => [],
             'support.warn_before_minutes' => 30,
         ]);
     }
@@ -60,6 +61,22 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
         $this->assertSame('warning', $status['state']);
         $this->assertSame(30, $status['minutes_left']);
+    }
+
+    public function test_sla_deadline_and_countdown_skip_configured_business_holidays(): void
+    {
+        config(['support.business_hours.holidays' => ['2026-11-18']]);
+        $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
+
+        $sla = app(SupportSlaService::class);
+        $deadline = $sla->addSlaMinutes(now(), 30);
+
+        $this->assertSame('2026-11-21 09:15:00', $deadline->format('Y-m-d H:i:s'));
+        $this->assertSame(30, $sla->minutesUntilDeadline($deadline));
+        $this->assertSame(-30, $sla->minutesUntilDeadline(
+            $deadline,
+            Carbon::parse('2026-11-21 09:45:00', 'Asia/Tehran')
+        ));
     }
 
     public function test_agent_report_measures_first_response_in_business_minutes(): void
