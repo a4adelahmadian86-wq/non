@@ -3,10 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\ConversationMessage;
+use App\Models\StorageManagedFile;
+use App\Services\Storage\StorageManager;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Mockery;
 use Tests\TestCase;
 
 class InternalMessengerTest extends TestCase
@@ -60,6 +66,94 @@ class InternalMessengerTest extends TestCase
         ]);
 
         $this->actingAs($recipient)->get(route('messenger.show', $conversation))->assertOk();
+    }
+
+    public function test_attachment_download_requires_a_managed_file_bound_to_the_exact_message(): void
+    {
+        Storage::fake('private');
+        $organization = $this->makeOrganization();
+        $sender = $this->makeEmployee($organization);
+        $recipient = $this->makeEmployee($organization);
+        $outsider = $this->makeEmployee($organization);
+        $conversation = Conversation::create(['type' => 'direct', 'created_by' => $sender->id]);
+        $conversation->participants()->attach([
+            $sender->id => ['role' => 'owner'],
+            $recipient->id => ['role' => 'member'],
+        ]);
+
+        $file = UploadedFile::fake()->createWithContent('internal.txt', 'private message attachment');
+        $response = $this->actingAs($sender)->postJson(route('messenger.send', $conversation), [
+            'body' => 'فایل محرمانه',
+            'attachments' => [$file],
+        ])->assertCreated();
+
+        $message = ConversationMessage::query()->findOrFail((int) $response->json('message.id'));
+        $attachment = $message->attachments[0];
+        $managed = StorageManagedFile::query()->findOrFail((int) $attachment['managed_file_id']);
+
+        $this->assertSame('messenger', $managed->source_module);
+        $this->assertSame(ConversationMessage::class, $managed->source_type);
+        $this->assertSame($message->id, (int) $managed->source_id);
+        $this->assertTrue($response->json('message.attachments.0.available'));
+
+        $this->actingAs($recipient)
+            ->get(route('messenger.attachment', [$conversation, $message, 0]))
+            ->assertOk()
+            ->assertContent('private message attachment');
+
+        $this->actingAs($outsider)
+            ->get(route('messenger.attachment', [$conversation, $message, 0]))
+            ->assertNotFound();
+
+        $tampered = $message->attachments;
+        $tampered[0]['path'] = 'messenger/another-users-file.txt';
+        $message->forceFill(['attachments' => $tampered])->save();
+
+        $this->actingAs($recipient)
+            ->get(route('messenger.attachment', [$conversation, $message, 0]))
+            ->assertNotFound();
+    }
+
+    public function test_message_and_managed_attachment_reference_roll_back_together(): void
+    {
+        Storage::fake('private');
+        $organization = $this->makeOrganization();
+        $sender = $this->makeEmployee($organization);
+        $recipient = $this->makeEmployee($organization);
+        $conversation = Conversation::create(['type' => 'direct', 'created_by' => $sender->id]);
+        $conversation->participants()->attach([
+            $sender->id => ['role' => 'owner'],
+            $recipient->id => ['role' => 'member'],
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class)->makePartial();
+        $storage->shouldReceive('adoptExistingPrivate')->once()->andReturn([
+            'path' => 'messenger/managed-failure.txt',
+            'disk' => 'private',
+            'managed_file_id' => 999999,
+        ]);
+        $storage->shouldReceive('bindReference')
+            ->once()
+            ->andThrow(new \RuntimeException('reference binding failed'));
+        $storage->shouldReceive('delete')
+            ->once()
+            ->with('private', 'messenger/managed-failure.txt')
+            ->andReturnNull();
+        $this->app->instance(StorageManager::class, $storage);
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($sender)->postJson(route('messenger.send', $conversation), [
+                'body' => 'این پیام نباید ثبت شود',
+                'attachments' => [UploadedFile::fake()->createWithContent('rollback.txt', 'rollback')],
+            ]);
+            $this->fail('The failed managed reference must roll back the message.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('reference binding failed', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('conversation_messages', 0);
+        $this->assertSame(0, $conversation->fresh()->messages()->count());
     }
 
     public function test_non_participant_cannot_view_poll_or_send_messages(): void
