@@ -5,8 +5,8 @@
     $lastMsgId = $ticket->last_scanned_message_id ?? $ticket->messages->last()?->id ?? 0;
     $oldestMsgId = $ticket->oldest_scanned_message_id ?? $ticket->messages->first()?->id ?? 0;
 @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114managedattachments">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114managedattachments">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261114threadhistory">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261114threadhistory">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
