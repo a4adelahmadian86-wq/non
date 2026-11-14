@@ -18,6 +18,10 @@ return Application::configure(basePath:dirname(__DIR__))
             Route::get('/ready', ReadinessController::class)->name('health.ready');
         },
     )
+    // Explicitly register first-party command classes used by scheduled operations.
+    ->withCommands([
+        __DIR__.'/../app/Console/Commands',
+    ])
     ->withMiddleware(function(Middleware $middleware):void{
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
         $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'admin.section'=>App\Http\Middleware\EnsureAdminSection::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class,'resource.permission'=>App\Http\Middleware\EnsureResourcePermission::class]);

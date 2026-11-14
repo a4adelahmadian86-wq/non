@@ -204,7 +204,14 @@ class SupportNotificationService
                 if ($staff->email) {
                     $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning', $cycleIdentity);
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $exception) {
+                Log::warning('farast.support.sla_email_notification_failed', [
+                    'ticket_id' => $ticket->id,
+                    'notification_type' => 'ticket_sla_warning',
+                    'kind' => $kind,
+                    'recipient_id' => $staff->id,
+                    'exception_class' => get_class($exception),
+                ]);
             }
         }
 
@@ -240,7 +247,14 @@ class SupportNotificationService
                 if ($staff->email) {
                     $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach', 'sla-breached:'.$kind);
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $exception) {
+                Log::warning('farast.support.sla_email_notification_failed', [
+                    'ticket_id' => $ticket->id,
+                    'notification_type' => 'ticket_sla_breach',
+                    'kind' => $kind,
+                    'recipient_id' => $staff->id,
+                    'exception_class' => get_class($exception),
+                ]);
             }
         }
 

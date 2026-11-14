@@ -119,14 +119,16 @@
                             @php
                                 $slaBars = [];
                                 if ($active->sla_first_due_at && ! $active->first_response_at) {
-                                    $total = max(1, $active->created_at->diffInMinutes($active->sla_first_due_at));
-                                    $used = max(0, $active->created_at->diffInMinutes(now()));
+                                    $total = max(1, (int) config('support.sla_first_response_minutes.'.$active->priority, 240));
+                                    $remaining = $slaService->minutesUntilDeadline($active->sla_first_due_at);
+                                    $used = max(0, $total - $remaining);
                                     $pct = min(100, (int) round(100 * $used / $total));
                                     $slaBars[] = ['label' => 'پاسخ اول', 'pct' => $pct, 'color' => $slaA['color'] ?? 'ok'];
                                 }
                                 if ($active->sla_resolve_due_at && $active->status !== 'closed' && $active->status !== 'pending') {
-                                    $total = max(1, $active->created_at->diffInMinutes($active->sla_resolve_due_at));
-                                    $used = max(0, $active->created_at->diffInMinutes(now()));
+                                    $total = max(1, (int) config('support.sla_resolution_minutes.'.$active->priority, 1440));
+                                    $remaining = $slaService->minutesUntilDeadline($active->sla_resolve_due_at);
+                                    $used = max(0, $total - $remaining);
                                     $pct = min(100, (int) round(100 * $used / $total));
                                     $slaBars[] = ['label' => 'حل', 'pct' => $pct, 'color' => $slaR['color'] ?? 'ok'];
                                 }
@@ -247,14 +249,14 @@
                     </div>
                     <div style="display:flex;width:100%;gap:8px;align-items:center;justify-content:space-between;margin-top:6px;flex-wrap:wrap">
                         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                            <select name="status" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
+                            <select name="status" id="adminReplyStatus" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
                                 <option value="answered">پاسخ داده‌شده</option>
                                 <option value="pending">منتظر پاسخ کاربر</option>
                                 <option value="open">باز نگه دار</option>
                                 <option value="closed">بستن تیکت</option>
                             </select>
                             <label style="display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--sd-muted);cursor:pointer">
-                                <input type="checkbox" name="is_internal" value="1"> یادداشت داخلی
+                                <input type="checkbox" name="is_internal" id="adminInternalNote" value="1"> یادداشت داخلی
                             </label>
                             <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:.82rem;color:var(--sd-blue)">
                                 <i class="fa-solid fa-paperclip"></i> پیوست
@@ -262,6 +264,9 @@
                             </label>
                         </div>
                         <button type="submit" class="sd-btn sd-btn-primary">ارسال پاسخ</button>
+                    </div>
+                    <div id="internalNoteHint" hidden style="width:100%;font-size:.76rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:7px 10px">
+                        یادداشت داخلی فقط برای کارشناسان قابل مشاهده است و وضعیت تیکت یا ساعت SLA را تغییر نمی‌دهد.
                     </div>
                 </div>
             </form>
@@ -297,6 +302,20 @@
   });
   const toast = document.querySelector('.sd-toast');
   if (toast) setTimeout(() => toast.remove(), 4000);
+
+  const internalNote = document.getElementById('adminInternalNote');
+  const replyStatus = document.getElementById('adminReplyStatus');
+  const internalHint = document.getElementById('internalNoteHint');
+  const syncInternalNote = () => {
+    const isInternal = !!internalNote?.checked;
+    if (replyStatus) {
+      replyStatus.disabled = isInternal;
+      replyStatus.setAttribute('aria-disabled', isInternal ? 'true' : 'false');
+    }
+    if (internalHint) internalHint.hidden = !isInternal;
+  };
+  internalNote?.addEventListener('change', syncInternalNote);
+  syncInternalNote();
 
   // Poll for new messages on active ticket
   const thread = document.getElementById('adminThread');
