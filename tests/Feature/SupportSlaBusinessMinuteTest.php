@@ -51,7 +51,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_sla_monitor_sends_warning_when_business_time_reaches_threshold(): void
     {
-        $this->travelTo(now()->parse('2026-11-17 17:45:00', 'Asia/Tehran'));
+        $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
         $deadline = $sla->addSlaMinutes(now(), 30);
 
