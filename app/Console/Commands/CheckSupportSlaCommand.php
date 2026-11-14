@@ -31,16 +31,15 @@ class CheckSupportSlaCommand extends Command
         $dry = (bool) $this->option('dry-run');
         $warnBefore = (int) config('support.warn_before_minutes', 30);
 
-        $open = Ticket::query()
-            ->openQueue()
-            ->with(['assignee', 'user'])
-            ->orderBy('id')
-            ->limit(500)
-            ->get();
-
         $stats = ['warned_first' => 0, 'breached_first' => 0, 'warned_resolve' => 0, 'breached_resolve' => 0];
 
-        foreach ($open as $ticket) {
+        // Process every open ticket in bounded batches. A fixed limit would
+        // permanently starve records after the first 500 IDs.
+        Ticket::query()
+            ->openQueue()
+            ->with(['assignee', 'user'])
+            ->chunkById(500, function ($tickets) use ($sla, $notifier, $dry, $warnBefore, &$stats): void {
+                foreach ($tickets as $ticket) {
             // —— اولین پاسخ ——
             if (! $ticket->first_response_at && $ticket->sla_first_due_at) {
                 $mins = $sla->minutesUntilDeadline($ticket->sla_first_due_at);
@@ -81,8 +80,8 @@ class CheckSupportSlaCommand extends Command
                         $notifier->slaWarning($ticket, 'resolution', $mins);
                     }
                 }
-            }
-        }
+                }
+            });
 
         $this->info(sprintf(
             'SLA check done. first(warn=%d,breach=%d) resolve(warn=%d,breach=%d)%s',
