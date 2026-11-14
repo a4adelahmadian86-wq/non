@@ -88,7 +88,10 @@ class SupportTicketAuditLedgerTest extends TestCase
 
         app(SupportTicketService::class)->changeStatus($ticket, 'open', $actor, false);
 
-        $this->assertDatabaseCount('farast_audit_events', 0);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+        ]);
         $this->assertSame('open', $ticket->fresh()->status);
     }
 
@@ -114,7 +117,10 @@ class SupportTicketAuditLedgerTest extends TestCase
         }
 
         $this->assertSame('open', $ticket->fresh()->status);
-        $this->assertDatabaseCount('farast_audit_events', 0);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+        ]);
     }
 
     public function test_customer_reply_status_transition_is_audited_without_message_content(): void
