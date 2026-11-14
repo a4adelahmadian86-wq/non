@@ -415,7 +415,7 @@ class SupportController extends Controller
             'body' => 'required|string|max:8000',
             'status' => 'nullable|in:'.implode(',', SupportTicketService::STATUSES),
             'is_internal' => 'nullable|boolean',
-            'attachment' => 'nullable|file|max:8192|mimes:jpg,jpeg,png,gif,pdf,txt,zip,doc,docx',
+            'attachment' => 'nullable|file|max:8192|mimes:jpg,jpeg,png,gif,pdf,txt,zip,docx',
         ]);
 
         $isInternal = (bool) ($data['is_internal'] ?? false);
