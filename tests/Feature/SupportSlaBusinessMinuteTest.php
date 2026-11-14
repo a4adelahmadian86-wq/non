@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Mockery;
@@ -30,11 +31,11 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_sla_countdown_uses_business_minutes_across_the_close_of_business(): void
     {
-        $this->travelTo(Carbon::parse('2026-11-18 17:45:00', 'Asia/Tehran'));
+        $this->travelTo(Carbon::parse('2026-11-17 17:45:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
         $deadline = $sla->addSlaMinutes(now(), 30);
 
-        $this->assertSame('2026-11-19 09:15:00', $deadline->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-18 09:15:00', $deadline->format('Y-m-d H:i:s'));
         $this->assertSame(30, $sla->minutesUntilDeadline($deadline));
 
         $ticket = new Ticket([
@@ -50,7 +51,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_sla_monitor_sends_warning_when_business_time_reaches_threshold(): void
     {
-        $this->travelTo(now()->parse('2026-11-18 17:45:00', 'Asia/Tehran'));
+        $this->travelTo(now()->parse('2026-11-17 17:45:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
         $deadline = $sla->addSlaMinutes(now(), 30);
 
@@ -76,9 +77,9 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
     {
-        $this->travelTo(Carbon::parse('2026-11-23 09:30:00', 'Asia/Tehran'));
+        $this->travelTo(Carbon::parse('2026-11-21 09:30:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
-        $deadline = Carbon::parse('2026-11-20 17:30:00', 'Asia/Tehran');
+        $deadline = Carbon::parse('2026-11-18 17:30:00', 'Asia/Tehran');
 
         $this->assertSame(-60, $sla->minutesUntilDeadline($deadline));
     }
