@@ -163,7 +163,7 @@ class BusinessCommerceLifecycleTest extends TestCase
 
         // The event is durably queued with payment, then the shared retry worker
         // projects the same paid-order fact into CRM exactly once.
-        $this->assertSame(1, app(\\App\\Services\\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => $workflowEventKey,
             'status' => 'completed',
