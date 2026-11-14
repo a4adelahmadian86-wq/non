@@ -94,6 +94,15 @@ class SupportTicketAssignmentLoadTest extends TestCase
             'department' => 'support',
         ]);
 
+        Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'assigned_to' => $teamAgent->id,
+            'subject' => 'Second closed ticket must also be excluded from active workload',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
         for ($i = 1; $i <= 4; $i++) {
             Ticket::create([
                 'user_id' => $outsideCustomer->id,
