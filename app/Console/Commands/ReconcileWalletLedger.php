@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Console\\Commands;
+namespace App\Console\Commands;
 
-use App\\Services\\WalletLedgerReconciliationService;
-use Illuminate\\Console\\Command;
-use Illuminate\\Support\\Facades\\Log;
+use App\Services\WalletLedgerReconciliationService;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ReconcileWalletLedger extends Command
