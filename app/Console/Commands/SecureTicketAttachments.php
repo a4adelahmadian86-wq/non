@@ -178,7 +178,7 @@ class SecureTicketAttachments extends Command
                                 8 * 1024 * 1024
                             );
                             if (($inspection['safe'] ?? false) !== true || ($inspection['risk_level'] ?? null) === 'blocked') {
-                                throw new \\RuntimeException('legacy_attachment_security_rejected');
+                                throw new \RuntimeException('legacy_attachment_security_rejected');
                             }
                         } catch (Throwable $exception) {
                             $quarantinePath = 'quarantine/support/'.$message->ticket_id.'/'.Str::uuid().'-'.$sourceName;
