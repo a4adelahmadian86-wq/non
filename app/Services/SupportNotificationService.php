@@ -322,6 +322,7 @@ class SupportNotificationService
             if ($throwOnFailure) {
                 throw $e;
             }
+        }
     }
 
     /** @return \Illuminate\Support\Collection<int, User> */
