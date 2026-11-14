@@ -5,9 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
 
 class StoreLibraryItem extends Model
 {
+    protected static function booted(): void
+    {
+        static::updating(function (StoreLibraryItem $item): void {
+            if ($item->isDirty(['user_id', 'product_id', 'order_id', 'order_item_id', 'product_file_id', 'license_code', 'granted_at'])) {
+                throw new LogicException('store_library_entitlement_identity_is_immutable');
+            }
+        });
+
+        static::deleting(function (StoreLibraryItem $item): void {
+            if (
+                $item->order_id !== null
+                || $item->order_item_id !== null
+                || $item->downloads()->exists()
+                || StoreCourseEnrollment::query()->where('library_item_id', $item->id)->exists()
+            ) {
+                throw new LogicException('purchased_library_entitlements_must_be_revoked_not_deleted');
+            }
+        });
+    }
+
     protected $fillable = ['user_id','product_id','order_id','order_item_id','product_file_id','license_code','granted_at','revoked_at'];
     protected $casts = ['granted_at'=>'datetime','revoked_at'=>'datetime'];
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
