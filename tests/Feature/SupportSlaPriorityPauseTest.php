@@ -35,6 +35,7 @@ class SupportSlaPriorityPauseTest extends TestCase
             'first_response_at' => $createdAt->copy()->addMinutes(30),
         ]);
 
+        $ticket->forceFill(['created_at' => $createdAt])->saveQuietly();
         $originalFirstDueAt = $ticket->sla_first_due_at->copy();
 
         $service = new SupportTicketService(
@@ -69,6 +70,7 @@ class SupportSlaPriorityPauseTest extends TestCase
             'closed_at' => $createdAt->copy()->addMinutes(1800),
         ]);
 
+        $ticket->forceFill(['created_at' => $createdAt])->saveQuietly();
         $originalFirstDueAt = $ticket->sla_first_due_at->copy();
         $originalResolveDueAt = $ticket->sla_resolve_due_at->copy();
 
