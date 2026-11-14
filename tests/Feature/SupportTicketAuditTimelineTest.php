@@ -162,7 +162,7 @@ class SupportTicketAuditTimelineTest extends TestCase
             'status' => 'open',
             'priority' => 'normal',
             'department' => 'support',
-            'sla_first_due_at' => now()->subMinutes(5),
+            'sla_first_due_at' => now()->subHour(),
         ]);
 
         $notifier = Mockery::mock(SupportNotificationService::class);
