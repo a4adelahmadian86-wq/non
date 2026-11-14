@@ -127,7 +127,23 @@ class SupportTicketService
                 }
     
                 $ticket = Ticket::create($payload);
-    
+
+                // Ticket creation is the first durable lifecycle event. Keep the
+                // audit entry in this transaction and exclude subject, message,
+                // guest contact details and attachment metadata from its payload.
+                $this->recordSupportAuditEvent($ticket, $user, 'support.ticket.created', [
+                    'status' => 'open',
+                    'source' => $payload['source'] ?? ($user ? self::SOURCE_DASHBOARD : self::SOURCE_WIDGET),
+                    'department' => $payload['department'],
+                    'priority' => $payload['priority'],
+                    'topic_area' => $payload['topic_area'] ?? null,
+                    'related_service' => $payload['related_service'] ?? null,
+                    'related_product_id' => isset($payload['related_product_id'])
+                        ? (int) $payload['related_product_id']
+                        : null,
+                    'initiator_type' => $user ? 'customer' : 'guest',
+                ]);
+
                 // Assignment is resolved against the persisted ticket so RBAC scope
                 // checks always evaluate the actual record, not an incomplete payload.
                 if (Schema::hasColumn('tickets', 'assigned_to')) {
