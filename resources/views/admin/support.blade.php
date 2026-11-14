@@ -76,11 +76,10 @@
 
         <div class="sd-filters">
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
-            <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
-            <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
-            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">منتظر کاربر</a>
-            <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
-            <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
+            <a class="sd-chip {{ request('status')===\App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>\App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY]) }}">نیازمند پاسخ</a>
+            @foreach(\App\Services\SupportTicketService::STATUSES as $status)
+                <a class="sd-chip {{ request('status')===$status?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>$status]) }}">{{ $statusLabels[$status] ?? $status }}</a>
+            @endforeach
             <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_AT_RISK?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_AT_RISK])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
             <a class="sd-chip {{ request('sla')===\App\Services\SupportTicketService::SLA_FILTER_BREACHED?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['sla'=>\App\Services\SupportTicketService::SLA_FILTER_BREACHED])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
             <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($chipFilters, ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
@@ -101,7 +100,7 @@
                 <span>وضعیت</span>
                 <select name="status">
                     <option value="">همه وضعیت‌ها</option>
-                    <option value="needs_reply" @selected(request('status') === 'needs_reply')>نیازمند پاسخ</option>
+                    <option value="{{ \App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY }}" @selected(request('status') === \App\Services\SupportTicketService::STATUS_FILTER_NEEDS_REPLY)>نیازمند پاسخ</option>
                     @foreach(\App\Services\SupportTicketService::STATUSES as $status)
                         <option value="{{ $status }}" @selected(request('status') === $status)>{{ $statusLabels[$status] ?? $status }}</option>
                     @endforeach
