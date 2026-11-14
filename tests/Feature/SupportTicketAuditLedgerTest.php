@@ -233,7 +233,7 @@ class SupportTicketAuditLedgerTest extends TestCase
         try {
             $service->changeStatus($ticket, 'not-a-valid-status', $admin);
             $this->fail('Unknown status values must be rejected.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertSame('وضعیت نامعتبر است.', $exception->getMessage());
         }
 
@@ -243,7 +243,7 @@ class SupportTicketAuditLedgerTest extends TestCase
                 'status' => 'not-a-valid-status',
             ]);
             $this->fail('A reply with an invalid status must be rejected atomically.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertNotSame('', $exception->getMessage());
         }
 
