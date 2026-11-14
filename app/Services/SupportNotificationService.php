@@ -231,7 +231,7 @@ class SupportNotificationService
                     );
                 }
             }
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             Log::warning('farast.support.sla_sms_notification_failed', [
                 'ticket_id' => $ticket->id,
                 'notification_type' => 'ticket_sla_warning',
@@ -280,7 +280,7 @@ class SupportNotificationService
                     );
                 }
             }
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             Log::warning('farast.support.sla_sms_notification_failed', [
                 'ticket_id' => $ticket->id,
                 'notification_type' => 'ticket_sla_breach',
