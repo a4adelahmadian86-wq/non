@@ -8,6 +8,7 @@ use App\Models\RolePermission;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Http\Middleware\ResolveAdminScope;
 use App\Services\AuthorizationService;
 use App\Services\SupportTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,6 +94,14 @@ class SupportTicketAssignmentLoadTest extends TestCase
                 'department' => 'support',
             ]);
         }
+
+        // The request's resolved scope belongs to the current requester,
+        // not to the candidate agent. Assignment workload must resolve each
+        // candidate's own effective scope.
+        request()->attributes->set('farast.scope', 'global');
+        $agentVisibleUserIds = ResolveAdminScope::visibleUserIds($teamAgent);
+        $this->assertContains($insideCustomer->id, $agentVisibleUserIds);
+        $this->assertNotContains($outsideCustomer->id, $agentVisibleUserIds);
 
         $picked = DB::transaction(
             fn () => app(SupportTicketService::class)->pickLeastLoadedAgent($target)
