@@ -30,7 +30,7 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_sla_countdown_uses_business_minutes_across_the_close_of_business(): void
     {
-        $this->travelTo(now()->parse('2026-11-18 17:45:00', 'Asia/Tehran'));
+        $this->travelTo(Carbon::parse('2026-11-18 17:45:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
         $deadline = $sla->addSlaMinutes(now(), 30);
 
@@ -76,9 +76,9 @@ class SupportSlaBusinessMinuteTest extends TestCase
 
     public function test_overdue_countdown_reports_only_elapsed_business_minutes(): void
     {
-        $this->travelTo(now()->parse('2026-11-23 09:30:00', 'Asia/Tehran'));
+        $this->travelTo(Carbon::parse('2026-11-23 09:30:00', 'Asia/Tehran'));
         $sla = app(SupportSlaService::class);
-        $deadline = now()->parse('2026-11-20 17:30:00', 'Asia/Tehran');
+        $deadline = Carbon::parse('2026-11-20 17:30:00', 'Asia/Tehran');
 
         $this->assertSame(-60, $sla->minutesUntilDeadline($deadline));
     }
