@@ -187,6 +187,20 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-reader-preferences-panel [data-reader-legacy-annotation],.farast-reader-preferences-panel [data-reader-highlight],.farast-reader-preferences-panel [data-reader-note],.farast-reader-preferences-panel [data-reader-notes],.farast-reader-preferences-panel [data-reader-export],.farast-reader-preferences-panel [data-reader-import],.farast-reader-preferences-panel [data-reader-import-file],.farast-reader-preferences-panel .farast-reader-ink-tools{display:none!important}
 
 
+
+/* Reader intentionally avoids remote icon-font dependencies; keep every wide action readable. */
+.farast-reader-toolbar .reader-tool-wide[aria-label]{
+  width:auto;
+  min-width:38px;
+  flex:0 1 auto;
+  padding:0 9px;
+}
+.farast-reader-toolbar .reader-tool-wide[aria-label]::after{
+  content:attr(aria-label);
+  font-size:.62rem;
+  line-height:1.25;
+  white-space:nowrap;
+}
 </style>
 @endpush
 
