@@ -335,7 +335,7 @@ class SupportTicketService
     private function buildStatusTransitionUpdate(Ticket $ticket, string $targetStatus): array
     {
         if (! in_array($targetStatus, self::STATUSES, true)) {
-            throw new \\InvalidArgumentException('وضعیت نامعتبر است.');
+            throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
         $attributes = ['status' => $targetStatus];
