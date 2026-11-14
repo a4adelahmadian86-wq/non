@@ -6,6 +6,11 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
   await page.locator('.farast-reader-annotation-panel > summary').click();
   await expect(page.locator('.farast-annotation-toolbar')).toBeVisible();
+  const highlightTool=page.locator('[data-tool="highlight"]');
+  await expect(highlightTool).toHaveAttribute('aria-label','هایلایت');
+  await expect(highlightTool).toHaveAttribute('title','هایلایت');
+  await expect(highlightTool.locator('i')).toHaveAttribute('aria-hidden','true');
+  await expect(highlightTool.locator('.farast-annotation-tool-label')).toHaveText('هایلایت');
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
   await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
   await page.locator('[data-tool="highlight"]').click();
