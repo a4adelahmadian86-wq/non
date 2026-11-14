@@ -45,7 +45,14 @@ class SupportSlaService
             // The clock stopped at sla_paused_at. Recalculate the budget from
             // that instant, not from now(), which may be days later.
             $pauseStartedAt = $ticket->sla_paused_at;
-            $targets['sla_resolve_remaining_minutes'] = $this->businessMinutesBetween($pauseStartedAt, $resolveDueAt);
+            $remainingAtPause = $this->minutesUntilDeadline($resolveDueAt, $pauseStartedAt);
+            $targets['sla_resolve_remaining_minutes'] = max(0, $remainingAtPause);
+
+            if ($remainingAtPause < 0
+                && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
+                && empty($ticket->sla_resolve_breached_at)) {
+                $targets['sla_resolve_breached_at'] = $pauseStartedAt;
+            }
         }
 
         if ($targets !== []) {
@@ -189,12 +196,27 @@ class SupportSlaService
     /** @return array{state:string,label:string,color:string,breached:bool} */
     public function resolutionStatus(Ticket $ticket): array
     {
+        $hasResolutionBreach = ! empty($ticket->sla_resolve_breached_at);
+
         if ($ticket->status === 'pending') {
             return [
                 'state' => 'paused',
-                'label' => 'متوقف (منتظر کاربر)',
-                'color' => 'muted',
-                'breached' => false,
+                'label' => $hasResolutionBreach
+                    ? 'متوقف؛ نقض SLA حل ثبت شده'
+                    : 'متوقف (منتظر کاربر)',
+                'color' => $hasResolutionBreach ? 'danger' : 'muted',
+                'breached' => $hasResolutionBreach,
+            ];
+        }
+
+        // A recorded breach is historical evidence and must not disappear
+        // when a paused ticket resumes or is eventually closed.
+        if ($hasResolutionBreach) {
+            return [
+                'state' => 'breached',
+                'label' => 'نقض SLA حل ثبت شده',
+                'color' => 'danger',
+                'breached' => true,
             ];
         }
 
@@ -270,13 +292,21 @@ class SupportSlaService
 
         if ($newStatus === 'pending' && $oldStatus !== 'pending') {
             $dueAt = $ticket->sla_resolve_due_at;
-
-            return [
-                'sla_paused_at' => now(),
-                'sla_resolve_remaining_minutes' => $dueAt
-                    ? $this->businessMinutesBetween(now(), $dueAt)
-                    : null,
+            $pausedAt = now();
+            $remaining = $dueAt ? $this->minutesUntilDeadline($dueAt, $pausedAt) : null;
+            $attributes = [
+                'sla_paused_at' => $pausedAt,
+                'sla_resolve_remaining_minutes' => $remaining === null ? null : max(0, $remaining),
             ];
+
+            if ($remaining !== null
+                && $remaining < 0
+                && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
+                && empty($ticket->sla_resolve_breached_at)) {
+                $attributes['sla_resolve_breached_at'] = $pausedAt;
+            }
+
+            return $attributes;
         }
 
         if ($oldStatus === 'pending' && $newStatus !== 'pending' && $ticket->sla_paused_at) {
