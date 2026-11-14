@@ -86,6 +86,41 @@ class SupportSlaPriorityPauseTest extends TestCase
         $this->assertTrue($updated->sla_resolve_due_at->equalTo($originalResolveDueAt));
     }
 
+    public function test_priority_change_during_a_long_pending_period_uses_the_pause_instant(): void
+    {
+        config([
+            'support.business_hours_only' => false,
+            'support.sla_first_response_minutes.high' => 30,
+            'support.sla_resolution_minutes.high' => 60,
+        ]);
+
+        $createdAt = now()->startOfMinute()->subDays(3);
+        $pausedAt = $createdAt->copy()->addMinutes(30);
+        $this->travelTo($createdAt->copy()->addDays(3));
+
+        $ticket = Ticket::create([
+            'subject' => 'Priority changed after prolonged customer wait',
+            'status' => 'pending',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_paused_at' => $pausedAt,
+            'sla_resolve_remaining_minutes' => 1410,
+        ]);
+        $ticket->forceFill(['created_at' => $createdAt])->saveQuietly();
+
+        $service = new SupportTicketService(
+            Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing(),
+            new SupportSlaService(),
+        );
+        $service->updateMeta($ticket, ['priority' => 'high']);
+
+        $updated = $ticket->fresh();
+        $this->assertSame('pending', $updated->status);
+        $this->assertTrue($updated->sla_paused_at->equalTo($pausedAt));
+        $this->assertSame(30, (int) $updated->sla_resolve_remaining_minutes);
+        $this->assertTrue($updated->sla_resolve_due_at->equalTo($createdAt->copy()->addMinutes(60)));
+    }
+
     public function test_priority_recalculation_updates_remaining_budget_without_unpausing_ticket(): void
     {
         config([
@@ -111,7 +146,7 @@ class SupportSlaPriorityPauseTest extends TestCase
 
         $updated = $ticket->fresh();
         $this->assertNotNull($updated->sla_paused_at);
-        $this->assertSame(30, (int) $updated->sla_resolve_remaining_minutes);
+        $this->assertSame(40, (int) $updated->sla_resolve_remaining_minutes);
         $this->assertTrue($updated->sla_resolve_due_at->equalTo($now->copy()->addMinutes(30)));
     }
 }
