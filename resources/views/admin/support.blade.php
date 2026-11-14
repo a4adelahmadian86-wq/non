@@ -12,6 +12,8 @@
         'status' => request('status'),
         'department' => request('department'),
         'priority' => request('priority'),
+        'source' => request('source'),
+        'topic_area' => request('topic_area'),
         'sla' => request('sla'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
@@ -43,7 +45,7 @@
         <div class="sd-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <form method="get" action="{{ route('admin.support.management') }}" style="width:100%">
-                @foreach(request()->only(['status','department','priority']) as $k=>$v)
+                @foreach(request()->only(['status','department','priority','source','topic_area','sla','assigned']) as $k=>$v)
                     @if($v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
                 @endforeach
                 <input type="search" name="q" value="{{ request('q') }}" placeholder="کد تیکت، موضوع، ایمیل..." autocomplete="off">
@@ -51,7 +53,7 @@
         </div>
 
         <div class="sd-filters">
-            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'sla'=>request('sla')]); @endphp
+            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla')]); @endphp
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
             <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
             <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
@@ -62,7 +64,11 @@
             <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
             <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'sla'=>request('sla')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
             <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'priority'=>request('priority'),'sla'=>request('sla')]), ['department'=>'billing'])) }}">مالی</a>
-            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'sla'=>request('sla')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'source'=>request('source'),'topic_area'=>request('topic_area'),'sla'=>request('sla')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
+            <a class="sd-chip {{ request('source')==='dashboard'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'dashboard'])) }}">ثبت از پنل</a>
+            <a class="sd-chip {{ request('source')==='widget'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['source'=>'widget'])) }}">ثبت از ویجت</a>
+            <a class="sd-chip {{ request('topic_area')==='services'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'services'])) }}">موضوع خدمات</a>
+            <a class="sd-chip {{ request('topic_area')==='store'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, array_filter(['status'=>request('status')]), ['topic_area'=>'store'])) }}">موضوع فروشگاه</a>
         </div>
 
         <div class="sd-list" id="ticketList">
