@@ -77,6 +77,96 @@ class SupportTicketAuditLedgerTest extends TestCase
         $this->assertStringNotContainsString('message body', $encoded);
     }
 
+    public function test_ticket_creation_appends_a_sanitized_creation_event_to_the_audit_ledger(): void
+    {
+        $customer = User::factory()->create(['email' => 'audit-customer@example.test']);
+
+        $ticket = app(SupportTicketService::class)->createTicket($customer, [
+            'subject' => 'Private ticket subject',
+            'body' => 'Private initial message content',
+            'source' => 'dashboard',
+            'department' => 'billing',
+            'priority' => 'high',
+            'topic_area' => 'services',
+            'related_service' => 'ocr',
+        ]);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.created')
+            ->firstOrFail();
+
+        $this->assertSame($customer->id, $event->user_id);
+        $this->assertSame('support', $event->source);
+        $this->assertSame('open', $event->payload_meta['status']);
+        $this->assertSame('dashboard', $event->payload_meta['source']);
+        $this->assertSame('billing', $event->payload_meta['department']);
+        $this->assertSame('high', $event->payload_meta['priority']);
+        $this->assertSame('services', $event->payload_meta['topic_area']);
+        $this->assertSame('ocr', $event->payload_meta['related_service']);
+        $this->assertSame('customer', $event->payload_meta['initiator_type']);
+
+        $encoded = json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('Private ticket subject', $encoded);
+        $this->assertStringNotContainsString('Private initial message content', $encoded);
+        $this->assertStringNotContainsString('audit-customer@example.test', $encoded);
+    }
+
+    public function test_guest_ticket_creation_audit_does_not_store_guest_contact_details(): void
+    {
+        $ticket = app(SupportTicketService::class)->createTicket(null, [
+            'subject' => 'Guest private subject',
+            'body' => 'Guest private message',
+            'guest_name' => 'Private Guest Name',
+            'guest_email' => 'guest-private@example.test',
+            'source' => 'widget',
+            'department' => 'support',
+            'priority' => 'normal',
+        ]);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.created')
+            ->firstOrFail();
+
+        $this->assertNull($event->user_id);
+        $this->assertSame('guest', $event->payload_meta['initiator_type']);
+        $this->assertSame('widget', $event->payload_meta['source']);
+
+        $encoded = json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('Private Guest Name', $encoded);
+        $this->assertStringNotContainsString('guest-private@example.test', $encoded);
+        $this->assertStringNotContainsString('Guest private subject', $encoded);
+        $this->assertStringNotContainsString('Guest private message', $encoded);
+    }
+
+    public function test_ticket_creation_rolls_back_when_audit_append_fails(): void
+    {
+        $customer = User::factory()->create();
+        $audit = Mockery::mock(\App\Services\AuditEventService::class);
+        $audit->shouldReceive('record')->once()->andThrow(new \RuntimeException('audit ledger unavailable'));
+        $this->app->instance(\App\Services\AuditEventService::class, $audit);
+
+        try {
+            app(SupportTicketService::class)->createTicket($customer, [
+                'subject' => 'Must not persist',
+                'body' => 'Must not persist',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+            $this->fail('Ticket creation must roll back when its audit event cannot be appended.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('audit ledger unavailable', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('tickets', 0);
+        $this->assertDatabaseCount('ticket_messages', 0);
+        $this->assertDatabaseCount('farast_workflow_events', 0);
+        $this->assertDatabaseCount('farast_audit_events', 0);
+    }
+
     public function test_noop_status_change_does_not_append_an_audit_event(): void
     {
         $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
