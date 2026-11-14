@@ -54,6 +54,10 @@ final class SupportAssignmentMutex
             return $callback();
         }
 
+        if ($connection->transactionLevel() !== 0) {
+            throw new RuntimeException('قفل تخصیص باید پیش از شروع تراکنش بیرونی دریافت شود؛ فراخوانی تو‌در‌تو مجاز نیست.');
+        }
+
         // Force the write PDO: GET_LOCK and the following transaction must use
         // the same MySQL session even when read/write splitting is configured.
         $lock = $connection->selectOne(
@@ -67,8 +71,22 @@ final class SupportAssignmentMutex
         }
 
         try {
-            return $callback();
+            $result = $callback();
+
+            if ($connection->transactionLevel() !== 0) {
+                throw new RuntimeException('عملیات هماهنگ‌شده پیش از آزادسازی قفل، تراکنش خود را نبست.');
+            }
+
+            return $result;
         } finally {
+            try {
+                while ($connection->transactionLevel() > 0) {
+                    $connection->rollBack();
+                }
+            } catch (Throwable $rollbackException) {
+                report($rollbackException);
+            }
+
             try {
                 $released = $connection->selectOne(
                     'SELECT RELEASE_LOCK(?) AS released',
