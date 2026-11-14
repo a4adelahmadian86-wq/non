@@ -8,7 +8,7 @@ use App\Services\SupportAssignmentMutex;
 use App\Services\SupportNotificationService;
 use App\Services\SupportTicketService;
 use App\Services\WorkflowEngine;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Illuminate\Support\Facades\DB;
 use Mockery;
 use RuntimeException;
@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 class SupportAssignmentMutexTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     public function test_ticket_creation_holds_mysql_workload_lock_and_rebalances_after_each_ticket(): void
     {
