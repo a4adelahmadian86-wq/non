@@ -102,6 +102,7 @@ class SupportController extends Controller
         $afterId = (int) $request->input('after_id', 0);
 
         $messages = $ticket->messages()
+            ->with('user')
             ->where('id', '>', $afterId)
             ->when(! $canSeeInternal, fn ($q) => $q->where(function ($w) {
                 $w->where('is_internal', false)->orWhereNull('is_internal');
@@ -264,10 +265,21 @@ class SupportController extends Controller
 
     public function adminIndex(Request $request)
     {
-        $query = Ticket::with([
-            'messages' => fn ($q) => $q->orderBy('created_at'),
-            'user', 'relatedProduct', 'assignee',
-        ]);
+        // Inbox rows need only the latest public preview. Loading every message
+        // for every ticket on the page caused memory growth proportional to all
+        // conversation history; the active thread is loaded separately below.
+        $latestPublicMessageBody = TicketMessage::query()
+            ->select('body')
+            ->whereColumn('ticket_id', 'tickets.id')
+            ->where(function ($q) {
+                $q->where('is_internal', false)->orWhereNull('is_internal');
+            })
+            ->orderByDesc('id')
+            ->limit(1);
+
+        $query = Ticket::query()
+            ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
+            ->with(['user', 'relatedProduct', 'assignee']);
 
         if ($request->filled('status') && $request->status !== 'all') {
             if ($request->status === 'needs_reply') {
@@ -343,11 +355,14 @@ class SupportController extends Controller
 
         $active = null;
         if ($request->filled('ticket')) {
-            $active = Ticket::with(['messages' => fn ($q) => $q->orderBy('created_at'), 'user', 'relatedProduct', 'assignee'])
+            $active = Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])
                 ->find($request->integer('ticket'));
         }
         if (! $active) {
-            $active = $tickets->getCollection()->first();
+            $firstTicketId = $tickets->getCollection()->first()?->id;
+            $active = $firstTicketId
+                ? Ticket::with(['messages.user', 'user', 'relatedProduct', 'assignee'])->find($firstTicketId)
+                : null;
         }
 
         $stats = [
