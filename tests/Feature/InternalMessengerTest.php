@@ -82,10 +82,10 @@ class InternalMessengerTest extends TestCase
         ]);
 
         $file = UploadedFile::fake()->createWithContent('internal.txt', 'private message attachment');
-        $response = $this->actingAs($sender)->postJson(route('messenger.send', $conversation), [
+        $response = $this->actingAs($sender)->post(route('messenger.send', $conversation), [
             'body' => 'فایل محرمانه',
             'attachments' => [$file],
-        ])->assertCreated();
+        ], ['Accept' => 'application/json'])->assertCreated();
 
         $message = ConversationMessage::query()->findOrFail((int) $response->json('message.id'));
         $attachment = $message->attachments[0];
@@ -143,10 +143,10 @@ class InternalMessengerTest extends TestCase
 
         $this->withoutExceptionHandling();
         try {
-            $this->actingAs($sender)->postJson(route('messenger.send', $conversation), [
+            $this->actingAs($sender)->post(route('messenger.send', $conversation), [
                 'body' => 'این پیام نباید ثبت شود',
                 'attachments' => [UploadedFile::fake()->createWithContent('rollback.txt', 'rollback')],
-            ]);
+            ], ['Accept' => 'application/json']);
             $this->fail('The failed managed reference must roll back the message.');
         } catch (\RuntimeException $exception) {
             $this->assertSame('reference binding failed', $exception->getMessage());
