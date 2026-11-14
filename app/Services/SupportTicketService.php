@@ -23,9 +23,28 @@ class SupportTicketService
 
     public const STATUS_FILTER_NEEDS_REPLY = 'needs_reply';
 
-    public const DEPARTMENTS = ['support', 'sales', 'billing', 'complaint'];
+    public const DEPARTMENT_SUPPORT = 'support';
 
-    public const PRIORITIES = ['low', 'normal', 'high'];
+    public const DEPARTMENT_SALES = 'sales';
+
+    public const DEPARTMENT_BILLING = 'billing';
+
+    public const DEPARTMENT_COMPLAINT = 'complaint';
+
+    public const DEPARTMENTS = [
+        self::DEPARTMENT_SUPPORT,
+        self::DEPARTMENT_SALES,
+        self::DEPARTMENT_BILLING,
+        self::DEPARTMENT_COMPLAINT,
+    ];
+
+    public const PRIORITY_LOW = 'low';
+
+    public const PRIORITY_NORMAL = 'normal';
+
+    public const PRIORITY_HIGH = 'high';
+
+    public const PRIORITIES = [self::PRIORITY_LOW, self::PRIORITY_NORMAL, self::PRIORITY_HIGH];
 
     public const SOURCE_DASHBOARD = 'dashboard';
 
@@ -78,8 +97,8 @@ class SupportTicketService
                     'user_id' => $user?->id,
                     'subject' => $data['subject'],
                     'status' => 'open',
-                    'priority' => $data['priority'] ?? 'normal',
-                    'department' => $data['department'] ?? 'support',
+                    'priority' => $data['priority'] ?? self::PRIORITY_NORMAL,
+                    'department' => $data['department'] ?? self::DEPARTMENT_SUPPORT,
                 ];
     
                 if (Schema::hasColumn('tickets', 'ticket_code')) {
