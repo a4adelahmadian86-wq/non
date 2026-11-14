@@ -186,12 +186,12 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $customer = User::factory()->create();
         $outsideCustomer = User::factory()->create();
 
-        $organization = \\App\\Models\\Organization::create([
+        $organization = \App\Models\Organization::create([
             'name' => 'Support scope organization',
             'slug' => 'support-scope-organization',
             'status' => 'active',
         ]);
-        $team = \\App\\Models\\Team::create([
+        $team = \App\Models\Team::create([
             'organization_id' => $organization->id,
             'name' => 'Support team',
             'slug' => 'support-team',
