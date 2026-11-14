@@ -248,6 +248,11 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'department' => 'support',
         ]);
 
+        self::assertSame('team', app(AuthorizationService::class)->effectiveScope($agent));
+        $visibleUserIds = app(\App\Services\AdminConsoleService::class)->visibleUserIds($agent);
+        self::assertContains($customer->id, $visibleUserIds);
+        self::assertNotContains($outsideCustomer->id, $visibleUserIds);
+
         $this->actingAs($agent)
             ->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
             ->assertOk()
@@ -263,11 +268,14 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertDontSee('Other-team private ticket')
             ->assertDontSee('Global-only guest ticket');
 
-        $this->actingAs($agent)
+        $searchResponse = $this->actingAs($agent)
             ->get(route('admin.support.management', ['q' => 'Other-team private ticket']))
             ->assertOk()
-            ->assertDontSee('Other-team private ticket')
             ->assertDontSee('Global-only guest ticket');
+
+        // The query text is echoed in the search input; assert the foreign ticket
+        // itself is not linked into the rendered inbox.
+        $this->assertStringNotContainsString('ticket='.$outsideTicket->id, $searchResponse->getContent());
 
         $this->actingAs($agent)
             ->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'Unauthorized reply'])
