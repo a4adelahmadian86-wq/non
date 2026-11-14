@@ -281,6 +281,9 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $team->members()->detach($agent->id);
         $team->update(['supervisor_id' => null]);
         $this->actingAs($agent)
+            ->get(route('admin.support.management'))
+            ->assertForbidden();
+        $this->actingAs($agent)
             ->post(route('admin.tickets.reply', $insideTicket), ['body' => 'Stale team access'])
             ->assertForbidden();
     }
