@@ -21,8 +21,6 @@ final class SupportAssignmentMutex
 {
     public const LOCK_NAME = 'farast:support:assignment-workload';
 
-    private const LOCK_TIMEOUT_SECONDS = 15;
-
     public function assertHeld(): void
     {
         $connection = DB::connection();
@@ -62,7 +60,7 @@ final class SupportAssignmentMutex
         // the same MySQL session even when read/write splitting is configured.
         $lock = $connection->selectOne(
             'SELECT GET_LOCK(?, ?) AS acquired',
-            [self::LOCK_NAME, self::LOCK_TIMEOUT_SECONDS],
+            [self::LOCK_NAME, max(0, (int) config('support.assignment_lock_timeout_seconds', 15))],
             false
         );
 

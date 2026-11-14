@@ -123,6 +123,76 @@ class SupportAssignmentMutexTest extends TestCase
         $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
     }
 
+    public function test_mysql_workload_lock_timeout_fails_closed_without_running_callback(): void
+    {
+        $this->requireMySql();
+
+        $probe = $this->probeConnection();
+        config(['support.assignment_lock_timeout_seconds' => 0]);
+
+        $held = $probe->selectOne(
+            'SELECT GET_LOCK(?, 0) AS acquired',
+            [SupportAssignmentMutex::LOCK_NAME],
+            false
+        );
+        $this->assertSame(1, (int) $held->acquired);
+
+        $callbackRan = false;
+
+        try {
+            try {
+                app(SupportAssignmentMutex::class)->synchronized(function () use (&$callbackRan): void {
+                    $callbackRan = true;
+                });
+                $this->fail('A lock timeout must stop the workload mutation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('در مهلت مقرر دریافت نشد', $exception->getMessage());
+            }
+
+            $this->assertFalse($callbackRan, 'The protected callback must never run without the workload lock.');
+
+            // The failed contender must not release a lock owned by another session.
+            $stillHeld = $probe->selectOne(
+                'SELECT IS_USED_LOCK(?) IS NOT NULL AS held',
+                [SupportAssignmentMutex::LOCK_NAME],
+                false
+            );
+            $this->assertSame(1, (int) $stillHeld->held);
+        } finally {
+            $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
+        }
+    }
+
+    public function test_mysql_session_loss_releases_the_named_workload_lock(): void
+    {
+        $this->requireMySql();
+
+        $probe = $this->probeConnection();
+        $connection = DB::connection();
+        $connectionId = (int) $connection->selectOne('SELECT CONNECTION_ID() AS id', [], false)->id;
+
+        try {
+            $result = app(SupportAssignmentMutex::class)->synchronized(function () use ($probe, $connectionId): string {
+                $probe->statement('KILL CONNECTION '.$connectionId);
+
+                return 'connection terminated';
+            });
+
+            $this->assertSame('connection terminated', $result);
+
+            // MySQL releases session-scoped named locks when the owning session dies.
+            $available = $probe->selectOne(
+                'SELECT GET_LOCK(?, 0) AS acquired',
+                [SupportAssignmentMutex::LOCK_NAME],
+                false
+            );
+            $this->assertSame(1, (int) $available->acquired);
+        } finally {
+            $probe->selectOne('SELECT RELEASE_LOCK(?) AS released', [SupportAssignmentMutex::LOCK_NAME], false);
+            DB::purge();
+        }
+    }
+
     public function test_mysql_workload_lock_rejects_calls_inside_an_existing_transaction(): void
     {
         $this->requireMySql();
