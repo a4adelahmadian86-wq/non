@@ -206,7 +206,10 @@
             @endif
 
             <div class="sd-messages" id="chatMessages">
-                <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $active->messages->last()?->id ?? 0 }}">
+                @if($active->has_older_messages)
+                    <button type="button" id="loadOlderAdminMessages" class="sd-btn" style="display:block;margin:8px auto;background:#eef4ff;color:#1769ff">نمایش پیام‌های قدیمی‌تر</button>
+                @endif
+                <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $active->last_scanned_message_id ?? $active->messages->last()?->id ?? 0 }}" data-oldest-id="{{ $active->oldest_scanned_message_id ?? $active->messages->first()?->id ?? 0 }}">
                 @foreach($active->messages as $m)
                     @php $isStaff = $m->isFromStaff(); $isInternal = (bool) $m->is_internal; @endphp
                     <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}">
@@ -329,12 +332,72 @@
   internalNote?.addEventListener('change', syncInternalNote);
   syncInternalNote();
 
-  // Poll for new messages on the active ticket without overlapping requests.
+  // Build one message node for both polling and older-history loading.
   const thread = document.getElementById('adminThread');
+  const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const buildAdminMessageNode = (m) => {
+    const isStaff = !!m.is_staff;
+    const isInternal = !!m.is_internal;
+    const attachmentsHtml = Array.isArray(m.attachments) && m.attachments.length
+      ? '<div class="tk-attach-list">' + m.attachments.map((a) => {
+          const name = esc(a.name || 'پیوست');
+          if (a.quarantined) return '<span class="tk-attach-unavailable"><i class="fa-solid fa-shield-halved"></i> ' + name + ' · قرنطینه امنیتی</span>';
+          if (!a.available) return '<span class="tk-attach-pending"><i class="fa-solid fa-hourglass-half"></i> ' + name + ' · در حال انتقال به فضای امن</span>';
+          return '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + name + '</a>';
+        }).join('') + '</div>'
+      : '';
+    const wrap = document.createElement('div');
+    wrap.className = 'sd-msg ' + (isStaff ? 'sd-msg-user' : 'sd-msg-staff');
+    wrap.dataset.msgId = String(m.id);
+    wrap.innerHTML = (isStaff ? '' : '<div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>') +
+      '<div class="sd-msg-col"><div class="sd-bubble"' + (isInternal ? ' style="border:1px dashed #f59e0b;background:#fffbeb;color:#78350f"' : '') + '>' +
+      (isInternal ? '<div style="font-size:.72rem;font-weight:800;margin-bottom:4px">یادداشت داخلی</div>' : '') +
+      '<pre>' + esc(m.body) + '</pre>' + attachmentsHtml + '</div>' +
+      '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
+    return wrap;
+  };
+
+  const box = document.getElementById('chatMessages');
+  const olderButton = document.getElementById('loadOlderAdminMessages');
   if (thread && thread.dataset.pollUrl) {
     let lastId = parseInt(thread.dataset.lastId || '0', 10) || 0;
     let pollInFlight = false;
-    const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let olderInFlight = false;
+
+    olderButton?.addEventListener('click', async () => {
+      if (olderInFlight) return;
+      const beforeId = Number(thread.dataset.oldestId || 0);
+      if (!beforeId || !box) return;
+      olderInFlight = true;
+      olderButton.disabled = true;
+      olderButton.textContent = 'در حال بارگذاری...';
+      const previousHeight = box.scrollHeight;
+      const previousTop = box.scrollTop;
+      try {
+        const url = thread.dataset.pollUrl + (thread.dataset.pollUrl.includes('?') ? '&' : '?') + 'before_id=' + beforeId;
+        const response = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!response.ok) throw new Error('history request failed');
+        const data = await response.json();
+        if (!data.ok) throw new Error('history response invalid');
+
+        const nodes = (Array.isArray(data.messages) ? data.messages : []).map(buildAdminMessageNode);
+        nodes.reverse().forEach((node) => thread.insertBefore(node, thread.firstChild));
+
+        const nextBeforeId = Number(data.next_before_id);
+        if (Number.isFinite(nextBeforeId) && nextBeforeId > 0) {
+          thread.dataset.oldestId = String(nextBeforeId);
+        }
+        if (!data.has_more) olderButton.hidden = true;
+        box.scrollTop = previousTop + (box.scrollHeight - previousHeight);
+      } catch (e) {
+        olderButton.textContent = 'خطا؛ دوباره تلاش کنید';
+      } finally {
+        olderInFlight = false;
+        olderButton.disabled = false;
+        if (!olderButton.hidden) olderButton.textContent = 'نمایش پیام‌های قدیمی‌تر';
+      }
+    });
+
     setInterval(async () => {
       if (pollInFlight || document.hidden) return;
       pollInFlight = true;
@@ -351,24 +414,7 @@
         (Array.isArray(data.messages) ? data.messages : []).forEach((m) => {
           if (m.id <= lastId) return;
           lastId = m.id;
-          const isStaff = !!m.is_staff;
-          const isInternal = !!m.is_internal;
-          const attachmentsHtml = Array.isArray(m.attachments) && m.attachments.length
-            ? '<div class="tk-attach-list">' + m.attachments.map((a) => {
-                const name = esc(a.name || 'پیوست');
-                if (a.quarantined) return '<span class="tk-attach-unavailable"><i class="fa-solid fa-shield-halved"></i> ' + name + ' · قرنطینه امنیتی</span>';
-                if (!a.available) return '<span class="tk-attach-pending"><i class="fa-solid fa-hourglass-half"></i> ' + name + ' · در حال انتقال به فضای امن</span>';
-                return '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + name + '</a>';
-              }).join('') + '</div>'
-            : '';
-          const wrap = document.createElement('div');
-          wrap.className = 'sd-msg ' + (isStaff ? 'sd-msg-user' : 'sd-msg-staff');
-          wrap.innerHTML = (isStaff ? '' : '<div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>') +
-            '<div class="sd-msg-col"><div class="sd-bubble"' + (isInternal ? ' style="border:1px dashed #f59e0b;background:#fffbeb;color:#78350f"' : '') + '>' +
-            (isInternal ? '<div style="font-size:.72rem;font-weight:800;margin-bottom:4px">یادداشت داخلی</div>' : '') +
-            '<pre>' + esc(m.body) + '</pre>' + attachmentsHtml + '</div>' +
-            '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
-          thread.appendChild(wrap);
+          thread.appendChild(buildAdminMessageNode(m));
         });
 
         const serverCursor = Number(data.last_id);
