@@ -8,6 +8,8 @@ use App\Services\SupportNotificationService;
 use App\Services\SupportSlaService;
 use App\Services\SupportTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Mockery;
 use Tests\TestCase;
