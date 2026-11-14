@@ -457,6 +457,7 @@
                                                     'internal_note' => 'یادداشت داخلی',
                                                     'system_note' => 'یادداشت سیستمی',
                                                     'staff_reply' => 'پاسخ کارشناس',
+                                                    'system_reply' => 'پیام سیستمی',
                                                     'customer_reply' => 'پاسخ مشتری',
                                                     'guest_reply' => 'پاسخ مهمان',
                                                     default => 'پیام',
