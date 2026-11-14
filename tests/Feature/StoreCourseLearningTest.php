@@ -140,6 +140,13 @@ class StoreCourseLearningTest extends TestCase
         $this->post('/cart/checkout', ['accept_terms' => '1'])
             ->assertRedirect(route('library'));
 
+        $freeOrder = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$freeOrder->id.':order.paid',
+            'event_type' => 'order.paid',
+            'status' => 'pending',
+        ]);
+
         $libraryItem = StoreLibraryItem::query()
             ->where('user_id', $user->id)
             ->where('product_id', $product->id)
@@ -172,6 +179,11 @@ class StoreCourseLearningTest extends TestCase
 
         $order->refresh();
         $this->assertTrue($order->isPaid());
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'order:'.$order->id.':order.paid',
+            'event_type' => 'order.paid',
+            'status' => 'pending',
+        ]);
         $payment = Payment::query()->where('order_id', $order->id)->firstOrFail();
         $this->assertSame('paid', $payment->status);
         $this->assertSame((int) $order->total_rials, (int) $payment->amount_rials);
@@ -195,6 +207,7 @@ class StoreCourseLearningTest extends TestCase
         $this->assertSame(1, Payment::query()->where('order_id', $order->id)->count());
         $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
         $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
+        $this->assertSame(1, DB::table('farast_workflow_events')->where('idempotency_key', 'order:'.$order->id.':order.paid')->count());
     }
 
     public function test_course_enrollment_rejects_paid_order_without_matching_payment_ledger(): void
