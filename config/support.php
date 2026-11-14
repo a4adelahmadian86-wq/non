@@ -30,6 +30,11 @@ return [
         // Carbon: 0=یکشنبه … 4=پنجشنبه، 5=جمعه، 6=شنبه
         // پیش‌فرض: پنجشنبه و جمعه تعطیل (الگوی رایج بسیاری از سازمان‌های ایرانی)
         'weekend' => array_map('intval', explode(',', env('SUPPORT_WEEKEND', '4,5'))),
+        // Comma-separated local dates in YYYY-MM-DD format.
+        'holidays' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('SUPPORT_BUSINESS_HOLIDAYS', ''))
+        ))),
     ],
 
     /*
