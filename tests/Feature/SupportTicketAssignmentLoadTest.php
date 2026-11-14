@@ -10,14 +10,15 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Http\Middleware\ResolveAdminScope;
 use App\Services\AuthorizationService;
+use App\Services\SupportAssignmentMutex;
 use App\Services\SupportTicketService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SupportTicketAssignmentLoadTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     public function test_auto_assignment_ignores_workload_outside_each_agents_rbac_scope(): void
     {
@@ -84,6 +85,24 @@ class SupportTicketAssignmentLoadTest extends TestCase
             'department' => 'support',
         ]);
 
+        Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'assigned_to' => $teamAgent->id,
+            'subject' => 'Closed in-scope ticket must not count as active workload',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'assigned_to' => $teamAgent->id,
+            'subject' => 'Second closed ticket must also be excluded from active workload',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
         for ($i = 1; $i <= 4; $i++) {
             Ticket::create([
                 'user_id' => $outsideCustomer->id,
@@ -103,8 +122,10 @@ class SupportTicketAssignmentLoadTest extends TestCase
         $this->assertContains($insideCustomer->id, $agentVisibleUserIds);
         $this->assertNotContains($outsideCustomer->id, $agentVisibleUserIds);
 
-        $picked = DB::transaction(
-            fn () => app(SupportTicketService::class)->pickLeastLoadedAgent($target)
+        $picked = app(SupportAssignmentMutex::class)->synchronized(
+            fn () => DB::transaction(
+                fn () => app(SupportTicketService::class)->pickLeastLoadedAgent($target)
+            )
         );
 
         $this->assertNotNull($picked);

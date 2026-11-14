@@ -4,16 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\FarastAuditEvent;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\SupportNotificationService;
 use App\Services\SupportTicketService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Mockery;
 use Tests\TestCase;
 
 class SupportTicketAuditLedgerTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     public function test_status_metadata_and_assignment_changes_append_sanitized_audit_events(): void
     {
@@ -159,4 +160,99 @@ class SupportTicketAuditLedgerTest extends TestCase
             json_encode($event->payload_meta, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
         );
     }
+
+    public function test_reassigning_ticket_to_the_same_agent_does_not_append_duplicate_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'No-op assignment audit',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agent->id,
+        ]);
+
+        $auditCount = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count();
+        $messageCount = TicketMessage::query()->where('ticket_id', $ticket->id)->count();
+
+        app(SupportTicketService::class)->assign($ticket, $agent, $admin);
+
+        $this->assertSame($auditCount, FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count());
+        $this->assertSame($messageCount, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
+    }
+
+
+    public function test_reapplying_identical_ticket_metadata_does_not_append_duplicate_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'No-op metadata audit',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $before = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count();
+
+        app(SupportTicketService::class)->updateMeta($ticket, [
+            'priority' => 'normal',
+            'department' => 'support',
+        ], $admin);
+
+        $this->assertSame($before, FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count());
+    }
+
+
+    public function test_invalid_status_values_are_rejected_without_persisting_ticket_changes(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => null,
+            'subject' => 'Invalid status validation',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $service = app(SupportTicketService::class);
+
+        try {
+            $service->changeStatus($ticket, 'not-a-valid-status', $admin);
+            $this->fail('Unknown status values must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('وضعیت نامعتبر است.', $exception->getMessage());
+        }
+
+        try {
+            $service->addMessage($ticket, $admin, 'This message must roll back', [
+                'is_staff' => true,
+                'status' => 'not-a-valid-status',
+            ]);
+            $this->fail('A reply with an invalid status must be rejected atomically.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertNotSame('', $exception->getMessage());
+        }
+
+        $this->assertSame('open', $ticket->fresh()->status);
+        $this->assertSame(0, TicketMessage::query()->where('ticket_id', $ticket->id)->count());
+        $this->assertSame(0, FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->count());
+    }
+
 }

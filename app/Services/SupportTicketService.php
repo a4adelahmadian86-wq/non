@@ -46,7 +46,8 @@ class SupportTicketService
         $initialMessage = null;
 
         try {
-            $ticket = DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
+            $ticket = app(SupportAssignmentMutex::class)->synchronized(function () use ($user, $data, $attachment, &$initialMessage) {
+                return DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
                 $payload = [
                     'user_id' => $user?->id,
                     'subject' => $data['subject'],
@@ -92,6 +93,11 @@ class SupportTicketService
                     if ($agent) {
                         abort_unless($this->isEligibleSupportAgent($agent, $ticket), 403);
                         $ticket->forceFill(['assigned_to' => $agent->id])->save();
+
+                        $this->recordSupportAuditEvent($ticket, null, 'support.ticket.assignment_changed', [
+                            'from_assigned_to' => null,
+                            'to_assigned_to' => (int) $agent->id,
+                        ]);
                     }
                 }
     
@@ -109,6 +115,7 @@ class SupportTicketService
                 app(WorkflowEngine::class)->enqueueTicketCreated($ticket);
 
                 return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+                });
             });
         } catch (\Throwable $exception) {
             // addMessage owns cleanup for failures inside its own transaction.
@@ -166,6 +173,8 @@ class SupportTicketService
      */
     public function pickLeastLoadedAgent(Ticket $ticket): ?User
     {
+        app(SupportAssignmentMutex::class)->assertHeld();
+
         $agents = $this->eligibleAgentsFor($ticket);
         if ($agents->isEmpty()) {
             return null;
@@ -264,7 +273,7 @@ class SupportTicketService
         }
 
         try {
-            [$message, $previousStatus, $fresh, $resolutionBreachDetected] = DB::transaction(function () use (
+            $persistMessage = fn () => DB::transaction(function () use (
                 $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus
             ): array {
                 $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
@@ -323,6 +332,9 @@ class SupportTicketService
 
                 return [$message, $previousStatus, $locked->fresh(), $resolutionBreachDetected];
             });
+            [$message, $previousStatus, $fresh, $resolutionBreachDetected] = ($touchStatus && ! $isInternal)
+                ? app(SupportAssignmentMutex::class)->synchronized($persistMessage)
+                : $persistMessage();
         } catch (\Throwable $exception) {
             if ($temporaryPath !== null && $temporaryPath !== '') {
                 \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
@@ -415,7 +427,8 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
+        [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = app(SupportAssignmentMutex::class)->synchronized(
+            fn () => DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             $old = (string) $locked->status;
 
@@ -447,7 +460,8 @@ class SupportTicketService
             }
 
             return [$locked->fresh(), $old, $transitionMessage?->id, true, $resolutionBreachDetected];
-        });
+            })
+        );
 
         if (! $changed) {
             return $fresh;
@@ -473,7 +487,8 @@ class SupportTicketService
             return $ticket;
         }
 
-        [$fresh, $assignmentMessageId, $changed] = DB::transaction(function () use ($ticket, $agent, $actor): array {
+        [$fresh, $assignmentMessageId, $changed] = app(SupportAssignmentMutex::class)->synchronized(
+            fn () => DB::transaction(function () use ($ticket, $agent, $actor): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
             if ((int) ($locked->assigned_to ?? 0) === (int) ($agent?->id ?? 0)) {
@@ -505,7 +520,8 @@ class SupportTicketService
             }
 
             return [$locked->fresh(['assignee']), $assignmentMessage?->id, true];
-        });
+            })
+        );
 
         if (! $changed) {
             return $fresh;
@@ -657,11 +673,11 @@ class SupportTicketService
             return 0;
         }
 
-        $claimed = Ticket::query()
+        $claimed = app(SupportAssignmentMutex::class)->synchronized(fn () => DB::transaction(fn () => Ticket::query()
             ->whereNull('user_id')
             ->whereIn('id', $ticketIds)
             ->whereRaw('LOWER(guest_email) = ?', [$sessionEmail])
-            ->update(['user_id' => $user->id]);
+            ->update(['user_id' => $user->id])));
 
         if ($claimed > 0) {
             session()->forget(['support_guest_ticket_ids', 'support_guest_email', 'support_guest_name']);
