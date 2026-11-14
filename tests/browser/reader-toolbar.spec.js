@@ -6,8 +6,16 @@ const readerView = fs.readFileSync(
   path.join(__dirname, '../../resources/views/store/reader.blade.php'),
   'utf8'
 );
-const readerStyles = readerView.match(/<style>([\s\S]*?)<\/style>/)?.[1];
-if (!readerStyles) throw new Error('Reader view styles could not be loaded.');
+const readerStyles = fs.readFileSync(
+  path.join(__dirname, '../../public/css/farast-reader.css'),
+  'utf8'
+);
+
+test('reader styles are served from a local cacheable asset without remote dependencies', async () => {
+  expect(readerView).toContain('/css/farast-reader.css?v=20261114reader1');
+  expect(readerView).not.toMatch(/<style>/i);
+  expect(readerStyles).not.toMatch(/@import\s+[^;]*https?:|url\(\s*['"]?https?:/i);
+});
 
 test('wide reader toolbar actions stay visibly labeled without remote icon fonts', async ({ page }) => {
   await page.setContent(
