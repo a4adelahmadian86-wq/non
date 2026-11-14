@@ -482,13 +482,24 @@ class SupportController extends Controller
             ? User::query()->whereIn('id', $auditUserIds)->get(['id', 'name'])->keyBy('id')
             : collect();
 
+        $visibleAuditUserIds = $visibleUserIds === null
+            ? collect()
+            : collect($visibleUserIds)->map(fn ($id) => (int) $id)->unique();
+
         $auditUserLabels = collect();
         foreach ($auditUsers as $auditUser) {
+            $isVisibleTeamSupportAgent = $visibleUserIds !== null
+                && $visibleAuditUserIds->contains((int) $auditUser->id)
+                && app(AuthorizationService::class)->allows($auditUser, 'support.manage');
+
             if ((int) $auditUser->id === (int) auth()->id()) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
             } elseif ($active && (int) $auditUser->id === (int) $active->user_id) {
                 $auditUserLabels[$auditUser->id] = 'مشتری';
-            } elseif (app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)) {
+            } elseif (
+                app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)
+                || $isVisibleTeamSupportAgent
+            ) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
             } else {
                 // Do not disclose names of historical actors/assignees outside
