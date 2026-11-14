@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\FarastDocument;
-use App\\Models\\FarastProject;
-use App\\Models\\TypingDocument;
-use App\\Models\\User;
-use App\\Services\\EditorDocumentService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
+use App\Models\FarastDocument;
+use App\Models\FarastProject;
+use App\Models\TypingDocument;
+use App\Models\User;
+use App\Services\EditorDocumentService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class ProjectDocumentCanonicalLinkageTest extends TestCase
 {
