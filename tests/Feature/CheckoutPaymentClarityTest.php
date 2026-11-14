@@ -183,7 +183,7 @@ class CheckoutPaymentClarityTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->assertSame(1, app(\\App\\Services\\WorkflowEngine::class)->retryFailedEvents());
+        $this->assertSame(1, app(\App\Services\WorkflowEngine::class)->retryFailedEvents());
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => $eventKey,
             'status' => 'completed',
