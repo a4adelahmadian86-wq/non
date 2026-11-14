@@ -28,6 +28,10 @@ class SupportSlaAlertOutboxService
      */
     public function enqueue(Ticket $ticket, string $kind, array $alert): int
     {
+        if (DB::connection()->transactionLevel() < 1) {
+            throw new RuntimeException('SLA alert intent must be persisted inside the ticket transaction.');
+        }
+
         if (! in_array($kind, ['first_response', 'resolution'], true)
             || ! in_array($alert['event'] ?? null, ['warning', 'breached'], true)) {
             throw new RuntimeException('Unsupported support SLA alert payload.');
@@ -79,6 +83,20 @@ class SupportSlaAlertOutboxService
 
         $ids = DB::transaction(function () use ($limit): array {
             $staleBefore = now()->subMinutes(self::STALE_AFTER_MINUTES);
+
+            // A worker may die during its final permitted attempt. Close that expired lease
+            // explicitly instead of leaving a permanently processing row behind.
+            SupportSlaAlertOutbox::query()
+                ->where('status', 'processing')
+                ->where('attempts', '>=', self::MAX_ATTEMPTS)
+                ->where('locked_at', '<=', $staleBefore)
+                ->update([
+                    'status' => 'failed',
+                    'locked_at' => null,
+                    'last_error' => 'Retry limit reached after an abandoned delivery lease.',
+                    'updated_at' => now(),
+                ]);
+
             $rows = SupportSlaAlertOutbox::query()
                 ->where('attempts', '<', self::MAX_ATTEMPTS)
                 ->where(function ($query) use ($staleBefore): void {
