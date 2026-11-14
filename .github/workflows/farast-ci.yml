@@ -157,7 +157,7 @@ jobs:
           DB_DATABASE: farast_test
           DB_USERNAME: root
           DB_PASSWORD: root
-      # Support lock tests use per-test migrations on MySQL so the advisory lock spans a real commit boundary.
+      # Support lock tests use the MySQL-aware RefreshDatabase helper to avoid an outer transaction.
       - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
