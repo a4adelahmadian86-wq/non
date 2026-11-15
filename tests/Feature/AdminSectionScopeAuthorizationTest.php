@@ -575,6 +575,71 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_direct_record_grants_cannot_widen_scoped_admin_assignments(): void
+    {
+        $organizationA = Organization::create(['name' => 'Record Scope Org A', 'slug' => 'record-scope-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Record Scope Org B', 'slug' => 'record-scope-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456961', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456962', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456963', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Record Scope Outside Team',
+            'slug' => 'record-scope-outside-team',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-record-access-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $usersView = Permission::query()->where('key', 'users.view')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            [
+                'user_id' => $admin->id,
+                'permission_id' => $usersView->id,
+                'effect' => 'allow',
+                'scope' => 'global',
+                'organization_id' => null,
+                'team_id' => null,
+                'granted_by' => null,
+                'starts_at' => now()->subMinute(),
+                'expires_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $admin->id,
+                'permission_id' => $usersView->id,
+                'effect' => 'allow',
+                'scope' => 'team',
+                'organization_id' => $organizationB->id,
+                'team_id' => $teamB->id,
+                'granted_by' => null,
+                'starts_at' => now()->subMinute(),
+                'expires_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $recordA = new class extends \Illuminate\Database\Eloquent\Model {};
+        $recordA->setAttribute('organization_id', $organizationA->id);
+        $recordB = new class extends \Illuminate\Database\Eloquent\Model {};
+        $recordB->setAttribute('organization_id', $organizationB->id);
+        $recordB->setAttribute('team_id', $teamB->id);
+        $recordB->setAttribute('user_id', $memberB->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allowsRecord($admin, 'users.view', $recordA));
+        $this->assertFalse($authorization->allowsRecord($admin, 'users.view', $recordB));
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
