@@ -165,6 +165,9 @@ class S3CompatibleAdapter
                 }
                 $written += $count;
             }
+            if (function_exists('flush')) {
+                flush();
+            }
             $remaining -= $chunkLength;
         }
         if ($remaining !== 0) {
