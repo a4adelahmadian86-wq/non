@@ -9,7 +9,7 @@
         <div><h1>مرکز ارتباطات فراست</h1><p>{{ $isAdmin ? 'نمای هماهنگ تیکت‌های پشتیبانی، گفت‌وگوهای داخلی و اعلان‌ها؛ با حفظ منبع داده و گردش‌کار اصلی هر بخش.' : 'نمای یکپارچه تیکت‌های پشتیبانی شما و اعلان‌های حساب، بدون پراکندگی میان بخش‌های مختلف.' }}</p></div>
         <div class="ac-actions">
             @if($canSupport)
-                <a class="ac-btn primary" href="{{ $isAdmin ? route('admin.support.management') : route('support') }}"><i class="fa-solid fa-headset"></i> {{ $isAdmin ? 'میز تیکت‌ها' : 'تیکت‌های من' }}</a>
+                <a class="ac-btn primary" href="{{ $canManageAllTickets ? route('admin.support.management') : route('support') }}"><i class="fa-solid fa-headset"></i> {{ $canManageAllTickets ? 'میز تیکت‌ها' : 'تیکت‌های من' }}</a>
             @endif
             @if($canUseMessenger)
                 <a class="ac-btn" href="{{ route('messenger.index') }}"><i class="fa-solid fa-comments"></i> پیام‌رسان داخلی</a>
@@ -20,7 +20,7 @@
 
     <section class="ac-panel" aria-label="جست‌وجوی یکپارچه">
         <h2><i class="fa-solid fa-magnifying-glass"></i> جست‌وجوی ارتباطات</h2>
-        <form method="GET" action="{{ $isAdmin ? route('admin.communications.index') : route('platform.communications') }}" style="display:flex;gap:9px;flex-wrap:wrap">
+        <form method="GET" action="{{ $canManageAllTickets ? route('admin.communications.index') : route('platform.communications') }}" style="display:flex;gap:9px;flex-wrap:wrap">
             <input type="search" name="q" value="{{ $searchTerm }}" minlength="2" maxlength="120" placeholder="جست‌وجو در تیکت‌ها، پیام‌های مجاز، گفت‌وگوها و اعلان‌ها…" aria-label="عبارت جست‌وجو" style="flex:1;min-width:220px;border:1px solid #dbe3ee;border-radius:10px;padding:11px 13px;font:inherit">
             <button class="ac-btn primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i> جست‌وجو</button>
             @if($searchTerm !== '')
@@ -70,7 +70,7 @@
             <h2><i class="fa-solid fa-ticket"></i> تیکت‌های اخیر</h2>
             <div class="ac-list">
                 @forelse($tickets as $ticket)
-                    <a class="ac-item" href="{{ route('admin.support.management', ['ticket'=>$ticket->id]) }}">
+                    <a class="ac-item" href="{{ ($canManageAllTickets ? route('admin.support.management', ['ticket'=>$ticket->id]) : route('support.show', $ticket)) }}">
                         <span class="ac-icon"><i class="fa-solid fa-headset"></i></span>
                         <span class="ac-copy"><strong>{{ $ticket->displayCode() }} · {{ $ticket->subject }}</strong><small>{{ $ticket->displayName() }} · {{ $ticket->statusLabel() }} · {{ $ticket->priorityLabel() }}</small></span>
                         <span class="ac-tag">{{ $ticket->departmentLabel() }}</span>
@@ -79,7 +79,7 @@
                     <div class="ac-empty">تیکتی ثبت نشده است.</div>
                 @endforelse
             </div>
-            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $isAdmin ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
+            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $canManageAllTickets ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
         </section>
 
         <div style="display:grid;gap:16px;align-content:start">
