@@ -83,6 +83,32 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonFragment(['body' => 'یادداشت داخلی کارشناس']);
     }
 
+    public function test_global_support_operator_communication_center_can_search_internal_notes(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+        $agent = $this->supportAgent();
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Global support operator ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'body' => 'global-support-internal-search-615',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($agent)
+            ->get(route('platform.communications', ['q' => 'global-support-internal-search-615']))
+            ->assertOk()
+            ->assertSee('global-support-internal-search-615')
+            ->assertSee(route('admin.support.management', ['ticket' => $ticket->id]));
+    }
     public function test_support_agent_can_view_ticket_but_cannot_submit_customer_csat(): void
     {
         $agent = $this->supportAgent();
