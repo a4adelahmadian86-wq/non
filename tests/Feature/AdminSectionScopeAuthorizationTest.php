@@ -12,6 +12,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\AuthorizationService;
+use App\Services\AdminConsoleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -303,6 +304,87 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->actingAs($manager)->get('/admin/store/operations')->assertForbidden();
         $this->actingAs($employee)->get('/admin/support-report')->assertForbidden();
         $this->actingAs($manager)->get('/admin/support-report')->assertForbidden();
+    }
+
+
+    public function test_direct_own_grant_cannot_unlock_an_organization_scoped_admin_section(): void
+    {
+        $organization = Organization::create(['name' => 'Direct Grant Org', 'slug' => 'direct-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123456796', User::ROLE_ADMIN);
+        $manager = $this->makeUser('09123456797', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        config(['farast_admin.sections.direct_grant_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'organization',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission($root, $manager, 'store.manage', 'allow', 'own');
+
+        // The generic permission exists, but its own-only grant cannot authorize
+        // an organization-wide section query.
+        $this->assertTrue($authorization->allows($manager, 'store.manage'));
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($manager, 'direct_grant_scope_test'));
+
+        $authorization->grantDirectPermission(
+            $root,
+            $manager,
+            'store.manage',
+            'allow',
+            'organization',
+            $organization->id,
+        );
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($manager, 'direct_grant_scope_test'));
+    }
+
+    public function test_team_scoped_section_grants_must_cover_every_visible_team(): void
+    {
+        $organization = Organization::create(['name' => 'Multi Team Grant Org', 'slug' => 'multi-team-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123456798', User::ROLE_ADMIN);
+        $supervisor = $this->makeUser('09123456799', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Grant Team A',
+            'slug' => 'grant-team-a',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $teamB = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Grant Team B',
+            'slug' => 'grant-team-b',
+            'supervisor_id' => $supervisor->id,
+        ]);
+
+        config(['farast_admin.sections.direct_team_grant_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission(
+            $root,
+            $supervisor,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $teamA->id,
+        );
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'direct_team_grant_scope_test'));
+
+        $authorization->grantDirectPermission(
+            $root,
+            $supervisor,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $teamB->id,
+        );
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'direct_team_grant_scope_test'));
     }
 
 }
