@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -115,6 +116,7 @@ class SupportSlaAlertOutboxService
                 ->update([
                     'status' => 'failed',
                     'locked_at' => null,
+                    'lease_token' => null,
                     'last_error' => 'Retry limit reached after an abandoned delivery lease.',
                     'updated_at' => now(),
                 ]);
@@ -135,32 +137,44 @@ class SupportSlaAlertOutboxService
                 ->lockForUpdate()
                 ->get();
 
+            $claims = [];
             foreach ($rows as $row) {
+                $leaseToken = (string) Str::uuid();
                 $row->forceFill([
                     'status' => 'processing',
                     'attempts' => $row->attempts + 1,
                     'locked_at' => now(),
+                    'lease_token' => $leaseToken,
                     'last_error' => null,
                 ])->save();
+
+                $claims[] = ['id' => (int) $row->id, 'lease_token' => $leaseToken];
             }
 
-            return $rows->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            return $claims;
         });
 
         $delivered = 0;
-        foreach ($ids as $id) {
-            $alert = SupportSlaAlertOutbox::query()->find($id);
-            if (! $alert || $alert->status !== 'processing') {
+        foreach ($ids as $claim) {
+            $id = $claim['id'];
+            $leaseToken = $claim['lease_token'];
+            $alert = SupportSlaAlertOutbox::query()
+                ->whereKey($id)
+                ->where('status', 'processing')
+                ->where('lease_token', $leaseToken)
+                ->first();
+            if (! $alert) {
                 continue;
             }
 
             try {
                 $ticket = Ticket::query()->with(['assignee', 'user'])->find($alert->ticket_id);
                 if (! $ticket) {
-                    SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
+                    SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->where('lease_token', $leaseToken)->update([
                         'status' => 'skipped',
                         'delivered_at' => null,
                         'locked_at' => null,
+                        'lease_token' => null,
                         'last_error' => 'Ticket no longer exists.',
                         'updated_at' => now(),
                     ]);
@@ -181,14 +195,19 @@ class SupportSlaAlertOutboxService
                 // Commit the outbox completion and canonical audit event together.
                 // If audit append fails, this transaction rolls back and the alert
                 // remains retryable; channel-level idempotency prevents duplicate effects.
-                $updated = DB::transaction(function () use ($id, $alert): int {
-                    $changed = SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
-                        'status' => 'delivered',
-                        'delivered_at' => now(),
-                        'locked_at' => null,
-                        'last_error' => null,
-                        'updated_at' => now(),
-                    ]);
+                $updated = DB::transaction(function () use ($id, $alert, $leaseToken): int {
+                    $changed = SupportSlaAlertOutbox::query()
+                        ->whereKey($id)
+                        ->where('status', 'processing')
+                        ->where('lease_token', $leaseToken)
+                        ->update([
+                            'status' => 'delivered',
+                            'delivered_at' => now(),
+                            'locked_at' => null,
+                            'lease_token' => null,
+                            'last_error' => null,
+                            'updated_at' => now(),
+                        ]);
 
                     if ($changed > 0) {
                         $this->audit->record(
@@ -220,10 +239,11 @@ class SupportSlaAlertOutboxService
                 $delayMinutes = min(60, 2 ** min($attempts, 6));
                 $message = mb_substr($exception->getMessage(), 0, 2000);
 
-                SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->update([
+                SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->where('lease_token', $leaseToken)->update([
                     'status' => 'failed',
                     'available_at' => now()->addMinutes($delayMinutes),
                     'locked_at' => null,
+                    'lease_token' => null,
                     'last_error' => $message,
                     'updated_at' => now(),
                 ]);
