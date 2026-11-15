@@ -1273,11 +1273,14 @@
   renderBookmarks();
   refreshBookmarkButton();
   const startupNavigationRevision=readerNavigationRevision;
+  let startupNavigationWasUserInitiated=false;
   restoreDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>{
     // Do not let delayed startup work undo navigation already initiated by the reader.
-    if(readerNavigationRevision===startupNavigationRevision)return showItem(0);
+    startupNavigationWasUserInitiated=readerNavigationRevision!==startupNavigationRevision;
+    if(!startupNavigationWasUserInitiated)return showItem(0);
   }).then(()=>{
     restoringInitial=false;
+    if(startupNavigationWasUserInitiated)saveReaderProgress();
     refreshResumeButton();
     refreshBookmarkButton();
   }).catch(showPdfError);

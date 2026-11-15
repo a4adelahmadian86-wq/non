@@ -298,6 +298,10 @@ test.describe('FARAST sample reader interactions', () => {
     await page.evaluate(() => window.__releaseReaderMigration());
     await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveClass(/is-active/);
     await expect(page.locator('#reader-page-number')).toHaveValue('2');
+    await expect.poll(() => page.evaluate(async () => {
+      const raw = await window.FarastReaderDurableStore.restore('farast-reader:v1:reader-fixture');
+      return raw ? JSON.parse(raw).progress?.section : null;
+    })).toBe(1);
   });
 
   test('saves reading progress and resumes the last section on this device', async ({ page }) => {
