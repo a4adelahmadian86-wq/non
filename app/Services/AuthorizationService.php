@@ -210,18 +210,16 @@ class AuthorizationService
                 return false;
             }
 
-            $grantedTeamIds = $allowGrants
-                ->where('scope', 'team')
-                ->pluck('team_id')
-                ->filter(fn ($id): bool => $id !== null)
-                ->map(fn ($id): int => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
+            $teamGrants = $allowGrants->where('scope', 'team');
 
             return $visibleTeams->every(
                 fn (Team $team): bool => in_array((int) $team->organization_id, $grantedOrganizationIds, true)
-                    || in_array((int) $team->id, $grantedTeamIds, true)
+                    || $teamGrants->contains(
+                        fn (object $grant): bool => $grant->team_id !== null
+                            && $grant->organization_id !== null
+                            && (int) $grant->team_id === (int) $team->id
+                            && (int) $grant->organization_id === (int) $team->organization_id
+                    )
             );
         }
 
