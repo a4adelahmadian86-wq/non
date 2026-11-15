@@ -165,6 +165,7 @@ class ProcessProductDocumentStorageTest extends TestCase
                 'detected_type' => 'docx',
                 'page_count' => 1,
                 'embedded_image_count' => 0,
+                'visual_inventory_complete' => true,
                 'extraction_truncated' => false,
                 'warnings' => [],
             ],
