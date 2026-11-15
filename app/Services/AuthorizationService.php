@@ -825,7 +825,7 @@ class AuthorizationService
             $allowedTeamIds = $allowedTeamIds->intersect($validTeamIds)->values();
         }
 
-        if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin()) {
+        if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin() && ! $hasExplicitTeamManagementScope && $effectiveTeamIds === null) {
             $managedTeamsQuery = \App\Models\Team::query();
             if ($actor->organization_id !== null) {
                 $managedTeamsQuery->where('organization_id', (int) $actor->organization_id);
