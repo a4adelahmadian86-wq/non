@@ -855,6 +855,12 @@ class AuthorizationService
             return false;
         }
 
+        $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
+        $effectiveScope = $this->effectiveScope($user);
+        if (($rank[$effectiveScope] ?? 4) > ($rank[$scope] ?? 4)) {
+            return false;
+        }
+
         if ($scope === 'global') {
             return true;
         }
@@ -863,55 +869,63 @@ class AuthorizationService
         $teamId = $grant?->team_id;
 
         if ($scope === 'organization') {
+            if ($organizationId === null) {
+                return false;
+            }
+
+            if ($user->isAdmin()) {
+                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                if ($effectiveOrganizationIds !== null
+                    && ! in_array((int) $organizationId, $effectiveOrganizationIds, true)) {
+                    return false;
+                }
+            } elseif ($user->organization_id === null
+                || (int) $organizationId !== (int) $user->organization_id) {
+                return false;
+            }
+
             $recordOrganizationId = $record->getAttribute('organization_id');
             if (! $recordOrganizationId && $record->getAttribute('user_id')) {
                 $recordOrganizationId = User::query()->whereKey($record->getAttribute('user_id'))->value('organization_id');
             }
 
-            return $organizationId !== null
-                && (int) $recordOrganizationId === (int) $organizationId;
+            return (int) $recordOrganizationId === (int) $organizationId;
         }
 
         if ($scope === 'team') {
-            // A scoped assignment is valid only while the subject still belongs
-            // to the assigned team (or remains its supervisor). This mirrors
-            // effectiveTeamIds() and prevents stale assignments after removal.
-            if ($teamId !== null) {
-                $teamQuery = \App\Models\Team::query()->whereKey((int) $teamId);
-                if ($grant?->organization_id !== null) {
-                    $teamQuery->where('organization_id', (int) $grant->organization_id);
-                }
-                $team = $teamQuery->first(['id', 'organization_id']);
-                if (! $team) {
-                    return false;
-                }
-
-                if ($user->isAdmin()) {
-                    $organizationIds = $this->effectiveOrganizationIds($user);
-                    if ($organizationIds !== null && ! in_array((int) $team->organization_id, $organizationIds, true)) {
-                        return false;
-                    }
-                } elseif (! $user->organization_id
-                    || (int) $team->organization_id !== (int) $user->organization_id
-                    || ! $this->userHasTeamAccess($user, (int) $teamId)) {
-                    return false;
-                }
+            if ($teamId === null) {
+                return false;
             }
 
-            $teamIds = $teamId !== null
-                ? collect([(int) $teamId])
-                : \App\Models\Team::query()
-                    ->where('supervisor_id', $user->id)
-                    ->orWhereHas('members', fn ($query) => $query->where('users.id', $user->id)->where('team_user.team_role', 'manager'))
-                    ->pluck('id');
+            $teamQuery = \App\Models\Team::query()->whereKey((int) $teamId);
+            if ($grant?->organization_id !== null) {
+                $teamQuery->where('organization_id', (int) $grant->organization_id);
+            }
+            $team = $teamQuery->first(['id', 'organization_id']);
+            if (! $team) {
+                return false;
+            }
 
-            if ($teamIds->isEmpty()) {
+            if ($user->isAdmin()) {
+                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                if ($effectiveOrganizationIds !== null
+                    && ! in_array((int) $team->organization_id, $effectiveOrganizationIds, true)) {
+                    return false;
+                }
+            } elseif (! $user->organization_id
+                || (int) $team->organization_id !== (int) $user->organization_id
+                || ! $this->userHasTeamAccess($user, (int) $teamId)) {
+                return false;
+            }
+
+            $effectiveTeamIds = $this->effectiveTeamIds($user);
+            if ($effectiveTeamIds !== null && ! in_array((int) $teamId, $effectiveTeamIds, true)) {
                 return false;
             }
 
             $recordTeamId = $record->getAttribute('team_id');
             if ($recordTeamId !== null) {
-                return $teamIds->contains((int) $recordTeamId);
+                return (int) $recordTeamId === (int) $teamId;
             }
 
             $ownerId = $record->getAttribute('user_id')
@@ -920,16 +934,15 @@ class AuthorizationService
 
             return $ownerId !== null && DB::table('team_user')
                 ->where('user_id', $ownerId)
-                ->whereIn('team_id', $teamIds)
+                ->where('team_id', $teamId)
                 ->exists();
         }
 
-        foreach (['user_id', 'owner_id', 'created_by'] as $ownerColumn) {
-            if ($record->getAttribute($ownerColumn) !== null) {
-                return (int) $record->getAttribute($ownerColumn) === (int) $user->id;
-            }
-        }
+        $ownerId = $record instanceof User
+            ? $record->getKey()
+            : ($record->getAttribute('user_id')
+                ?? $record->getAttribute('owner_id')
+                ?? $record->getAttribute('created_by'));
 
-        return false;
-    }
-}
+        return $ownerId !== null && (int) $ownerId === (int) $user->id;
+    }}
