@@ -8,6 +8,8 @@ use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
 use App\Models\UserFile;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductPreview;
+use App\Models\StoreProductDocumentArtifact;
 use App\Models\ConversationMessage;
 use App\Models\TicketMessage;
 use Illuminate\Support\Carbon;
