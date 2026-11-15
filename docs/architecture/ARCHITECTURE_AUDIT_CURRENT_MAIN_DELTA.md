@@ -10,7 +10,7 @@
 
 - **Commit مبنا:** `509febd015427804d1d7eea9177edfbb9432c3d3` (آخرین main در زمان این به‌روزرسانی).
 - **اندازه درخت Git:** 1,262 entry.
-- **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 179 فایل آزمون و 12 فایل Route.
+- **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 179 فایل آزمون (157 فایل PHP) و 12 فایل Route.
 - **Migrationها:** 11 گروه timestamp تکراری وجود دارد، اما نام کامل فایل‌ها یکتا است. تکرار timestamp به‌تنهایی اثبات خرابی نیست؛ ترتیب lexical و dependency باید با fresh install و upgrade واقعی اعتبارسنجی شود. وضعیت اجراشده/درانتظار دیتابیس محلی یا عملیاتی از Git قابل تشخیص نیست.
 
 ### CI معتبر
@@ -21,7 +21,8 @@
 - Laravel/Playwright، Admin Product E2E، Phase 3، Phase 4 Agent، Voice Service و Product Supervisor موفق؛ آزمون مستقل `reader-browser-regression` نیز با پنج مجموعه مرورگر reader موفق شد.
 - Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
 
-این نتایج متعلق به HEAD PR پیش از squash هستند. پس از ادغام PR #599، اجرای مستقل روی merge commit `961d661da16a811b854d50521ad789976542d612` نیز انجام شد: `FARAST CI` (run `43735268869`)، `FARAST Phase 3 Commerce Tests` (run `43735268942`) و `FARAST Phase 4 Agent` (run `43735268908`) همگی با conclusion=`success` خاتمه یافتند. سپس main به commit `509febd` پیش رفت و راهنمای میان‌برهای خوانشگر را اضافه کرد؛ آزمون `reader-shortcut-guide.spec.js` نیز به‌عنوان مجموعه ششم به job مرورگر افزوده شده و در CI همین PR باید با مبنای جدید تأیید شود.
+این نتایج متعلق به HEAD PR #599 پیش از squash هستند. پس از آن، PR #598 راهنمای میان‌برهای خوانشگر را اضافه کرد؛ روی HEAD دقیق آن (7e43d08cbf293d2019ebca1b716625359236b6a7) هر سه Workflow یعنی FARAST CI (run 43735607204)، Phase 3 (run 43735607192) و Phase 4 Agent (run 43735607189) موفق شدند.
+PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد. روی همین merge commit، Phase 3 (run 43736179272) و Phase 4 Agent (run 43736179325) موفق‌اند؛ FARAST CI اصلی (run 43736179322) در زمان این snapshot هنوز در حال اجراست، بنابراین وضعیت کامل CI روی merge commit هنوز سبز اعلام نمی‌شود.
 
 ### اصلاحات تأییدشده پس از snapshot قبلی
 
@@ -45,6 +46,10 @@
 3. **Migrationهای واقعی محیط نصب‌شده نامعلوم‌اند.** شمار فایل‌ها یا CI fresh install نشان نمی‌دهد چند migration در دیتابیس محلی/عملیاتی pending است. پیش از اجرای migration حساس، موتور/نسخه DB، خروجی `php artisan migrate:status` و backup قابل بازیابی باید ثبت شوند.
 
 4. **Storage و commerce هنوز مرزهای مالکیت نیازمند تکمیل دارند.** PRهای قدیمی storage/financial را صرفاً بر اساس عنوان یا تعداد commit نمی‌توان پذیرفت؛ فقط تغییرهای لازم پس از تطبیق با main جاری، اجرای preflight و تست چندموتوره قابل انتقال‌اند.
+
+5. **Scope مجوز مستقیم در گارد بخش‌های مدیریتی باید enforce شود.** در main، AuthorizationService::allows() نتیجه grant مستقیم را به boolean تبدیل می‌کند و AdminConsoleService::sectionAllowed() همان نتیجه را با scope کلی کاربر ترکیب می‌کند؛ scope خود grant در این مسیر اعمال نمی‌شود. در نتیجه grant با دامنه own می‌تواند برای نقش دارای scope سازمانی مجوز بخش سازمانی را فعال کند، و grant یک تیم ممکن است بخشی را باز کند که query آن چند تیم را برمی‌گرداند. PR #601 این شکاف را با evaluator مخصوص scope مؤثر و تست‌های regression پوشش می‌دهد؛ تا تکمیل CI و بازبینی، این اصلاح در main نیست.
+
+6. **PR #347 منبع حقیقت RBAC موازی پیشنهاد می‌کند و قابل ادغام مستقیم نیست.** main از roles, role_assignments, user_permission_grants, access_audit_logs و permissions/role_permissions استفاده می‌کند؛ Migration افزوده‌شده در PR #347 جداول موازی farast_roles, farast_role_permissions, farast_user_roles, farast_user_permission_overrides, farast_access_audit_logs می‌سازد. این دوگانگی با اصل یک منبع حقیقت ناسازگار است. علاوه بر آن، شاخه PR در مقایسه با main جاری 219 commit عقب است و فایل‌های مشترک route/workflow را تغییر می‌دهد. پیش از ادغام باید روی جداول canonical بازطراحی و روی main جاری rebase شود.
 
 ### منابع حقیقت جاری در حوزه‌های حساس
 
