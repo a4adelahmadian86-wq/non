@@ -890,7 +890,7 @@ class StoreController extends Controller
         return response()->stream(function () use ($storage, $artifactDisk, $artifact, $start, $length) {
             $output = fopen('php://output', 'wb');
             if (! is_resource($output)) {
-                throw new \\RuntimeException('جریان خروجی فایل صوتی در دسترس نیست.');
+                throw new \RuntimeException('جریان خروجی فایل صوتی در دسترس نیست.');
             }
 
             try {
