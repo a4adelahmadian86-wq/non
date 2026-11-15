@@ -277,6 +277,116 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+    private function assignScopedAdminRole(
+        User $admin,
+        string $roleKey,
+        array $permissionKeys,
+        string $scope,
+        ?int $organizationId = null,
+        ?int $teamId = null,
+    ): void {
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => $roleKey,
+            'name' => 'Scoped admin '.$roleKey,
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ($permissionKeys as $permissionKey) {
+            $permission = Permission::query()->where('key', $permissionKey)->firstOrFail();
+            RolePermission::firstOrCreate([
+                'role' => $roleKey,
+                'permission_id' => $permission->id,
+            ]);
+        }
+
+        DB::table('users')->where('id', $admin->id)->update([
+            'access_control_managed' => true,
+            'updated_at' => now(),
+        ]);
+
+        DB::table('role_assignments')->insert([
+            'user_id' => $admin->id,
+            'role_id' => $roleId,
+            'scope' => $scope,
+            'organization_id' => $organizationId,
+            'team_id' => $teamId,
+            'assigned_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        app(AuthorizationService::class)->forgetUser($admin->id);
+    }
+
+    public function test_admin_organization_assignment_is_the_source_of_scope_without_user_organization_id(): void
+    {
+        $organizationA = Organization::create(['name' => 'Assigned Admin Org A', 'slug' => 'assigned-admin-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Assigned Admin Org B', 'slug' => 'assigned-admin-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456901', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456902', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456903', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-organization-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'organization');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 1);
+        $response->assertViewHas('users', fn ($users): bool => $users->contains('id', $memberA->id)
+            && ! $users->contains('id', $memberB->id));
+    }
+
+    public function test_admin_team_assignment_is_the_source_of_scope_without_team_membership(): void
+    {
+        $organizationA = Organization::create(['name' => 'Assigned Admin Team Org A', 'slug' => 'assigned-admin-team-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Assigned Admin Team Org B', 'slug' => 'assigned-admin-team-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456911', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456912', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456913', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorA = $this->makeUser('09123456914', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $supervisorB = $this->makeUser('09123456915', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+
+        $teamA = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Assigned Team A',
+            'slug' => 'assigned-admin-team-a',
+            'supervisor_id' => $supervisorA->id,
+        ]);
+        $teamA->members()->attach($memberA->id, ['team_role' => 'employee']);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Assigned Team B',
+            'slug' => 'assigned-admin-team-b',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-team-test',
+            ['dashboard.view', 'users.view'],
+            'team',
+            $organizationA->id,
+            $teamA->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'team');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 2);
+        $response->assertViewHas('users', fn ($users): bool => $users->contains('id', $memberA->id)
+            && ! $users->contains('id', $memberB->id));
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
