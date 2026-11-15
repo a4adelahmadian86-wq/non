@@ -492,7 +492,7 @@ class StoreController extends Controller
         }, $status, $headers);
     }
 
-    public function reader(string $slug)
+    public function reader(string $slug, StorageManager $storage)
     {
         $product = StoreProduct::with([
             'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
@@ -532,12 +532,13 @@ class StoreController extends Controller
                 if ($readerReady && $document->pages->isNotEmpty()) {
                     $readerDocument = $document;
                     $readerMode = 'document';
+                    // Artifact locations may be managed remote volumes; never probe them via a Laravel disk directly.
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
-                            && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                        ->first(fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                            && $storage->exists($artifact->disk ?: 'private', $artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     // Reading a PDF must never trigger a remote speech-provider call.
@@ -782,7 +783,7 @@ class StoreController extends Controller
             ->header('Cross-Origin-Resource-Policy', 'same-origin');
     }
 
-    public function readerAudio(StoreProduct $product, StoreProductDocument $document)
+    public function readerAudio(StoreProduct $product, StoreProductDocument $document, StorageManager $storage)
     {
         $user = request()->user();
         abort_unless(
@@ -820,8 +821,8 @@ class StoreController extends Controller
             $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
         }
         $artifact = $artifactQuery->get()
-            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
-                && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+            ->first(fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+                && $storage->exists($candidate->disk ?: 'private', $candidate->path));
         if (! $artifact && request()->isMethod('HEAD')) {
             $audioState = (string) data_get($document->structure_json, 'audio.status', '');
             $pollHeaders = [
@@ -843,8 +844,9 @@ class StoreController extends Controller
         }
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
-        $disk = Storage::disk($artifact->disk ?: 'private');
-        $size = (int) $disk->size($artifact->path);
+        $artifactDisk = $artifact->disk ?: 'private';
+        $size = $storage->size($artifactDisk, $artifact->path);
+        abort_unless($size > 0, 404);
         $start = 0;
         $end = max(0, $size - 1);
         $status = 200;
@@ -886,20 +888,17 @@ class StoreController extends Controller
             return response('', $status, $headers);
         }
 
-        $stream = $disk->readStream($artifact->path);
-        abort_unless(is_resource($stream), 404);
-
-        return response()->stream(function () use ($stream, $start, $length) {
-            if ($start > 0) fseek($stream, $start);
-            $remaining = $length;
-            while ($remaining > 0 && ! feof($stream)) {
-                $chunk = fread($stream, min(8192, $remaining));
-                if (! is_string($chunk) || $chunk === '') break;
-                echo $chunk;
-                $remaining -= strlen($chunk);
-                flush();
+        return response()->stream(function () use ($storage, $artifactDisk, $artifact, $start, $length) {
+            $output = fopen('php://output', 'wb');
+            if (! is_resource($output)) {
+                throw new \RuntimeException('جریان خروجی فایل صوتی در دسترس نیست.');
             }
-            fclose($stream);
+
+            try {
+                $storage->streamRange($artifactDisk, $artifact->path, $start, $length, $output);
+            } finally {
+                fclose($output);
+            }
         }, $status, $headers);
     }
 
