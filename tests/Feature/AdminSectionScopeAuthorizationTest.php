@@ -448,4 +448,40 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($employee, 'team_grant_own_scope_test'));
     }
 
+
+    public function test_role_assignment_permission_must_cover_every_visible_team(): void
+    {
+        $organization = Organization::create(['name' => 'Role Scope Org', 'slug' => 'role-scope-org', 'status' => 'active']);
+        $root = $this->makeUser('09123456804', User::ROLE_ADMIN);
+        $supervisor = $this->makeUser('09123456805', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create(['organization_id' => $organization->id, 'name' => 'Role Team A', 'slug' => 'role-team-a']);
+        $teamB = Team::create(['organization_id' => $organization->id, 'name' => 'Role Team B', 'slug' => 'role-team-b']);
+        $supervisor->teams()->attach([
+            $teamA->id => ['team_role' => 'manager'],
+            $teamB->id => ['team_role' => 'manager'],
+        ]);
+
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        DB::table('roles')->insert([
+            ['key' => 'team_store_operator', 'name' => 'Team store operator', 'is_system' => false, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'team_limited_operator', 'name' => 'Team limited operator', 'is_system' => false, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        RolePermission::firstOrCreate(['role' => 'team_store_operator', 'permission_id' => $storePermission->id]);
+
+        config(['farast_admin.sections.team_role_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->assignRole($root, $supervisor, 'team_store_operator', 'team', $organization->id, $teamA->id);
+        $authorization->assignRole($root, $supervisor, 'team_limited_operator', 'team', $organization->id, $teamB->id);
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'team_role_scope_test'));
+
+        RolePermission::firstOrCreate(['role' => 'team_limited_operator', 'permission_id' => $storePermission->id]);
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'team_role_scope_test'));
+    }
+
 }
