@@ -27,11 +27,14 @@ class CommunicationCenterController extends Controller
     ) {
         $user = $request->user();
         $isAdmin = $user->isAdmin();
-        $canManageAllTickets = $isAdmin && $adminConsole->sectionAllowed($user, 'support_admin');
-        $canAccessSupportInbox = $isAdmin && $adminConsole->sectionAllowed($user, 'support_inbox');
+        $canManageAllTickets = $adminConsole->sectionAllowed($user, 'support_admin');
+        $canAccessSupportInbox = $adminConsole->sectionAllowed($user, 'support_inbox');
         $visibleTicketUserIds = $canManageAllTickets
             ? null
-            : ($adminConsole->visibleUserIds($user) ?? [(int) $user->id]);
+            : array_values(array_unique(array_merge(
+                $adminConsole->visibleUserIds($user) ?? [],
+                [(int) $user->id],
+            )));
         $canSupport = $capabilities->allowed($user, 'can_support');
         $canUseMessenger = $messengerAccess->canUse($user);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
