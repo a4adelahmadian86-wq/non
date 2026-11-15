@@ -35,7 +35,7 @@ class CommunicationCenterController extends Controller
                 $adminConsole->visibleUserIds($user) ?? [],
                 [(int) $user->id],
             )));
-        $canSupport = $capabilities->allowed($user, 'can_support');
+        $canSupport = $canAccessSupportInbox || $capabilities->allowed($user, 'can_support');
         $canUseMessenger = $messengerAccess->canUse($user);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
         $searchTerm = trim((string) ($validated['q'] ?? ''));
