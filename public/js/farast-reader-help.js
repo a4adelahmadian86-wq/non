@@ -11,6 +11,7 @@
   trigger.className = 'reader-tool reader-shortcuts-help';
   trigger.setAttribute('aria-label', 'راهنمای میان‌برهای صفحه‌کلید');
   trigger.setAttribute('aria-haspopup', 'dialog');
+  trigger.setAttribute('aria-keyshortcuts', 'Shift+/');
   trigger.setAttribute('aria-controls', 'reader-shortcuts-dialog');
   trigger.title = 'راهنمای میان‌برها · ؟';
   trigger.textContent = '?';
@@ -59,7 +60,7 @@
 
   document.addEventListener('keydown', event => {
     if (!root.contains(event.target) && event.target !== document.body && event.target !== document.documentElement) return;
-    if (event.ctrlKey || event.metaKey || event.altKey || event.key !== '?') return;
+    if (event.ctrlKey || event.metaKey || event.altKey || (event.key !== '?' && !(event.code === 'Slash' && event.shiftKey))) return;
     if (event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable="true"],.farast-pdf-text-layer,.farast-pdf-cont-text,[data-reader-text-layer]')) return;
     event.preventDefault();
     if (!dialog.open) open();
