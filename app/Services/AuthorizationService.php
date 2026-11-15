@@ -590,6 +590,17 @@ class AuthorizationService
             ? $manageableTeamIds
             : ($effectiveTeamIds !== null ? collect($effectiveTeamIds) : collect());
 
+        // Organization-scoped management grants also constrain team operations,
+        // even when the actor's narrower effective role is team-scoped.
+        if ($hasExplicitOrganizationManagementScope) {
+            $validTeamIds = \\App\\Models\\Team::query()
+                ->whereIn('id', $allowedTeamIds)
+                ->whereIn('organization_id', $manageableOrganizationIds)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+            $allowedTeamIds = $allowedTeamIds->intersect($validTeamIds)->values();
+        }
+
         if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin()) {
             $allowedTeamIds = \App\Models\Team::query()
                 ->where('organization_id', $actor->organization_id)
