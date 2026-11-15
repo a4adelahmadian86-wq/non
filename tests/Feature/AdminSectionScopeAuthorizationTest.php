@@ -435,10 +435,25 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->assignScopedAdminRole(
             $admin,
             'scoped-admin-access-manager-test',
-            ['dashboard.view', 'users.view', 'access.manage'],
+            ['dashboard.view', 'users.view'],
             'organization',
             $organizationA->id,
         );
+
+        $accessPermission = Permission::query()->where('key', 'access.manage')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $accessPermission->id,
+            'effect' => 'allow',
+            'scope' => 'global',
+            'organization_id' => null,
+            'team_id' => null,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberA->id.'/roles', [
             'role_key' => 'user',
