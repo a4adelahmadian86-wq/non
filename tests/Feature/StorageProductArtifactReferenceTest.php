@@ -103,8 +103,8 @@ class StorageProductArtifactReferenceTest extends TestCase
         $managed = StorageManagedFile::create([
             'storage_volume_id' => $volume->id,
             'drive_key' => 'iran_primary',
-            'file_key' => 'products/artifacts/new-audio.wav',
-            'file_key_hash' => hash('sha256', 'products/artifacts/new-audio.wav'),
+            'file_key' => 'legacy/shared-audio.wav',
+            'file_key_hash' => hash('sha256', 'legacy/shared-audio.wav'),
             'original_name' => 'new-audio.wav',
             'mime' => 'audio/wav',
             'size_bytes' => 128,
@@ -125,10 +125,31 @@ class StorageProductArtifactReferenceTest extends TestCase
         $preview->refresh();
         $newDisk = 'storage_volume:'.$volume->id;
         $this->assertSame($newDisk, $artifact->disk);
-        $this->assertSame('products/artifacts/new-audio.wav', $artifact->path);
+        $this->assertSame('legacy/shared-audio.wav', $artifact->path);
         $this->assertSame($newDisk, $preview->disk);
-        $this->assertSame('products/artifacts/new-audio.wav', $preview->path);
+        $this->assertSame('legacy/shared-audio.wav', $preview->path);
         $this->assertSame($newDisk, $preview->audio_disk);
-        $this->assertSame('products/artifacts/new-audio.wav', $preview->audio_path);
+        $this->assertSame('legacy/shared-audio.wav', $preview->audio_path);
+        $staleManaged = StorageManagedFile::create([
+            'storage_volume_id' => $volume->id,
+            'drive_key' => 'iran_primary',
+            'file_key' => 'legacy/superseded-audio.wav',
+            'file_key_hash' => hash('sha256', 'legacy/superseded-audio.wav'),
+            'original_name' => 'superseded-audio.wav',
+            'mime' => 'audio/wav',
+            'size_bytes' => 128,
+            'checksum' => hash('sha256', 'old-audio'),
+            'classification' => 'critical',
+            'source_module' => 'store-product-artifact',
+            'source_type' => StoreProductDocumentArtifact::class,
+            'source_id' => $artifact->id,
+            'product_id' => $product->id,
+            'visibility' => 'private',
+            'status' => 'active',
+            'metadata' => ['disk' => 'storage_volume:'.$volume->id, 'reference_pending' => false],
+        ]);
+        app(StorageTransferService::class)->syncSourceReference($staleManaged, 'storage_volume:'.$volume->id);
+        $artifact->refresh();
+        $this->assertSame('legacy/shared-audio.wav', $artifact->path);
     }
 }

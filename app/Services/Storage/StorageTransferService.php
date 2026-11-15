@@ -27,7 +27,7 @@ class StorageTransferService
         $reference = match ($file->source_type) {
             UserFile::class => UserFile::find($file->source_id),
             StoreProductFile::class => StoreProductFile::find($file->source_id),
-            StoreProductDocumentArtifact::class => StoreProductDocumentArtifact::with('document')->find($file->source_id),
+            StoreProductDocumentArtifact::class => StoreProductDocumentArtifact::with('document')->whereKey($file->source_id)->lockForUpdate()->first(),
             ConversationMessage::class => ConversationMessage::find($file->source_id),
             TicketMessage::class => TicketMessage::find($file->source_id),
             FarastStorageObject::class => FarastStorageObject::find($file->source_id),
@@ -53,6 +53,11 @@ class StorageTransferService
         }
 
         if ($reference instanceof StoreProductDocumentArtifact) {
+            $isRestore = filled(data_get($file->metadata, 'restored_at'));
+            if (! $isRestore && (string) $reference->path !== (string) $file->file_key) {
+                return;
+            }
+
             $oldDisk = $reference->disk ?: 'private';
             $oldPath = (string) $reference->path;
             $productId = (int) ($reference->document?->product_id ?? 0);
@@ -86,6 +91,7 @@ class StorageTransferService
         StoreProductPreview::query()
             ->where('product_id', $productId)
             ->where(fn ($query) => $query->where('path', $oldPath)->orWhere('audio_path', $oldPath))
+            ->lockForUpdate()
             ->get()
             ->each(function (StoreProductPreview $preview) use ($oldDisk, $oldPath, $newDisk, $newPath): void {
                 $changes = [];
