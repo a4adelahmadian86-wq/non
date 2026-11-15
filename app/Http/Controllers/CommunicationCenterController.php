@@ -28,6 +28,7 @@ class CommunicationCenterController extends Controller
         $user = $request->user();
         $isAdmin = $user->isAdmin();
         $canManageAllTickets = $isAdmin && $adminConsole->sectionAllowed($user, 'support_admin');
+        $canAccessSupportInbox = $isAdmin && $adminConsole->sectionAllowed($user, 'support_inbox');
         $visibleTicketUserIds = $canManageAllTickets
             ? null
             : ($adminConsole->visibleUserIds($user) ?? [(int) $user->id]);
@@ -36,7 +37,7 @@ class CommunicationCenterController extends Controller
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
         $searchTerm = trim((string) ($validated['q'] ?? ''));
         $searchResults = $searchTerm !== ''
-            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger, 30, $canManageAllTickets, $visibleTicketUserIds)
+            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger, 30, $canManageAllTickets, $visibleTicketUserIds, $canAccessSupportInbox)
             : collect();
 
         $ticketQuery = Ticket::query()->with(['user:id,name,email', 'assignee:id,name']);
@@ -113,7 +114,7 @@ class CommunicationCenterController extends Controller
                 'kind' => 'ticket',
                 'title' => $ticket->displayCode().' — '.$ticket->subject,
                 'body' => $ticket->displayName().' · '.$ticket->statusLabel().' · '.$ticket->priorityLabel(),
-                'url' => $canManageAllTickets
+                'url' => $canAccessSupportInbox
                     ? route('admin.support.management', ['ticket' => $ticket->id])
                     : route('support.show', $ticket),
                 'at' => $ticket->updated_at,
@@ -182,6 +183,7 @@ class CommunicationCenterController extends Controller
             'stats',
             'isAdmin',
             'canManageAllTickets',
+            'canAccessSupportInbox',
             'canSupport',
             'canUseMessenger',
             'searchTerm',
