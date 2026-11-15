@@ -119,6 +119,70 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $this->assertTrue($directory->eligibleFor($insideTicket)->contains('id', $admin->id));
         $this->assertFalse($directory->eligibleFor($outsideTicket)->contains('id', $admin->id));
     }
+    public function test_admin_assignee_uses_its_own_team_scope_not_the_acting_admin_request_scope(): void
+    {
+        config(['farast_admin.multi_role_console' => true, 'farast_admin.scope_override_key' => '']);
+        $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $candidate = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $customer = User::factory()->create();
+        $outsideCustomer = User::factory()->create();
+        $organization = Organization::create(['name' => 'Admin Assignee Org', 'slug' => 'admin-assignee-org', 'status' => 'active']);
+        $team = \App\Models\Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Admin Assignee Team',
+            'slug' => 'admin-assignee-team',
+            'supervisor_id' => $root->id,
+        ]);
+        $team->members()->attach($customer->id, ['team_role' => 'employee']);
+
+        $permission = Permission::firstOrCreate(
+            ['key' => 'support.manage'],
+            ['label' => 'Support management', 'group' => 'support'],
+        );
+        DB::table('roles')->insert([
+            'key' => 'admin_team_support_operator',
+            'name' => 'Admin team support operator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::firstOrCreate([
+            'role' => 'admin_team_support_operator',
+            'permission_id' => $permission->id,
+        ]);
+        app(AuthorizationService::class)->assignRole(
+            $root,
+            $candidate,
+            'admin_team_support_operator',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $insideTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Admin candidate in team scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Admin candidate outside team scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        // Simulate a global actor assigning work while the candidate has a narrower team grant.
+        request()->attributes->set('farast.scope', 'global');
+        $directory = app(\App\Services\SupportAgentDirectory::class);
+        $this->assertTrue($directory->allows($candidate, $insideTicket));
+        $this->assertFalse($directory->allows($candidate, $outsideTicket));
+        $this->assertTrue($directory->eligibleFor($insideTicket)->contains('id', $candidate->id));
+        $this->assertFalse($directory->eligibleFor($outsideTicket)->contains('id', $candidate->id));
+    }
     public function test_global_support_operator_communication_center_can_search_internal_notes(): void
     {
         config(['farast_admin.multi_role_console' => true]);
