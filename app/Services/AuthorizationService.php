@@ -102,7 +102,7 @@ class AuthorizationService
      * Section-level checks must not let a narrowly scoped direct grant unlock
      * a wider console query. Record-level grants continue to use allowsRecord().
      */
-    public function allowsWithinEffectiveScope(?User $user, string $permission): bool
+    public function allowsWithinEffectiveScope(?User $user, string $permission, ?string $effectiveScope = null): bool
     {
         if (! $this->activeUser($user) || trim($permission) === '' || ! $this->allows($user, $permission)) {
             return false;
@@ -119,7 +119,9 @@ class AuthorizationService
             return false;
         }
 
-        $scope = $this->effectiveScope($user);
+        $scope = in_array($effectiveScope, self::SCOPES, true)
+            ? $effectiveScope
+            : $this->effectiveScope($user);
 
         // A global grant covers every effective scope.
         if ($allowGrants->contains(fn (object $grant): bool => $grant->scope === 'global')) {
