@@ -1,7 +1,7 @@
 'use strict';
 
-const CACHE_NAME = 'farast-static-v3';
-const LEGACY_CACHES = ['farast-shell-v1', 'farast-static-v2'];
+const CACHE_NAME = 'farast-static-v4';
+const LEGACY_CACHES = ['farast-shell-v1', 'farast-static-v2', 'farast-static-v3'];
 const CORE_ASSETS = [
   '/offline.html',
   '/manifest.webmanifest',
@@ -9,6 +9,13 @@ const CORE_ASSETS = [
   '/icons/farast-maskable.svg',
   '/icons/farast-192.png',
   '/icons/farast-512.png',
+  '/css/vazirmatn.css?v=20261115local1',
+  '/css/fontawesome.css?v=20261115local1',
+  '/fonts/vazirmatn-variable.woff2',
+  '/fonts/fontawesome/fa-solid-900.woff2',
+  '/fonts/fontawesome/fa-regular-400.woff2',
+  '/fonts/fontawesome/fa-brands-400.woff2',
+  '/fonts/fontawesome/fa-v4compatibility.woff2',
   '/css/farast-pwa.css?v=20261108pwa1',
   '/css/farast-mobile-dock.css?v=20261108dock1',
   '/css/farast-experience.css?v=20261108ux1',
