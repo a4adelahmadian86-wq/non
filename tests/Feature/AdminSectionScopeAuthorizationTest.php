@@ -355,6 +355,10 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'slug' => 'grant-team-b',
             'supervisor_id' => $supervisor->id,
         ]);
+        $supervisor->teams()->attach([
+            $teamA->id => ['team_role' => 'manager'],
+            $teamB->id => ['team_role' => 'manager'],
+        ]);
 
         config(['farast_admin.sections.direct_team_grant_scope_test' => [
             'permission' => 'store.manage',
