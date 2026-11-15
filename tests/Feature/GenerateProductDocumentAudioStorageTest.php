@@ -90,11 +90,22 @@ class GenerateProductDocumentAudioStorageTest extends TestCase
             'content_sha256' => hash('sha256', 'متن آماده برای تولید صوت.'),
             'metadata_json' => [],
         ]);
+        StoreProductDocumentArtifact::create([
+            'document_id' => $document->id,
+            'artifact_type' => 'audio_full_wav',
+            'version' => 3,
+            'disk' => 'private',
+            'path' => 'legacy/old-audio.wav',
+            'mime' => 'audio/wav',
+            'size_bytes' => 128,
+            'sha256' => hash('sha256', 'old-audio'),
+            'metadata_json' => ['generated_once' => true],
+        ]);
         $preview = StoreProductPreview::create([
             'product_id' => $product->id,
             'disk' => 'private',
-            'path' => 'legacy/reader.pdf',
-            'mime' => 'application/pdf',
+            'path' => 'legacy/old-audio.wav',
+            'mime' => 'audio/wav',
             'page_number' => 1,
             'kind' => 'reader_document',
             'access_level' => 'full',
