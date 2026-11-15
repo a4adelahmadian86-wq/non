@@ -481,10 +481,29 @@ class ProcessProductDocument implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        StoreProductDocument::query()->whereKey($this->documentId)->update([
-            'processing_status' => 'failed',
-            'failure_code' => 'document_processing_failed',
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function (): void {
+            $document = StoreProductDocument::query()->lockForUpdate()->find($this->documentId);
+            if (! $document) {
+                return;
+            }
+
+            $structure = (array) ($document->structure_json ?? []);
+            if (in_array(data_get($structure, 'audio.status'), ['pending', 'upgrading'], true)) {
+                $structure['audio'] = ['status' => 'failed'];
+            }
+
+            // A retry/reprocessing failure must not invalidate already-published reader content.
+            // The reader controller still verifies the source hash before serving any page.
+            $hasReadyContent = in_array($document->processing_status, ['completed', 'extracted'], true)
+                && (bool) data_get($structure, 'reader.ready', false)
+                && $document->pages()->exists();
+
+            $document->update([
+                'processing_status' => $hasReadyContent ? $document->processing_status : 'failed',
+                'failure_code' => $hasReadyContent ? $document->failure_code : 'document_processing_failed',
+                'structure_json' => $structure,
+                'updated_at' => now(),
+            ]);
+        });
     }
 }
