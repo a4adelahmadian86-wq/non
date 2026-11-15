@@ -21,14 +21,14 @@ test.describe('Self-hosted PWA presentation assets', () => {
     const loadedFonts = await page.evaluate(async () => {
       const [persian, icons] = await Promise.all([
         document.fonts.load('400 16px "Vazirmatn"', 'فراست'),
-        document.fonts.load('900 16px "Font Awesome 6 Free"', '\\uf007'),
+        document.fonts.load('900 16px "Font Awesome 6 Free"', '\uF007'),
       ]);
 
       return {
         persian: persian.length,
         icons: icons.length,
         persianReady: document.fonts.check('400 16px "Vazirmatn"', 'فراست'),
-        iconsReady: document.fonts.check('900 16px "Font Awesome 6 Free"', '\\uf007'),
+        iconsReady: document.fonts.check('900 16px "Font Awesome 6 Free"', '\uF007'),
       };
     });
 
