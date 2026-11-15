@@ -235,234 +235,234 @@ class ProcessProductDocument implements ShouldQueue
 
         try {
             DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $storage, $sampleBytes, $sampleHash, $sampleStoredForCleanup, &$sampleStoredWasBound, &$totalCharacters, &$totalWords) {
-            $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
-            $locked->chunks()->delete();
-            $locked->facts()->delete();
+                $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+                $locked->chunks()->delete();
+                $locked->facts()->delete();
 
-            foreach ($chunks as $index => $chunk) {
-                if (! is_array($chunk)) continue;
-                $text = mb_substr((string) ($chunk['content_text'] ?? ''), 0, 1800);
-                if ($text === '') continue;
-                $locator = is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [];
-                $chunkHash = (string) ($chunk['content_sha256'] ?? hash('sha256', $text));
-                $locked->chunks()->create([
-                    'chunk_index' => (int) $index,
-                    'chunk_type' => preg_replace('/[^a-z0-9_]/i', '', (string) ($chunk['chunk_type'] ?? 'text')) ?: 'text',
-                    'locator_json' => $locator,
-                    'content_text' => $text,
-                    'content_sha256' => strlen($chunkHash) === 64 ? $chunkHash : hash('sha256', $text),
-                    'metadata_json' => [
-                        'redacted_sensitive_items' => (int) ($chunk['redacted_sensitive_items'] ?? 0),
-                    ],
-                ]);
-                $totalCharacters += mb_strlen($text);
-                $totalWords += preg_match_all('/[\p{L}\p{N}]+/u', $text);
-            }
-
-            $facts = is_array($payload['facts'] ?? null) ? array_slice($payload['facts'], 0, 100) : [];
-            $storedFactCount = 0;
-            $allowedFactTypes = ['definition','concept','quantity','date','feature','requirement','warning','other'];
-            foreach ($facts as $fact) {
-                if (! is_array($fact)) continue;
-                $factKey = mb_substr(trim((string) ($fact['fact_key'] ?? '')), 0, 160);
-                $factValue = mb_substr(trim((string) ($fact['fact_value'] ?? '')), 0, 1000);
-                $evidence = mb_substr(trim((string) ($fact['evidence_text'] ?? '')), 0, 700);
-                if ($factKey === '' || $factValue === '' || mb_strlen($evidence) < 6) continue;
-
-                $normalizedEvidence = mb_strtolower((string) preg_replace('/\\s+/u', ' ', $evidence));
-                $matchedChunk = null;
-                foreach ($chunks as $sourceChunk) {
-                    if (! is_array($sourceChunk)) continue;
-                    $sourceText = mb_strtolower((string) preg_replace('/\\s+/u', ' ', (string) ($sourceChunk['content_text'] ?? '')));
-                    if ($normalizedEvidence !== '' && str_contains($sourceText, $normalizedEvidence)) {
-                        $matchedChunk = $sourceChunk;
-                        break;
-                    }
+                foreach ($chunks as $index => $chunk) {
+                    if (! is_array($chunk)) continue;
+                    $text = mb_substr((string) ($chunk['content_text'] ?? ''), 0, 1800);
+                    if ($text === '') continue;
+                    $locator = is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [];
+                    $chunkHash = (string) ($chunk['content_sha256'] ?? hash('sha256', $text));
+                    $locked->chunks()->create([
+                        'chunk_index' => (int) $index,
+                        'chunk_type' => preg_replace('/[^a-z0-9_]/i', '', (string) ($chunk['chunk_type'] ?? 'text')) ?: 'text',
+                        'locator_json' => $locator,
+                        'content_text' => $text,
+                        'content_sha256' => strlen($chunkHash) === 64 ? $chunkHash : hash('sha256', $text),
+                        'metadata_json' => [
+                            'redacted_sensitive_items' => (int) ($chunk['redacted_sensitive_items'] ?? 0),
+                        ],
+                    ]);
+                    $totalCharacters += mb_strlen($text);
+                    $totalWords += preg_match_all('/[\p{L}\p{N}]+/u', $text);
                 }
-                if (! is_array($matchedChunk)) continue;
 
-                $factType = strtolower((string) ($fact['fact_type'] ?? 'other'));
-                $factType = in_array($factType, $allowedFactTypes, true) ? $factType : 'other';
-                $locked->facts()->create([
+                $facts = is_array($payload['facts'] ?? null) ? array_slice($payload['facts'], 0, 100) : [];
+                $storedFactCount = 0;
+                $allowedFactTypes = ['definition','concept','quantity','date','feature','requirement','warning','other'];
+                foreach ($facts as $fact) {
+                    if (! is_array($fact)) continue;
+                    $factKey = mb_substr(trim((string) ($fact['fact_key'] ?? '')), 0, 160);
+                    $factValue = mb_substr(trim((string) ($fact['fact_value'] ?? '')), 0, 1000);
+                    $evidence = mb_substr(trim((string) ($fact['evidence_text'] ?? '')), 0, 700);
+                    if ($factKey === '' || $factValue === '' || mb_strlen($evidence) < 6) continue;
+
+                    $normalizedEvidence = mb_strtolower((string) preg_replace('/\\s+/u', ' ', $evidence));
+                    $matchedChunk = null;
+                    foreach ($chunks as $sourceChunk) {
+                        if (! is_array($sourceChunk)) continue;
+                        $sourceText = mb_strtolower((string) preg_replace('/\\s+/u', ' ', (string) ($sourceChunk['content_text'] ?? '')));
+                        if ($normalizedEvidence !== '' && str_contains($sourceText, $normalizedEvidence)) {
+                            $matchedChunk = $sourceChunk;
+                            break;
+                        }
+                    }
+                    if (! is_array($matchedChunk)) continue;
+
+                    $factType = strtolower((string) ($fact['fact_type'] ?? 'other'));
+                    $factType = in_array($factType, $allowedFactTypes, true) ? $factType : 'other';
+                    $locked->facts()->create([
+                        'source_sha256' => $locked->source_sha256,
+                        'fact_type' => $factType,
+                        'fact_key' => $factKey,
+                        'fact_value' => $factValue,
+                        'evidence_text' => $evidence,
+                        'locator_json' => is_array($matchedChunk['locator'] ?? null) ? $matchedChunk['locator'] : [],
+                        'verification_status' => 'evidence_backed',
+                    ]);
+                    $storedFactCount++;
+                }
+
+                $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
+                $pageBuild = app(\App\Services\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
+                $locked->pages()->delete();
+                foreach ($pageBuild['pages'] as $page) {
+                    $locked->pages()->create($page);
+                }
+                foreach ($pageBuild['chunk_locators'] as $chunkIndex => $locator) {
+                    $locked->chunks()->where('chunk_index', (int) $chunkIndex)->update(['locator_json' => $locator]);
+                }
+
+                $structure = (array) ($locked->structure_json ?? []);
+                $structure['inspection'] = $inspection;
+                $structure['reader'] = [
+                    'ready' => $pageBuild['page_count'] > 0,
+                    'page_count' => (int) $pageBuild['page_count'],
+                    'representation' => 'server_generated_html',
                     'source_sha256' => $locked->source_sha256,
-                    'fact_type' => $factType,
-                    'fact_key' => $factKey,
-                    'fact_value' => $factValue,
-                    'evidence_text' => $evidence,
-                    'locator_json' => is_array($matchedChunk['locator'] ?? null) ? $matchedChunk['locator'] : [],
-                    'verification_status' => 'evidence_backed',
-                ]);
-                $storedFactCount++;
-            }
+                ];
+                $structure['analysis_representation'] = $sourceExtension === 'docx'
+                    ? 'docx_structured_with_converted_pdf'
+                    : ($inspection['detected_type'] ?? 'unknown');
+                $structure['fact_count'] = $storedFactCount;
+                $structure['ai_review'] = [
+                    'review_id' => $payload['review_id'] ?? null,
+                    'summary' => $payload['summary'] ?? null,
+                    'findings' => $payload['findings'] ?? [],
+                    'warnings' => $payload['warnings'] ?? [],
+                    'provider_status' => $payload['provider_status'] ?? [],
+                    'media_reports' => (array) ($payload['media_reports'] ?? []),
+                    'analysis_batch_count' => (int) ($payload['analysis_batch_count'] ?? 0),
+                    'successful_analysis_batches' => (int) ($payload['successful_analysis_batches'] ?? 0),
+                    'analyzed_characters' => (int) ($payload['analyzed_characters'] ?? 0),
+                    'security_gate' => $payload['security_gate'] ?? null,
+                    'publication_authorized' => false,
+                ];
 
-            $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
-            $pageBuild = app(\App\Services\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
-            $locked->pages()->delete();
-            foreach ($pageBuild['pages'] as $page) {
-                $locked->pages()->create($page);
-            }
-            foreach ($pageBuild['chunk_locators'] as $chunkIndex => $locator) {
-                $locked->chunks()->where('chunk_index', (int) $chunkIndex)->update(['locator_json' => $locator]);
-            }
-
-            $structure = (array) ($locked->structure_json ?? []);
-            $structure['inspection'] = $inspection;
-            $structure['reader'] = [
-                'ready' => $pageBuild['page_count'] > 0,
-                'page_count' => (int) $pageBuild['page_count'],
-                'representation' => 'server_generated_html',
-                'source_sha256' => $locked->source_sha256,
-            ];
-            $structure['analysis_representation'] = $sourceExtension === 'docx'
-                ? 'docx_structured_with_converted_pdf'
-                : ($inspection['detected_type'] ?? 'unknown');
-            $structure['fact_count'] = $storedFactCount;
-            $structure['ai_review'] = [
-                'review_id' => $payload['review_id'] ?? null,
-                'summary' => $payload['summary'] ?? null,
-                'findings' => $payload['findings'] ?? [],
-                'warnings' => $payload['warnings'] ?? [],
-                'provider_status' => $payload['provider_status'] ?? [],
-                'media_reports' => (array) ($payload['media_reports'] ?? []),
-                'analysis_batch_count' => (int) ($payload['analysis_batch_count'] ?? 0),
-                'successful_analysis_batches' => (int) ($payload['successful_analysis_batches'] ?? 0),
-                'analyzed_characters' => (int) ($payload['analyzed_characters'] ?? 0),
-                'security_gate' => $payload['security_gate'] ?? null,
-                'publication_authorized' => false,
-            ];
-
-            if ($file->is_primary && is_string($sampleBytes)) {
-                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                $sampleDiskName = $existingSample?->disk ?: 'private';
-                $samplePathForReader = null;
-                $sampleArtifact = $existingSample;
-                $sampleStoredWasUsed = false;
-                if ($existingSample && $existingSample->path && $storage->exists($sampleDiskName, $existingSample->path)) {
-                    $samplePathForReader = $existingSample->path;
-                    $structure['sample'] = [
-                        'artifact_type' => 'sample_pdf',
-                        'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
-                        'sha256' => $existingSample->sha256,
-                        'generated_once' => true,
-                    ];
-                } elseif (is_array($sampleStoredForCleanup)) {
-                    $sampleArtifact = $locked->artifacts()->updateOrCreate(
-                        ['artifact_type' => 'sample_pdf', 'version' => 1],
-                        [
-                            'disk' => $sampleStoredForCleanup['disk'],
-                            'path' => $sampleStoredForCleanup['path'],
-                            'mime' => 'application/pdf',
-                            'size_bytes' => strlen($sampleBytes),
-                            'sha256' => $sampleHash,
-                            'metadata_json' => [
-                                'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                'source_sha256' => $locked->source_sha256,
-                                'generated_once' => true,
-                            ],
-                        ]
-                    );
-                    $samplePathForReader = $sampleArtifact->path;
-                    $sampleDiskName = (string) $sampleArtifact->disk;
-                    $sampleStoredWasUsed = true;
-                    $structure['sample'] = [
-                        'artifact_type' => 'sample_pdf',
-                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                        'sha256' => $sampleArtifact->sha256,
-                        'generated_once' => true,
-                    ];
-                }
-
-                if ($samplePathForReader) {
-                    StoreProductPreview::query()->updateOrCreate(
-                        ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
-                        [
-                            'disk' => $sampleDiskName,
-                            'mime' => 'application/pdf',
-                            'page_number' => 1,
-                            'kind' => 'pdf',
-                            'access_level' => 'sample',
-                            'watermarked' => true,
-                            'is_active' => true,
-                            'sort_order' => 0,
-                        ]
-                    );
-                    if ($sampleStoredWasUsed && is_array($sampleStoredForCleanup)) {
-                        $storage->bindReference(
-                            (int) $sampleStoredForCleanup['managed_file_id'],
-                            StoreProductDocumentArtifact::class,
-                            (int) $sampleArtifact->id,
-                            (int) $locked->product_id
+                if ($file->is_primary && is_string($sampleBytes)) {
+                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                    $sampleDiskName = $existingSample?->disk ?: 'private';
+                    $samplePathForReader = null;
+                    $sampleArtifact = $existingSample;
+                    $sampleStoredWasUsed = false;
+                    if ($existingSample && $existingSample->path && $storage->exists($sampleDiskName, $existingSample->path)) {
+                        $samplePathForReader = $existingSample->path;
+                        $structure['sample'] = [
+                            'artifact_type' => 'sample_pdf',
+                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                            'sha256' => $existingSample->sha256,
+                            'generated_once' => true,
+                        ];
+                    } elseif (is_array($sampleStoredForCleanup)) {
+                        $sampleArtifact = $locked->artifacts()->updateOrCreate(
+                            ['artifact_type' => 'sample_pdf', 'version' => 1],
+                            [
+                                'disk' => $sampleStoredForCleanup['disk'],
+                                'path' => $sampleStoredForCleanup['path'],
+                                'mime' => 'application/pdf',
+                                'size_bytes' => strlen($sampleBytes),
+                                'sha256' => $sampleHash,
+                                'metadata_json' => [
+                                    'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                                    'source_sha256' => $locked->source_sha256,
+                                    'generated_once' => true,
+                                ],
+                            ]
                         );
-                        $sampleStoredWasBound = true;
+                        $samplePathForReader = $sampleArtifact->path;
+                        $sampleDiskName = (string) $sampleArtifact->disk;
+                        $sampleStoredWasUsed = true;
+                        $structure['sample'] = [
+                            'artifact_type' => 'sample_pdf',
+                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                            'sha256' => $sampleArtifact->sha256,
+                            'generated_once' => true,
+                        ];
+                    }
+
+                    if ($samplePathForReader) {
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                            [
+                                'disk' => $sampleDiskName,
+                                'mime' => 'application/pdf',
+                                'page_number' => 1,
+                                'kind' => 'pdf',
+                                'access_level' => 'sample',
+                                'watermarked' => true,
+                                'is_active' => true,
+                                'sort_order' => 0,
+                            ]
+                        );
+                        if ($sampleStoredWasUsed && is_array($sampleStoredForCleanup)) {
+                            $storage->bindReference(
+                                (int) $sampleStoredForCleanup['managed_file_id'],
+                                StoreProductDocumentArtifact::class,
+                                (int) $sampleArtifact->id,
+                                (int) $locked->product_id
+                            );
+                            $sampleStoredWasBound = true;
+                        }
                     }
                 }
-            }
 
-            if ($file->is_primary && ($product->download_policy ?? 'signed') === 'reader_only') {
-                $fullReaderPath = null;
-                $fullReaderDisk = 'private';
-                $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
-                if ($sourceExtension === 'pdf') {
-                    $fullReaderPath = $file->path;
-                    $fullReaderDisk = $file->disk ?: 'private';
-                } elseif ($sourceExtension === 'docx') {
-                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
-                    if ($readerPdf) {
-                        $fullReaderPath = $readerPdf->path;
-                        $fullReaderDisk = $readerPdf->disk ?: 'private';
+                if ($file->is_primary && ($product->download_policy ?? 'signed') === 'reader_only') {
+                    $fullReaderPath = null;
+                    $fullReaderDisk = 'private';
+                    $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
+                    if ($sourceExtension === 'pdf') {
+                        $fullReaderPath = $file->path;
+                        $fullReaderDisk = $file->disk ?: 'private';
+                    } elseif ($sourceExtension === 'docx') {
+                        $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                        if ($readerPdf) {
+                            $fullReaderPath = $readerPdf->path;
+                            $fullReaderDisk = $readerPdf->disk ?: 'private';
+                        }
+                    }
+
+                    if ($fullReaderPath && $storage->exists($fullReaderDisk, $fullReaderPath)) {
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['product_id' => $locked->product_id, 'path' => $fullReaderPath],
+                            [
+                                'disk' => $fullReaderDisk,
+                                'mime' => 'application/pdf',
+                                'page_number' => 1,
+                                'kind' => 'pdf',
+                                'access_level' => 'full',
+                                'watermarked' => true,
+                                'is_active' => true,
+                                'sort_order' => 1,
+                            ]
+                        );
                     }
                 }
 
-                if ($fullReaderPath && $storage->exists($fullReaderDisk, $fullReaderPath)) {
-                    StoreProductPreview::query()->updateOrCreate(
-                        ['product_id' => $locked->product_id, 'path' => $fullReaderPath],
-                        [
-                            'disk' => $fullReaderDisk,
-                            'mime' => 'application/pdf',
-                            'page_number' => 1,
-                            'kind' => 'pdf',
-                            'access_level' => 'full',
-                            'watermarked' => true,
-                            'is_active' => true,
-                            'sort_order' => 1,
-                        ]
-                    );
+                $processingState = app(\App\Services\ProductDocumentProcessingState::class)->derive(
+                    (array) $inspection,
+                    (array) ($payload['provider_status'] ?? []),
+                    (int) ($payload['analysis_batch_count'] ?? 0),
+                    (int) ($payload['successful_analysis_batches'] ?? 0),
+                    $locked->chunks()->exists(),
+                    (int) ($pageBuild['page_count'] ?? 0),
+                );
+
+                $structure['completeness'] = $processingState['completeness'];
+                $structure['reader']['ready'] = $processingState['reader_ready'];
+                $structure['reader']['status'] = $processingState['status'];
+                if ($file->purpose === 'product_download'
+                    && (bool) $processingState['reader_ready']
+                    && $locked->chunks()->exists()) {
+                    // Keep an older playable artifact available while a newer version is generated.
+                    $hasExistingAudioArtifact = $locked->artifacts()
+                        ->where('artifact_type', 'audio_full_wav')
+                        ->where('version', '>=', 2)
+                        ->exists();
+                    $structure['audio'] = ['status' => $hasExistingAudioArtifact ? 'upgrading' : 'pending'];
                 }
-            }
 
-            $processingState = app(\App\Services\ProductDocumentProcessingState::class)->derive(
-                (array) $inspection,
-                (array) ($payload['provider_status'] ?? []),
-                (int) ($payload['analysis_batch_count'] ?? 0),
-                (int) ($payload['successful_analysis_batches'] ?? 0),
-                $locked->chunks()->exists(),
-                (int) ($pageBuild['page_count'] ?? 0),
-            );
-
-            $structure['completeness'] = $processingState['completeness'];
-            $structure['reader']['ready'] = $processingState['reader_ready'];
-            $structure['reader']['status'] = $processingState['status'];
-            if ($file->purpose === 'product_download'
-                && (bool) $processingState['reader_ready']
-                && $locked->chunks()->exists()) {
-                // Keep an older playable artifact available while a newer version is generated.
-                $hasExistingAudioArtifact = $locked->artifacts()
-                    ->where('artifact_type', 'audio_full_wav')
-                    ->where('version', '>=', 2)
-                    ->exists();
-                $structure['audio'] = ['status' => $hasExistingAudioArtifact ? 'upgrading' : 'pending'];
-            }
-
-            $locked->update([
-                'processing_status' => $processingState['status'],
-                'detected_type' => $sourceExtension === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
-                'page_count' => isset($inspection['page_count']) ? (int) $inspection['page_count'] : $locked->page_count,
-                'character_count' => $totalCharacters,
-                'word_count' => $totalWords,
-                'structure_json' => $structure,
-                'failure_code' => null,
-                'processed_at' => now(),
-            ]);
+                $locked->update([
+                    'processing_status' => $processingState['status'],
+                    'detected_type' => $sourceExtension === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
+                    'page_count' => isset($inspection['page_count']) ? (int) $inspection['page_count'] : $locked->page_count,
+                    'character_count' => $totalCharacters,
+                    'word_count' => $totalWords,
+                    'structure_json' => $structure,
+                    'failure_code' => null,
+                    'processed_at' => now(),
+                ]);
             });
             if (is_array($sampleStoredForCleanup) && ! $sampleStoredWasBound) {
                 try {
