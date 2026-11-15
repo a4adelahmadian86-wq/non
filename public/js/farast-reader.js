@@ -153,7 +153,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
-  let continuousNavigationTarget=null,continuousNavigationSequence=0;
+  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -181,7 +181,7 @@
   const bookmarkButton=root.querySelector('#reader-bookmark-toggle');
   const bookmarksOpenButton=root.querySelector('#reader-bookmarks-open');
   const bookmarksPanel=root.querySelector('#reader-bookmarks-panel');
-  let restoringInitial=true;
+  let restoringInitial=true,readerStateRevision=0;
   let readerState={progress:null,bookmarks:[]};
   try{
     const stored=JSON.parse(localStorage.getItem(storageKey)||'null');
@@ -198,9 +198,26 @@
   const currentPosition=()=>({section:itemIndex,page:isPdf()?pdfPage:1});
   const samePosition=(a,b)=>Boolean(a&&b&&a.section===b.section&&a.page===b.page);
   const persistReaderState=()=>{
+    readerStateRevision++;
     const raw=JSON.stringify(readerState);try{localStorage.setItem(storageKey,raw);}catch(_){}window.FarastReaderDurableStore?.set(storageKey,raw).catch(()=>{});
   };
-  const restoreDurableReaderState=async()=>{if(!window.FarastReaderDurableStore)return;try{let legacy=null;try{legacy=localStorage.getItem(storageKey);}catch(_){}const raw=await window.FarastReaderDurableStore.migrate(storageKey,legacy);if(raw){const stored=JSON.parse(raw);if(stored&&typeof stored==='object'){const saved=stored.progress,bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];readerState={progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)};}}await window.FarastReaderDurableStore.requestPersistence();}catch(_){}};
+  const restoreDurableReaderState=async()=>{
+    if(!window.FarastReaderDurableStore)return;
+    const revisionAtRestoreStart=readerStateRevision;
+    try{
+      let legacy=null;try{legacy=localStorage.getItem(storageKey);}catch(_){}
+      const raw=await window.FarastReaderDurableStore.migrate(storageKey,legacy);
+      // A user action made while IndexedDB was opening is newer than this snapshot.
+      if(raw&&readerStateRevision===revisionAtRestoreStart){
+        const stored=JSON.parse(raw);
+        if(stored&&typeof stored==='object'){
+          const saved=stored.progress,bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];
+          readerState={progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)};
+        }
+      }
+      await window.FarastReaderDurableStore.requestPersistence();
+    }catch(_){}
+  };
   const remoteStateUrl=root.dataset.readerStateUrl||'';
   let remoteSyncTimer=null;
   const queueRemoteSync=()=>{
@@ -220,10 +237,12 @@
   };
   const loadRemoteReaderState=async()=>{
     if(!remoteStateUrl)return;
+    const revisionAtRequest=readerStateRevision;
     try{
       const response=await fetch(remoteStateUrl,{credentials:'same-origin',headers:{'Accept':'application/json'}});
       if(!response.ok)return;
       const remote=await response.json();
+      if(readerStateRevision!==revisionAtRequest){queueRemoteSync();return;}
       const hasLocalState=Boolean(readerState.progress||readerState.bookmarks.length);
       if(remote.updated_at&&!hasLocalState){
         const saved=remote.progress;
@@ -649,6 +668,7 @@
 
   const navigatePdfPage=async(number)=>{
     if(!pdfDoc)return;
+    readerNavigationRevision++;
     const target=clamp(Number(number)||1,1,pdfDoc.numPages);
     if(continuousMode){
       const wrapper=continuousHost?.querySelector('[data-pdf-cont-page="'+target+'"]');
@@ -999,6 +1019,7 @@
   };
 
   const showItem=async(index)=>{
+    readerNavigationRevision++;
     const nextIndex=clamp(Number(index)||0,0,articles.length-1);
     if(nextIndex!==itemIndex){searchRequest++;pdfMatches=[];matchIndex=-1;}
     itemIndex=nextIndex;
@@ -1251,7 +1272,11 @@
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
-  restoreDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>showItem(0)).then(()=>{
+  const startupNavigationRevision=readerNavigationRevision;
+  restoreDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>{
+    // Do not let delayed startup work undo navigation already initiated by the reader.
+    if(readerNavigationRevision===startupNavigationRevision)return showItem(0);
+  }).then(()=>{
     restoringInitial=false;
     refreshResumeButton();
     refreshBookmarkButton();

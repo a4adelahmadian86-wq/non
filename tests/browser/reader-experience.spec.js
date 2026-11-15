@@ -75,7 +75,7 @@ test('keeps reader data in IndexedDB after local storage and Cache API are clear
 
 
 
-async function mountReader(page, includeExcel = false, readerStateUrl = '') {
+async function mountReader(page, includeExcel = false, readerStateUrl = '', beforeReaderScript = null) {
   await page.goto('/');
   const total = includeExcel ? 3 : 2;
   const excelMarkup = includeExcel ? `
@@ -130,6 +130,7 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
   `);
   await page.addStyleTag({ content: '.farast-reader-page-content img,.farast-reader-page-content iframe { transform: scale(var(--reader-zoom, 1)); transform-origin: top center; }.farast-reader-print-block{display:none}@media print{body *{visibility:hidden!important}.farast-reader-print-block{display:block!important;visibility:visible!important;position:fixed;inset:0;padding:48px;background:#fff;color:#111}.farast-reader-print-block *{visibility:visible!important}}' });
   await page.addScriptTag({ url: new URL('/js/farast-reader-storage.js', page.url()).href });
+  if (beforeReaderScript) await beforeReaderScript(page);
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -253,6 +254,52 @@ test('PDF annotations expose safe external links and interactive AcroForm text f
 });
 
 test.describe('FARAST sample reader interactions', () => {
+  test('keeps a bookmark created during durable restore instead of applying the stale snapshot', async ({ page }) => {
+    await mountReader(page, false, '', async page => {
+      await page.evaluate(() => {
+        const store = window.FarastReaderDurableStore;
+        let release;
+        window.__releaseReaderMigration = () => release();
+        window.FarastReaderDurableStore = Object.freeze({
+          ...store,
+          migrate: () => new Promise(resolve => {
+            release = () => resolve(JSON.stringify({ progress: null, bookmarks: [] }));
+          })
+        });
+      });
+    });
+
+    await page.locator('#reader-bookmark-toggle').click();
+    await page.evaluate(() => window.__releaseReaderMigration());
+    await page.locator('#reader-bookmarks-open').click();
+    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(2);
+    const stored = await page.evaluate(async () => {
+      const raw = await window.FarastReaderDurableStore.restore('farast-reader:v1:reader-fixture');
+      return raw ? JSON.parse(raw).bookmarks : [];
+    });
+    expect(stored).toEqual([{ section: 0, page: 1 }]);
+  });
+
+  test('does not reset a section selected while durable startup restore is pending', async ({ page }) => {
+    await mountReader(page, false, '', async page => {
+      await page.evaluate(() => {
+        const store = window.FarastReaderDurableStore;
+        let release;
+        window.__releaseReaderMigration = () => release();
+        window.FarastReaderDurableStore = Object.freeze({
+          ...store,
+          migrate: () => new Promise(resolve => { release = () => resolve(null); })
+        });
+      });
+    });
+
+    await page.locator('#reader-next').click();
+    await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveClass(/is-active/);
+    await page.evaluate(() => window.__releaseReaderMigration());
+    await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveClass(/is-active/);
+    await expect(page.locator('#reader-page-number')).toHaveValue('2');
+  });
+
   test('saves reading progress and resumes the last section on this device', async ({ page }) => {
     await mountReader(page);
     await page.locator('#reader-next').click();
