@@ -855,9 +855,10 @@ class AuthorizationService
             return false;
         }
 
+        $isDeny = ($grant?->effect ?? null) === 'deny';
         $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
         $effectiveScope = $this->effectiveScope($user);
-        if (($rank[$effectiveScope] ?? 4) > ($rank[$scope] ?? 4)) {
+        if (! $isDeny && ($rank[$effectiveScope] ?? 4) > ($rank[$scope] ?? 4)) {
             return false;
         }
 
@@ -873,15 +874,17 @@ class AuthorizationService
                 return false;
             }
 
-            if ($user->isAdmin()) {
-                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
-                if ($effectiveOrganizationIds !== null
-                    && ! in_array((int) $organizationId, $effectiveOrganizationIds, true)) {
+            if (! $isDeny) {
+                if ($user->isAdmin()) {
+                    $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                    if ($effectiveOrganizationIds !== null
+                        && ! in_array((int) $organizationId, $effectiveOrganizationIds, true)) {
+                        return false;
+                    }
+                } elseif ($user->organization_id === null
+                    || (int) $organizationId !== (int) $user->organization_id) {
                     return false;
                 }
-            } elseif ($user->organization_id === null
-                || (int) $organizationId !== (int) $user->organization_id) {
-                return false;
             }
 
             $recordOrganizationId = $record->getAttribute('organization_id');
@@ -906,21 +909,23 @@ class AuthorizationService
                 return false;
             }
 
-            if ($user->isAdmin()) {
-                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
-                if ($effectiveOrganizationIds !== null
-                    && ! in_array((int) $team->organization_id, $effectiveOrganizationIds, true)) {
+            if (! $isDeny) {
+                if ($user->isAdmin()) {
+                    $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                    if ($effectiveOrganizationIds !== null
+                        && ! in_array((int) $team->organization_id, $effectiveOrganizationIds, true)) {
+                        return false;
+                    }
+                } elseif (! $user->organization_id
+                    || (int) $team->organization_id !== (int) $user->organization_id
+                    || ! $this->userHasTeamAccess($user, (int) $teamId)) {
                     return false;
                 }
-            } elseif (! $user->organization_id
-                || (int) $team->organization_id !== (int) $user->organization_id
-                || ! $this->userHasTeamAccess($user, (int) $teamId)) {
-                return false;
-            }
 
-            $effectiveTeamIds = $this->effectiveTeamIds($user);
-            if ($effectiveTeamIds !== null && ! in_array((int) $teamId, $effectiveTeamIds, true)) {
-                return false;
+                $effectiveTeamIds = $this->effectiveTeamIds($user);
+                if ($effectiveTeamIds !== null && ! in_array((int) $teamId, $effectiveTeamIds, true)) {
+                    return false;
+                }
             }
 
             $recordTeamId = $record->getAttribute('team_id');
