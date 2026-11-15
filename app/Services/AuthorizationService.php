@@ -96,7 +96,7 @@ class AuthorizationService
                 return null;
             }
 
-            $teamQuery = \\App\\Models\\Team::query()->whereKey($teamId);
+            $teamQuery = \App\Models\Team::query()->whereKey($teamId);
             if ($assignment->organization_id !== null) {
                 $teamQuery->where('organization_id', (int) $assignment->organization_id);
             }
@@ -781,7 +781,7 @@ class AuthorizationService
             // to the assigned team (or remains its supervisor). This mirrors
             // effectiveTeamIds() and prevents stale assignments after removal.
             if ($teamId !== null) {
-                $teamQuery = \\App\\Models\\Team::query()->whereKey((int) $teamId);
+                $teamQuery = \App\Models\Team::query()->whereKey((int) $teamId);
                 if ($grant?->organization_id !== null) {
                     $teamQuery->where('organization_id', (int) $grant->organization_id);
                 }
