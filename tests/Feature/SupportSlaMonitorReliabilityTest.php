@@ -225,7 +225,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->app->instance(SupportNotificationService::class, $failedNotifier);
 
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
-        $this->assertDatabaseHas('support_sla_alert_outbox', ['id' => $outbox->id, 'status' => 'failed', 'attempts' => 1]);
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['id' => $outbox->id, 'status' => 'failed', 'attempts' => 1, 'lease_token' => null]);
 
         DB::table('support_sla_alert_outbox')->where('id', $outbox->id)->update(['available_at' => now()->subMinute()]);
         $successfulNotifier = Mockery::mock(SupportNotificationService::class);
@@ -241,6 +241,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             'id' => $outbox->id,
             'status' => 'delivered',
             'attempts' => 2,
+            'lease_token' => null,
         ]);
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
     }
