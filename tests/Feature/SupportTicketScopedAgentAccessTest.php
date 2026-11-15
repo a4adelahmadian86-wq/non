@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
 use App\Models\Permission;
+use App\Models\SiteSetting;
 use App\Models\RolePermission;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
@@ -98,6 +100,52 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $this->assertTrue(Gate::forUser($customer)->allows('rate', $ticket));
     }
 
+    public function test_admin_role_does_not_bypass_organization_scope_on_direct_ticket_routes(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Scoped Admin Org', 'slug' => 'scoped-admin-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Foreign Admin Org', 'slug' => 'foreign-admin-org', 'status' => 'active']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organization->id,
+            'is_blocked' => false,
+        ]);
+        $insideCustomer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideCustomer = User::factory()->create(['organization_id' => $otherOrganization->id, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $insideTicket = Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'subject' => 'Scoped admin visible ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Scoped admin forbidden ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('support.show', $insideTicket))
+            ->assertOk()
+            ->assertSee('Scoped admin visible ticket');
+
+        $this->get(route('support.show', $outsideTicket))->assertForbidden();
+
+        $this->post(route('admin.tickets.reply', $insideTicket), ['body' => 'پاسخ مجاز در دامنه سازمان'])
+            ->assertRedirect();
+        $this->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'پاسخ خارج از دامنه'])
+            ->assertForbidden();
+
+        $this->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
+            ->assertOk()
+            ->assertSee('Scoped admin visible ticket')
+            ->assertDontSee('Scoped admin forbidden ticket');
+    }
     public function test_customer_can_never_read_staff_internal_notes(): void
     {
         $customer = User::factory()->create();
