@@ -130,11 +130,29 @@ class AuthorizationService
 
         // An organization grant covers the organization's full console projection
         // and any narrower projection belonging to that same organization.
-        if ($user->organization_id !== null && $allowGrants->contains(
+        $organizationGrant = $allowGrants->first(
             fn (object $grant): bool => $grant->scope === 'organization'
+                && $user->organization_id !== null
                 && (int) $grant->organization_id === (int) $user->organization_id
-        )) {
-            return in_array($scope, ['organization', 'team', 'own'], true);
+        );
+        if ($organizationGrant) {
+            if (in_array($scope, ['organization', 'own'], true)) {
+                return true;
+            }
+
+            if ($scope === 'team') {
+                $visibleTeamIds = $this->consoleTeamIds($user);
+                if ($visibleTeamIds === []) {
+                    return false;
+                }
+
+                $teamsInGrantedOrganization = Team::query()
+                    ->whereIn('id', $visibleTeamIds)
+                    ->where('organization_id', $organizationGrant->organization_id)
+                    ->count();
+
+                return $teamsInGrantedOrganization === count($visibleTeamIds);
+            }
         }
 
         if ($scope === 'team') {
@@ -159,18 +177,9 @@ class AuthorizationService
         }
 
         if ($scope === 'own') {
-            return $allowGrants->contains(function (object $grant) use ($user): bool {
-                if ($grant->scope === 'own') {
-                    return true;
-                }
-
-                if ($grant->scope === 'team') {
-                    return $grant->team_id !== null
-                        && $this->userHasTeamAccess($user, (int) $grant->team_id);
-                }
-
-                return false;
-            });
+            // An own-scoped console query includes all of the user's records;
+            // a team grant cannot safely authorize that wider projection.
+            return $allowGrants->contains(fn (object $grant): bool => $grant->scope === 'own');
         }
 
         return false;
