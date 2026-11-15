@@ -8,7 +8,7 @@
 
 ## 0. Snapshot جاری main — 2026-11-15
 
-- **Commit مبنا:** `509febd015427804d1d7eea9177edfbb9432c3d3` (آخرین main در زمان این به‌روزرسانی).
+- **Commit مبنا:** `8d90130eac8377526030c5c4d08131651bda0d8f` (ادغام PR #603؛ آخرین main در زمان این به‌روزرسانی).
 - **اندازه درخت Git:** 1,262 entry.
 - **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 179 فایل آزمون (157 فایل PHP) و 12 فایل Route.
 - **Migrationها:** 11 گروه timestamp تکراری وجود دارد، اما نام کامل فایل‌ها یکتا است. تکرار timestamp به‌تنهایی اثبات خرابی نیست؛ ترتیب lexical و dependency باید با fresh install و upgrade واقعی اعتبارسنجی شود. وضعیت اجراشده/درانتظار دیتابیس محلی یا عملیاتی از Git قابل تشخیص نیست.
@@ -22,7 +22,7 @@
 - Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
 
 این نتایج متعلق به HEAD PR #599 پیش از squash هستند. پس از آن، PR #598 راهنمای میان‌برهای خوانشگر را اضافه کرد؛ روی HEAD دقیق آن (7e43d08cbf293d2019ebca1b716625359236b6a7) هر سه Workflow یعنی FARAST CI (run 43735607204)، Phase 3 (run 43735607192) و Phase 4 Agent (run 43735607189) موفق شدند.
-PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد. روی همین merge commit هر سه Workflow موفق‌اند: FARAST CI (run 43736179322)، Phase 3 (run 43736179272) و Phase 4 Agent (run 43736179325).
+PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد و هر سه Workflow آن merge commit موفق شدند. پس از آن PR #603 اصلاح جلوگیری از اجرای میان‌برهای خوانشگر در زمان بازبودن dialog را اضافه کرد؛ هر سه Workflow روی head آن (`362a3b5de8441b4ab26d7bf82668243f028ef072`) موفق شدند و PR #603 در commit `8d90130eac8377526030c5c4d08131651bda0d8f` به main ادغام شد. روی merge commit جدید، FARAST CI (run 43737656383)، Phase 3 (run 43737656343) و Phase 4 Agent (run 43737656337) در زمان این snapshot هنوز queued/in progress هستند؛ بنابراین CI پس از merge #603 هنوز کامل تأیید نشده است.
 
 ### اصلاحات تأییدشده پس از snapshot قبلی
 
@@ -33,13 +33,14 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 | مالکیت Workerهای outbox | PR #594 ستون `lease_token` را اضافه کرد. claim برای هر Worker token یکتا می‌سازد و read/skip/success/failure فقط با همان token معتبر انجام می‌شوند. Worker منقضی‌شده نمی‌تواند وضعیت یا audit نتیجه‌ی Worker جدید را بازنویسی کند. |
 | گزارش CSAT | `SupportReportController` از aggregate SQL استفاده می‌کند و دیگر تمام امتیازها را برای محاسبه count/average/distribution در حافظه PHP بارگذاری نمی‌کند. |
 | خواندن صوت خوانشگر | PR #599 مسیرهای `reader` و `readerAudio` را به `StorageManager::exists/size/streamRange` متصل کرد؛ خواندن Range از private و S3-compatible volume از یک abstraction انجام می‌شود و chunkها flush می‌شوند. |
+| جلوگیری از میان‌بر در dialog خوانشگر | PR #603 با stopPropagation برای کلیدهای غیر Escape و تست Playwright ادغام شد؛ modal دیگر کلیدهای F، B و جهت‌ها را به listener سراسری خوانشگر نشت نمی‌دهد. |
 | دسترسی بخش‌های حساس مدیریت | شکاف تاریخی بخش 5 برای فروشگاه، عملیات محصول و گزارش پشتیبانی در main جاری اصلاح شده است: گروه‌های admin فروشگاه و عملیات محصول `admin.section:store` و گزارش پشتیبانی `admin.section:support_admin` دارند. `AdminSectionScopeAuthorizationTest` دسترسی employee و مدیر سازمانی را رد می‌کند. این اصلاح به معنی تکمیل ممیزی تمام routeهای مدیریتی نیست؛ همه routeهای `/admin` همچنان باید در برابر permission و scope بررسی شوند. |
 | ثبت پیشرفت دوره | `StoreCourseProgressService` محاسبه مشترک پیشرفت را برای تجربه یادگیری و CRM نگه می‌دارد؛ CRM نباید الگوریتم محاسبه موازی بسازد. |
 | تست و autoload | workflow اصلی قبل از تست‌ها `composer dump-autoload --optimize --strict-psr` و `composer test:preflight` را اجرا می‌کند. این CI وضعیت محیط محلی کاربر را اثبات نمی‌کند؛ برای آن باید همان دستورات و `migrate:status` روی ماشین/دیتابیس محلی اجرا شوند. |
 
 ### شکاف‌های باز که در main فعلی دوباره تأیید شدند
 
-1. **Writerهای artifact خوانشگر هنوز StorageManager را دور می‌زنند.** در `GenerateProductDocumentAudio` و `ProcessProductDocument` عملیات وجود/ذخیره فایل‌های `audio_full_wav`، `reader_pdf` و `sample_pdf` مستقیماً به `Storage::disk(...)` متکی است. `StorageManager::bindReference` وجود دارد، اما APIای مانند `storeContents` برای محتوای تولیدشده ندارد؛ همچنین `StorageTransferService::syncSourceReference` مدل‌های `StoreProductDocumentArtifact` و `StoreProductPreview` را نمی‌شناسد. بنابراین صرفاً اضافه‌کردن `StorageManagedFile` کافی نیست و referenceهای artifact/preview پس از انتقال به volume همگام نمی‌شوند. مرحله بعد باید writerها، reference binding، همگام‌سازی preview، cleanup و retry را یکپارچه کند؛ صرفاً تغییر endpoint خواندن کافی نیست.
+1. **یکپارچگی Storage برای artifactهای تولیدشده هنوز کامل نیست.** در main فعلی، `GenerateProductDocumentAudio` و `ProcessProductDocument` همچنان writerهای مستقیمی برای `audio_full_wav`، `reader_pdf` و `sample_pdf` دارند. PR #604 مسیر `audio_full_wav` را با `StorageManager::storeContents`، اتصال به `StorageManagedFile` و همگام‌سازی referenceهای artifact/preview هنگام انتقال به volume پوشش می‌دهد؛ Phase 3 و Phase 4 آن موفق‌اند، اما FARAST CI هنوز در حال اجراست و این تغییر هنوز در main نیست. پس از ادغام آن، `reader_pdf` و `sample_pdf` در `ProcessProductDocument` همچنان باید از همین abstraction استفاده کنند؛ cleanup، retry و rollback نیز باید با تست انتقال واقعی اثبات شوند.
 
 2. **مسیر سهمیه پروژه هنوز با catalog تجاری جدید هم‌راستا نیست.** `ProfessionalCommerceService` از `FarastCommercialPlan` و entitlementهای تجاری استفاده می‌کند؛ اما `ProjectBillingService::includedAllowance` در main فعلی هنوز `farast_subscriptions.plan_id` را به `farast_plans.id` وصل می‌کند و مصرف را از ستون‌های legacy در `farast_usage_counters` می‌خواند. پیش از هر migration اشتراک، باید mapping plan ID/code، entitlement و usage برای هر دو مسیر با داده واقعی reconcile شود. PR #340 در زمان این snapshot draft و ادغام‌نشده است؛ migration آن بدون اصلاح mapping و تست upgrade نباید اجرا شود.
 
@@ -47,7 +48,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 
 4. **Storage و commerce هنوز مرزهای مالکیت نیازمند تکمیل دارند.** PRهای قدیمی storage/financial را صرفاً بر اساس عنوان یا تعداد commit نمی‌توان پذیرفت؛ فقط تغییرهای لازم پس از تطبیق با main جاری، اجرای preflight و تست چندموتوره قابل انتقال‌اند.
 
-5. **Scope مجوز مستقیم در گارد بخش‌های مدیریتی باید enforce شود.** در main، AuthorizationService::allows() نتیجه grant مستقیم را به boolean تبدیل می‌کند و AdminConsoleService::sectionAllowed() همان نتیجه را با scope کلی کاربر ترکیب می‌کند؛ scope خود grant در این مسیر اعمال نمی‌شود. در نتیجه grant با دامنه own می‌تواند برای نقش دارای scope سازمانی مجوز بخش سازمانی را فعال کند، و grant یک تیم ممکن است بخشی را باز کند که query آن چند تیم را برمی‌گرداند. PR #601 این شکاف را با evaluator مخصوص scope مؤثر و تست‌های regression پوشش می‌دهد؛ تا تکمیل CI و بازبینی، این اصلاح در main نیست.
+5. **Scope مجوز بخش‌های مدیریتی هنوز باید با PR #602 تکمیل شود.** `AdminConsoleService::sectionAllowed()` در main از تصمیم permission-level استفاده می‌کند؛ scope مستقیم grant و پوشش تمام role assignmentهای قابل مشاهده باید در تصمیم section لحاظ شوند. سناریوهای باز عبارت‌اند از grant شخصی برای section سازمانی، مجوز نقش فقط برای یکی از چند تیم، و grant سازمانی در حضور تیم‌های قابل مشاهده از سازمان دیگر. PR #601 پیاده‌سازی و تست‌های اولیه را داشت اما برای جلوگیری از دو شاخه موازی بسته شد؛ یافته‌ها و patch cases به PR #602 ارجاع شدند. در head قبلی PR #602، Phase 3 چهار تست authorization/support را fail کرد؛ root causeها (کاربر تیمی با organization_id خالی و حذف شدن direct team access.manage با legacy own scope) در review ثبت شدند. head جدید PR #602 دوباره در CI است؛ تا سبزشدن همه Workflowها و پوشش سناریوهای section-level، این شکاف در main باز است.
 
 6. **PR #347 منبع حقیقت RBAC موازی پیشنهاد می‌کند و قابل ادغام مستقیم نیست.** main از roles, role_assignments, user_permission_grants, access_audit_logs و permissions/role_permissions استفاده می‌کند؛ Migration افزوده‌شده در PR #347 جداول موازی farast_roles, farast_role_permissions, farast_user_roles, farast_user_permission_overrides, farast_access_audit_logs می‌سازد. این دوگانگی با اصل یک منبع حقیقت ناسازگار است. علاوه بر آن، شاخه PR در مقایسه با main جاری 219 commit عقب است و فایل‌های مشترک route/workflow را تغییر می‌دهد. پیش از ادغام باید روی جداول canonical بازطراحی و روی main جاری rebase شود.
 
@@ -65,7 +66,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 
 **محدودیت شواهد:** این snapshot از Git tree، کد، Migrationها و نتایج CI استخراج شده است. به دیتابیس نصب‌شده، secrets، سرویس‌های خارجی یا محیط محلی دسترسی اجرایی نداشته‌ام؛ بنابراین سلامت داده‌های production، backup قابل بازیابی و وضعیت واقعی providerها را تأیید نمی‌کند.
 
-## 1. وضعیت فعلی مخزن
+## 1. Snapshot تاریخی پیشین (قبل از 2026-11-15)
 
 | شاخص | مقدار در خط مبنای جاری |
 |---|---:|
