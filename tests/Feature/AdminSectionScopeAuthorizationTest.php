@@ -387,6 +387,43 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             && ! $users->contains('id', $memberB->id));
     }
 
+    public function test_scoped_admin_can_assign_roles_only_inside_assigned_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Manage Scope Org A', 'slug' => 'manage-scope-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Manage Scope Org B', 'slug' => 'manage-scope-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456921', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456922', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456923', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-access-manager-test',
+            ['dashboard.view', 'users.view', 'access.manage'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberA->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('role_assignments', [
+            'user_id' => $memberA->id,
+            'scope' => 'own',
+        ]);
+
+        $this->postJson('/admin/access-control/users/'.$memberB->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $memberB->id,
+            'scope' => 'own',
+        ]);
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
