@@ -319,8 +319,6 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-
-        app(AuthorizationService::class)->forgetUser($admin->id);
     }
 
     public function test_admin_organization_assignment_is_the_source_of_scope_without_user_organization_id(): void
