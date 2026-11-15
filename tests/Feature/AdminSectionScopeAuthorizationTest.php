@@ -694,6 +694,40 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->assertFalse($authorization->allowsRecord($admin, 'users.view', $memberB));
     }
 
+    public function test_global_deny_grant_overrides_scoped_allow_within_assigned_organization(): void
+    {
+        $organization = Organization::create(['name' => 'Deny Precedence Org', 'slug' => 'deny-precedence-org', 'status' => 'active']);
+        $admin = $this->makeUser('09123456981', User::ROLE_ADMIN);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-deny-precedence-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organization->id,
+        );
+
+        $usersView = Permission::query()->where('key', 'users.view')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $usersView->id,
+            'effect' => 'deny',
+            'scope' => 'global',
+            'organization_id' => null,
+            'team_id' => null,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $record = new class extends IlluminateDatabaseEloquentModel {};
+        $record->setAttribute('organization_id', $organization->id);
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsRecord($admin, 'users.view', $record));
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
