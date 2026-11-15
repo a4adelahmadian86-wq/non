@@ -163,4 +163,110 @@ class StorageProductArtifactReferenceTest extends TestCase
         $this->assertSame($newDisk, $artifact->disk);
         $this->assertSame('legacy/shared-audio.wav', $artifact->path);
     }
+
+    public function test_transferred_reader_and_sample_pdf_artifacts_update_preview_disk_and_path(): void
+    {
+        $category = StoreCategory::create([
+            'name' => 'دسته PDF',
+            'slug' => 'storage-pdf-reference-tests',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول PDF',
+            'slug' => 'storage-pdf-reference-product',
+            'sku' => 'STORAGE-PDF-REFERENCE',
+            'type' => 'digital_file',
+            'price_rials' => 0,
+            'status' => 'published',
+            'published_at' => now(),
+            'version' => '1.0',
+        ]);
+        $productFile = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => 1,
+            'disk' => 'private',
+            'path' => 'legacy/source.pdf',
+            'original_name' => 'source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 256,
+            'sha256' => hash('sha256', 'source'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $productFile->id,
+            'source_sha256' => hash('sha256', 'source'),
+            'processing_status' => 'completed',
+        ]);
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'PDF artifact reference volume',
+            'driver' => 'local',
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        foreach ([
+            ['type' => 'reader_pdf', 'access' => 'full', 'path' => 'legacy/reader.pdf'],
+            ['type' => 'sample_pdf', 'access' => 'sample', 'path' => 'legacy/sample.pdf'],
+        ] as $index => $definition) {
+            $artifact = StoreProductDocumentArtifact::create([
+                'document_id' => $document->id,
+                'artifact_type' => $definition['type'],
+                'version' => 1,
+                'disk' => 'private',
+                'path' => $definition['path'],
+                'mime' => 'application/pdf',
+                'size_bytes' => 128,
+                'sha256' => hash('sha256', $definition['path']),
+            ]);
+            $preview = StoreProductPreview::create([
+                'product_id' => $product->id,
+                'disk' => 'private',
+                'path' => $definition['path'],
+                'mime' => 'application/pdf',
+                'page_number' => 1,
+                'kind' => 'pdf',
+                'access_level' => $definition['access'],
+                'watermarked' => true,
+                'is_active' => true,
+                'sort_order' => $index,
+            ]);
+            $managed = StorageManagedFile::create([
+                'storage_volume_id' => $volume->id,
+                'drive_key' => 'iran_primary',
+                'file_key' => $definition['path'],
+                'file_key_hash' => hash('sha256', $definition['path']),
+                'original_name' => basename($definition['path']),
+                'mime' => 'application/pdf',
+                'size_bytes' => 128,
+                'checksum' => hash('sha256', $definition['path']),
+                'classification' => 'critical',
+                'source_module' => 'store-product-artifact',
+                'source_type' => StoreProductDocumentArtifact::class,
+                'source_id' => $artifact->id,
+                'product_id' => $product->id,
+                'visibility' => 'private',
+                'status' => 'active',
+                'metadata' => ['disk' => 'storage_volume:'.$volume->id, 'reference_pending' => false],
+            ]);
+
+            app(StorageTransferService::class)->syncSourceReference($managed, 'storage_volume:'.$volume->id);
+
+            $artifact->refresh();
+            $preview->refresh();
+            $this->assertSame('storage_volume:'.$volume->id, $artifact->disk);
+            $this->assertSame($definition['path'], $artifact->path);
+            $this->assertSame($artifact->disk, $preview->disk);
+            $this->assertSame($artifact->path, $preview->path);
+        }
+    }
+
 }
