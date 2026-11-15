@@ -31,7 +31,21 @@ test('reader shortcut guide is discoverable, keyboard accessible and does not hi
 
   await trigger.click();
   await expect(dialog).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__shortcutDialogBubbledKeys = [];
+    document.addEventListener('keydown', event => {
+      if (event.target instanceof Element && event.target.closest('#reader-shortcuts-dialog')) {
+        window.__shortcutDialogBubbledKeys.push(event.key);
+      }
+    });
+  });
+  await page.keyboard.press('f');
+  await page.keyboard.press('ArrowLeft');
+  expect(await page.evaluate(() => window.__shortcutDialogBubbledKeys)).toEqual([]);
+
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+  expect(await page.evaluate(() => window.__shortcutDialogBubbledKeys)).toEqual(['Escape']);
 });
