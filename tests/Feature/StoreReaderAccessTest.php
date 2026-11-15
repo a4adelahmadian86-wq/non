@@ -8,11 +8,14 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductDocument;
+use App\Models\StorageVolume;
 use App\Models\StoreLibraryItem;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use App\Services\Storage\S3CompatibleAdapter;
+use App\Services\Storage\StorageManager;
 use Tests\TestCase;
 
 class StoreReaderAccessTest extends TestCase
@@ -974,6 +977,141 @@ class StoreReaderAccessTest extends TestCase
             ->assertOk()
             ->assertDontSee('نسخه محصول:')
             ->assertDontSee('نسخه فایل اصلی:');
+    }
+
+    public function test_full_reader_audio_uses_storage_manager_for_s3_range_requests(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $product->update(['download_policy' => 'reader_only']);
+        $user = $this->makeReaderUser();
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
+        ]);
+
+        $sourceBytes = '%PDF-1.4 source';
+        Storage::disk('private')->put('store/products/'.$product->id.'/source.pdf', $sourceBytes);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/source.pdf',
+            'original_name' => 'source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($sourceBytes),
+            'sha256' => hash('sha256', $sourceBytes),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $file->sha256,
+            'processing_status' => 'extracted',
+            'detected_type' => 'pdf',
+            'page_count' => 1,
+            'structure_json' => [
+                'reader' => ['ready' => true, 'page_count' => 1],
+                'audio' => ['status' => 'completed'],
+            ],
+        ]);
+        $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'pdf_page',
+            'locator_key' => 'page:1',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'متن مجاز',
+            'content_html' => '<section><p>متن مجاز</p></section>',
+            'content_sha256' => hash('sha256', 'متن مجاز'),
+            'has_extracted_text' => true,
+        ]);
+
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Reader audio S3 volume',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.test',
+            'bucket' => 'reader-audio',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 0,
+            'object_count' => 1,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+        $audioBytes = '0123456789';
+        $audioPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/audio-v3.wav';
+        $document->artifacts()->create([
+            'artifact_type' => 'audio_full_wav',
+            'version' => 3,
+            'disk' => 'storage_volume:'.$volume->id,
+            'path' => $audioPath,
+            'mime' => 'audio/wav',
+            'size_bytes' => strlen($audioBytes),
+            'sha256' => hash('sha256', $audioBytes),
+            'metadata_json' => [
+                'source_sha256' => $document->source_sha256,
+                'duration_ms' => 1000,
+                'segments' => [],
+            ],
+        ]);
+
+        $adapter = \Mockery::mock(S3CompatibleAdapter::class);
+        $adapter->shouldReceive('exists')
+            ->times(3)
+            ->withArgs(fn ($actualVolume, string $key): bool => $actualVolume->id === $volume->id && $key === $audioPath)
+            ->andReturn(true);
+        $adapter->shouldReceive('size')
+            ->twice()
+            ->withArgs(fn ($actualVolume, string $key): bool => $actualVolume->id === $volume->id && $key === $audioPath)
+            ->andReturn(strlen($audioBytes));
+        $adapter->shouldReceive('streamRange')
+            ->once()
+            ->withArgs(function ($actualVolume, string $key, int $start, int $length, $output) use ($volume, $audioPath, $audioBytes): bool {
+                $this->assertSame($volume->id, $actualVolume->id);
+                $this->assertSame($audioPath, $key);
+                $this->assertSame(2, $start);
+                $this->assertSame(4, $length);
+                $this->assertIsResource($output);
+                $this->assertSame(4, fwrite($output, substr($audioBytes, $start, $length)));
+
+                return true;
+            });
+        $this->app->instance(S3CompatibleAdapter::class, $adapter);
+        $this->app->forgetInstance(StorageManager::class);
+
+        $this->actingAs($user)
+            ->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="ready"', false);
+
+        $this->actingAs($user)
+            ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertOk()
+            ->assertHeader('Content-Length', '10')
+            ->assertHeader('Accept-Ranges', 'bytes');
+
+        $response = $this->actingAs($user)
+            ->withHeader('Range', 'bytes=2-5')
+            ->get(route('store.reader.audio', [$product, $document]).'?version=3');
+
+        $response->assertStatus(206)
+            ->assertHeader('Content-Range', 'bytes 2-5/10')
+            ->assertHeader('Content-Length', '4');
+        $this->assertSame('2345', $response->streamedContent());
     }
 
 }
