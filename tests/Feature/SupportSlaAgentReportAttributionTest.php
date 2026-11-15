@@ -13,6 +13,41 @@ class SupportSlaAgentReportAttributionTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_agent_report_uses_persisted_first_response_when_legacy_public_message_is_missing(): void
+    {
+        config(['support.business_hours_only' => false]);
+        $createdAt = now()->startOfMinute();
+        $assignedAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+
+        $ticket = Ticket::create([
+            'subject' => 'Legacy response timestamp',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $assignedAgent->id,
+            'sla_first_due_at' => $createdAt->copy()->addMinutes(30),
+            'first_response_at' => $createdAt->copy()->addMinutes(20),
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+
+        $report = app(SupportSlaService::class)->agentReport(
+            $createdAt->copy()->subMinute(),
+            $createdAt->copy()->addMinute(),
+        );
+        $assignedRow = collect($report['agents'])->firstWhere('id', $assignedAgent->id);
+
+        $this->assertNotNull($assignedRow);
+        $this->assertSame(1, $assignedRow['assigned']);
+        $this->assertSame(1, $assignedRow['first_response_total']);
+        $this->assertSame(1, $assignedRow['first_response_met']);
+        $this->assertSame(20, $assignedRow['avg_first_response_minutes']);
+        $this->assertSame(20, $assignedRow['median_first_response_minutes']);
+        $this->assertSame(100.0, $assignedRow['sla_rate']);
+        $this->assertSame(1, $report['totals']['first_response_total']);
+        $this->assertSame(1, $report['totals']['first_response_met']);
+        $this->assertSame(20, $report['totals']['avg_first_response_minutes']);
+    }
     public function test_agent_report_attributes_first_response_and_replies_to_the_actual_staff_author(): void
     {
         config(['support.business_hours_only' => false]);
