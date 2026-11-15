@@ -25,6 +25,7 @@ class CommunicationSearchService
         int $limit = 30,
         ?bool $canManageAllTickets = null,
         ?array $visibleTicketUserIds = null,
+        ?bool $canAccessSupportInbox = null,
     ): Collection
     {
         $term = trim($term);
@@ -36,6 +37,7 @@ class CommunicationSearchService
         $results = collect();
         $isAdmin = $actor->isAdmin();
         $canManageAllTickets ??= $isAdmin;
+        $canAccessSupportInbox ??= $isAdmin;
         if (! $canManageAllTickets) {
             $visibleTicketUserIds = array_values(array_unique(array_map('intval', $visibleTicketUserIds ?? [(int) $actor->id])));
         }
@@ -64,7 +66,7 @@ class CommunicationSearchService
                     'ticket',
                     $ticket->displayCode().' — '.$ticket->subject,
                     $ticket->displayName().' · '.$ticket->statusLabel(),
-                    $canManageAllTickets
+                    $canAccessSupportInbox
                         ? route('admin.support.management', ['ticket' => $ticket->id])
                         : route('support.show', $ticket),
                     $ticket->updated_at,
