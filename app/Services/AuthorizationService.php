@@ -57,20 +57,62 @@ class AuthorizationService
     }
 
     /**
-     * Explicit team assignments constrain the existing console's team queries.
-     * null means use the legacy supervisor/manager membership resolution.
+     * Explicit organization assignments constrain administrator queries.
+     * null means use the actor's legacy organization context; an empty array
+     * means an explicit assignment exists but contains no valid organization.
      */
-    public function effectiveTeamIds(User $user): ?array
+    public function effectiveOrganizationIds(User $user): ?array
     {
-        $assignments = $this->activeAssignments($user)
-            ->where('scope', 'team')
-            ->whereNotNull('team_id');
+        $assignments = $this->activeAssignments($user)->where('scope', 'organization');
 
         if ($assignments->isEmpty()) {
             return null;
         }
 
-        return $assignments->pluck('team_id')->map(fn ($id) => (int) $id)->unique()->filter(fn (int $id): bool => $this->userHasTeamAccess($user, $id))->values()->all();
+        return $assignments->pluck('organization_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->filter(fn (int $id): bool => $id > 0 && DB::table('organizations')->where('id', $id)->exists())
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Explicit team assignments constrain the existing console's team queries.
+     * null means use the legacy supervisor/manager membership resolution.
+     */
+    public function effectiveTeamIds(User $user): ?array
+    {
+        $assignments = $this->activeAssignments($user)->where('scope', 'team');
+
+        if ($assignments->isEmpty()) {
+            return null;
+        }
+
+        return $assignments->map(function (object $assignment) use ($user): ?int {
+            $teamId = (int) ($assignment->team_id ?? 0);
+            if ($teamId < 1) {
+                return null;
+            }
+
+            $teamQuery = \\App\\Models\\Team::query()->whereKey($teamId);
+            if ($assignment->organization_id !== null) {
+                $teamQuery->where('organization_id', (int) $assignment->organization_id);
+            }
+
+            if (! $teamQuery->exists()) {
+                return null;
+            }
+
+            // An explicit scoped assignment is the authority for an administrator;
+            // unlike an employee, the administrator need not be a team member.
+            if (! $user->isAdmin() && ! $this->userHasTeamAccess($user, $teamId)) {
+                return null;
+            }
+
+            return $teamId;
+        })->filter()->unique()->values()->all();
     }
 
     public function allows(?User $user, string $permission): bool
@@ -738,8 +780,14 @@ class AuthorizationService
             // A scoped assignment is valid only while the subject still belongs
             // to the assigned team (or remains its supervisor). This mirrors
             // effectiveTeamIds() and prevents stale assignments after removal.
-            if ($teamId !== null && ! $this->userHasTeamAccess($user, (int) $teamId)) {
-                return false;
+            if ($teamId !== null) {
+                $teamQuery = \\App\\Models\\Team::query()->whereKey((int) $teamId);
+                if ($grant?->organization_id !== null) {
+                    $teamQuery->where('organization_id', (int) $grant->organization_id);
+                }
+                if (! $teamQuery->exists() || (! $user->isAdmin() && ! $this->userHasTeamAccess($user, (int) $teamId))) {
+                    return false;
+                }
             }
 
             $teamIds = $teamId !== null
