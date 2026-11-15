@@ -24,7 +24,7 @@
             <input type="search" name="q" value="{{ $searchTerm }}" minlength="2" maxlength="120" placeholder="جست‌وجو در تیکت‌ها، پیام‌های مجاز، گفت‌وگوها و اعلان‌ها…" aria-label="عبارت جست‌وجو" style="flex:1;min-width:220px;border:1px solid #dbe3ee;border-radius:10px;padding:11px 13px;font:inherit">
             <button class="ac-btn primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i> جست‌وجو</button>
             @if($searchTerm !== '')
-                <a class="ac-btn" href="{{ $isAdmin ? route('admin.communications.index') : route('platform.communications') }}">پاک‌کردن</a>
+                <a class="ac-btn" href="{{ ($isAdmin && $canManageAllTickets) ? route('admin.communications.index') : route('platform.communications') }}">پاک‌کردن</a>
             @endif
         </form>
         @if($searchTerm !== '')
@@ -79,7 +79,7 @@
                     <div class="ac-empty">تیکتی ثبت نشده است.</div>
                 @endforelse
             </div>
-            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $canManageAllTickets ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
+            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $canAccessSupportInbox ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
         </section>
 
         <div style="display:grid;gap:16px;align-content:start">
