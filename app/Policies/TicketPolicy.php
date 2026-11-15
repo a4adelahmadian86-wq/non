@@ -5,7 +5,7 @@ namespace App\Policies;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AuthorizationService;
-use App\Services\AdminConsoleService;
+use App\Http\Middleware\ResolveAdminScope;
 
 class TicketPolicy
 {
@@ -15,7 +15,11 @@ class TicketPolicy
         // Apply the active admin data scope first so a narrowed admin cannot use a
         // direct ticket URL to bypass the inbox/query scope.
         if ($user->isAdmin()) {
-            $visibleUserIds = app(AdminConsoleService::class)->visibleUserIds($user);
+            $requestScope = auth()->id() === $user->id ? request()->attributes->get('farast.scope') : null;
+            $scope = is_string($requestScope)
+                ? $requestScope
+                : ResolveAdminScope::scopeWithConfiguredOverride($user);
+            $visibleUserIds = ResolveAdminScope::visibleUserIds($user, $scope);
             if ($visibleUserIds !== null) {
                 $visibleUserIds = array_values(array_unique(array_merge(
                     array_map('intval', $visibleUserIds),
