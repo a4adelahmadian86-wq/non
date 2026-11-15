@@ -225,7 +225,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         $this->app->instance(SupportNotificationService::class, $failedNotifier);
 
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
-        $this->assertDatabaseHas('support_sla_alert_outbox', ['id' => $outbox->id, 'status' => 'failed', 'attempts' => 1]);
+        $this->assertDatabaseHas('support_sla_alert_outbox', ['id' => $outbox->id, 'status' => 'failed', 'attempts' => 1, 'lease_token' => null]);
 
         DB::table('support_sla_alert_outbox')->where('id', $outbox->id)->update(['available_at' => now()->subMinute()]);
         $successfulNotifier = Mockery::mock(SupportNotificationService::class);
@@ -241,6 +241,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             'id' => $outbox->id,
             'status' => 'delivered',
             'attempts' => 2,
+            'lease_token' => null,
         ]);
         $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
     }
@@ -313,6 +314,93 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             'aggregate_type' => 'ticket',
             'aggregate_id' => $ticketId,
             'event_type' => 'support.ticket.sla_alert_queued',
+        ]);
+    }
+
+    public function test_expired_worker_cannot_mark_alert_delivered_after_another_worker_reclaims_lease(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Fenced SLA delivery',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')->where('ticket_id', $ticketId)->first();
+        $replacementToken = '00000000-0000-4000-8000-000000000002';
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaBreached')->once()->withArgs(
+            function ($ticket, $kind, $identity) use ($ticketId, $outbox, $replacementToken): bool {
+                DB::table('support_sla_alert_outbox')->where('id', $outbox->id)->update([
+                    'lease_token' => $replacementToken,
+                    'locked_at' => now(),
+                ]);
+
+                return (int) $ticket->id === $ticketId
+                    && $kind === 'first_response'
+                    && $identity === $outbox->event_identity;
+            }
+        );
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'processing',
+            'lease_token' => $replacementToken,
+        ]);
+        $this->assertDatabaseMissing('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticketId,
+            'event_type' => 'support.ticket.sla_alert_dispatched',
+        ]);
+    }
+
+    public function test_expired_worker_cannot_fail_alert_after_another_worker_reclaims_lease(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Fenced SLA failure',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(5),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')->where('ticket_id', $ticketId)->first();
+        $replacementToken = '00000000-0000-4000-8000-000000000003';
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaBreached')->once()->andReturnUsing(
+            function ($ticket, $kind, $identity) use ($outbox, $replacementToken): void {
+                DB::table('support_sla_alert_outbox')->where('id', $outbox->id)->update([
+                    'lease_token' => $replacementToken,
+                    'locked_at' => now(),
+                ]);
+
+                throw new \RuntimeException('stale worker provider failure');
+            }
+        );
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'processing',
+            'lease_token' => $replacementToken,
         ]);
     }
 

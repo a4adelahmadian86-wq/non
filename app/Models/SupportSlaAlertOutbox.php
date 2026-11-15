@@ -19,6 +19,7 @@ class SupportSlaAlertOutbox extends Model
         'attempts',
         'available_at',
         'locked_at',
+        'lease_token',
         'delivered_at',
         'last_error',
     ];
