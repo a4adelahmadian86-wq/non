@@ -51,8 +51,17 @@ class ResolveAdminScope
         $scope = self::scopeFor($user);
 
         // اگر کاربر مدیر باشد اما سازمان نداشته باشد، دامنه به own تنزل می‌کند تا دادهٔ نشت نکند.
-        if ($scope === self::SCOPE_ORGANIZATION && ! $user->organization_id) {
-            $scope = self::SCOPE_OWN;
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            $assignedOrganizationIds = $user->isAdmin()
+                ? $this->authorization->effectiveOrganizationIds($user)
+                : null;
+            $hasOrganizationBoundary = $user->isAdmin()
+                ? ($assignedOrganizationIds === null ? (bool) $user->organization_id : $assignedOrganizationIds !== [])
+                : (bool) $user->organization_id;
+
+            if (! $hasOrganizationBoundary) {
+                $scope = self::SCOPE_OWN;
+            }
         }
         if ($scope === self::SCOPE_TEAM && ! $this->hasManagedTeams($user)) {
             $scope = self::SCOPE_OWN;
@@ -145,12 +154,20 @@ class ResolveAdminScope
 
     private static function organizationUserIds(User $user): array
     {
-        if (! $user->organization_id) {
+        $organizationIds = $user->isAdmin()
+            ? app(AuthorizationService::class)->effectiveOrganizationIds($user)
+            : null;
+
+        if ($organizationIds === null) {
+            $organizationIds = $user->organization_id ? [(int) $user->organization_id] : [];
+        }
+
+        if ($organizationIds === []) {
             return [$user->id];
         }
 
         return User::query()
-            ->where('organization_id', $user->organization_id)
+            ->whereIn('organization_id', $organizationIds)
             ->where('role', '!=', User::ROLE_ADMIN)
             ->pluck('id')
             ->all();
