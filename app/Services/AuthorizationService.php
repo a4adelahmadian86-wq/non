@@ -529,6 +529,8 @@ class AuthorizationService
             return false;
         }
 
+        $hasExplicitOrganizationManagementScope = $manageableAssignments->contains('scope', 'organization')
+            || $directManagementGrants->contains('scope', 'organization');
         $manageableOrganizationIds = $manageableAssignments->where('scope', 'organization')->pluck('organization_id')
             ->merge($directManagementGrants->where('scope', 'organization')->pluck('organization_id'))
             ->filter()
@@ -542,6 +544,8 @@ class AuthorizationService
                 ->values();
         }
 
+        $hasExplicitTeamManagementScope = $manageableAssignments->contains('scope', 'team')
+            || $directManagementGrants->contains('scope', 'team');
         $manageableTeamIds = $manageableAssignments->where('scope', 'team')->pluck('team_id')
             ->merge($directManagementGrants->where('scope', 'team')->pluck('team_id'))
             ->filter()
@@ -555,13 +559,13 @@ class AuthorizationService
                 ->values();
         }
 
-        $allowedOrganizationIds = $manageableOrganizationIds->isNotEmpty()
+        $allowedOrganizationIds = $hasExplicitOrganizationManagementScope
             ? $manageableOrganizationIds
             : ($effectiveOrganizationIds !== null
                 ? collect($effectiveOrganizationIds)
                 : ($actor->organization_id ? collect([(int) $actor->organization_id]) : collect()));
 
-        $allowedTeamIds = $manageableTeamIds->isNotEmpty()
+        $allowedTeamIds = $hasExplicitTeamManagementScope
             ? $manageableTeamIds
             : ($effectiveTeamIds !== null ? collect($effectiveTeamIds) : collect());
 
