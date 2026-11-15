@@ -107,10 +107,7 @@ class AuthorizationService
             }
             if ($user->isAdmin() && $organizationIds !== null) {
                 $teamQuery->whereIn('organization_id', $organizationIds);
-            } elseif (! $user->isAdmin()) {
-                if (! $user->organization_id) {
-                    return null;
-                }
+            } elseif (! $user->isAdmin() && $user->organization_id !== null) {
                 $teamQuery->where('organization_id', (int) $user->organization_id);
             }
 
@@ -563,13 +560,14 @@ class AuthorizationService
                 ->map(fn ($id) => (int) $id);
             $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
         } elseif (! $actor->isAdmin()) {
-            $validTeamIds = $actor->organization_id
-                ? \App\Models\Team::query()
-                    ->whereIn('id', $manageableTeamIds)
-                    ->where('organization_id', $actor->organization_id)
-                    ->pluck('id')
-                    ->map(fn ($id) => (int) $id)
-                : collect();
+            $validTeamQuery = \App\Models\Team::query()->whereIn('id', $manageableTeamIds);
+            if ($actor->organization_id !== null) {
+                $validTeamQuery->where('organization_id', (int) $actor->organization_id);
+            }
+            $validTeamIds = $validTeamQuery->get(['id'])
+                ->filter(fn ($team): bool => $this->userHasTeamAccess($actor, (int) $team->id))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
             $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
         }
 
@@ -602,8 +600,11 @@ class AuthorizationService
         }
 
         if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin()) {
-            $allowedTeamIds = \App\Models\Team::query()
-                ->where('organization_id', $actor->organization_id)
+            $managedTeamsQuery = \App\Models\Team::query();
+            if ($actor->organization_id !== null) {
+                $managedTeamsQuery->where('organization_id', (int) $actor->organization_id);
+            }
+            $allowedTeamIds = $managedTeamsQuery
                 ->where(function ($query) use ($actor): void {
                     $query->where('supervisor_id', $actor->id)
                         ->orWhereIn('id', function ($subquery) use ($actor): void {
@@ -916,8 +917,8 @@ class AuthorizationService
                         && ! in_array((int) $team->organization_id, $effectiveOrganizationIds, true)) {
                         return false;
                     }
-                } elseif (! $user->organization_id
-                    || (int) $team->organization_id !== (int) $user->organization_id
+                } elseif (($user->organization_id !== null
+                    && (int) $team->organization_id !== (int) $user->organization_id)
                     || ! $this->userHasTeamAccess($user, (int) $teamId)) {
                     return false;
                 }
