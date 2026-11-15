@@ -722,7 +722,7 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $record = new class extends IlluminateDatabaseEloquentModel {};
+        $record = new class extends \Illuminate\Database\Eloquent\Model {};
         $record->setAttribute('organization_id', $organization->id);
 
         $this->assertFalse(app(AuthorizationService::class)->allowsRecord($admin, 'users.view', $record));
