@@ -90,7 +90,12 @@ class AuthorizationService
             return null;
         }
 
-        return $assignments->map(function (object $assignment) use ($user): ?int {
+        $organizationIds = $user->isAdmin() ? $this->effectiveOrganizationIds($user) : null;
+        if ($user->isAdmin() && $organizationIds === []) {
+            return [];
+        }
+
+        return $assignments->map(function (object $assignment) use ($user, $organizationIds): ?int {
             $teamId = (int) ($assignment->team_id ?? 0);
             if ($teamId < 1) {
                 return null;
@@ -99,6 +104,14 @@ class AuthorizationService
             $teamQuery = \App\Models\Team::query()->whereKey($teamId);
             if ($assignment->organization_id !== null) {
                 $teamQuery->where('organization_id', (int) $assignment->organization_id);
+            }
+            if ($user->isAdmin() && $organizationIds !== null) {
+                $teamQuery->whereIn('organization_id', $organizationIds);
+            } elseif (! $user->isAdmin()) {
+                if (! $user->organization_id) {
+                    return null;
+                }
+                $teamQuery->where('organization_id', (int) $user->organization_id);
             }
 
             if (! $teamQuery->exists()) {
@@ -785,7 +798,19 @@ class AuthorizationService
                 if ($grant?->organization_id !== null) {
                     $teamQuery->where('organization_id', (int) $grant->organization_id);
                 }
-                if (! $teamQuery->exists() || (! $user->isAdmin() && ! $this->userHasTeamAccess($user, (int) $teamId))) {
+                $team = $teamQuery->first(['id', 'organization_id']);
+                if (! $team) {
+                    return false;
+                }
+
+                if ($user->isAdmin()) {
+                    $organizationIds = $this->effectiveOrganizationIds($user);
+                    if ($organizationIds !== null && ! in_array((int) $team->organization_id, $organizationIds, true)) {
+                        return false;
+                    }
+                } elseif (! $user->organization_id
+                    || (int) $team->organization_id !== (int) $user->organization_id
+                    || ! $this->userHasTeamAccess($user, (int) $teamId)) {
                     return false;
                 }
             }
