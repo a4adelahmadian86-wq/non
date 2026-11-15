@@ -536,7 +536,7 @@ class StoreController extends Controller
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                        ->first(fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
                             && $storage->exists($artifact->disk ?: 'private', $artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
@@ -820,7 +820,7 @@ class StoreController extends Controller
             $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
         }
         $artifact = $artifactQuery->get()
-            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+            ->first(fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
                 && $storage->exists($candidate->disk ?: 'private', $candidate->path));
         if (! $artifact && request()->isMethod('HEAD')) {
             $audioState = (string) data_get($document->structure_json, 'audio.status', '');
