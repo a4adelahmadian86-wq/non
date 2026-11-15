@@ -130,9 +130,19 @@ class StorageProductArtifactReferenceTest extends TestCase
         $this->assertSame('legacy/shared-audio.wav', $preview->path);
         $this->assertSame($newDisk, $preview->audio_disk);
         $this->assertSame('legacy/shared-audio.wav', $preview->audio_path);
+        $otherVolume = StorageVolume::create([
+            'drive_key' => 'foreign_primary',
+            'name' => 'Stale transfer must not win',
+            'driver' => 'local',
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 2,
+        ]);
         $staleManaged = StorageManagedFile::create([
-            'storage_volume_id' => $volume->id,
-            'drive_key' => 'iran_primary',
+            'storage_volume_id' => $otherVolume->id,
+            'drive_key' => 'foreign_primary',
             'file_key' => 'legacy/superseded-audio.wav',
             'file_key_hash' => hash('sha256', 'legacy/superseded-audio.wav'),
             'original_name' => 'superseded-audio.wav',
@@ -146,10 +156,11 @@ class StorageProductArtifactReferenceTest extends TestCase
             'product_id' => $product->id,
             'visibility' => 'private',
             'status' => 'active',
-            'metadata' => ['disk' => 'storage_volume:'.$volume->id, 'reference_pending' => false],
+            'metadata' => ['disk' => 'storage_volume:'.$otherVolume->id, 'reference_pending' => false],
         ]);
-        app(StorageTransferService::class)->syncSourceReference($staleManaged, 'storage_volume:'.$volume->id);
+        app(StorageTransferService::class)->syncSourceReference($staleManaged, 'storage_volume:'.$otherVolume->id);
         $artifact->refresh();
+        $this->assertSame($newDisk, $artifact->disk);
         $this->assertSame('legacy/shared-audio.wav', $artifact->path);
     }
 }
