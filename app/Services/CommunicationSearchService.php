@@ -102,7 +102,7 @@ class CommunicationSearchService
                     'ticket',
                     'پیام در '.$ticket->displayCode().' — '.$ticket->subject,
                     Str::limit(trim(strip_tags((string) $message->body)), 180),
-                    $canManageAllTickets
+                    $canAccessSupportInbox
                         ? route('admin.support.management', ['ticket' => $ticket->id])
                         : route('support.show', $ticket),
                     $message->created_at,
