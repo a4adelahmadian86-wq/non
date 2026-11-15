@@ -165,8 +165,7 @@ class AuthorizationService
             $grantedTeamIds = $allowGrants
                 ->where('scope', 'team')
                 ->filter(fn (object $grant): bool => $grant->team_id !== null
-                    && in_array((int) $grant->team_id, $visibleTeamIds, true)
-                    && $this->userHasTeamAccess($user, (int) $grant->team_id))
+                    && in_array((int) $grant->team_id, $visibleTeamIds, true))
                 ->pluck('team_id')
                 ->map(fn ($id): int => (int) $id)
                 ->unique()
@@ -206,8 +205,17 @@ class AuthorizationService
                 ->exists();
         }
 
+        $permissionId = $this->permissionId($permission);
+        if ($permissionId === null) {
+            return false;
+        }
+
+        $roleKeysWithPermission = RolePermission::query()
+            ->where('permission_id', $permissionId)
+            ->pluck('role')
+            ->flip();
         $permissionAssignments = $assignments->filter(
-            fn (object $assignment): bool => $this->assignedRoleAllows(collect([$assignment]), $permission)
+            fn (object $assignment): bool => $roleKeysWithPermission->has($assignment->role_key)
         );
         if ($permissionAssignments->isEmpty()) {
             return false;
