@@ -75,6 +75,7 @@ search?.addEventListener('input',()=>{
   clearTimeout(searchTimer);searchController?.abort();
   const term=search.value.trim();
   if(term.length<2){closeSearchSuggestions();return}
+  closeSearchSuggestions();
   searchTimer=setTimeout(async()=>{
     const controller=new AbortController();searchController=controller;
     try{
