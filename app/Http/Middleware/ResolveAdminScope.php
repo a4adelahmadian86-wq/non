@@ -67,19 +67,8 @@ class ResolveAdminScope
             $scope = self::SCOPE_OWN;
         }
 
-        // دامنهٔ قابل‌ویرایش: ادمین می‌تواند برای هر کاربر، دامنهٔ محدودتری نسبت به نقشش تنظیم کند.
-        $override = config('farast_admin.scope_override_key');
-        if (is_string($override) && $override !== '') {
-            try {
-                $configured = trim((string) \App\Models\SiteSetting::read($override, ''));
-            } catch (\Throwable) {
-                $configured = '';
-            }
-            $allowedRank = [self::SCOPE_GLOBAL => 0, self::SCOPE_ORGANIZATION => 1, self::SCOPE_TEAM => 2, self::SCOPE_OWN => 3];
-            if (isset($allowedRank[$configured]) && $allowedRank[$configured] >= $allowedRank[$scope]) {
-                $scope = $configured;
-            }
-        }
+        // دامنهٔ قابل‌ویرایش: ادمین می‌تواند دامنهٔ مؤثر را محدودتر کند.
+        $scope = self::scopeWithConfiguredOverride($user, $scope);
 
         $request->attributes->set('farast.scope', $scope);
         view()->share('farastScope', $scope);
@@ -98,6 +87,36 @@ class ResolveAdminScope
         }
 
         return app(AuthorizationService::class)->effectiveScope($user);
+    }
+    /**
+     * Resolve the configured scope override for a target user, including when
+     * checking another agent from the current request (whose request scope belongs
+     * to the acting user, not to that candidate).
+     */
+    public static function scopeWithConfiguredOverride(?User $user, ?string $scope = null): string
+    {
+        if (! $user) {
+            return self::SCOPE_OWN;
+        }
+
+        $scope ??= self::scopeFor($user);
+        $override = config('farast_admin.scope_override_key');
+        if (! is_string($override) || $override === '') {
+            return $scope;
+        }
+
+        try {
+            $configured = trim((string) \App\Models\SiteSetting::read($override, ''));
+        } catch (\Throwable) {
+            $configured = '';
+        }
+
+        $rank = [self::SCOPE_GLOBAL => 0, self::SCOPE_ORGANIZATION => 1, self::SCOPE_TEAM => 2, self::SCOPE_OWN => 3];
+        if (isset($rank[$configured]) && $rank[$configured] >= ($rank[$scope] ?? 3)) {
+            return $configured;
+        }
+
+        return $scope;
     }
 
     /**

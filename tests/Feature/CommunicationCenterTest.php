@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\FarastNotification;
+use App\Models\Organization;
+use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
@@ -198,6 +200,59 @@ class CommunicationCenterTest extends TestCase
             ->assertSee('public-orchid-reply');
     }
 
+    public function test_scoped_admin_communication_center_never_exposes_tickets_outside_its_organization(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+
+        $organization = Organization::create(['name' => 'Support Scope Org', 'slug' => 'support-scope-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Other Support Org', 'slug' => 'other-support-org', 'status' => 'active']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organization->id,
+            'is_blocked' => false,
+        ]);
+        $insideCustomer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideCustomer = User::factory()->create(['organization_id' => $otherOrganization->id, 'is_blocked' => false]);
+
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $insideTicket = Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'subject' => 'تیکت مجاز سازمانی',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'تیکت خارج از دامنه',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $insideTicket->id,
+            'user_id' => $insideCustomer->id,
+            'body' => 'scope-visible-ticket-message-314',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $outsideTicket->id,
+            'user_id' => $outsideCustomer->id,
+            'body' => 'scope-hidden-ticket-message-271',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('platform.communications', ['q' => 'scope-visible-ticket-message-314']))
+            ->assertOk()
+            ->assertSee('تیکت مجاز سازمانی')
+            ->assertSee('scope-visible-ticket-message-314')
+            ->assertDontSee('تیکت خارج از دامنه')
+            ->assertDontSee('scope-hidden-ticket-message-271');
+    }
     public function test_non_admin_cannot_open_staff_communication_center(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
