@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Single source of truth for discovering support agents and checking their
  * record-level eligibility. Candidate discovery is narrowed in SQL; the final
- * decision always goes through AuthorizationService.
+ * decision goes through TicketPolicy, which applies the canonical RBAC and ticket-scope rules.
  */
 class SupportAgentDirectory
 {
