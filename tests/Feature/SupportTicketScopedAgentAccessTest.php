@@ -139,7 +139,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ['key' => 'support.manage'],
             ['label' => 'Support management', 'group' => 'support'],
         );
-        DB::table('roles')->insert([
+        $roleId = DB::table('roles')->insertGetId([
             'key' => 'admin_team_support_operator',
             'name' => 'Admin team support operator',
             'is_system' => false,
@@ -151,14 +151,22 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             'role' => 'admin_team_support_operator',
             'permission_id' => $permission->id,
         ]);
-        app(AuthorizationService::class)->assignRole(
-            $root,
-            $candidate,
-            'admin_team_support_operator',
-            'team',
-            $organization->id,
-            $team->id,
-        );
+        DB::table('users')->where('id', $candidate->id)->update([
+            'access_control_managed' => true,
+            'updated_at' => now(),
+        ]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $candidate->id,
+            'role_id' => $roleId,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+            'assigned_by' => $root->id,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $insideTicket = Ticket::create([
             'user_id' => $customer->id,
