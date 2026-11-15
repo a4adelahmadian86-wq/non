@@ -57,6 +57,11 @@
   dialog.querySelector('.farast-reader-shortcuts-done')?.addEventListener('click', close);
   dialog.addEventListener('click', event => { if (event.target === dialog) close(); });
   dialog.addEventListener('close', () => trigger.focus());
+  // Do not let the underlying reader's document-level shortcuts run while
+  // this modal is open. Escape remains native so the dialog can close.
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') event.stopPropagation();
+  });
 
   document.addEventListener('keydown', event => {
     if (!root.contains(event.target) && event.target !== document.body && event.target !== document.documentElement) return;

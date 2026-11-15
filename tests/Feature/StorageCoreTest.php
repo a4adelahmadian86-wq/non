@@ -414,4 +414,40 @@ class StorageCoreTest extends TestCase
         $this->fail('Unknown file classification must fail closed.');
     }
 
+
+    public function test_generated_contents_are_registered_in_the_managed_storage_inventory(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Generated artifact volume',
+            'driver' => 'local',
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        $contents = '%PDF-1.4 generated preview payload';
+        $stored = app(StorageManager::class)->storeContents(
+            $contents,
+            'generated-preview.pdf',
+            'application/pdf',
+            StorageManager::CRITICAL,
+            'store-product-preview'
+        );
+
+        $this->assertSame($volume->id, $stored['volume_id']);
+        $this->assertSame($contents, app(StorageManager::class)->get($stored['disk'], $stored['path']));
+        $this->assertSame(strlen($contents), $stored['size_bytes']);
+        $this->assertSame(hash('sha256', $contents), $stored['sha256']);
+        $this->assertDatabaseHas('storage_managed_files', [
+            'id' => $stored['managed_file_id'],
+            'status' => 'active',
+            'checksum' => hash('sha256', $contents),
+            'source_module' => 'store-product-preview',
+        ]);
+    }
+
 }

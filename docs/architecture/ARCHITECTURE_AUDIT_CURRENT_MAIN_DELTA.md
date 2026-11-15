@@ -8,9 +8,9 @@
 
 ## 0. Snapshot جاری main — 2026-11-15
 
-- **Commit مبنا:** `8d90130eac8377526030c5c4d08131651bda0d8f` (ادغام PR #603؛ آخرین main در زمان این به‌روزرسانی).
-- **اندازه درخت Git:** 1,262 entry.
-- **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 179 فایل آزمون (157 فایل PHP) و 12 فایل Route.
+- **Commit مبنا:** `98c6cde99f265c555dc5cd742475fa8f3ede3657` (پس از ادغام PR #604؛ آخرین main در زمان این به‌روزرسانی).
+- **اندازه درخت Git:** 1,264 entry.
+- **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 181 فایل آزمون (159 فایل PHP) و 12 فایل Route.
 - **Migrationها:** 11 گروه timestamp تکراری وجود دارد، اما نام کامل فایل‌ها یکتا است. تکرار timestamp به‌تنهایی اثبات خرابی نیست؛ ترتیب lexical و dependency باید با fresh install و upgrade واقعی اعتبارسنجی شود. وضعیت اجراشده/درانتظار دیتابیس محلی یا عملیاتی از Git قابل تشخیص نیست.
 
 ### CI معتبر
@@ -22,7 +22,7 @@
 - Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
 
 این نتایج متعلق به HEAD PR #599 پیش از squash هستند. پس از آن، PR #598 راهنمای میان‌برهای خوانشگر را اضافه کرد؛ روی HEAD دقیق آن (7e43d08cbf293d2019ebca1b716625359236b6a7) هر سه Workflow یعنی FARAST CI (run 43735607204)، Phase 3 (run 43735607192) و Phase 4 Agent (run 43735607189) موفق شدند.
-PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد و هر سه Workflow آن merge commit موفق شدند. پس از آن PR #603 اصلاح جلوگیری از اجرای میان‌برهای خوانشگر در زمان بازبودن dialog را اضافه کرد؛ هر سه Workflow روی head آن (`362a3b5de8441b4ab26d7bf82668243f028ef072`) موفق شدند و PR #603 در commit `8d90130eac8377526030c5c4d08131651bda0d8f` به main ادغام شد. روی merge commit جدید، FARAST CI (run 43737656383)، Phase 3 (run 43737656343) و Phase 4 Agent (run 43737656337) در زمان این snapshot هنوز queued/in progress هستند؛ بنابراین CI پس از merge #603 هنوز کامل تأیید نشده است.
+PR #598 در commit `509febd015427804d1d7eea9177edfbb9432c3d3`، PR #599 در commit `961d661da16a811b854d50521ad789976542d612` و PR #604 در commit `98c6cde99f265c555dc5cd742475fa8f3ede3657` وارد main شدند. PR #604 روی HEAD دقیق خود (`b7d8cdd11c92513d1ecc24c9b07691564b2a1803`) تمام checkهای الزامی را گذراند: PHPUnit/Feature، Laravel/Playwright، MySQL 8.4 integrity، Admin Product E2E، Document Audio Smoke، Voice Service و Product Supervisor؛ `reader-browser-regression` نیز موفق شد. فقط `voice-model-smoke` به‌دلیل شرط اجرای مخصوص Sherpa skipped بود. روی merge commit `98c6cde99f265c555dc5cd742475fa8f3ede3657`، FARAST CI (run 43737957574)، Phase 3 (run 43737957640) و Phase 4 Agent (run 43737957592) در زمان snapshot هنوز در حال اجرا هستند؛ بنابراین نتیجه CI پس از merge #604 هنوز نهایی نشده است.
 
 ### اصلاحات تأییدشده پس از snapshot قبلی
 
@@ -33,6 +33,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 | مالکیت Workerهای outbox | PR #594 ستون `lease_token` را اضافه کرد. claim برای هر Worker token یکتا می‌سازد و read/skip/success/failure فقط با همان token معتبر انجام می‌شوند. Worker منقضی‌شده نمی‌تواند وضعیت یا audit نتیجه‌ی Worker جدید را بازنویسی کند. |
 | گزارش CSAT | `SupportReportController` از aggregate SQL استفاده می‌کند و دیگر تمام امتیازها را برای محاسبه count/average/distribution در حافظه PHP بارگذاری نمی‌کند. |
 | خواندن صوت خوانشگر | PR #599 مسیرهای `reader` و `readerAudio` را به `StorageManager::exists/size/streamRange` متصل کرد؛ خواندن Range از private و S3-compatible volume از یک abstraction انجام می‌شود و chunkها flush می‌شوند. |
+| تولید صوت خوانشگر | PR #604 خروجی `audio_full_wav` را با `StorageManager::storeContents` در `StorageManagedFile` ثبت می‌کند؛ `StoreProductDocumentArtifact` مرجع canonical است و `StorageTransferService` هنگام انتقال staging به volume، disk/path artifact و preview mirrorها را همگام می‌کند. انتقال قدیمی با path متفاوت اجازه بازنویسی مرجع artifact جدید را ندارد. |
 | جلوگیری از میان‌بر در dialog خوانشگر | PR #603 با stopPropagation برای کلیدهای غیر Escape و تست Playwright ادغام شد؛ modal دیگر کلیدهای F، B و جهت‌ها را به listener سراسری خوانشگر نشت نمی‌دهد. |
 | دسترسی بخش‌های حساس مدیریت | شکاف تاریخی بخش 5 برای فروشگاه، عملیات محصول و گزارش پشتیبانی در main جاری اصلاح شده است: گروه‌های admin فروشگاه و عملیات محصول `admin.section:store` و گزارش پشتیبانی `admin.section:support_admin` دارند. `AdminSectionScopeAuthorizationTest` دسترسی employee و مدیر سازمانی را رد می‌کند. این اصلاح به معنی تکمیل ممیزی تمام routeهای مدیریتی نیست؛ همه routeهای `/admin` همچنان باید در برابر permission و scope بررسی شوند. |
 | ثبت پیشرفت دوره | `StoreCourseProgressService` محاسبه مشترک پیشرفت را برای تجربه یادگیری و CRM نگه می‌دارد؛ CRM نباید الگوریتم محاسبه موازی بسازد. |
@@ -40,7 +41,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 
 ### شکاف‌های باز که در main فعلی دوباره تأیید شدند
 
-1. **یکپارچگی Storage برای artifactهای تولیدشده هنوز کامل نیست.** در main فعلی، `GenerateProductDocumentAudio` و `ProcessProductDocument` همچنان writerهای مستقیمی برای `audio_full_wav`، `reader_pdf` و `sample_pdf` دارند. PR #604 مسیر `audio_full_wav` را با `StorageManager::storeContents`، اتصال به `StorageManagedFile` و همگام‌سازی referenceهای artifact/preview هنگام انتقال به volume پوشش می‌دهد؛ Phase 3 و Phase 4 آن موفق‌اند، اما FARAST CI هنوز در حال اجراست و این تغییر هنوز در main نیست. پس از ادغام آن، `reader_pdf` و `sample_pdf` در `ProcessProductDocument` همچنان باید از همین abstraction استفاده کنند؛ cleanup، retry و rollback نیز باید با تست انتقال واقعی اثبات شوند.
+1. **یکپارچگی Storage برای artifactهای تولیدشده هنوز کامل نیست.** PR #604 مسیر تولید `audio_full_wav` را در main به `StorageManager::storeContents`، `StorageManagedFile` و `StorageTransferService` متصل کرده است؛ referenceهای `StoreProductDocumentArtifact` و preview mirrorها هنگام انتقال staging به volume همگام می‌شوند و انتقال stale نمی‌تواند مرجع artifact جدید را بازنویسی کند. اما `ProcessProductDocument` هنوز فایل منبع را با `Storage::disk(...)->exists/get` می‌خواند و `reader_pdf` و `sample_pdf` را مستقیماً روی private disk می‌نویسد. مرحله بعد باید این سه مسیر را به `StorageManager` منتقل کند و با تست واقعی staging، انتقال، retry، rollback و cleanup پوشش دهد. PR #335 یک پیاده‌سازی draft و بسیار گسترده برای بخشی از این کار دارد؛ به‌دلیل عقب‌ماندگی و هم‌پوشانی، فقط deltaهای لازم باید به‌صورت مستقل و پس از تطبیق با main جاری منتقل شوند.
 
 2. **مسیر سهمیه پروژه هنوز با catalog تجاری جدید هم‌راستا نیست.** `ProfessionalCommerceService` از `FarastCommercialPlan` و entitlementهای تجاری استفاده می‌کند؛ اما `ProjectBillingService::includedAllowance` در main فعلی هنوز `farast_subscriptions.plan_id` را به `farast_plans.id` وصل می‌کند و مصرف را از ستون‌های legacy در `farast_usage_counters` می‌خواند. پیش از هر migration اشتراک، باید mapping plan ID/code، entitlement و usage برای هر دو مسیر با داده واقعی reconcile شود. PR #340 در زمان این snapshot draft و ادغام‌نشده است؛ migration آن بدون اصلاح mapping و تست upgrade نباید اجرا شود.
 
@@ -52,6 +53,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 
 6. **PR #347 منبع حقیقت RBAC موازی پیشنهاد می‌کند و قابل ادغام مستقیم نیست.** main از roles, role_assignments, user_permission_grants, access_audit_logs و permissions/role_permissions استفاده می‌کند؛ Migration افزوده‌شده در PR #347 جداول موازی farast_roles, farast_role_permissions, farast_user_roles, farast_user_permission_overrides, farast_access_audit_logs می‌سازد. این دوگانگی با اصل یک منبع حقیقت ناسازگار است. علاوه بر آن، شاخه PR در مقایسه با main جاری 219 commit عقب است و فایل‌های مشترک route/workflow را تغییر می‌دهد. پیش از ادغام باید روی جداول canonical بازطراحی و روی main جاری rebase شود.
 
+7. **دارایی‌های ثابت هنوز به CDN خارجی وابسته‌اند.** layout عمومی stylesheetهای Font Awesome از cdnjs و فونت Vazirmatn از jsDelivr را بارگذاری می‌کند. این‌ها API تجاری نیستند، اما دسترسی، حریم خصوصی و بارگذاری اولیه را به شبکه ثالث وابسته می‌کنند؛ باید با حفظ license، نسخه‌های pin‌شده و تست آفلاین، به assetهای self-hosted زیر `public/` منتقل شوند.
 ### منابع حقیقت جاری در حوزه‌های حساس
 
 | قابلیت | داده/منبع حقیقت | مالک عملیات یا تصمیم |
@@ -59,7 +61,7 @@ PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد mai
 | مجوزها و scope | `permissions`, `role_permissions`, `roles`, `role_assignments`, `user_permission_grants` | `AuthorizationService`؛ enforce بخش در `EnsureAdminSection` و scope در `ResolveAdminScope` |
 | تیکت و چرخه عمر | `tickets`, `ticket_messages` | `SupportTicketService`؛ قفل workload در `SupportAssignmentMutex` |
 | SLA و تحویل | `support_sla_alert_outbox` به‌علاوه ledgerهای مجزای اعلان/ایمیل/SMS | `SupportSlaAlertOutboxService`, `SupportNotificationService`, `NotificationService`, `EmailService`, `SmsService` |
-| فایل‌های مدیریت‌شده | `storage_managed_files`, `storage_volumes` | `StorageManager`, `StorageTransferService`, adapterهای storage |
+| فایل‌های مدیریت‌شده | `storage_managed_files`, `storage_volumes` | `StorageManager`, `StorageTransferService`, adapterهای storage؛ تولید صوت خوانشگر اکنون از `storeContents` استفاده می‌کند، اما writerهای PDF پردازش سند هنوز باید منتقل شوند |
 | سفارش و پرداخت فروشگاه | `orders`, `payments`, `store_order_items`, `store_library_items` | سرویس‌های checkout/payment و `StoreCourseEnrollmentService` برای اعطای enrollment |
 | پیشرفت دوره | `store_course_enrollments`, `store_course_lesson_progress` | `StoreCourseProgressService` |
 | اعلان شخصی | `farast_notifications` | `NotificationService`; اطلاعیه عمومی `Announcement`/ `AnnouncementService` یک aggregate جداست |
@@ -734,7 +736,7 @@ Migration می‌خواهد ستون `frequency` را با `after('confidence')`
 
 **تغییر مهم مصرف‌کننده Storage:** `StoreController::previewAudio()` اکنون از `StorageManager::exists/size/streamRange` برای پاسخ range و stream استفاده می‌کند؛ بنابراین مسیر صوت preview دیگر مستقیماً فایل را در حافظه PHP materialize نمی‌کند. این تغییر، PR/commit stream صوت را در main تثبیت کرده و شکاف مصرف‌کننده‌ای را که در inventory قبلی ثبت شده بود می‌بندد.
 
-**مسیر منبع سند در Job:** `ProcessProductDocument` برای فایل‌هایی که disk آن‌ها به Volume مدیریت‌شده اشاره می‌کند از `StorageManager::downloadTo()` استفاده می‌کند. برای diskهای legacy، مسیر fallback از adapter دیسک موجود و `readStream()` استفاده می‌کند. این fallback را نباید به‌عنوان StorageManager دوم تعبیر کرد؛ آن یک سازگاری legacy است که باید با مهاجرت رکوردهای قدیمی و تست باقی بماند.
+**مسیر منبع و PDF در Job پردازش:** در main فعلی، `ProcessProductDocument` هنوز منبع `StoreProductFile` را با `Storage::disk($sourceDisk)->exists/get` می‌خواند و خروجی‌های `reader_pdf` و `sample_pdf` را با `Storage::disk('private')->put` می‌نویسد. بنابراین این مسیر هنوز برای `disk=storage_volume:<id>` به abstraction مرکزی متصل نشده است. این با مسیر صوت تولیدشده در PR #604 متفاوت است؛ نباید پیش از انتقال writerهای PDF، کل چرخه پردازش را یکپارچه‌شده فرض کرد.
 
 **قرارداد وضعیت صوت:** وضعیت‌های `pending/queued/processing/upgrading/failed/awaiting_provider/not_applicable` در metadata سند ثبت می‌شوند؛ وجود artifact معتبر مرجع آماده‌بودن خروجی است. Reader با endpoint واحد `store.reader.audio` وضعیت را poll می‌کند: 202 برای انتظار، 200/206 برای محتوای آماده، 409 برای شکست آماده‌سازی و 410 برای غیرقابل‌اعمال/عدم پیکربندی. client فقط این قرارداد را نمایش می‌دهد و حق صدور مجوز یا تغییر وضعیت canonical را ندارد.
 
