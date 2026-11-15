@@ -476,6 +476,55 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_scoped_admin_cannot_use_team_management_grant_outside_organization_boundary(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Grant Boundary A', 'slug' => 'team-grant-boundary-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Team Grant Boundary B', 'slug' => 'team-grant-boundary-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456941', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456942', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456943', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Team Grant Outside Org',
+            'slug' => 'team-grant-outside-org',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-org-for-team-grant-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $accessPermission = Permission::query()->where('key', 'access.manage')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $accessPermission->id,
+            'effect' => 'allow',
+            'scope' => 'team',
+            'organization_id' => $organizationB->id,
+            'team_id' => $teamB->id,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberB->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $memberB->id,
+            'scope' => 'own',
+        ]);
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);
