@@ -57,20 +57,75 @@ class AuthorizationService
     }
 
     /**
-     * Explicit team assignments constrain the existing console's team queries.
-     * null means use the legacy supervisor/manager membership resolution.
+     * Explicit organization assignments constrain administrator queries.
+     * null means use the actor's legacy organization context; an empty array
+     * means an explicit assignment exists but contains no valid organization.
      */
-    public function effectiveTeamIds(User $user): ?array
+    public function effectiveOrganizationIds(User $user): ?array
     {
-        $assignments = $this->activeAssignments($user)
-            ->where('scope', 'team')
-            ->whereNotNull('team_id');
+        $assignments = $this->activeAssignments($user)->where('scope', 'organization');
 
         if ($assignments->isEmpty()) {
             return null;
         }
 
-        return $assignments->pluck('team_id')->map(fn ($id) => (int) $id)->unique()->filter(fn (int $id): bool => $this->userHasTeamAccess($user, $id))->values()->all();
+        return $assignments->pluck('organization_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->filter(fn (int $id): bool => $id > 0 && DB::table('organizations')->where('id', $id)->exists())
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Explicit team assignments constrain the existing console's team queries.
+     * null means use the legacy supervisor/manager membership resolution.
+     */
+    public function effectiveTeamIds(User $user): ?array
+    {
+        $assignments = $this->activeAssignments($user)->where('scope', 'team');
+
+        if ($assignments->isEmpty()) {
+            return null;
+        }
+
+        $organizationIds = $user->isAdmin() ? $this->effectiveOrganizationIds($user) : null;
+        if ($user->isAdmin() && $organizationIds === []) {
+            return [];
+        }
+
+        return $assignments->map(function (object $assignment) use ($user, $organizationIds): ?int {
+            $teamId = (int) ($assignment->team_id ?? 0);
+            if ($teamId < 1) {
+                return null;
+            }
+
+            $teamQuery = \App\Models\Team::query()->whereKey($teamId);
+            if ($assignment->organization_id !== null) {
+                $teamQuery->where('organization_id', (int) $assignment->organization_id);
+            }
+            if ($user->isAdmin() && $organizationIds !== null) {
+                $teamQuery->whereIn('organization_id', $organizationIds);
+            } elseif (! $user->isAdmin()) {
+                if (! $user->organization_id) {
+                    return null;
+                }
+                $teamQuery->where('organization_id', (int) $user->organization_id);
+            }
+
+            if (! $teamQuery->exists()) {
+                return null;
+            }
+
+            // An explicit scoped assignment is the authority for an administrator;
+            // unlike an employee, the administrator need not be a team member.
+            if (! $user->isAdmin() && ! $this->userHasTeamAccess($user, $teamId)) {
+                return null;
+            }
+
+            return $teamId;
+        })->filter()->unique()->values()->all();
     }
 
     public function allows(?User $user, string $permission): bool
@@ -457,11 +512,40 @@ class AuthorizationService
             );
         $directManagementGrants = $this->activeDirectGrants($actor, 'access.manage')
             ->where('effect', 'allow');
+
         $manageableScopes = $manageableAssignments->pluck('scope')
             ->merge($directManagementGrants->pluck('scope'));
         $actorScope = $manageableScopes->isNotEmpty()
             ? $manageableScopes->sortByDesc(fn ($value) => $rank[$value] ?? 4)->first()
             : ($this->activeAssignments($actor)->isEmpty() && ! $actor->access_control_managed ? $this->legacyScope($actor) : 'own');
+
+        // A broad access.manage grant must never override a narrower role boundary.
+        $effectiveScope = $this->effectiveScope($actor);
+        if (($rank[$effectiveScope] ?? 4) > ($rank[$actorScope] ?? 4)) {
+            $actorScope = $effectiveScope;
+        }
+
+        if (! isset($rank[$actorScope], $rank[$scope]) || $rank[$scope] < $rank[$actorScope]) {
+            return false;
+        }
+
+        $hasExplicitOrganizationManagementScope = $manageableAssignments->contains('scope', 'organization')
+            || $directManagementGrants->contains('scope', 'organization');
+        $manageableOrganizationIds = $manageableAssignments->where('scope', 'organization')->pluck('organization_id')
+            ->merge($directManagementGrants->where('scope', 'organization')->pluck('organization_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $effectiveOrganizationIds = $this->effectiveOrganizationIds($actor);
+        if ($manageableOrganizationIds->isNotEmpty() && $effectiveOrganizationIds !== null) {
+            $manageableOrganizationIds = $manageableOrganizationIds
+                ->filter(fn (int $id): bool => in_array($id, $effectiveOrganizationIds, true))
+                ->values();
+        }
+
+        $hasExplicitTeamManagementScope = $manageableAssignments->contains('scope', 'team')
+            || $directManagementGrants->contains('scope', 'team');
         $manageableTeamIds = $manageableAssignments->where('scope', 'team')->pluck('team_id')
             ->merge($directManagementGrants->where('scope', 'team')->pluck('team_id'))
             ->filter()
@@ -469,8 +553,68 @@ class AuthorizationService
             ->unique()
             ->values();
 
-        if (! isset($rank[$actorScope]) || $rank[$scope] < $rank[$actorScope]) {
-            return false;
+        // A team-level management grant must also stay inside any organization
+        // boundary assigned to the actor (or their legacy organization).
+        if ($actor->isAdmin() && $effectiveOrganizationIds !== null) {
+            $validTeamIds = \\App\\Models\\Team::query()
+                ->whereIn('id', $manageableTeamIds)
+                ->whereIn('organization_id', $effectiveOrganizationIds)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+            $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
+        } elseif (! $actor->isAdmin()) {
+            $validTeamIds = $actor->organization_id
+                ? \\App\\Models\\Team::query()
+                    ->whereIn('id', $manageableTeamIds)
+                    ->where('organization_id', $actor->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                : collect();
+            $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
+        }
+
+        $effectiveTeamIds = $this->effectiveTeamIds($actor);
+        if ($manageableTeamIds->isNotEmpty() && $effectiveTeamIds !== null) {
+            $manageableTeamIds = $manageableTeamIds
+                ->filter(fn (int $id): bool => in_array($id, $effectiveTeamIds, true))
+                ->values();
+        }
+
+        $allowedOrganizationIds = $hasExplicitOrganizationManagementScope
+            ? $manageableOrganizationIds
+            : ($effectiveOrganizationIds !== null
+                ? collect($effectiveOrganizationIds)
+                : ($actor->organization_id ? collect([(int) $actor->organization_id]) : collect()));
+
+        $allowedTeamIds = $hasExplicitTeamManagementScope
+            ? $manageableTeamIds
+            : ($effectiveTeamIds !== null ? collect($effectiveTeamIds) : collect());
+
+        // Organization-scoped management grants also constrain team operations,
+        // even when the actor's narrower effective role is team-scoped.
+        if ($hasExplicitOrganizationManagementScope) {
+            $validTeamIds = \\App\\Models\\Team::query()
+                ->whereIn('id', $allowedTeamIds)
+                ->whereIn('organization_id', $manageableOrganizationIds)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+            $allowedTeamIds = $allowedTeamIds->intersect($validTeamIds)->values();
+        }
+
+        if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin()) {
+            $allowedTeamIds = \App\Models\Team::query()
+                ->where('organization_id', $actor->organization_id)
+                ->where(function ($query) use ($actor): void {
+                    $query->where('supervisor_id', $actor->id)
+                        ->orWhereIn('id', function ($subquery) use ($actor): void {
+                            $subquery->select('team_id')
+                                ->from('team_user')
+                                ->where('user_id', $actor->id)
+                                ->whereIn('team_role', ['manager', 'owner', 'supervisor']);
+                        });
+                })
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
         }
 
         if ($scope === 'global') {
@@ -480,20 +624,21 @@ class AuthorizationService
         if ($scope === 'organization') {
             return $organizationId !== null
                 && (int) $subject->organization_id === $organizationId
-                && ($actorScope === 'global' || (int) $actor->organization_id === $organizationId);
+                && ($actorScope === 'global' || $allowedOrganizationIds->contains($organizationId));
         }
 
         if ($scope === 'team') {
-            if ($teamId === null || ! $subject->teams()->whereKey($teamId)->exists()) {
+            if ($teamId === null) {
                 return false;
             }
-            if ($actorScope === 'team' && $manageableTeamIds->isNotEmpty() && ! $manageableTeamIds->contains($teamId)) {
-                return false;
-            }
-            $teamOrganizationId = \App\Models\Team::query()->whereKey($teamId)->value('organization_id');
 
-            if ($teamOrganizationId === null
-                || ($organizationId !== null && $organizationId !== (int) $teamOrganizationId)) {
+            $team = \App\Models\Team::query()->whereKey($teamId)->first(['id', 'organization_id']);
+            if (! $team
+                || ($organizationId !== null && (int) $team->organization_id !== $organizationId)
+                || ! \App\Models\Team::query()->whereKey($teamId)->where(function ($query) use ($subject): void {
+                    $query->where('supervisor_id', $subject->id)
+                        ->orWhereHas('members', fn ($members) => $members->whereKey($subject->id));
+                })->exists()) {
                 return false;
             }
 
@@ -501,16 +646,11 @@ class AuthorizationService
                 return true;
             }
 
-            if ((int) $actor->organization_id !== (int) $teamOrganizationId) {
-                return false;
+            if ($actorScope === 'organization') {
+                return $allowedOrganizationIds->contains((int) $team->organization_id);
             }
 
-            return $actorScope === 'organization'
-                || \App\Models\Team::query()
-                    ->whereKey($teamId)
-                    ->where('supervisor_id', $actor->id)
-                    ->exists()
-                || $actor->teams()->whereKey($teamId)->wherePivot('team_role', 'manager')->exists();
+            return $actorScope === 'team' && $allowedTeamIds->contains($teamId);
         }
 
         if ($actorScope === 'global') {
@@ -518,24 +658,22 @@ class AuthorizationService
         }
 
         if ($actorScope === 'organization') {
-            return $organizationId !== null
-                && (int) $subject->organization_id === $organizationId
-                && (int) $actor->organization_id === $organizationId;
+            return $subject->organization_id !== null
+                && $allowedOrganizationIds->contains((int) $subject->organization_id);
         }
 
         if ($actorScope === 'team') {
-            if ($manageableTeamIds->isNotEmpty()) {
-                return $subject->teams()->whereIn('teams.id', $manageableTeamIds)->exists();
+            if ($allowedTeamIds->isEmpty()) {
+                return false;
             }
 
-            return $actor->teams()
-                ->wherePivot('team_role', 'manager')
-                ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
-                ->exists()
-                || \App\Models\Team::query()
-                    ->where('supervisor_id', $actor->id)
-                    ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
-                    ->exists();
+            return \App\Models\Team::query()
+                ->whereIn('id', $allowedTeamIds)
+                ->where(function ($query) use ($subject): void {
+                    $query->where('supervisor_id', $subject->id)
+                        ->orWhereHas('members', fn ($members) => $members->whereKey($subject->id));
+                })
+                ->exists();
         }
 
         return (int) $actor->id === (int) $subject->id;
@@ -717,6 +855,12 @@ class AuthorizationService
             return false;
         }
 
+        $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
+        $effectiveScope = $this->effectiveScope($user);
+        if (($rank[$effectiveScope] ?? 4) > ($rank[$scope] ?? 4)) {
+            return false;
+        }
+
         if ($scope === 'global') {
             return true;
         }
@@ -725,37 +869,73 @@ class AuthorizationService
         $teamId = $grant?->team_id;
 
         if ($scope === 'organization') {
+            if ($organizationId === null) {
+                return false;
+            }
+
+            if ($user->isAdmin()) {
+                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                if ($effectiveOrganizationIds !== null
+                    && ! in_array((int) $organizationId, $effectiveOrganizationIds, true)) {
+                    return false;
+                }
+            } elseif ($user->organization_id === null
+                || (int) $organizationId !== (int) $user->organization_id) {
+                return false;
+            }
+
             $recordOrganizationId = $record->getAttribute('organization_id');
             if (! $recordOrganizationId && $record->getAttribute('user_id')) {
                 $recordOrganizationId = User::query()->whereKey($record->getAttribute('user_id'))->value('organization_id');
             }
 
-            return $organizationId !== null
-                && (int) $recordOrganizationId === (int) $organizationId;
+            return (int) $recordOrganizationId === (int) $organizationId;
         }
 
         if ($scope === 'team') {
-            // A scoped assignment is valid only while the subject still belongs
-            // to the assigned team (or remains its supervisor). This mirrors
-            // effectiveTeamIds() and prevents stale assignments after removal.
-            if ($teamId !== null && ! $this->userHasTeamAccess($user, (int) $teamId)) {
+            if ($teamId === null) {
                 return false;
             }
 
-            $teamIds = $teamId !== null
-                ? collect([(int) $teamId])
-                : \App\Models\Team::query()
-                    ->where('supervisor_id', $user->id)
-                    ->orWhereHas('members', fn ($query) => $query->where('users.id', $user->id)->where('team_user.team_role', 'manager'))
-                    ->pluck('id');
+            $teamQuery = \App\Models\Team::query()->whereKey((int) $teamId);
+            if ($grant?->organization_id !== null) {
+                $teamQuery->where('organization_id', (int) $grant->organization_id);
+            }
+            $team = $teamQuery->first(['id', 'organization_id']);
+            if (! $team) {
+                return false;
+            }
 
-            if ($teamIds->isEmpty()) {
+            if ($user->isAdmin()) {
+                $effectiveOrganizationIds = $this->effectiveOrganizationIds($user);
+                if ($effectiveOrganizationIds !== null
+                    && ! in_array((int) $team->organization_id, $effectiveOrganizationIds, true)) {
+                    return false;
+                }
+            } elseif (! $user->organization_id
+                || (int) $team->organization_id !== (int) $user->organization_id
+                || ! $this->userHasTeamAccess($user, (int) $teamId)) {
+                return false;
+            }
+
+            $effectiveTeamIds = $this->effectiveTeamIds($user);
+            if ($effectiveTeamIds !== null && ! in_array((int) $teamId, $effectiveTeamIds, true)) {
                 return false;
             }
 
             $recordTeamId = $record->getAttribute('team_id');
             if ($recordTeamId !== null) {
-                return $teamIds->contains((int) $recordTeamId);
+                return (int) $recordTeamId === (int) $teamId;
+            }
+
+            if ($record instanceof User) {
+                return \\App\\Models\\Team::query()
+                    ->whereKey((int) $teamId)
+                    ->where(function ($query) use ($record): void {
+                        $query->where('supervisor_id', $record->id)
+                            ->orWhereHas('members', fn ($members) => $members->whereKey($record->id));
+                    })
+                    ->exists();
             }
 
             $ownerId = $record->getAttribute('user_id')
@@ -764,16 +944,16 @@ class AuthorizationService
 
             return $ownerId !== null && DB::table('team_user')
                 ->where('user_id', $ownerId)
-                ->whereIn('team_id', $teamIds)
+                ->where('team_id', $teamId)
                 ->exists();
         }
 
-        foreach (['user_id', 'owner_id', 'created_by'] as $ownerColumn) {
-            if ($record->getAttribute($ownerColumn) !== null) {
-                return (int) $record->getAttribute($ownerColumn) === (int) $user->id;
-            }
-        }
+        $ownerId = $record instanceof User
+            ? $record->getKey()
+            : ($record->getAttribute('user_id')
+                ?? $record->getAttribute('owner_id')
+                ?? $record->getAttribute('created_by'));
 
-        return false;
+        return $ownerId !== null && (int) $ownerId === (int) $user->id;
     }
 }
