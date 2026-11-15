@@ -931,4 +931,48 @@ class AdminSectionScopeAuthorizationTest extends TestCase
     }
 
 
+
+    public function test_invalid_explicit_team_assignment_does_not_fall_back_to_legacy_managed_teams(): void
+    {
+        $organization = Organization::create(['name' => 'Invalid Team Scope Org', 'slug' => 'invalid-team-scope-org', 'status' => 'active']);
+        $actor = $this->makeUser('09123457012', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $target = $this->makeUser('09123457013', User::ROLE_EMPLOYEE, $organization->id);
+        $unmanagedAssignedTeam = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Explicit But Unmanaged Team',
+            'slug' => 'explicit-but-unmanaged-team',
+        ]);
+        $legacyManagedTeam = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Legacy Managed Team',
+            'slug' => 'legacy-managed-team',
+            'supervisor_id' => $actor->id,
+        ]);
+        $legacyManagedTeam->members()->attach($target->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $actor,
+            'invalid-explicit-team-access-manager',
+            ['access.manage'],
+            'team',
+            $organization->id,
+            $unmanagedAssignedTeam->id,
+        );
+
+        $this->actingAs($actor)->postJson('/admin/access-control/users/'.$target->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $legacyManagedTeam->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $target->id,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $legacyManagedTeam->id,
+        ]);
+    }
+
+
 }
