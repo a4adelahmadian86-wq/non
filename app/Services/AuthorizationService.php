@@ -97,6 +97,130 @@ class AuthorizationService
         return $decision;
     }
 
+    /**
+     * Section-level checks must not let a narrowly scoped direct grant unlock
+     * a wider console query. Record-level grants continue to use allowsRecord().
+     */
+    public function allowsWithinEffectiveScope(?User $user, string $permission): bool
+    {
+        if (! $this->activeUser($user) || trim($permission) === '' || ! $this->allows($user, $permission)) {
+            return false;
+        }
+
+        // Role grants are bounded by effectiveScope() and the console's query scopes.
+        if ($this->rolePermissionAllowsInEffectiveScope($user, $permission)) {
+            return true;
+        }
+
+        $allowGrants = $this->activeDirectGrants($user, $permission)
+            ->where('effect', 'allow');
+        if ($allowGrants->isEmpty()) {
+            return false;
+        }
+
+        $scope = $this->effectiveScope($user);
+
+        // A global grant covers every effective scope.
+        if ($allowGrants->contains(fn (object $grant): bool => $grant->scope === 'global')) {
+            return true;
+        }
+
+        // An organization grant covers the organization's full console projection
+        // and any narrower projection belonging to that same organization.
+        if ($user->organization_id !== null && $allowGrants->contains(
+            fn (object $grant): bool => $grant->scope === 'organization'
+                && (int) $grant->organization_id === (int) $user->organization_id
+        )) {
+            return in_array($scope, ['organization', 'team', 'own'], true);
+        }
+
+        if ($scope === 'team') {
+            $visibleTeamIds = $this->consoleTeamIds($user);
+            if ($visibleTeamIds === []) {
+                return false;
+            }
+
+            $grantedTeamIds = $allowGrants
+                ->where('scope', 'team')
+                ->filter(fn (object $grant): bool => $grant->team_id !== null
+                    && in_array((int) $grant->team_id, $visibleTeamIds, true)
+                    && $this->userHasTeamAccess($user, (int) $grant->team_id))
+                ->pluck('team_id')
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->all();
+
+            // A section query can return every visible team. A direct grant to
+            // only one of several teams must not authorize the whole section.
+            return array_diff($visibleTeamIds, $grantedTeamIds) === [];
+        }
+
+        if ($scope === 'own') {
+            return $allowGrants->contains(function (object $grant) use ($user): bool {
+                if ($grant->scope === 'own') {
+                    return true;
+                }
+
+                if ($grant->scope === 'team') {
+                    return $grant->team_id !== null
+                        && $this->userHasTeamAccess($user, (int) $grant->team_id);
+                }
+
+                return false;
+            });
+        }
+
+        return false;
+    }
+
+    private function rolePermissionAllowsInEffectiveScope(User $user, string $permission): bool
+    {
+        $assignments = $this->activeAssignments($user);
+        if ($assignments->isNotEmpty()) {
+            return $this->assignedRoleAllows($assignments, $permission);
+        }
+
+        if ($user->access_control_managed) {
+            return false;
+        }
+
+        if ($user->role === User::ROLE_ADMIN) {
+            return true;
+        }
+
+        $permissionId = $this->permissionId($permission);
+
+        return $permissionId !== null && RolePermission::query()
+            ->where('role', $user->role)
+            ->where('permission_id', $permissionId)
+            ->exists();
+    }
+
+    /**
+     * Resolve all teams represented by the current console scope. Explicit
+     * assignments take precedence; legacy supervisors/managers retain their
+     * existing team membership behavior during migration.
+     */
+    private function consoleTeamIds(User $user): array
+    {
+        $assigned = $this->effectiveTeamIds($user);
+        if ($assigned !== null) {
+            return $assigned;
+        }
+
+        return \\App\\Models\\Team::query()
+            ->where('supervisor_id', $user->id)
+            ->orWhereIn('id', function ($query) use ($user): void {
+                $query->select('team_id')
+                    ->from('team_user')
+                    ->where('user_id', $user->id)
+                    ->where('team_role', 'manager');
+            })
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
     private function resolvePermissionDecision(User $user, string $permission): bool
     {
         $direct = $this->activeDirectGrants($user, $permission);
