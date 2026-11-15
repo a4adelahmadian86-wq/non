@@ -272,6 +272,45 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertSee('Scoped admin visible ticket')
             ->assertDontSee('Scoped admin forbidden ticket');
     }
+    public function test_own_scope_admin_can_view_own_ticket_but_cannot_read_internal_notes_or_attachments(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'own');
+        $ticket = Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'Own-scope admin ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $internal = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'own-scope-hidden-internal-note-911',
+            'is_internal' => true,
+            'is_staff' => true,
+            'attachments' => [[
+                'name' => 'private-note.txt',
+                'path' => 'private/own-scope-note.txt',
+                'disk' => 'private',
+                'managed_file_id' => 999999,
+            ]],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('support.show', $ticket))
+            ->assertOk()
+            ->assertSee('Own-scope admin ticket')
+            ->assertDontSee('own-scope-hidden-internal-note-911');
+
+        $this->get(route('support.messages.poll', $ticket))
+            ->assertOk()
+            ->assertJsonMissing(['body' => 'own-scope-hidden-internal-note-911']);
+
+        $this->get(route('support.attachment', ['ticket' => $ticket->id, 'message' => $internal->id, 'index' => 0]))
+            ->assertNotFound();
+    }
     public function test_customer_can_never_read_staff_internal_notes(): void
     {
         $customer = User::factory()->create();
