@@ -83,6 +83,42 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonFragment(['body' => 'یادداشت داخلی کارشناس']);
     }
 
+    public function test_scoped_admin_is_not_an_eligible_assignee_outside_its_ticket_scope(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Assignee Scope Org', 'slug' => 'assignee-scope-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Other Assignee Org', 'slug' => 'other-assignee-org', 'status' => 'active']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organization->id,
+            'is_blocked' => false,
+        ]);
+        $insideCustomer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideCustomer = User::factory()->create(['organization_id' => $otherOrganization->id, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+        request()->attributes->set('farast.scope', 'organization');
+
+        $insideTicket = Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'subject' => 'Ticket inside assignee scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Ticket outside assignee scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $directory = app(\App\Services\SupportAgentDirectory::class);
+        $this->assertTrue($directory->allows($admin, $insideTicket));
+        $this->assertFalse($directory->allows($admin, $outsideTicket));
+        $this->assertTrue($directory->eligibleFor($insideTicket)->contains('id', $admin->id));
+        $this->assertFalse($directory->eligibleFor($outsideTicket)->contains('id', $admin->id));
+    }
     public function test_global_support_operator_communication_center_can_search_internal_notes(): void
     {
         config(['farast_admin.multi_role_console' => true]);
