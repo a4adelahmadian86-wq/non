@@ -21,7 +21,7 @@
 - Laravel/Playwright، Admin Product E2E، Phase 3، Phase 4 Agent، Voice Service و Product Supervisor موفق؛ آزمون مستقل `reader-browser-regression` نیز با پنج مجموعه مرورگر reader موفق شد.
 - Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
 
-این نتایج متعلق به HEAD PR پیش از squash هستند. اجرای CI جدید روی merge commit `33e7eeb` باید جداگانه تکمیل شود؛ تا آن زمان نباید نتیجه‌ی CI merge commit را سبز اعلام کرد.
+این نتایج متعلق به HEAD PR پیش از squash هستند. پس از ادغام PR #599، اجرای مستقل روی merge commit جاری `961d661da16a811b854d50521ad789976542d612` نیز انجام شد: `FARAST CI` (run `43735268869`)، `FARAST Phase 3 Commerce Tests` (run `43735268942`) و `FARAST Phase 4 Agent` (run `43735268908`) همگی با conclusion=`success` خاتمه یافتند.
 
 ### اصلاحات تأییدشده پس از snapshot قبلی
 
