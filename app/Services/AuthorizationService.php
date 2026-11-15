@@ -552,6 +552,27 @@ class AuthorizationService
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
+
+        // A team-level management grant must also stay inside any organization
+        // boundary assigned to the actor (or their legacy organization).
+        if ($actor->isAdmin() && $effectiveOrganizationIds !== null) {
+            $validTeamIds = \\App\\Models\\Team::query()
+                ->whereIn('id', $manageableTeamIds)
+                ->whereIn('organization_id', $effectiveOrganizationIds)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+            $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
+        } elseif (! $actor->isAdmin()) {
+            $validTeamIds = $actor->organization_id
+                ? \\App\\Models\\Team::query()
+                    ->whereIn('id', $manageableTeamIds)
+                    ->where('organization_id', $actor->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                : collect();
+            $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
+        }
+
         $effectiveTeamIds = $this->effectiveTeamIds($actor);
         if ($manageableTeamIds->isNotEmpty() && $effectiveTeamIds !== null) {
             $manageableTeamIds = $manageableTeamIds
