@@ -17,7 +17,15 @@ class CommunicationSearchService
      * Search only records the current actor can already open. This is a read
      * model over the existing domain stores; it never creates a second index.
      */
-    public function search(User $actor, string $term, bool $canSupport, bool $canUseMessenger, int $limit = 30): Collection
+    public function search(
+        User $actor,
+        string $term,
+        bool $canSupport,
+        bool $canUseMessenger,
+        int $limit = 30,
+        ?bool $canManageAllTickets = null,
+        ?array $visibleTicketUserIds = null,
+    ): Collection
     {
         $term = trim($term);
         if (mb_strlen($term) < 2) {
@@ -27,12 +35,22 @@ class CommunicationSearchService
         $limit = max(1, min($limit, 50));
         $results = collect();
         $isAdmin = $actor->isAdmin();
+        $canManageAllTickets ??= $isAdmin;
+        if (! $canManageAllTickets) {
+            $visibleTicketUserIds = array_values(array_unique(array_map('intval', $visibleTicketUserIds ?? [(int) $actor->id])));
+        }
         $pattern = '%'.$term.'%';
 
         if ($canSupport) {
             $tickets = Ticket::query()
                 ->with('user:id,name')
-                ->when(! $isAdmin, fn ($query) => $query->where('user_id', $actor->id))
+                ->when(! $canManageAllTickets, function ($query) use ($visibleTicketUserIds): void {
+                    if ($visibleTicketUserIds === []) {
+                        $query->whereRaw('1 = 0');
+                    } else {
+                        $query->whereIn('user_id', $visibleTicketUserIds);
+                    }
+                })
                 ->where(function ($query) use ($pattern) {
                     $query->where('subject', 'like', $pattern)
                         ->orWhere('ticket_code', 'like', $pattern);
@@ -46,7 +64,7 @@ class CommunicationSearchService
                     'ticket',
                     $ticket->displayCode().' — '.$ticket->subject,
                     $ticket->displayName().' · '.$ticket->statusLabel(),
-                    $isAdmin
+                    $canManageAllTickets
                         ? route('admin.support.management', ['ticket' => $ticket->id])
                         : route('support.show', $ticket),
                     $ticket->updated_at,
@@ -57,9 +75,13 @@ class CommunicationSearchService
             $ticketMessages = TicketMessage::query()
                 ->with('ticket')
                 ->where('body', 'like', $pattern)
-                ->whereHas('ticket', function ($query) use ($actor, $isAdmin) {
-                    if (! $isAdmin) {
-                        $query->where('user_id', $actor->id);
+                ->whereHas('ticket', function ($query) use ($visibleTicketUserIds, $canManageAllTickets): void {
+                    if (! $canManageAllTickets) {
+                        if ($visibleTicketUserIds === []) {
+                            $query->whereRaw('1 = 0');
+                        } else {
+                            $query->whereIn('user_id', $visibleTicketUserIds);
+                        }
                     }
                 })
                 ->when(! $isAdmin, fn ($query) => $query->where(function ($visible) {
@@ -78,7 +100,7 @@ class CommunicationSearchService
                     'ticket',
                     'پیام در '.$ticket->displayCode().' — '.$ticket->subject,
                     Str::limit(trim(strip_tags((string) $message->body)), 180),
-                    $isAdmin
+                    $canManageAllTickets
                         ? route('admin.support.management', ['ticket' => $ticket->id])
                         : route('support.show', $ticket),
                     $message->created_at,
