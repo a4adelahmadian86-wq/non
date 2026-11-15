@@ -556,7 +556,7 @@ class AuthorizationService
         // A team-level management grant must also stay inside any organization
         // boundary assigned to the actor (or their legacy organization).
         if ($actor->isAdmin() && $effectiveOrganizationIds !== null) {
-            $validTeamIds = \\App\\Models\\Team::query()
+            $validTeamIds = \App\Models\Team::query()
                 ->whereIn('id', $manageableTeamIds)
                 ->whereIn('organization_id', $effectiveOrganizationIds)
                 ->pluck('id')
@@ -564,7 +564,7 @@ class AuthorizationService
             $manageableTeamIds = $manageableTeamIds->intersect($validTeamIds)->values();
         } elseif (! $actor->isAdmin()) {
             $validTeamIds = $actor->organization_id
-                ? \\App\\Models\\Team::query()
+                ? \App\Models\Team::query()
                     ->whereIn('id', $manageableTeamIds)
                     ->where('organization_id', $actor->organization_id)
                     ->pluck('id')
@@ -593,7 +593,7 @@ class AuthorizationService
         // Organization-scoped management grants also constrain team operations,
         // even when the actor's narrower effective role is team-scoped.
         if ($hasExplicitOrganizationManagementScope) {
-            $validTeamIds = \\App\\Models\\Team::query()
+            $validTeamIds = \App\Models\Team::query()
                 ->whereIn('id', $allowedTeamIds)
                 ->whereIn('organization_id', $manageableOrganizationIds)
                 ->pluck('id')
@@ -929,7 +929,7 @@ class AuthorizationService
             }
 
             if ($record instanceof User) {
-                return \\App\\Models\\Team::query()
+                return \App\Models\Team::query()
                     ->whereKey((int) $teamId)
                     ->where(function ($query) use ($record): void {
                         $query->where('supervisor_id', $record->id)
