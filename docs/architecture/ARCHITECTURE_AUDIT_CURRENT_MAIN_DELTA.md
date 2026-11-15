@@ -22,7 +22,7 @@
 - Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
 
 این نتایج متعلق به HEAD PR #599 پیش از squash هستند. پس از آن، PR #598 راهنمای میان‌برهای خوانشگر را اضافه کرد؛ روی HEAD دقیق آن (7e43d08cbf293d2019ebca1b716625359236b6a7) هر سه Workflow یعنی FARAST CI (run 43735607204)، Phase 3 (run 43735607192) و Phase 4 Agent (run 43735607189) موفق شدند.
-PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد. روی همین merge commit، Phase 3 (run 43736179272) و Phase 4 Agent (run 43736179325) موفق‌اند؛ FARAST CI اصلی (run 43736179322) در زمان این snapshot هنوز در حال اجراست، بنابراین وضعیت کامل CI روی merge commit هنوز سبز اعلام نمی‌شود.
+PR #598 سپس در commit 509febd015427804d1d7eea9177edfbb9432c3d3 وارد main شد. روی همین merge commit هر سه Workflow موفق‌اند: FARAST CI (run 43736179322)، Phase 3 (run 43736179272) و Phase 4 Agent (run 43736179325).
 
 ### اصلاحات تأییدشده پس از snapshot قبلی
 
