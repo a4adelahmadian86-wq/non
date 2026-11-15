@@ -12,6 +12,7 @@ use App\Services\CapabilityService;
 use App\Services\MessengerAccessService;
 use App\Services\NotificationService;
 use App\Services\CommunicationSearchService;
+use App\Services\AdminConsoleService;
 use Illuminate\Http\Request;
 
 class CommunicationCenterController extends Controller
@@ -22,20 +23,29 @@ class CommunicationCenterController extends Controller
         CapabilityService $capabilities,
         MessengerAccessService $messengerAccess,
         CommunicationSearchService $communicationSearch,
+        AdminConsoleService $adminConsole,
     ) {
         $user = $request->user();
         $isAdmin = $user->isAdmin();
-        $canSupport = $isAdmin || $capabilities->allowed($user, 'can_support');
+        $canManageAllTickets = $isAdmin && $adminConsole->sectionAllowed($user, 'support_admin');
+        $visibleTicketUserIds = $canManageAllTickets
+            ? null
+            : ($adminConsole->visibleUserIds($user) ?? [(int) $user->id]);
+        $canSupport = $capabilities->allowed($user, 'can_support');
         $canUseMessenger = $messengerAccess->canUse($user);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
         $searchTerm = trim((string) ($validated['q'] ?? ''));
         $searchResults = $searchTerm !== ''
-            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger)
+            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger, 30, $canManageAllTickets, $visibleTicketUserIds)
             : collect();
 
         $ticketQuery = Ticket::query()->with(['user:id,name,email', 'assignee:id,name']);
-        if (! $isAdmin) {
-            $ticketQuery->where('user_id', $user->id);
+        if (! $canManageAllTickets) {
+            if ($visibleTicketUserIds === []) {
+                $ticketQuery->whereRaw('1 = 0');
+            } else {
+                $ticketQuery->whereIn('user_id', $visibleTicketUserIds);
+            }
         }
         if (! $canSupport) {
             $ticketQuery->whereRaw('1 = 0');
@@ -103,7 +113,7 @@ class CommunicationCenterController extends Controller
                 'kind' => 'ticket',
                 'title' => $ticket->displayCode().' — '.$ticket->subject,
                 'body' => $ticket->displayName().' · '.$ticket->statusLabel().' · '.$ticket->priorityLabel(),
-                'url' => $isAdmin
+                'url' => $canManageAllTickets
                     ? route('admin.support.management', ['ticket' => $ticket->id])
                     : route('support.show', $ticket),
                 'at' => $ticket->updated_at,
@@ -141,9 +151,25 @@ class CommunicationCenterController extends Controller
             $customerUnreadTickets = $unreadTicketsQuery->count();
         }
 
+        $scopedTicketStats = Ticket::query();
+        if (! $canManageAllTickets) {
+            if ($visibleTicketUserIds === []) {
+                $scopedTicketStats->whereRaw('1 = 0');
+            } else {
+                $scopedTicketStats->whereIn('user_id', $visibleTicketUserIds);
+            }
+        }
+        if (! $canSupport) {
+            $scopedTicketStats->whereRaw('1 = 0');
+        }
+
         $stats = [
-            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $customerUnreadTickets,
-            'tickets_open' => $isAdmin ? Ticket::query()->openQueue()->count() : $tickets->where('status', '!=', 'closed')->count(),
+            'tickets_needing_reply' => $canManageAllTickets
+                ? Ticket::query()->needsReply()->count()
+                : ($isAdmin ? (clone $scopedTicketStats)->needsReply()->count() : $customerUnreadTickets),
+            'tickets_open' => $canManageAllTickets
+                ? Ticket::query()->openQueue()->count()
+                : ($isAdmin ? (clone $scopedTicketStats)->where('status', '!=', 'closed')->count() : $tickets->where('status', '!=', 'closed')->count()),
             'conversations_unread' => $unreadConversationsCount,
             'notifications_unread' => $unreadNotifications,
         ];
@@ -155,6 +181,7 @@ class CommunicationCenterController extends Controller
             'feed',
             'stats',
             'isAdmin',
+            'canManageAllTickets',
             'canSupport',
             'canUseMessenger',
             'searchTerm',
