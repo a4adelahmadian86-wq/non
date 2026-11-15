@@ -532,6 +532,7 @@ class StoreController extends Controller
                 if ($readerReady && $document->pages->isNotEmpty()) {
                     $readerDocument = $document;
                     $readerMode = 'document';
+                    // Artifact locations may be managed remote volumes; never probe them via a Laravel disk directly.
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
