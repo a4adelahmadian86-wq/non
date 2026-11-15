@@ -50,7 +50,7 @@ class ResolveAdminScope
 
         $scope = self::scopeFor($user);
 
-        // اگر کاربر مدیر باشد اما سازمان نداشته باشد، دامنه به own تنزل می‌کند تا دادهٔ نشت نکند.
+        // Without an effective organization boundary, an organization-scoped actor fails closed to own.
         if ($scope === self::SCOPE_ORGANIZATION) {
             $assignedOrganizationIds = $user->isAdmin()
                 ? $this->authorization->effectiveOrganizationIds($user)
