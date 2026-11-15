@@ -517,23 +517,19 @@ class SupportController extends Controller
             : collect();
 
         $visibleAuditUserIds = $visibleUserIds === null
-            ? collect()
+            ? null
             : collect($visibleUserIds)->map(fn ($id) => (int) $id)->unique();
 
         $auditUserLabels = collect();
         foreach ($auditUsers as $auditUser) {
-            $isVisibleTeamSupportAgent = $visibleUserIds !== null
-                && $visibleAuditUserIds->contains((int) $auditUser->id)
-                && app(AuthorizationService::class)->allows($auditUser, 'support.manage');
+            $isVisibleAuditActor = $visibleAuditUserIds === null
+                || $visibleAuditUserIds->contains((int) $auditUser->id);
 
             if ((int) $auditUser->id === (int) auth()->id()) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
             } elseif ($active && (int) $auditUser->id === (int) $active->user_id) {
                 $auditUserLabels[$auditUser->id] = 'مشتری';
-            } elseif (
-                app(AuthorizationService::class)->allowsRecord(auth()->user(), 'support.manage', $auditUser)
-                || $isVisibleTeamSupportAgent
-            ) {
+            } elseif ($isVisibleAuditActor) {
                 $auditUserLabels[$auditUser->id] = $auditUser->name;
             } else {
                 // Do not disclose names of historical actors/assignees outside
