@@ -147,4 +147,5 @@
 <script src="/js/farast-reader-annotations.js?v=20261111compact1" defer></script>
 <script src="/js/farast-reader-studio.js?v=20261111compact2" defer></script>
 <script src="/js/farast-reader-ink-pressure.js?v=20261110durable4" defer></script>
+<script src="/js/farast-reader-help.js?v=20261115shortcuts1" defer></script>
 @endpush
