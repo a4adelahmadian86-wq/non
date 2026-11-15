@@ -534,11 +534,15 @@ class SupportSlaService
                     }
 
                     $firstStaff = $firstReplies->get($ticket->id);
-                    if (! $firstStaff) {
+                    // Retain SLA evidence from the canonical ticket timestamp when
+                    // legacy public reply rows are missing or have been purged.
+                    $firstResponseAt = $firstStaff?->created_at
+                        ? Carbon::parse($firstStaff->created_at)
+                        : ($ticket->first_response_at ? Carbon::parse($ticket->first_response_at) : null);
+
+                    if (! $firstResponseAt) {
                         continue;
                     }
-
-                    $firstResponseAt = Carbon::parse($firstStaff->created_at);
                     $minutes = $this->businessMinutesBetween($ticket->created_at, $firstResponseAt);
                     $allFirstHistogram[$minutes] = ($allFirstHistogram[$minutes] ?? 0) + 1;
                     $allFirstSum += $minutes;
@@ -554,10 +558,10 @@ class SupportSlaService
 
                     // If a legacy/system public response has no actor ID, retain
                     // the previous fallback to the assigned agent.
-                    $responderId = (int) ($firstStaff->user_id ?: $assignedId);
+                    $responderId = (int) (($firstStaff?->user_id) ?: $assignedId);
                     if ($responderId > 0) {
-                        $responderName = $firstStaff->author_name
-                            ?: ($firstStaff->author_email ?: $assignedName);
+                        $responderName = $firstStaff?->author_name
+                            ?: ($firstStaff?->author_email ?: $assignedName);
                         $ensureAgent($responderId, $responderName);
                         $agents[$responderId]['first_response_total']++;
                         $agents[$responderId]['first_response_sum'] += $minutes;
