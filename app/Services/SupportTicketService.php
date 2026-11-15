@@ -247,7 +247,10 @@ class SupportTicketService
         $loadQuery = Ticket::query()->whereNotIn('status', ['closed']);
         $loadQuery->where(function ($query) use ($agents): void {
             foreach ($agents as $agent) {
-                $visibleUserIds = ResolveAdminScope::visibleUserIds($agent);
+                $visibleUserIds = ResolveAdminScope::visibleUserIds(
+                    $agent,
+                    ResolveAdminScope::scopeWithConfiguredOverride($agent),
+                );
 
                 $query->orWhere(function ($agentQuery) use ($agent, $visibleUserIds): void {
                     $agentQuery->where('assigned_to', $agent->id);
