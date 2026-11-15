@@ -579,7 +579,7 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(page.locator('[data-audio-caption]')).toContainText('سلام');
   });
 
-  test('uses phrase-level labels when only sentence timestamps are supplied', async ({ page }) => {
+  test('does not advertise estimated word timings as precise word playback', async ({ page }) => {
     const sampleRate = 8000;
     const sampleCount = sampleRate * 2;
     const dataSize = sampleCount * 2;
@@ -603,7 +603,14 @@ test.describe('FARAST sample reader interactions', () => {
       contentType: 'audio/wav',
       body: wav,
     }));
-    const timings = [{ text: 'سلام به همه', start: 0, end: 1.2, page: 1 }];
+    const timings = [{
+      text: 'سلام به همه', start: 0, end: 1.2, page: 1, alignment_quality: 'estimated',
+      words: [
+        { text: 'سلام', start: 0, end: 0.4 },
+        { text: 'به', start: 0.4, end: 0.7 },
+        { text: 'همه', start: 0.7, end: 1.2 }
+      ]
+    }];
     await page.setContent(`
       <section class="farast-reader" data-reader-root>
         <div id="reader-stage"><article class="farast-reader-page-item is-active" data-index="0"
@@ -619,6 +626,7 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(page.locator('[data-audio-progress]')).toContainText('بخش');
     await expect(page.locator('.reader-audio-word')).toHaveCount(3);
     await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
+    await expect(page.locator('[data-audio-word-hint]')).toContainText('زمان‌بندی واژه‌ها تقریبی است');
   });
 
 
