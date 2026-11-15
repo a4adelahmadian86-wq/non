@@ -272,6 +272,40 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertSee('Scoped admin visible ticket')
             ->assertDontSee('Scoped admin forbidden ticket');
     }
+    public function test_scoped_support_admin_does_not_see_audit_actor_names_outside_its_scope(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Audit Scope Org', 'slug' => 'audit-scope-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Other Audit Org', 'slug' => 'other-audit-org', 'status' => 'active']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'organization_id' => $organization->id, 'is_blocked' => false]);
+        $customer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideAgent = User::factory()->create(['role' => User::ROLE_ADMIN, 'organization_id' => $otherOrganization->id, 'name' => 'Outside Scope Agent Secret', 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Scoped audit history ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        app(\App\Services\AuditEventService::class)->record(
+            'support.ticket.assignment_changed',
+            (int) $outsideAgent->id,
+            null,
+            'ticket',
+            (int) $ticket->id,
+            ['from_assigned_to' => null, 'to_assigned_to' => (int) $outsideAgent->id],
+            'support',
+        );
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id]))
+            ->assertOk()
+            ->assertSee('Scoped audit history ticket')
+            ->assertSee('کارشناس دیگر')
+            ->assertDontSee('Outside Scope Agent Secret');
+    }
     public function test_own_scope_admin_can_view_own_ticket_but_cannot_read_internal_notes_or_attachments(): void
     {
         config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
