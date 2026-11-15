@@ -85,7 +85,7 @@ search?.addEventListener('input',()=>{
       if(search.value.trim()!==term)return;
       renderSearchSuggestions(payload);
     }catch(error){if(error.name!=='AbortError')closeSearchSuggestions()}
-  },180);
+  },250);
 });
 search?.addEventListener('keydown',event=>{
   const options=getSearchOptions();

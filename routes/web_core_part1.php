@@ -60,7 +60,7 @@ Route::get('/', function () {
 })->name('home');
 Route::get('/storage/managed/{file}', [\App\Http\Controllers\ManagedStoragePublicController::class, 'show'])->whereNumber('file')->name('storage.managed.public');
 Route::get('/search', [SearchController::class, 'index'])->name('search');
-Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->middleware('throttle:30,1')->name('search.suggestions');
+Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->middleware('throttle:60,1')->name('search.suggestions');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/community', [ContentDiscussionController::class, 'communityIndex'])->name('community.index');
 Route::middleware('auth')->group(function () {

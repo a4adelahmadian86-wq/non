@@ -19,7 +19,7 @@ class SearchController extends Controller
 
         $query = preg_replace('/[\x00-\x1F\x7F]/u', '', trim($raw)) ?? '';
 
-        return mb_substr($query, 0, 120, 'UTF-8');
+        return mb_substr(str_replace(['%', '_'], '', $query), 0, 120, 'UTF-8');
     }
 
     public function index(Request $request)

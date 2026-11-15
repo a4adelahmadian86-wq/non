@@ -13,7 +13,7 @@
         @if(mb_strlen($q, 'UTF-8') < 2)
             <div class="farast-search-page__hint">برای جستجو حداقل دو نویسه وارد کنید.</div>
         @elseif($total > 0)
-            <div class="farast-search-page__summary">{{ number_format($total) }} نتیجه برای «{{ $q }}»</div>
+            <div class="farast-search-page__summary">نمایش {{ number_format($total) }} نتیجه مرتبط برای «{{ $q }}»</div>
         @else
             <div class="farast-search-page__summary">نتیجه‌ای برای «{{ $q }}» پیدا نشد.</div>
         @endif
