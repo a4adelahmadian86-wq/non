@@ -16,7 +16,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ProcessProductDocument implements ShouldQueue
@@ -50,6 +49,8 @@ class ProcessProductDocument implements ShouldQueue
         $product = $document->product;
         $sourceDisk = $file->disk ?: 'private';
         $sourcePath = (string) $file->path;
+        $readerPdfOldPath = null;
+        $readerPdfOldDisk = 'private';
         $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-source-');
         if (! is_string($sourceTemporaryPath)) {
             $document->update(['processing_status' => 'failed', 'failure_code' => 'source_temp_unavailable']);
@@ -216,7 +217,7 @@ class ProcessProductDocument implements ShouldQueue
 
         $sampleManagedBound = false;
         try {
-        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
+        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, $readerPdfOldPath, $readerPdfOldDisk, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $file = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
