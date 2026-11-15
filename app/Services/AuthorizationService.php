@@ -945,4 +945,5 @@ class AuthorizationService
                 ?? $record->getAttribute('created_by'));
 
         return $ownerId !== null && (int) $ownerId === (int) $user->id;
-    }}
+    }
+}
