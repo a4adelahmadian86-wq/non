@@ -61,16 +61,14 @@ class SupportAgentDirectory
             })
             ->orderBy('id');
 
-        $authorization = app(AuthorizationService::class);
-
         return $query->get()
-            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
+            ->filter(fn (User $user): bool => $this->allows($user, $ticket))
             ->values();
     }
 
     public function allows(User $agent, Ticket $ticket): bool
     {
         return ! (bool) $agent->is_blocked
-            && app(AuthorizationService::class)->allowsRecord($agent, 'support.manage', $ticket);
+            && Gate::forUser($agent)->allows('manage', $ticket);
     }
 }
