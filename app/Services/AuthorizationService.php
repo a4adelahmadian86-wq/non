@@ -228,8 +228,11 @@ class AuthorizationService
                 return true;
             }
 
-            return $user->organization_id !== null
-                && in_array((int) $user->organization_id, $grantedOrganizationIds, true);
+            $ownOrganizationIds = $user->organization_id !== null
+                ? [(int) $user->organization_id]
+                : ($user->isAdmin() ? $this->consoleOrganizationIds($user) : []);
+
+            return array_intersect($ownOrganizationIds, $grantedOrganizationIds) !== [];
         }
 
         return false;
@@ -299,8 +302,15 @@ class AuthorizationService
                 }
 
                 if ($assignment->scope === 'organization') {
-                    return $user->organization_id !== null
-                        && (int) $assignment->organization_id === (int) $user->organization_id;
+                    if ($user->organization_id !== null) {
+                        return (int) $assignment->organization_id === (int) $user->organization_id;
+                    }
+
+                    // A scoped admin may be downgraded to an own-only view when
+                    // an additional team assignment is outside its organization boundary.
+                    // The valid organization assignment still grants the own-only section.
+                    return $user->isAdmin()
+                        && in_array((int) $assignment->organization_id, $this->consoleOrganizationIds($user), true);
                 }
 
                 return $assignment->scope === 'own';
@@ -849,9 +859,25 @@ class AuthorizationService
         }
 
         if ($scope === 'organization') {
-            return $organizationId !== null
-                && (int) $subject->organization_id === $organizationId
-                && ($actorScope === 'global' || $allowedOrganizationIds->contains($organizationId));
+            if ($organizationId === null || ($actorScope !== 'global' && ! $allowedOrganizationIds->contains($organizationId))) {
+                return false;
+            }
+
+            $subjectOrganizationIds = $this->effectiveOrganizationIds($subject);
+            if ($subjectOrganizationIds !== null) {
+                return in_array($organizationId, $subjectOrganizationIds, true);
+            }
+
+            if ($subject->organization_id !== null && (int) $subject->organization_id === $organizationId) {
+                return true;
+            }
+
+            $subjectTeamIds = $this->consoleTeamIds($subject);
+
+            return $subjectTeamIds !== [] && Team::query()
+                ->whereIn('id', $subjectTeamIds)
+                ->where('organization_id', $organizationId)
+                ->exists();
         }
 
         if ($scope === 'team') {
@@ -860,12 +886,17 @@ class AuthorizationService
             }
 
             $team = \App\Models\Team::query()->whereKey($teamId)->first(['id', 'organization_id']);
-            if (! $team
-                || ($organizationId !== null && (int) $team->organization_id !== $organizationId)
-                || ! \App\Models\Team::query()->whereKey($teamId)->where(function ($query) use ($subject): void {
+            $subjectTeamIds = $this->effectiveTeamIds($subject);
+            $subjectHasTeamAccess = $subjectTeamIds !== null
+                ? in_array($teamId, $subjectTeamIds, true)
+                : Team::query()->whereKey($teamId)->where(function ($query) use ($subject): void {
                     $query->where('supervisor_id', $subject->id)
                         ->orWhereHas('members', fn ($members) => $members->whereKey($subject->id));
-                })->exists()) {
+                })->exists();
+
+            if (! $team
+                || ($organizationId !== null && (int) $team->organization_id !== $organizationId)
+                || ! $subjectHasTeamAccess) {
                 return false;
             }
 
