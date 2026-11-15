@@ -60,8 +60,8 @@ class PwaShellTest extends TestCase
         $this->assertStringContainsString("request.mode === 'navigate'", $worker);
         $this->assertStringContainsString('const isPublicAsset', $worker);
         $this->assertStringContainsString('if (!isPublicAsset) return;', $worker);
-        $this->assertStringContainsString("CACHE_NAME = 'farast-static-v3'", $worker);
-        $this->assertStringContainsString("LEGACY_CACHES = ['farast-shell-v1', 'farast-static-v2']", $worker);
+        $this->assertStringContainsString("CACHE_NAME = 'farast-static-v4'", $worker);
+        $this->assertStringContainsString("LEGACY_CACHES = ['farast-shell-v1', 'farast-static-v2', 'farast-static-v3']", $worker);
         $this->assertStringContainsString("'/css/farast-mobile-dock.css?v=20261108dock1'", $worker);
         $this->assertStringContainsString("'/js/farast-pwa.js?v=20261108pwa1'", $worker);
     }
