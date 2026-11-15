@@ -90,3 +90,5 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-reader-shortcuts-dialog button:focus-visible{outline:3px solid #60a5fa;outline-offset:3px}
 @media(max-width:520px){.farast-reader-shortcuts-dialog__head{padding:16px}.farast-reader-shortcuts-intro,.farast-reader-shortcuts-footnote{padding-inline:16px}.farast-reader-shortcuts-table-wrap{padding-inline:16px}.farast-reader-shortcuts-table th{width:42%}.farast-reader-shortcuts-table th,.farast-reader-shortcuts-table td{padding:9px 5px;font-size:.7rem}.farast-reader-shortcuts-dialog__actions{padding:0 16px 16px}}
 @media(prefers-reduced-motion:reduce){.farast-reader-shortcuts-dialog::backdrop{backdrop-filter:none}}
+
+.farast-reader .reader-tool.reader-shortcuts-help::after{content:none!important}
