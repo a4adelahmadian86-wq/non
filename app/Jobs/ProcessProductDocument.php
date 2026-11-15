@@ -332,7 +332,7 @@ class ProcessProductDocument implements ShouldQueue
                 ];
 
                 if ($file->is_primary && is_string($sampleBytes)) {
-                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->lockForUpdate()->first();
                     $sampleDiskName = $existingSample?->disk ?: 'private';
                     $samplePathForReader = null;
                     $sampleArtifact = $existingSample;
@@ -406,7 +406,7 @@ class ProcessProductDocument implements ShouldQueue
                         $fullReaderPath = $file->path;
                         $fullReaderDisk = $file->disk ?: 'private';
                     } elseif ($sourceExtension === 'docx') {
-                        $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                        $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->lockForUpdate()->first();
                         if ($readerPdf) {
                             $fullReaderPath = $readerPdf->path;
                             $fullReaderDisk = $readerPdf->disk ?: 'private';
