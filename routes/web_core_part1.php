@@ -18,6 +18,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\StoreCartController;
 use App\Http\Controllers\StoreController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\StoreLibraryController;
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\TypingPreflightController;
@@ -58,6 +59,8 @@ Route::get('/', function () {
     return view('home', compact('recentProjects', 'homeProducts', 'homeCategories'));
 })->name('home');
 Route::get('/storage/managed/{file}', [\App\Http\Controllers\ManagedStoragePublicController::class, 'show'])->whereNumber('file')->name('storage.managed.public');
+Route::get('/search', [SearchController::class, 'index'])->name('search');
+Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->middleware('throttle:60,1')->name('search.suggestions');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/community', [ContentDiscussionController::class, 'communityIndex'])->name('community.index');
 Route::middleware('auth')->group(function () {

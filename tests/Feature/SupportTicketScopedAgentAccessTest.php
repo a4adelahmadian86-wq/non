@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
 use App\Models\Permission;
+use App\Models\SiteSetting;
 use App\Models\RolePermission;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
@@ -81,6 +83,140 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->assertJsonFragment(['body' => 'یادداشت داخلی کارشناس']);
     }
 
+    public function test_scoped_admin_is_not_an_eligible_assignee_outside_its_ticket_scope(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Assignee Scope Org', 'slug' => 'assignee-scope-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Other Assignee Org', 'slug' => 'other-assignee-org', 'status' => 'active']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organization->id,
+            'is_blocked' => false,
+        ]);
+        $insideCustomer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideCustomer = User::factory()->create(['organization_id' => $otherOrganization->id, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+        request()->attributes->set('farast.scope', 'organization');
+
+        $insideTicket = Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'subject' => 'Ticket inside assignee scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Ticket outside assignee scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $directory = app(\App\Services\SupportAgentDirectory::class);
+        $this->assertTrue($directory->allows($admin, $insideTicket));
+        $this->assertFalse($directory->allows($admin, $outsideTicket));
+        $this->assertTrue($directory->eligibleFor($insideTicket)->contains('id', $admin->id));
+        $this->assertFalse($directory->eligibleFor($outsideTicket)->contains('id', $admin->id));
+    }
+    public function test_admin_assignee_uses_its_own_team_scope_not_the_acting_admin_request_scope(): void
+    {
+        config(['farast_admin.multi_role_console' => true, 'farast_admin.scope_override_key' => '']);
+        $root = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $candidate = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $customer = User::factory()->create();
+        $outsideCustomer = User::factory()->create();
+        $organization = Organization::create(['name' => 'Admin Assignee Org', 'slug' => 'admin-assignee-org', 'status' => 'active']);
+        $team = \App\Models\Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Admin Assignee Team',
+            'slug' => 'admin-assignee-team',
+            'supervisor_id' => $root->id,
+        ]);
+        $team->members()->attach($customer->id, ['team_role' => 'employee']);
+
+        $permission = Permission::firstOrCreate(
+            ['key' => 'support.manage'],
+            ['label' => 'Support management', 'group' => 'support'],
+        );
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => 'admin_team_support_operator',
+            'name' => 'Admin team support operator',
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        RolePermission::firstOrCreate([
+            'role' => 'admin_team_support_operator',
+            'permission_id' => $permission->id,
+        ]);
+        DB::table('users')->where('id', $candidate->id)->update([
+            'access_control_managed' => true,
+            'updated_at' => now(),
+        ]);
+        DB::table('role_assignments')->insert([
+            'user_id' => $candidate->id,
+            'role_id' => $roleId,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+            'assigned_by' => $root->id,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $insideTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Admin candidate in team scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Admin candidate outside team scope',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        // Simulate a global actor assigning work while the candidate has a narrower team grant.
+        request()->attributes->set('farast.scope', 'global');
+        $directory = app(\App\Services\SupportAgentDirectory::class);
+        $this->assertTrue($directory->allows($candidate, $insideTicket));
+        $this->assertFalse($directory->allows($candidate, $outsideTicket));
+        $this->assertTrue($directory->eligibleFor($insideTicket)->contains('id', $candidate->id));
+        $this->assertFalse($directory->eligibleFor($outsideTicket)->contains('id', $candidate->id));
+    }
+    public function test_global_support_operator_communication_center_can_search_internal_notes(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+        $agent = $this->supportAgent();
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Global support operator ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'body' => 'global-support-internal-search-615',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($agent)
+            ->get(route('platform.communications', ['q' => 'global-support-internal-search-615']))
+            ->assertOk()
+            ->assertSee('global-support-internal-search-615')
+            ->assertSee(route('admin.support.management', ['ticket' => $ticket->id]));
+    }
     public function test_support_agent_can_view_ticket_but_cannot_submit_customer_csat(): void
     {
         $agent = $this->supportAgent();
@@ -98,6 +234,125 @@ class SupportTicketScopedAgentAccessTest extends TestCase
         $this->assertTrue(Gate::forUser($customer)->allows('rate', $ticket));
     }
 
+    public function test_admin_role_does_not_bypass_organization_scope_on_direct_ticket_routes(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Scoped Admin Org', 'slug' => 'scoped-admin-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Foreign Admin Org', 'slug' => 'foreign-admin-org', 'status' => 'active']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organization->id,
+            'is_blocked' => false,
+        ]);
+        $insideCustomer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideCustomer = User::factory()->create(['organization_id' => $otherOrganization->id, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $insideTicket = Ticket::create([
+            'user_id' => $insideCustomer->id,
+            'subject' => 'Scoped admin visible ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'subject' => 'Scoped admin forbidden ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('support.show', $insideTicket))
+            ->assertOk()
+            ->assertSee('Scoped admin visible ticket');
+
+        $this->get(route('support.show', $outsideTicket))->assertForbidden();
+
+        $this->post(route('admin.tickets.reply', $insideTicket), ['body' => 'پاسخ مجاز در دامنه سازمان'])
+            ->assertRedirect();
+        $this->post(route('admin.tickets.reply', $outsideTicket), ['body' => 'پاسخ خارج از دامنه'])
+            ->assertForbidden();
+
+        $this->get(route('admin.support.management', ['ticket' => $insideTicket->id]))
+            ->assertOk()
+            ->assertSee('Scoped admin visible ticket')
+            ->assertDontSee('Scoped admin forbidden ticket');
+    }
+    public function test_scoped_support_admin_does_not_see_audit_actor_names_outside_its_scope(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $organization = Organization::create(['name' => 'Audit Scope Org', 'slug' => 'audit-scope-org', 'status' => 'active']);
+        $otherOrganization = Organization::create(['name' => 'Other Audit Org', 'slug' => 'other-audit-org', 'status' => 'active']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'organization_id' => $organization->id, 'is_blocked' => false]);
+        $customer = User::factory()->create(['organization_id' => $organization->id, 'is_blocked' => false]);
+        $outsideAgent = User::factory()->create(['role' => User::ROLE_ADMIN, 'organization_id' => $otherOrganization->id, 'name' => 'Outside Scope Agent Secret', 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Scoped audit history ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        app(\App\Services\AuditEventService::class)->record(
+            'support.ticket.assignment_changed',
+            (int) $outsideAgent->id,
+            null,
+            'ticket',
+            (int) $ticket->id,
+            ['from_assigned_to' => null, 'to_assigned_to' => (int) $outsideAgent->id],
+            'support',
+        );
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id]))
+            ->assertOk()
+            ->assertSee('Scoped audit history ticket')
+            ->assertSee('کارشناس دیگر')
+            ->assertDontSee('Outside Scope Agent Secret');
+    }
+    public function test_own_scope_admin_can_view_own_ticket_but_cannot_read_internal_notes_or_attachments(): void
+    {
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        SiteSetting::write('dashboard_scope_override', 'own');
+        $ticket = Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'Own-scope admin ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $internal = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => null,
+            'body' => 'own-scope-hidden-internal-note-911',
+            'is_internal' => true,
+            'is_staff' => true,
+            'attachments' => [[
+                'name' => 'private-note.txt',
+                'path' => 'private/own-scope-note.txt',
+                'disk' => 'private',
+                'managed_file_id' => 999999,
+            ]],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('support.show', $ticket))
+            ->assertOk()
+            ->assertSee('Own-scope admin ticket')
+            ->assertDontSee('own-scope-hidden-internal-note-911');
+
+        $this->get(route('support.messages.poll', $ticket))
+            ->assertOk()
+            ->assertJsonMissing(['body' => 'own-scope-hidden-internal-note-911']);
+
+        $this->get(route('support.attachment', ['ticket' => $ticket->id, 'message' => $internal->id, 'index' => 0]))
+            ->assertNotFound();
+    }
     public function test_customer_can_never_read_staff_internal_notes(): void
     {
         $customer = User::factory()->create();

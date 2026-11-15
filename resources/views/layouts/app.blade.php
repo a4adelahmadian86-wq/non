@@ -12,11 +12,11 @@ if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityS
 if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
 @endphp
 @if(!$isReader)
-<link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="preload" href="/fonts/vazirmatn-variable.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/css/vazirmatn.css?v=20261115local1"><link rel="stylesheet" href="/css/fontawesome.css?v=20261115local1">
 @endif
 @if(!$isReader)
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
-@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
+@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-search.css?v=20261115global1"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
@@ -38,11 +38,12 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
       <span class="brand-mark farast-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
       <span><b>FARAST</b><small>فراست | محصولات دیجیتال و خدمات سند</small></span>
     </a>
-    <div class="header-search" role="search">
-      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-      <input id="farastGlobalSearch" type="search" placeholder="جستجوی فایل، خدمت یا موضوع..." autocomplete="off" aria-label="جستجو در سایت">
-      <button type="button" id="farastVoiceSearch" aria-label="جستجوی صوتی"><i class="fa-solid fa-microphone"></i></button>
-    </div>
+    <form class="header-search" id="farastGlobalSearchForm" action="{{ route('search') }}" method="get" role="search" autocomplete="off">
+      <button type="submit" class="farast-global-search-submit" aria-label="جستجو"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>
+      <input id="farastGlobalSearch" name="q" type="search" placeholder="جستجو در محصولات، مقاله‌ها و خدمات..." autocomplete="off" aria-label="جستجو در فراست" aria-autocomplete="list" aria-controls="farastSearchSuggestions" aria-expanded="false">
+      <button type="button" id="farastVoiceSearch" aria-label="جستجوی صوتی"><i class="fa-solid fa-microphone" aria-hidden="true"></i></button>
+      <div class="farast-search-suggestions" id="farastSearchSuggestions" role="listbox" aria-label="پیشنهادهای جستجو" hidden></div>
+    </form>
     <nav class="main-nav" id="primaryNavigation" aria-label="ناوبری اصلی">
       <a href="{{ route('home') }}" @if(request()->routeIs('home')) aria-current="page" @endif><i class="fa-solid fa-house"></i><span>خانه</span></a>
       <a href="{{ route('store') }}" @if(request()->routeIs('store*')) aria-current="page" @endif><i class="fa-solid fa-store"></i><span>فروشگاه</span></a>
