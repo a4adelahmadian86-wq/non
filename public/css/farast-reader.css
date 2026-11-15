@@ -65,3 +65,30 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
   line-height:1.25;
   white-space:nowrap;
 }
+
+
+/* Accessible, discoverable keyboard shortcut guide. */
+.farast-reader .reader-shortcuts-help{width:36px;min-width:36px;height:36px;padding:0;font:700 1rem/1 Tahoma,Arial,sans-serif;border-color:rgba(96,165,250,.45);color:#93c5fd}
+.farast-reader .reader-shortcuts-help:hover{background:rgba(59,130,246,.16);color:#bfdbfe}
+.farast-reader-shortcuts-dialog{width:min(560px,calc(100vw - 28px));max-height:min(82vh,720px);margin:auto;padding:0;border:1px solid var(--reader-line);border-radius:18px;background:var(--reader-panel);color:var(--reader-text);box-shadow:0 28px 90px rgba(0,0,0,.48);font:inherit}
+.farast-reader-shortcuts-dialog::backdrop{background:rgba(2,8,23,.72);backdrop-filter:blur(5px)}
+.farast-reader-shortcuts-dialog[open]{display:block}
+.farast-reader-shortcuts-dialog__head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px 14px;border-bottom:1px solid var(--reader-line)}
+.farast-reader-shortcuts-eyebrow{color:#60a5fa;font-size:.62rem;font-weight:800;letter-spacing:.12em;direction:ltr;display:block;text-align:right}
+.farast-reader-shortcuts-dialog h2{font-size:1.05rem;margin:5px 0 0}
+.farast-reader-shortcuts-close{width:34px;height:34px;border:1px solid var(--reader-line);border-radius:9px;background:transparent;color:var(--reader-muted);font-size:1.4rem;cursor:pointer}
+.farast-reader-shortcuts-intro,.farast-reader-shortcuts-footnote{margin:0;padding:12px 22px;color:var(--reader-muted);font-size:.76rem;line-height:1.9}
+.farast-reader-shortcuts-table-wrap{padding:0 22px;overflow:auto}
+.farast-reader-shortcuts-table{width:100%;border-collapse:collapse;font-size:.76rem}
+.farast-reader-shortcuts-table th,.farast-reader-shortcuts-table td{padding:10px 8px;border-bottom:1px solid var(--reader-line);text-align:right;vertical-align:middle}
+.farast-reader-shortcuts-table th{width:38%;font-weight:650;color:var(--reader-text)}
+.farast-reader-shortcuts-table td{color:var(--reader-muted);white-space:normal}
+.farast-reader-shortcuts-table kbd{display:inline-block;min-width:25px;margin:2px;padding:3px 6px;border:1px solid var(--reader-line);border-bottom-width:2px;border-radius:6px;background:rgba(100,116,139,.12);color:var(--reader-text);font:600 .68rem/1.4 Tahoma,Arial,sans-serif;text-align:center;direction:ltr}
+.farast-reader-shortcuts-table span{font-size:.66rem}
+.farast-reader-shortcuts-dialog__actions{display:flex;justify-content:flex-start;padding:0 22px 20px}
+.farast-reader-shortcuts-done{min-height:38px;padding:7px 18px;border:1px solid #2563eb;border-radius:10px;background:#2563eb;color:#fff;font:inherit;font-size:.76rem;font-weight:700;cursor:pointer}
+.farast-reader-shortcuts-dialog button:focus-visible{outline:3px solid #60a5fa;outline-offset:3px}
+@media(max-width:520px){.farast-reader-shortcuts-dialog__head{padding:16px}.farast-reader-shortcuts-intro,.farast-reader-shortcuts-footnote{padding-inline:16px}.farast-reader-shortcuts-table-wrap{padding-inline:16px}.farast-reader-shortcuts-table th{width:42%}.farast-reader-shortcuts-table th,.farast-reader-shortcuts-table td{padding:9px 5px;font-size:.7rem}.farast-reader-shortcuts-dialog__actions{padding:0 16px 16px}}
+@media(prefers-reduced-motion:reduce){.farast-reader-shortcuts-dialog::backdrop{backdrop-filter:none}}
+
+.farast-reader .reader-tool.reader-shortcuts-help::after{content:none!important}

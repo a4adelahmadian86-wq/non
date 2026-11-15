@@ -134,7 +134,7 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107reader1">
 <link rel="stylesheet" href="/vendor/pdfjs/legacy/web/pdf_viewer.css?v=6.5.438">
-<link rel="stylesheet" href="/css/farast-reader.css?v=20261114reader1">
+<link rel="stylesheet" href="/css/farast-reader.css?v=20261115shortcutguide1">
 @endpush
 
 @push('scripts')
@@ -147,4 +147,5 @@
 <script src="/js/farast-reader-annotations.js?v=20261111compact1" defer></script>
 <script src="/js/farast-reader-studio.js?v=20261111compact2" defer></script>
 <script src="/js/farast-reader-ink-pressure.js?v=20261110durable4" defer></script>
+<script src="/js/farast-reader-help.js?v=20261115shortcuts1" defer></script>
 @endpush

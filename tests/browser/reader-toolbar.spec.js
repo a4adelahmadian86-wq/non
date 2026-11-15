@@ -12,7 +12,7 @@ const readerStyles = fs.readFileSync(
 );
 
 test('reader styles are served from a local cacheable asset without remote dependencies', async () => {
-  expect(readerView).toContain('/css/farast-reader.css?v=20261114reader1');
+  expect(readerView).toMatch(/\/css\/farast-reader\.css\?v=[A-Za-z0-9_-]+/);
   expect(readerView).not.toMatch(/<style>/i);
   expect(readerStyles).not.toMatch(/@import\s+[^;]*https?:|url\(\s*['"]?https?:/i);
 });
