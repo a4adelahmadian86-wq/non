@@ -9,7 +9,7 @@
         <div><h1>مرکز ارتباطات فراست</h1><p>{{ $isAdmin ? 'نمای هماهنگ تیکت‌های پشتیبانی، گفت‌وگوهای داخلی و اعلان‌ها؛ با حفظ منبع داده و گردش‌کار اصلی هر بخش.' : 'نمای یکپارچه تیکت‌های پشتیبانی شما و اعلان‌های حساب، بدون پراکندگی میان بخش‌های مختلف.' }}</p></div>
         <div class="ac-actions">
             @if($canSupport)
-                <a class="ac-btn primary" href="{{ $canManageAllTickets ? route('admin.support.management') : route('support') }}"><i class="fa-solid fa-headset"></i> {{ $canManageAllTickets ? 'میز تیکت‌ها' : 'تیکت‌های من' }}</a>
+                <a class="ac-btn primary" href="{{ $canAccessSupportInbox ? route('admin.support.management') : route('support') }}"><i class="fa-solid fa-headset"></i> {{ $canAccessSupportInbox ? 'میز تیکت‌ها' : 'تیکت‌های من' }}</a>
             @endif
             @if($canUseMessenger)
                 <a class="ac-btn" href="{{ route('messenger.index') }}"><i class="fa-solid fa-comments"></i> پیام‌رسان داخلی</a>
@@ -70,7 +70,7 @@
             <h2><i class="fa-solid fa-ticket"></i> تیکت‌های اخیر</h2>
             <div class="ac-list">
                 @forelse($tickets as $ticket)
-                    <a class="ac-item" href="{{ ($canManageAllTickets ? route('admin.support.management', ['ticket'=>$ticket->id]) : route('support.show', $ticket)) }}">
+                    <a class="ac-item" href="{{ ($canAccessSupportInbox ? route('admin.support.management', ['ticket'=>$ticket->id]) : route('support.show', $ticket)) }}">
                         <span class="ac-icon"><i class="fa-solid fa-headset"></i></span>
                         <span class="ac-copy"><strong>{{ $ticket->displayCode() }} · {{ $ticket->subject }}</strong><small>{{ $ticket->displayName() }} · {{ $ticket->statusLabel() }} · {{ $ticket->priorityLabel() }}</small></span>
                         <span class="ac-tag">{{ $ticket->departmentLabel() }}</span>
