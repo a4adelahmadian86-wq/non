@@ -389,7 +389,7 @@ class SupportSlaMonitorReliabilityTest extends TestCase
                     'locked_at' => now(),
                 ]);
 
-                throw new \\RuntimeException('stale worker provider failure');
+                throw new \RuntimeException('stale worker provider failure');
             }
         );
         $this->app->instance(SupportNotificationService::class, $notifier);
