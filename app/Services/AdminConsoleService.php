@@ -51,7 +51,7 @@ class AdminConsoleService
             return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
         }
 
-        if (! $this->authorization->allows($user, $def['permission'])) {
+        if (! $this->authorization->allowsWithinEffectiveScope($user, $def['permission'])) {
             return false;
         }
 
