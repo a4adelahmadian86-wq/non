@@ -391,4 +391,61 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'direct_team_grant_scope_test'));
     }
 
+
+    public function test_organization_grant_does_not_cover_team_sections_spanning_another_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Grant Org A', 'slug' => 'grant-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Grant Org B', 'slug' => 'grant-org-b', 'status' => 'active']);
+        $root = $this->makeUser('09123456800', User::ROLE_ADMIN);
+        $supervisor = $this->makeUser('09123456801', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $teamA = Team::create(['organization_id' => $organizationA->id, 'name' => 'Org A Team', 'slug' => 'org-a-team']);
+        $teamB = Team::create(['organization_id' => $organizationB->id, 'name' => 'Org B Team', 'slug' => 'org-b-team']);
+        $supervisor->teams()->attach([
+            $teamA->id => ['team_role' => 'manager'],
+            $teamB->id => ['team_role' => 'manager'],
+        ]);
+
+        config(['farast_admin.sections.cross_org_team_grant_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        app(AuthorizationService::class)->grantDirectPermission(
+            $root,
+            $supervisor,
+            'store.manage',
+            'allow',
+            'organization',
+            $organizationA->id,
+        );
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'cross_org_team_grant_test'));
+    }
+
+    public function test_team_grant_cannot_unlock_an_own_scope_section_with_unbounded_owner_records(): void
+    {
+        $organization = Organization::create(['name' => 'Own Scope Grant Org', 'slug' => 'own-scope-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123456802', User::ROLE_ADMIN);
+        $employee = $this->makeUser('09123456803', User::ROLE_EMPLOYEE, $organization->id);
+        $team = Team::create(['organization_id' => $organization->id, 'name' => 'Own Scope Team', 'slug' => 'own-scope-team']);
+        $employee->teams()->attach($team->id, ['team_role' => 'employee']);
+
+        config(['farast_admin.sections.team_grant_own_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'own',
+        ]]);
+
+        app(AuthorizationService::class)->grantDirectPermission(
+            $root,
+            $employee,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($employee, 'team_grant_own_scope_test'));
+    }
+
 }
