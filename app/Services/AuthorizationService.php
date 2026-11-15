@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Permission;
 use App\Models\RolePermission;
 use App\Models\User;
+use App\Models\Team;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -208,7 +209,7 @@ class AuthorizationService
             return $assigned;
         }
 
-        return \\App\\Models\\Team::query()
+        return Team::query()
             ->where('supervisor_id', $user->id)
             ->orWhereIn('id', function ($query) use ($user): void {
                 $query->select('team_id')
