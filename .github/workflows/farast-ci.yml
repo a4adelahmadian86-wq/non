@@ -185,7 +185,7 @@ jobs:
           DB_PASSWORD: root
 
   reader-browser-regression:
-    if: ${{ always() && needs.laravel.result == 'failure' }}
+    if: ${{ always() }}
     needs: [laravel]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
