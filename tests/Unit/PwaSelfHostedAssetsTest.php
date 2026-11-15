@@ -63,6 +63,12 @@ final class PwaSelfHostedAssetsTest extends TestCase
         self::assertIsString($fontAwesome);
         self::assertIsString($vazirmatn);
         self::assertStringContainsString('../fonts/fontawesome/fa-solid-900.woff2', $fontAwesome);
+        preg_match_all('/url\\(([^)]+)\\)/', $fontAwesome, $fontUrls);
+        foreach ($fontUrls[1] as $fontUrl) {
+            $fontPath = (string) parse_url($fontUrl, PHP_URL_PATH);
+            self::assertStringStartsWith('../fonts/fontawesome/', $fontPath);
+            self::assertFileExists(dirname($root.'/public/css/fontawesome.css').'/'.$fontPath);
+        }
         self::assertStringContainsString('/fonts/vazirmatn-variable.woff2', $vazirmatn);
     }
 }
