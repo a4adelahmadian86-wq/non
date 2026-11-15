@@ -97,8 +97,8 @@ class ResolveAdminScope
         }
 
         try {
-            $configured = trim((string) \\App\\Models\\SiteSetting::read($override, ''));
-        } catch (\\Throwable) {
+            $configured = trim((string) \App\Models\SiteSetting::read($override, ''));
+        } catch (\Throwable) {
             $configured = '';
         }
 
