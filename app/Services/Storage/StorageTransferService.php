@@ -25,6 +25,7 @@ class StorageTransferService
         $reference = match ($file->source_type) {
             UserFile::class => UserFile::find($file->source_id),
             StoreProductFile::class => StoreProductFile::find($file->source_id),
+            StoreProductDocumentArtifact::class => StoreProductDocumentArtifact::with('document')->find($file->source_id),
             ConversationMessage::class => ConversationMessage::find($file->source_id),
             TicketMessage::class => TicketMessage::find($file->source_id),
             FarastStorageObject::class => FarastStorageObject::find($file->source_id),
@@ -49,6 +50,15 @@ class StorageTransferService
             return;
         }
 
+        if ($reference instanceof StoreProductDocumentArtifact) {
+            $oldDisk = $reference->disk ?: 'private';
+            $oldPath = (string) $reference->path;
+            $productId = (int) ($reference->document?->product_id ?? 0);
+            $reference->update(['disk' => $disk, 'path' => $file->file_key]);
+            $this->syncProductPreviewReferences($productId, $oldDisk, $oldPath, $disk, $file->file_key);
+            return;
+        }
+
         if ($reference instanceof FarastStorageObject) {
             $reference->update(['disk' => $disk, 'path' => $file->file_key]);
             return;
@@ -65,6 +75,28 @@ class StorageTransferService
         }
         unset($attachment);
         if ($changed) $reference->update(['attachments' => $attachments]);
+    }
+
+    private function syncProductPreviewReferences(int $productId, string $oldDisk, string $oldPath, string $newDisk, string $newPath): void
+    {
+        if ($productId < 1 || $oldPath === '') return;
+
+        StoreProductPreview::query()
+            ->where('product_id', $productId)
+            ->where(fn ($query) => $query->where('path', $oldPath)->orWhere('audio_path', $oldPath))
+            ->get()
+            ->each(function (StoreProductPreview $preview) use ($oldDisk, $oldPath, $newDisk, $newPath): void {
+                $changes = [];
+                if ((string) $preview->path === $oldPath && ($preview->disk ?: 'private') === $oldDisk) {
+                    $changes['disk'] = $newDisk;
+                    $changes['path'] = $newPath;
+                }
+                if ((string) $preview->audio_path === $oldPath && ($preview->audio_disk ?: 'private') === $oldDisk) {
+                    $changes['audio_disk'] = $newDisk;
+                    $changes['audio_path'] = $newPath;
+                }
+                if ($changes !== []) $preview->update($changes);
+            });
     }
 
     public function rebindToStaging(StorageManagedFile $file, string $stagingPath): void
