@@ -283,6 +283,9 @@ class StorageManager
                     if ($count === false || $count === 0) throw new RuntimeException('ارسال بخشی از سند ناموفق بود.');
                     $written += $count;
                 }
+                if (function_exists('flush')) {
+                    flush();
+                }
                 $remaining -= $chunkLength;
             }
             if ($remaining !== 0) throw new RuntimeException('دریافت بخشی از سند ناقص بود.');
