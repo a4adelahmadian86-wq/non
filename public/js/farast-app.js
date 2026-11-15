@@ -41,9 +41,61 @@ q('#farastCartButton')?.addEventListener('click',openCart);q('[data-cart-close]'
 window.FarastCart={add(item){if(!item?.id)return;const old=cart.find(x=>String(x.id)===String(item.id));if(old)old.qty=(old.qty||1)+1;else cart.push({...item,qty:1});save();openCart()}};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cart-add]');if(b)FarastCart.add({id:b.dataset.cartAdd,title:b.dataset.title||'محصول دیجیتال',price:Number(b.dataset.price||0)})});
 
-const search=q('#farastGlobalSearch');
-search?.addEventListener('input',()=>{const term=search.value.trim().toLocaleLowerCase('fa');document.querySelectorAll('[data-searchable]').forEach(el=>{el.hidden=!!term&&!el.textContent.toLocaleLowerCase('fa').includes(term)})});
-q('#farastVoiceSearch')?.addEventListener('click',()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){notice('جستجوی صوتی مستقیم در این مرورگر در دسترس نیست','در بخش تایپ صوتی، مسیر جایگزین سروری فعال است.');return}const r=new SR();r.lang='fa-IR';r.interimResults=false;r.maxAlternatives=1;r.onresult=e=>{search.value=e.results[0][0].transcript;search.dispatchEvent(new Event('input'))};r.onerror=()=>notice('جستجوی صوتی انجام نشد','دسترسی میکروفن و اتصال مرورگر را بررسی کنید.');r.start()});
+const search=q('#farastGlobalSearch'),searchForm=q('#farastGlobalSearchForm'),suggestions=q('#farastSearchSuggestions');
+let searchTimer=null,searchController=null,activeSearchOption=-1;
+const closeSearchSuggestions=()=>{if(!suggestions||!search)return;suggestions.hidden=true;search.setAttribute('aria-expanded','false');search.removeAttribute('aria-activedescendant');activeSearchOption=-1};
+const getSearchOptions=()=>Array.from(suggestions?.querySelectorAll('a[role="option"]')||[]);
+const activateSearchOption=index=>{const options=getSearchOptions();if(!options.length){activeSearchOption=-1;return}activeSearchOption=(index+options.length)%options.length;options.forEach((option,i)=>option.setAttribute('aria-selected',String(i===activeSearchOption)));const active=options[activeSearchOption];search.setAttribute('aria-activedescendant',active.id);active.scrollIntoView({block:'nearest'})};
+const renderSearchSuggestions=payload=>{
+  if(!suggestions||!search)return;
+  suggestions.replaceChildren();activeSearchOption=-1;let optionIndex=0;
+  (payload.groups||[]).forEach(group=>{
+    const section=document.createElement('section');section.className='farast-search-suggestion-group';section.setAttribute('role','group');section.setAttribute('aria-label',group.label||'نتایج');
+    const heading=document.createElement('div');heading.className='farast-search-suggestion-heading';heading.textContent=group.label||'';section.append(heading);
+    (group.items||[]).forEach(item=>{
+      const link=document.createElement('a');link.className='farast-search-suggestion';link.href=item.url;link.id='farast-search-option-'+optionIndex++;link.setAttribute('role','option');link.setAttribute('aria-selected','false');
+      const icon=document.createElement('i');icon.className='fa-solid '+(item.icon||'fa-magnifying-glass');icon.setAttribute('aria-hidden','true');
+      const copy=document.createElement('span');copy.className='farast-search-suggestion-copy';
+      const title=document.createElement('strong');title.textContent=item.title||'';
+      const detail=document.createElement('small');detail.textContent=[item.description,item.meta].filter(Boolean).join(' · ');
+      copy.append(title);if(detail.textContent)copy.append(detail);link.append(icon,copy);section.append(link);
+    });
+    if(group.items?.length)suggestions.append(section);
+  });
+  if(!(payload.groups||[]).some(group=>group.items?.length)){
+    const empty=document.createElement('div');empty.className='farast-search-suggestion-empty';empty.textContent='نتیجه‌ای پیدا نشد؛ عبارت دیگری را امتحان کنید.';suggestions.append(empty);
+  }
+  if(payload.all_results_url){
+    const all=document.createElement('a');all.className='farast-search-all-results';all.href=payload.all_results_url;all.textContent='مشاهده همه نتایج';all.setAttribute('role','option');all.id='farast-search-option-'+optionIndex;all.setAttribute('aria-selected','false');suggestions.append(all);
+  }
+  suggestions.hidden=false;search.setAttribute('aria-expanded','true');
+};
+search?.addEventListener('input',()=>{
+  if(!suggestions)return;
+  clearTimeout(searchTimer);searchController?.abort();
+  const term=search.value.trim();
+  if(term.length<2){closeSearchSuggestions();return}
+  searchTimer=setTimeout(async()=>{
+    const controller=new AbortController();searchController=controller;
+    try{
+      const response=await fetch('/search/suggestions?q='+encodeURIComponent(term),{headers:{Accept:'application/json'},credentials:'same-origin',signal:controller.signal});
+      if(!response.ok)throw new Error('search_unavailable');
+      const payload=await response.json();
+      if(search.value.trim()!==term)return;
+      renderSearchSuggestions(payload);
+    }catch(error){if(error.name!=='AbortError')closeSearchSuggestions()}
+  },180);
+});
+search?.addEventListener('keydown',event=>{
+  const options=getSearchOptions();
+  if(event.key==='ArrowDown'&&options.length){event.preventDefault();activateSearchOption(activeSearchOption+1)}
+  else if(event.key==='ArrowUp'&&options.length){event.preventDefault();activateSearchOption(activeSearchOption<=0?options.length-1:activeSearchOption-1)}
+  else if(event.key==='Enter'&&activeSearchOption>=0&&options[activeSearchOption]){event.preventDefault();options[activeSearchOption].click()}
+  else if(event.key==='Escape')closeSearchSuggestions();
+});
+searchForm?.addEventListener('submit',closeSearchSuggestions);
+document.addEventListener('click',event=>{if(searchForm&&!searchForm.contains(event.target))closeSearchSuggestions()});
+q('#farastVoiceSearch')?.addEventListener('click',()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){notice('جستجوی صوتی مستقیم در این مرورگر در دسترس نیست','در بخش تایپ صوتی، مسیر جایگزین سروری فعال است.');return}const r=new SR();r.lang='fa-IR';r.interimResults=false;r.maxAlternatives=1;r.onresult=e=>{if(!search)return;search.value=e.results[0][0].transcript;searchForm?.requestSubmit()};r.onerror=()=>notice('جستجوی صوتی انجام نشد','دسترسی میکروفن و اتصال مرورگر را بررسی کنید.');r.start()});
 
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 document.addEventListener('click',async e=>{const a=e.target.closest('a[href]');if(!a||a.target==='_blank'||a.hasAttribute('download')||a.origin!==location.origin||navigator.onLine)return;try{if(await caches.match(a.href))return}catch{}e.preventDefault();showConnectivity(false)},{capture:true});

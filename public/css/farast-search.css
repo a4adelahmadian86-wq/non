@@ -1,0 +1,47 @@
+.header-search{position:relative;z-index:30}
+.header-search .farast-global-search-submit{color:#60748f}
+.header-search .farast-global-search-submit:hover{background:#eaf1ff;color:#1769ff}
+.farast-search-suggestions[hidden]{display:none!important}
+.farast-search-suggestions{position:absolute;z-index:6500;top:calc(100% + 9px);right:0;left:0;max-height:min(68vh,480px);overflow:auto;padding:8px;border:1px solid #dce5f1;border-radius:16px;background:#fff;box-shadow:0 20px 55px rgba(12,34,70,.17);white-space:normal}
+.farast-search-suggestion-group+.farast-search-suggestion-group{margin-top:7px;padding-top:7px;border-top:1px solid #edf1f6}
+.farast-search-suggestion-heading{padding:5px 9px 7px;color:#8492a6;font-size:.7rem;font-weight:800}
+.farast-search-suggestion{display:flex;align-items:center;gap:11px;min-height:54px;padding:8px 10px;border-radius:11px;color:#243957;text-decoration:none;transition:background .15s ease}
+.farast-search-suggestion:hover,.farast-search-suggestion:focus-visible,.farast-search-suggestion[aria-selected="true"]{outline:0;background:#f0f5ff;color:#145ee0}
+.farast-search-suggestion>i{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:10px;background:#eef4ff;color:#4268c8;font-size:.88rem}
+.farast-search-suggestion-copy{min-width:0;flex:1;display:grid;gap:2px}
+.farast-search-suggestion-copy strong{overflow:hidden;color:inherit;font-size:.78rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
+.farast-search-suggestion-copy small{overflow:hidden;color:#8190a5;font-size:.68rem;line-height:1.6;text-overflow:ellipsis;white-space:nowrap}
+.farast-search-all-results{display:flex;align-items:center;justify-content:center;margin-top:6px;padding:10px;border-top:1px solid #edf1f6;border-radius:0 0 10px 10px;color:#1769ff;font-size:.76rem;font-weight:800;text-decoration:none}
+.farast-search-all-results:hover,.farast-search-all-results:focus-visible{background:#f5f8ff;outline:0}
+.farast-search-suggestion-empty{padding:18px 12px;text-align:center;color:#7c8ca3;font-size:.78rem}
+.farast-search-page{width:min(1080px,calc(100% - 36px));margin:36px auto 76px}
+.farast-search-page__hero{padding:clamp(24px,4vw,46px);border:1px solid #e0e8f3;border-radius:24px;background:radial-gradient(circle at 90% 0,rgba(87,112,232,.11),transparent 35%),linear-gradient(145deg,#fff,#f7f9ff);box-shadow:0 18px 48px rgba(13,35,73,.065)}
+.farast-search-page__eyebrow{display:inline-flex;align-items:center;gap:8px;color:#526bd2;font-size:.8rem;font-weight:800}
+.farast-search-page__hero h1{margin:12px 0 5px;color:#14294c;font-size:clamp(1.45rem,3vw,2.1rem);font-weight:850}
+.farast-search-page__hero>p{margin:0;color:#71819a;font-size:.9rem}
+.farast-search-page__form{display:flex;gap:9px;margin-top:22px;padding:7px;border:1px solid #dce5f1;border-radius:15px;background:#fff;box-shadow:0 7px 22px rgba(16,43,87,.045)}
+.farast-search-page__form input{min-width:0;flex:1;padding:9px 12px;border:0;outline:0;background:transparent;color:#203653;font:inherit;font-size:.9rem}
+.farast-search-page__form input:focus-visible{outline:2px solid #a9c5fb;outline-offset:2px;border-radius:8px}
+.farast-search-page__form button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;border:0;border-radius:11px;background:linear-gradient(135deg,#1769ff,#5148d8);color:#fff;font:inherit;font-size:.82rem;font-weight:800;cursor:pointer}
+.farast-search-page__summary,.farast-search-page__hint{margin-top:15px;color:#6d7e96;font-size:.8rem}
+.farast-search-page__groups{display:grid;gap:20px;margin-top:24px}
+.farast-search-results{padding:20px;border:1px solid #e3eaf3;border-radius:18px;background:#fff;box-shadow:0 10px 28px rgba(15,38,77,.04)}
+.farast-search-results__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.farast-search-results__heading h2{margin:0;color:#1b3153;font-size:1rem;font-weight:850}
+.farast-search-results__heading>span{min-width:26px;padding:2px 7px;border-radius:20px;background:#f0f4fb;color:#70819a;text-align:center;font-size:.7rem}
+.farast-search-results__list{display:grid;gap:5px}
+.farast-search-result{display:flex;align-items:center;gap:12px;min-width:0;padding:11px;border:1px solid transparent;border-radius:13px;color:#253a59;text-decoration:none;transition:background .15s,border-color .15s}
+.farast-search-result:hover,.farast-search-result:focus-visible{outline:0;border-color:#dce7fa;background:#f7f9ff}
+.farast-search-result__icon{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;border-radius:12px;background:#eef4ff;color:#4165c5}
+.farast-search-result__copy{min-width:0;flex:1;display:grid;gap:3px}
+.farast-search-result__copy strong{color:#1d3354;font-size:.86rem}
+.farast-search-result__copy small{overflow:hidden;color:#7a8aa1;font-size:.75rem;text-overflow:ellipsis;white-space:nowrap}
+.farast-search-result__meta{padding:4px 8px;border-radius:20px;background:#f4f6fa;color:#7a899e;font-size:.68rem;white-space:nowrap}
+.farast-search-result__arrow{color:#9aa8ba;font-size:.75rem}
+.farast-search-page__empty{margin-top:24px;padding:44px 20px;border:1px dashed #d6e0ed;border-radius:20px;background:#fff;text-align:center}
+.farast-search-page__empty>span{width:54px;height:54px;margin:0 auto 12px;display:grid;place-items:center;border-radius:16px;background:#f1f5fb;color:#6d83ab;font-size:1.3rem}
+.farast-search-page__empty h2{margin:0;color:#1e3456;font-size:1.05rem}
+.farast-search-page__empty p{margin:7px 0 16px;color:#7d8da3;font-size:.82rem}
+.farast-search-page__empty a{display:inline-flex;padding:9px 14px;border-radius:10px;background:#1769ff;color:#fff;text-decoration:none;font-size:.78rem;font-weight:800}
+@media(max-width:560px){.farast-search-page{width:calc(100% - 24px);margin:20px auto 56px}.farast-search-page__form{gap:5px}.farast-search-page__form button{padding:9px 12px}.farast-search-result{gap:8px;padding:9px}.farast-search-result__icon{width:34px;height:34px;flex-basis:34px}.farast-search-result__meta{display:none}.farast-search-suggestions{max-height:58vh}}
+@media(prefers-reduced-motion:reduce){.farast-search-suggestion,.farast-search-result{transition:none}}
