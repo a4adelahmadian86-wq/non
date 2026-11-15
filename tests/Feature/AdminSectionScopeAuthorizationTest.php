@@ -385,6 +385,45 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             && ! $users->contains('id', $memberB->id));
     }
 
+    public function test_team_assignment_cannot_escape_an_additional_organization_boundary(): void
+    {
+        $organizationA = Organization::create(['name' => 'Admin Boundary Org A', 'slug' => 'admin-boundary-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Admin Boundary Org B', 'slug' => 'admin-boundary-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456931', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456932', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456933', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Outside Assigned Org Team',
+            'slug' => 'outside-assigned-org-team',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-org-boundary-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-outside-team-test',
+            ['dashboard.view', 'users.view'],
+            'team',
+            $organizationB->id,
+            $teamB->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'own');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 1);
+        $response->assertViewHas('users', fn ($users): bool => $users->count() === 0
+            || ($users->count() === 1 && (int) $users->first()->id === (int) $admin->id));
+        $this->assertNotContains($memberB->id, $response->viewData('users')->pluck('id')->all());
+    }
+
     public function test_scoped_admin_can_assign_roles_only_inside_assigned_organization(): void
     {
         $organizationA = Organization::create(['name' => 'Manage Scope Org A', 'slug' => 'manage-scope-org-a', 'status' => 'active']);
