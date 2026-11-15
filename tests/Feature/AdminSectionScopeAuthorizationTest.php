@@ -277,6 +277,457 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+    private function assignScopedAdminRole(
+        User $admin,
+        string $roleKey,
+        array $permissionKeys,
+        string $scope,
+        ?int $organizationId = null,
+        ?int $teamId = null,
+    ): void {
+        $roleId = DB::table('roles')->insertGetId([
+            'key' => $roleKey,
+            'name' => 'Scoped admin '.$roleKey,
+            'is_system' => false,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ($permissionKeys as $permissionKey) {
+            $permission = Permission::query()->where('key', $permissionKey)->firstOrFail();
+            RolePermission::firstOrCreate([
+                'role' => $roleKey,
+                'permission_id' => $permission->id,
+            ]);
+        }
+
+        DB::table('users')->where('id', $admin->id)->update([
+            'access_control_managed' => true,
+            'updated_at' => now(),
+        ]);
+
+        DB::table('role_assignments')->insert([
+            'user_id' => $admin->id,
+            'role_id' => $roleId,
+            'scope' => $scope,
+            'organization_id' => $organizationId,
+            'team_id' => $teamId,
+            'assigned_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    public function test_admin_organization_assignment_is_the_source_of_scope_without_user_organization_id(): void
+    {
+        $organizationA = Organization::create(['name' => 'Assigned Admin Org A', 'slug' => 'assigned-admin-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Assigned Admin Org B', 'slug' => 'assigned-admin-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456901', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456902', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456903', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-organization-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'organization');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 1);
+        $response->assertViewHas('users', fn ($users): bool => $users->contains('id', $memberA->id)
+            && ! $users->contains('id', $memberB->id));
+    }
+
+    public function test_admin_team_assignment_is_the_source_of_scope_without_team_membership(): void
+    {
+        $organizationA = Organization::create(['name' => 'Assigned Admin Team Org A', 'slug' => 'assigned-admin-team-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Assigned Admin Team Org B', 'slug' => 'assigned-admin-team-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456911', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456912', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456913', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorA = $this->makeUser('09123456914', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $supervisorB = $this->makeUser('09123456915', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+
+        $teamA = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Assigned Team A',
+            'slug' => 'assigned-admin-team-a',
+            'supervisor_id' => $supervisorA->id,
+        ]);
+        $teamA->members()->attach($memberA->id, ['team_role' => 'employee']);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Assigned Team B',
+            'slug' => 'assigned-admin-team-b',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-team-test',
+            ['dashboard.view', 'users.view'],
+            'team',
+            $organizationA->id,
+            $teamA->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'team');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 2);
+        $response->assertViewHas('users', fn ($users): bool => $users->contains('id', $memberA->id)
+            && ! $users->contains('id', $memberB->id));
+    }
+
+    public function test_team_assignment_cannot_escape_an_additional_organization_boundary(): void
+    {
+        $organizationA = Organization::create(['name' => 'Admin Boundary Org A', 'slug' => 'admin-boundary-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Admin Boundary Org B', 'slug' => 'admin-boundary-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456931', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456932', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456933', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Outside Assigned Org Team',
+            'slug' => 'outside-assigned-org-team',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-org-boundary-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-outside-team-test',
+            ['dashboard.view', 'users.view'],
+            'team',
+            $organizationB->id,
+            $teamB->id,
+        );
+
+        $response = $this->actingAs($admin)->get('/admin')->assertOk();
+        $response->assertViewHas('scope', 'own');
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['users'] === 1);
+        $response->assertViewHas('users', fn ($users): bool => $users->count() === 0
+            || ($users->count() === 1 && (int) $users->first()->id === (int) $admin->id));
+        $this->assertNotContains($memberB->id, $response->viewData('users')->pluck('id')->all());
+    }
+
+    public function test_scoped_admin_can_assign_roles_only_inside_assigned_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Manage Scope Org A', 'slug' => 'manage-scope-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Manage Scope Org B', 'slug' => 'manage-scope-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456921', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456922', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456923', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-access-manager-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $accessPermission = Permission::query()->where('key', 'access.manage')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $accessPermission->id,
+            'effect' => 'allow',
+            'scope' => 'global',
+            'organization_id' => null,
+            'team_id' => null,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberA->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('role_assignments', [
+            'user_id' => $memberA->id,
+            'scope' => 'own',
+        ]);
+
+        $this->postJson('/admin/access-control/users/'.$memberB->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $memberB->id,
+            'scope' => 'own',
+        ]);
+    }
+
+    public function test_scoped_admin_cannot_use_team_management_grant_outside_organization_boundary(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Grant Boundary A', 'slug' => 'team-grant-boundary-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Team Grant Boundary B', 'slug' => 'team-grant-boundary-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456941', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456942', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456943', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Team Grant Outside Org',
+            'slug' => 'team-grant-outside-org',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-org-for-team-grant-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $accessPermission = Permission::query()->where('key', 'access.manage')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $accessPermission->id,
+            'effect' => 'allow',
+            'scope' => 'team',
+            'organization_id' => $organizationB->id,
+            'team_id' => $teamB->id,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberB->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $memberB->id,
+            'scope' => 'own',
+        ]);
+    }
+
+    public function test_organization_management_grant_cannot_escape_narrower_team_assignment(): void
+    {
+        $organizationA = Organization::create(['name' => 'Narrow Team Assignment A', 'slug' => 'narrow-team-assignment-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Broad Org Grant B', 'slug' => 'broad-org-grant-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456951', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456952', User::ROLE_EMPLOYEE, $organizationA->id);
+        $supervisorA = $this->makeUser('09123456953', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $teamA = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Narrow Assigned Team',
+            'slug' => 'narrow-assigned-team',
+            'supervisor_id' => $supervisorA->id,
+        ]);
+        $teamA->members()->attach($memberA->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'narrow-team-assignment-test',
+            ['dashboard.view', 'users.view'],
+            'team',
+            $organizationA->id,
+            $teamA->id,
+        );
+
+        $accessPermission = Permission::query()->where('key', 'access.manage')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $accessPermission->id,
+            'effect' => 'allow',
+            'scope' => 'organization',
+            'organization_id' => $organizationB->id,
+            'team_id' => null,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/access-control/users/'.$memberA->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'own',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $memberA->id,
+            'scope' => 'own',
+        ]);
+    }
+
+    public function test_direct_record_grants_cannot_widen_scoped_admin_assignments(): void
+    {
+        $organizationA = Organization::create(['name' => 'Record Scope Org A', 'slug' => 'record-scope-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Record Scope Org B', 'slug' => 'record-scope-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456961', User::ROLE_ADMIN);
+        $memberB = $this->makeUser('09123456962', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorB = $this->makeUser('09123456963', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Record Scope Outside Team',
+            'slug' => 'record-scope-outside-team',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-record-access-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organizationA->id,
+        );
+
+        $usersView = Permission::query()->where('key', 'users.view')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            [
+                'user_id' => $admin->id,
+                'permission_id' => $usersView->id,
+                'effect' => 'allow',
+                'scope' => 'global',
+                'organization_id' => null,
+                'team_id' => null,
+                'granted_by' => null,
+                'starts_at' => now()->subMinute(),
+                'expires_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $admin->id,
+                'permission_id' => $usersView->id,
+                'effect' => 'allow',
+                'scope' => 'team',
+                'organization_id' => $organizationB->id,
+                'team_id' => $teamB->id,
+                'granted_by' => null,
+                'starts_at' => now()->subMinute(),
+                'expires_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $recordA = new class extends \Illuminate\Database\Eloquent\Model {};
+        $recordA->setAttribute('organization_id', $organizationA->id);
+        $recordB = new class extends \Illuminate\Database\Eloquent\Model {};
+        $recordB->setAttribute('organization_id', $organizationB->id);
+        $recordB->setAttribute('team_id', $teamB->id);
+        $recordB->setAttribute('user_id', $memberB->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allowsRecord($admin, 'users.view', $recordA));
+        $this->assertFalse($authorization->allowsRecord($admin, 'users.view', $recordB));
+    }
+
+    public function test_team_scoped_direct_grant_checks_the_target_users_team_membership(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Record Org A', 'slug' => 'team-record-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Team Record Org B', 'slug' => 'team-record-org-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123456971', User::ROLE_ADMIN);
+        $memberA = $this->makeUser('09123456972', User::ROLE_EMPLOYEE, $organizationA->id);
+        $memberB = $this->makeUser('09123456973', User::ROLE_EMPLOYEE, $organizationB->id);
+        $supervisorA = $this->makeUser('09123456974', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $supervisorB = $this->makeUser('09123456975', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+
+        $teamA = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Team Record A',
+            'slug' => 'team-record-a',
+            'supervisor_id' => $supervisorA->id,
+        ]);
+        $teamA->members()->attach($memberA->id, ['team_role' => 'employee']);
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Team Record B',
+            'slug' => 'team-record-b',
+            'supervisor_id' => $supervisorB->id,
+        ]);
+        $teamB->members()->attach($memberB->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-team-record-test',
+            ['dashboard.view'],
+            'team',
+            $organizationA->id,
+            $teamA->id,
+        );
+
+        $usersView = Permission::query()->where('key', 'users.view')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $usersView->id,
+            'effect' => 'allow',
+            'scope' => 'team',
+            'organization_id' => $organizationA->id,
+            'team_id' => $teamA->id,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allowsRecord($admin, 'users.view', $memberA));
+        $this->assertFalse($authorization->allowsRecord($admin, 'users.view', $memberB));
+    }
+
+    public function test_global_deny_grant_overrides_scoped_allow_within_assigned_organization(): void
+    {
+        $organization = Organization::create(['name' => 'Deny Precedence Org', 'slug' => 'deny-precedence-org', 'status' => 'active']);
+        $admin = $this->makeUser('09123456981', User::ROLE_ADMIN);
+
+        $this->assignScopedAdminRole(
+            $admin,
+            'scoped-admin-deny-precedence-test',
+            ['dashboard.view', 'users.view'],
+            'organization',
+            $organization->id,
+        );
+
+        $usersView = Permission::query()->where('key', 'users.view')->firstOrFail();
+        DB::table('user_permission_grants')->insert([
+            'user_id' => $admin->id,
+            'permission_id' => $usersView->id,
+            'effect' => 'deny',
+            'scope' => 'global',
+            'organization_id' => null,
+            'team_id' => null,
+            'granted_by' => null,
+            'starts_at' => now()->subMinute(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $record = new class extends \Illuminate\Database\Eloquent\Model {};
+        $record->setAttribute('organization_id', $organization->id);
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsRecord($admin, 'users.view', $record));
+    }
+
     public function test_store_management_requires_global_store_section_access(): void
     {
         $organization = Organization::create(['name' => 'Store Scope Org', 'slug' => 'store-scope-org', 'status' => 'active']);

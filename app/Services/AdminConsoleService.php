@@ -105,9 +105,16 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            return $user->organization_id
-                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->all()
-                : [];
+            $organizationIds = $user->isAdmin()
+                ? $this->authorization->effectiveOrganizationIds($user)
+                : null;
+            if ($organizationIds === null) {
+                $organizationIds = $user->organization_id ? [(int) $user->organization_id] : [];
+            }
+
+            return $organizationIds === []
+                ? []
+                : Team::query()->whereIn('organization_id', $organizationIds)->pluck('id')->all();
         }
         if ($scope !== self::SCOPE_TEAM) {
             return [];
@@ -144,7 +151,14 @@ class AdminConsoleService
             return null;
         }
         if ($scope === self::SCOPE_ORGANIZATION) {
-            return $user->organization_id ? [(int) $user->organization_id] : [];
+            $organizationIds = $user->isAdmin()
+                ? $this->authorization->effectiveOrganizationIds($user)
+                : null;
+            if ($organizationIds === null) {
+                $organizationIds = $user->organization_id ? [(int) $user->organization_id] : [];
+            }
+
+            return array_values(array_unique(array_map('intval', $organizationIds)));
         }
         if ($scope === self::SCOPE_TEAM) {
             $teamIds = $this->visibleTeamIds($user) ?? [];
