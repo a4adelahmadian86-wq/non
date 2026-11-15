@@ -104,7 +104,7 @@ class SupportSlaAlertOutboxService
             return 0;
         }
 
-        $ids = DB::transaction(function () use ($limit): array {
+        $claims = DB::transaction(function () use ($limit): array {
             $staleBefore = now()->subMinutes(self::STALE_AFTER_MINUTES);
 
             // A worker may die during its final permitted attempt. Close that expired lease
@@ -155,7 +155,7 @@ class SupportSlaAlertOutboxService
         });
 
         $delivered = 0;
-        foreach ($ids as $claim) {
+        foreach ($claims as $claim) {
             $id = $claim['id'];
             $leaseToken = $claim['lease_token'];
             $alert = SupportSlaAlertOutbox::query()
