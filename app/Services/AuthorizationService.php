@@ -499,9 +499,10 @@ class AuthorizationService
 
         $rank = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
         $accessPermissionId = $this->permissionId('access.manage');
+        $actorAssignments = $this->activeAssignments($actor);
         $manageableAssignments = $accessPermissionId === null
             ? collect()
-            : $this->activeAssignments($actor)->filter(
+            : $actorAssignments->filter(
                 fn (object $assignment): bool => RolePermission::query()
                     ->where('role', $assignment->role_key)
                     ->where('permission_id', $accessPermissionId)
@@ -517,7 +518,11 @@ class AuthorizationService
             : ($this->activeAssignments($actor)->isEmpty() && ! $actor->access_control_managed ? $this->legacyScope($actor) : 'own');
 
         // A broad access.manage grant must never override a narrower role boundary.
-        $effectiveScope = $this->effectiveScope($actor);
+        // With no role assignments, an explicit direct management grant defines
+        // the management scope instead of the implicit own-only managed fallback.
+        $effectiveScope = $actorAssignments->isNotEmpty()
+            ? $this->effectiveScope($actor)
+            : ($directManagementGrants->isNotEmpty() ? $actorScope : $this->effectiveScope($actor));
         if (($rank[$effectiveScope] ?? 4) > ($rank[$actorScope] ?? 4)) {
             $actorScope = $effectiveScope;
         }
