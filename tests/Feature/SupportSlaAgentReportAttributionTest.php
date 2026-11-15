@@ -17,6 +17,7 @@ class SupportSlaAgentReportAttributionTest extends TestCase
     {
         config(['support.business_hours_only' => false]);
         $createdAt = now()->startOfMinute();
+        $this->travelTo($createdAt);
         $assignedAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
 
         $ticket = Ticket::create([
@@ -27,8 +28,6 @@ class SupportSlaAgentReportAttributionTest extends TestCase
             'assigned_to' => $assignedAgent->id,
             'sla_first_due_at' => $createdAt->copy()->addMinutes(30),
             'first_response_at' => $createdAt->copy()->addMinutes(20),
-            'created_at' => $createdAt,
-            'updated_at' => $createdAt,
         ]);
 
         $report = app(SupportSlaService::class)->agentReport(
