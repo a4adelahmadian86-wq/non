@@ -108,8 +108,13 @@ class AuthorizationService
             return false;
         }
 
-        // Role grants are bounded by effectiveScope() and the console's query scopes.
-        if ($this->rolePermissionAllowsInEffectiveScope($user, $permission)) {
+        $scope = in_array($effectiveScope, self::SCOPES, true)
+            ? $effectiveScope
+            : $this->effectiveScope($user);
+
+        // Role grants must cover the complete query scope, not merely one of
+        // several active team assignments.
+        if ($this->rolePermissionAllowsInEffectiveScope($user, $permission, $scope)) {
             return true;
         }
 
@@ -118,10 +123,6 @@ class AuthorizationService
         if ($allowGrants->isEmpty()) {
             return false;
         }
-
-        $scope = in_array($effectiveScope, self::SCOPES, true)
-            ? $effectiveScope
-            : $this->effectiveScope($user);
 
         // A global grant covers every effective scope.
         if ($allowGrants->contains(fn (object $grant): bool => $grant->scope === 'global')) {
@@ -185,27 +186,84 @@ class AuthorizationService
         return false;
     }
 
-    private function rolePermissionAllowsInEffectiveScope(User $user, string $permission): bool
+    private function rolePermissionAllowsInEffectiveScope(User $user, string $permission, string $scope): bool
     {
         $assignments = $this->activeAssignments($user);
-        if ($assignments->isNotEmpty()) {
-            return $this->assignedRoleAllows($assignments, $permission);
+        if ($assignments->isEmpty()) {
+            if ($user->access_control_managed) {
+                return false;
+            }
+
+            if ($user->role === User::ROLE_ADMIN) {
+                return true;
+            }
+
+            $permissionId = $this->permissionId($permission);
+
+            return $permissionId !== null && RolePermission::query()
+                ->where('role', $user->role)
+                ->where('permission_id', $permissionId)
+                ->exists();
         }
 
-        if ($user->access_control_managed) {
+        $permissionAssignments = $assignments->filter(
+            fn (object $assignment): bool => $this->assignedRoleAllows(collect([$assignment]), $permission)
+        );
+        if ($permissionAssignments->isEmpty()) {
             return false;
         }
 
-        if ($user->role === User::ROLE_ADMIN) {
-            return true;
+        if ($scope === 'global') {
+            return $permissionAssignments->contains(fn (object $assignment): bool => $assignment->scope === 'global');
         }
 
-        $permissionId = $this->permissionId($permission);
+        if ($scope === 'organization') {
+            return $user->organization_id !== null && $permissionAssignments->contains(
+                fn (object $assignment): bool => $assignment->scope === 'global'
+                    || ($assignment->scope === 'organization'
+                        && (int) $assignment->organization_id === (int) $user->organization_id)
+            );
+        }
 
-        return $permissionId !== null && RolePermission::query()
-            ->where('role', $user->role)
-            ->where('permission_id', $permissionId)
-            ->exists();
+        if ($scope === 'own') {
+            return $permissionAssignments->contains(function (object $assignment) use ($user): bool {
+                if ($assignment->scope === 'global') {
+                    return true;
+                }
+
+                if ($assignment->scope === 'organization') {
+                    return $user->organization_id !== null
+                        && (int) $assignment->organization_id === (int) $user->organization_id;
+                }
+
+                return $assignment->scope === 'own';
+            });
+        }
+
+        if ($scope === 'team') {
+            $visibleTeamIds = $this->consoleTeamIds($user);
+            if ($visibleTeamIds === []) {
+                return false;
+            }
+
+            $visibleTeams = Team::query()->whereIn('id', $visibleTeamIds)->get(['id', 'organization_id']);
+            if ($visibleTeams->count() !== count($visibleTeamIds)) {
+                return false;
+            }
+
+            return $visibleTeams->every(function (Team $team) use ($permissionAssignments): bool {
+                return $permissionAssignments->contains(function (object $assignment) use ($team): bool {
+                    return $assignment->scope === 'global'
+                        || ($assignment->scope === 'organization'
+                            && (int) $assignment->organization_id === (int) $team->organization_id)
+                        || ($assignment->scope === 'team'
+                            && (int) $assignment->team_id === (int) $team->id
+                            && (int) $assignment->organization_id === (int) $team->organization_id);
+                });
+            });
+        }
+
+        return false;
     }
 
     /**
