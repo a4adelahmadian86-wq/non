@@ -6,12 +6,13 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Single source of truth for discovering support agents and checking their
  * record-level eligibility. Candidate discovery is narrowed in SQL; the final
- * decision always goes through AuthorizationService.
+ * decision goes through TicketPolicy, which applies the canonical RBAC and ticket-scope rules.
  */
 class SupportAgentDirectory
 {
@@ -61,16 +62,14 @@ class SupportAgentDirectory
             })
             ->orderBy('id');
 
-        $authorization = app(AuthorizationService::class);
-
         return $query->get()
-            ->filter(fn (User $user): bool => $authorization->allowsRecord($user, 'support.manage', $ticket))
+            ->filter(fn (User $user): bool => $this->allows($user, $ticket))
             ->values();
     }
 
     public function allows(User $agent, Ticket $ticket): bool
     {
         return ! (bool) $agent->is_blocked
-            && app(AuthorizationService::class)->allowsRecord($agent, 'support.manage', $ticket);
+            && Gate::forUser($agent)->allows('manage', $ticket);
     }
 }
