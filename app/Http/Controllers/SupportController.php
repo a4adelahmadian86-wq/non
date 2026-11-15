@@ -102,7 +102,8 @@ class SupportController extends Controller
 
     public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities, AuthorizationService $authorization)
     {
-        $canSeeInternal = $authorization->allowsRecord(auth()->user(), 'support.manage', $ticket);
+        $canSeeInternal = app(AdminConsoleService::class)->sectionAllowed(auth()->user(), 'support_inbox')
+            && $authorization->allowsRecord(auth()->user(), 'support.manage', $ticket);
         abort_unless($capabilities->allowed(auth()->user(), 'can_support') || $canSeeInternal, 403);
         $this->authorize('view', $ticket);
 
@@ -740,7 +741,10 @@ class SupportController extends Controller
     {
         $this->authorize('view', $ticket);
         abort_unless((int) $message->ticket_id === (int) $ticket->id, 404);
-        abort_if($message->is_internal && ! $authorization->allowsRecord($request->user(), 'support.manage', $ticket), 404);
+        abort_if($message->is_internal && (
+            ! app(AdminConsoleService::class)->sectionAllowed($request->user(), 'support_inbox')
+            || ! $authorization->allowsRecord($request->user(), 'support.manage', $ticket)
+        ), 404);
 
         $attachments = array_values((array) ($message->attachments ?? []));
         abort_unless(isset($attachments[$index]) && is_array($attachments[$index]), 404);
