@@ -152,13 +152,20 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                         $referencesOldAudio = $oldPath
                             && (string) $productPreview->audio_path === (string) $oldPath
                             && ($productPreview->audio_disk ?: 'private') === $oldDisk;
-                        if (! $isActiveFullReader && ! $referencesOldAudio) continue;
+                        $referencesOldPreview = $oldPath
+                            && (string) $productPreview->path === (string) $oldPath
+                            && ($productPreview->disk ?: 'private') === $oldDisk;
+                        if (! $isActiveFullReader && ! $referencesOldAudio && ! $referencesOldPreview) continue;
 
                         $changes = [
                             'audio_disk' => $artifact->disk,
                             'audio_path' => $artifact->path,
                             'audio_mime' => 'audio/wav',
                         ];
+                        if ($referencesOldPreview) {
+                            $changes['disk'] = $artifact->disk;
+                            $changes['path'] = $artifact->path;
+                        }
                         if ($isActiveFullReader) {
                             $changes['audio_timing'] = $productPreview->kind === 'reader_document'
                                 ? array_values(array_filter(
