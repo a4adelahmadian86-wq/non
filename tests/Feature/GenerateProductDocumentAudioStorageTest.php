@@ -142,6 +142,8 @@ class GenerateProductDocumentAudioStorageTest extends TestCase
         $this->assertSame($artifact->path, $managed->file_key);
         $this->assertSame(false, data_get($managed->metadata, 'reference_pending'));
         $this->assertSame('active', $managed->status);
+        $this->assertSame('storage_volume:'.$volume->id, $preview->disk);
+        $this->assertSame($artifact->path, $preview->path);
         $this->assertSame('storage_volume:'.$volume->id, $preview->audio_disk);
         $this->assertSame($artifact->path, $preview->audio_path);
         $this->assertSame('audio/wav', $preview->audio_mime);
