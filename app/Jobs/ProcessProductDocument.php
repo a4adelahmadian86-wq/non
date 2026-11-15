@@ -200,13 +200,41 @@ class ProcessProductDocument implements ShouldQueue
             if ($sourceTemporaryPath) @unlink($sourceTemporaryPath);
         }
 
+        $sampleBytes = null;
+        $sampleHash = null;
+        $sampleStoredForCleanup = null;
+        $sampleStoredWasBound = false;
+        $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
+        if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
+            $decodedSample = base64_decode($sampleBase64, true);
+            if (is_string($decodedSample) && strlen($decodedSample) <= 8 * 1024 * 1024 && str_starts_with($decodedSample, '%PDF-')) {
+                $sampleBytes = $decodedSample;
+                $sampleHash = hash('sha256', $sampleBytes);
+                $existingSample = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                $existingSampleDisk = $existingSample?->disk ?: 'private';
+                $existingSampleExists = $existingSample && $existingSample->path
+                    && $storage->exists($existingSampleDisk, $existingSample->path);
+                if (! $existingSampleExists) {
+                    $sampleStoredForCleanup = $storage->storeContents(
+                        $sampleBytes,
+                        'sample-v1.pdf',
+                        'application/pdf',
+                        StorageManager::CRITICAL,
+                        'store-product-artifact',
+                        StoreProductDocumentArtifact::class,
+                        null,
+                        (int) $product->id,
+                        'private'
+                    );
+                }
+            }
+        }
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
 
-        $sampleStoredForCleanup = null;
         try {
-            DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $storage, &$sampleStoredForCleanup, &$totalCharacters, &$totalWords) {
+            DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $storage, $sampleBytes, $sampleHash, $sampleStoredForCleanup, &$sampleStoredWasBound, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
             $locked->facts()->delete();
@@ -303,83 +331,69 @@ class ProcessProductDocument implements ShouldQueue
                 'publication_authorized' => false,
             ];
 
-            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-            if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
-                $sampleBytes = base64_decode($sampleBase64, true);
-                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
-                    $sampleHash = hash('sha256', $sampleBytes);
-                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                    $sampleDiskName = $existingSample?->disk ?: 'private';
-                    $samplePathForReader = null;
-                    $sampleStored = null;
-                    if ($existingSample && $existingSample->path && $storage->exists($sampleDiskName, $existingSample->path)) {
-                        $samplePathForReader = $existingSample->path;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
-                            'sha256' => $existingSample->sha256,
-                            'generated_once' => true,
-                        ];
-                    } else {
-                        $sampleStored = $storage->storeContents(
-                            $sampleBytes,
-                            'sample-v1.pdf',
-                            'application/pdf',
-                            StorageManager::CRITICAL,
-                            'store-product-artifact',
-                            StoreProductDocumentArtifact::class,
-                            null,
-                            (int) $locked->product_id,
-                            'private'
-                        );
-                        $sampleStoredForCleanup = $sampleStored;
-                        $artifact = $locked->artifacts()->updateOrCreate(
-                            ['artifact_type' => 'sample_pdf', 'version' => 1],
-                            [
-                                'disk' => $sampleStored['disk'],
-                                'path' => $sampleStored['path'],
-                                'mime' => 'application/pdf',
-                                'size_bytes' => strlen($sampleBytes),
-                                'sha256' => $sampleHash,
-                                'metadata_json' => [
-                                    'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                    'source_sha256' => $locked->source_sha256,
-                                    'generated_once' => true,
-                                ],
-                            ]
-                        );
-                        $samplePathForReader = $artifact->path;
-                        $sampleDiskName = (string) $artifact->disk;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                            'sha256' => $artifact->sha256,
-                            'generated_once' => true,
-                        ];
-                    }
+            if ($file->is_primary && is_string($sampleBytes)) {
+                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                $sampleDiskName = $existingSample?->disk ?: 'private';
+                $samplePathForReader = null;
+                $sampleArtifact = $existingSample;
+                $sampleStoredWasUsed = false;
+                if ($existingSample && $existingSample->path && $storage->exists($sampleDiskName, $existingSample->path)) {
+                    $samplePathForReader = $existingSample->path;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                        'sha256' => $existingSample->sha256,
+                        'generated_once' => true,
+                    ];
+                } elseif (is_array($sampleStoredForCleanup)) {
+                    $sampleArtifact = $locked->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'sample_pdf', 'version' => 1],
+                        [
+                            'disk' => $sampleStoredForCleanup['disk'],
+                            'path' => $sampleStoredForCleanup['path'],
+                            'mime' => 'application/pdf',
+                            'size_bytes' => strlen($sampleBytes),
+                            'sha256' => $sampleHash,
+                            'metadata_json' => [
+                                'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                                'source_sha256' => $locked->source_sha256,
+                                'generated_once' => true,
+                            ],
+                        ]
+                    );
+                    $samplePathForReader = $sampleArtifact->path;
+                    $sampleDiskName = (string) $sampleArtifact->disk;
+                    $sampleStoredWasUsed = true;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                        'sha256' => $sampleArtifact->sha256,
+                        'generated_once' => true,
+                    ];
+                }
 
-                    if ($samplePathForReader) {
-                        StoreProductPreview::query()->updateOrCreate(
-                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
-                            [
-                                'disk' => $sampleDiskName,
-                                'mime' => 'application/pdf',
-                                'page_number' => 1,
-                                'kind' => 'pdf',
-                                'access_level' => 'sample',
-                                'watermarked' => true,
-                                'is_active' => true,
-                                'sort_order' => 0,
-                            ]
+                if ($samplePathForReader) {
+                    StoreProductPreview::query()->updateOrCreate(
+                        ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                        [
+                            'disk' => $sampleDiskName,
+                            'mime' => 'application/pdf',
+                            'page_number' => 1,
+                            'kind' => 'pdf',
+                            'access_level' => 'sample',
+                            'watermarked' => true,
+                            'is_active' => true,
+                            'sort_order' => 0,
+                        ]
+                    );
+                    if ($sampleStoredWasUsed && is_array($sampleStoredForCleanup)) {
+                        $storage->bindReference(
+                            (int) $sampleStoredForCleanup['managed_file_id'],
+                            StoreProductDocumentArtifact::class,
+                            (int) $sampleArtifact->id,
+                            (int) $locked->product_id
                         );
-                        if ($sampleStored) {
-                            $storage->bindReference(
-                                (int) $sampleStored['managed_file_id'],
-                                StoreProductDocumentArtifact::class,
-                                (int) $artifact->id,
-                                (int) $locked->product_id
-                            );
-                        }
+                        $sampleStoredWasBound = true;
                     }
                 }
             }
@@ -450,6 +464,16 @@ class ProcessProductDocument implements ShouldQueue
                 'processed_at' => now(),
             ]);
             });
+            if (is_array($sampleStoredForCleanup) && ! $sampleStoredWasBound) {
+                try {
+                    $storage->delete((string) $sampleStoredForCleanup['disk'], (string) $sampleStoredForCleanup['path']);
+                } catch (Throwable $cleanupException) {
+                    Log::warning('Unused product document sample artifact cleanup failed', [
+                        'document_id' => $this->documentId,
+                        'exception' => class_basename($cleanupException),
+                    ]);
+                }
+            }
             $sampleStoredForCleanup = null;
         } catch (Throwable $exception) {
             if (is_array($sampleStoredForCleanup)) {
