@@ -15,7 +15,7 @@ class TicketPolicy
         // Apply the active admin data scope first so a narrowed admin cannot use a
         // direct ticket URL to bypass the inbox/query scope.
         if ($user->isAdmin()) {
-            $requestScope = auth()->id() === $user->id ? request()->attributes->get('farast.scope') : null;
+            $requestScope = (int) auth()->id() === (int) $user->id ? request()->attributes->get('farast.scope') : null;
             $scope = is_string($requestScope)
                 ? $requestScope
                 : ResolveAdminScope::scopeWithConfiguredOverride($user);
