@@ -4,6 +4,61 @@
 > خط مبنای به‌روزشده این تکمیل: `main` در commit `638bf5fc6ed2709ad7f0cd072aff6ad826499f6c`، تاریخ 2026-11-11.  
 > این سند تغییرات بعد از snapshot، یافته‌های تازه و PRهای فعال مرتبط را جدا می‌کند؛ هیچ تغییری در دارایی‌های شاخه‌های همکاران اعمال نمی‌کند.
 
+> **به‌روزرسانی مرجع:** این سند ابتدا در 2026-11-11 و بر مبنای commit قدیمی‌تر نوشته شده بود. بخش «0» زیر snapshot تأییدشده‌ی `main` در 2026-11-15 است. بخش‌های بعدی سابقه ممیزی و شواهد آن زمان را حفظ می‌کنند؛ هرجا با بخش 0 تعارض دارند، بخش 0 وضعیت جدیدتر را بیان می‌کند.
+
+## 0. Snapshot جاری main — 2026-11-15
+
+- **Commit مبنا:** `33e7eebac8a76e8555bfb6288098d137df4761a8` (ادغام PR #594).
+- **اندازه درخت Git:** 1,260 entry.
+- **Inventory فایل‌ها:** 128 Migration، 106 Model، 119 Service، 54 Controller، 12 Middleware، 1 Policy، 4 Job، 23 Command، 178 فایل آزمون و 12 فایل Route.
+- **Migrationها:** 11 گروه timestamp تکراری وجود دارد، اما نام کامل فایل‌ها یکتا است. تکرار timestamp به‌تنهایی اثبات خرابی نیست؛ ترتیب lexical و dependency باید با fresh install و upgrade واقعی اعتبارسنجی شود. وضعیت اجراشده/درانتظار دیتابیس محلی یا عملیاتی از Git قابل تشخیص نیست.
+
+### CI معتبر
+
+روی HEAD دقیق PR #594 یعنی `82f174c0dbd3980e846d0caf68dd45ce79ed6aee`، همه checkهای لازم پیش از ادغام موفق شدند:
+- اجرای کامل PHP: **803 passed، 4,378 assertions، 5 skipped**.
+- MySQL 8.4 integrity: **62 passed، 377 assertions**؛ این اجرا `SupportSlaMonitorReliabilityTest` را نیز شامل می‌شد.
+- Laravel/Playwright، Admin Product E2E، Phase 3، Phase 4 Agent، Voice Service و Product Supervisor موفق.
+- Voice-model smoke به‌دلیل شرط اجرای مخصوص شاخه‌ی Sherpa skipped بود و شکست محسوب نمی‌شود.
+
+این نتایج متعلق به HEAD PR پیش از squash هستند. اجرای CI جدید روی merge commit `33e7eeb` باید جداگانه تکمیل شود؛ تا آن زمان نباید نتیجه‌ی CI merge commit را سبز اعلام کرد.
+
+### اصلاحات تأییدشده پس از snapshot قبلی
+
+| حوزه | وضعیت جاری و مالک |
+|---|---|
+| قفل تخصیص پشتیبانی | `SupportAssignmentMutex` همچنان مالک قفل workload است. timeout از `support.assignment_lock_timeout_seconds` می‌آید و پیش‌فرض 15 ثانیه حفظ شده؛ تست timeout و قطع session مالک در PR #584 ادغام شده‌اند. |
+| تحویل هشدار SLA | `SupportSlaAlertOutboxService` مالک claim/retry/dispatch است؛ intent همراه marker تیکت ثبت می‌شود، تحویل خارج از تراکنش تیکت انجام می‌شود و command زمان‌بندی‌شده‌ی `support:deliver-sla-alerts` هر دقیقه اجرا می‌شود. |
+| مالکیت Workerهای outbox | PR #594 ستون `lease_token` را اضافه کرد. claim برای هر Worker token یکتا می‌سازد و read/skip/success/failure فقط با همان token معتبر انجام می‌شوند. Worker منقضی‌شده نمی‌تواند وضعیت یا audit نتیجه‌ی Worker جدید را بازنویسی کند. |
+| گزارش CSAT | `SupportReportController` از aggregate SQL استفاده می‌کند و دیگر تمام امتیازها را برای محاسبه count/average/distribution در حافظه PHP بارگذاری نمی‌کند. |
+| دسترسی بخش‌های حساس مدیریت | شکاف تاریخی بخش 5 برای فروشگاه، عملیات محصول و گزارش پشتیبانی در main جاری اصلاح شده است: گروه‌های admin فروشگاه و عملیات محصول `admin.section:store` و گزارش پشتیبانی `admin.section:support_admin` دارند. `AdminSectionScopeAuthorizationTest` دسترسی employee و مدیر سازمانی را رد می‌کند. این اصلاح به معنی تکمیل ممیزی تمام routeهای مدیریتی نیست؛ همه routeهای `/admin` همچنان باید در برابر permission و scope بررسی شوند. |
+| ثبت پیشرفت دوره | `StoreCourseProgressService` محاسبه مشترک پیشرفت را برای تجربه یادگیری و CRM نگه می‌دارد؛ CRM نباید الگوریتم محاسبه موازی بسازد. |
+| تست و autoload | workflow اصلی قبل از تست‌ها `composer dump-autoload --optimize --strict-psr` و `composer test:preflight` را اجرا می‌کند. این CI وضعیت محیط محلی کاربر را اثبات نمی‌کند؛ برای آن باید همان دستورات و `migrate:status` روی ماشین/دیتابیس محلی اجرا شوند. |
+
+### شکاف‌های باز که در main فعلی دوباره تأیید شدند
+
+1. **Reader audio هنوز StorageManager را دور می‌زند.** در `StoreController::readerAudio`، وجود/اندازه/خواندن artifact با `Storage::disk(...)` انجام می‌شود، در حالی که `StorageManager` عملیات `exists/size/streamRange` را برای volumeهای محلی و S3-compatible ارائه می‌کند. منبع حقیقت فایل باید `StorageManagedFile`/رجیستری storage باشد و endpoint صوت از همان abstraction استفاده کند؛ مسیر مستقیم disk نباید implementation موازی باقی بماند. این مورد نیازمند تغییر مستقل و تست Range روی local و S3-compatible است.
+
+2. **مسیر سهمیه پروژه هنوز با catalog تجاری جدید هم‌راستا نیست.** `ProfessionalCommerceService` از `FarastCommercialPlan` و entitlementهای تجاری استفاده می‌کند؛ اما `ProjectBillingService::includedAllowance` در main فعلی هنوز `farast_subscriptions.plan_id` را به `farast_plans.id` وصل می‌کند و مصرف را از ستون‌های legacy در `farast_usage_counters` می‌خواند. پیش از هر migration اشتراک، باید mapping plan ID/code، entitlement و usage برای هر دو مسیر با داده واقعی reconcile شود. PR #340 در زمان این snapshot draft و ادغام‌نشده است؛ migration آن بدون اصلاح mapping و تست upgrade نباید اجرا شود.
+
+3. **Migrationهای واقعی محیط نصب‌شده نامعلوم‌اند.** شمار فایل‌ها یا CI fresh install نشان نمی‌دهد چند migration در دیتابیس محلی/عملیاتی pending است. پیش از اجرای migration حساس، موتور/نسخه DB، خروجی `php artisan migrate:status` و backup قابل بازیابی باید ثبت شوند.
+
+4. **Storage و commerce هنوز مرزهای مالکیت نیازمند تکمیل دارند.** PRهای قدیمی storage/financial را صرفاً بر اساس عنوان یا تعداد commit نمی‌توان پذیرفت؛ فقط تغییرهای لازم پس از تطبیق با main جاری، اجرای preflight و تست چندموتوره قابل انتقال‌اند.
+
+### منابع حقیقت جاری در حوزه‌های حساس
+
+| قابلیت | داده/منبع حقیقت | مالک عملیات یا تصمیم |
+|---|---|---|
+| مجوزها و scope | `permissions`, `role_permissions`, `roles`, `role_assignments`, `user_permission_grants` | `AuthorizationService`؛ enforce بخش در `EnsureAdminSection` و scope در `ResolveAdminScope` |
+| تیکت و چرخه عمر | `tickets`, `ticket_messages` | `SupportTicketService`؛ قفل workload در `SupportAssignmentMutex` |
+| SLA و تحویل | `support_sla_alert_outbox` به‌علاوه ledgerهای مجزای اعلان/ایمیل/SMS | `SupportSlaAlertOutboxService`, `SupportNotificationService`, `NotificationService`, `EmailService`, `SmsService` |
+| فایل‌های مدیریت‌شده | `storage_managed_files`, `storage_volumes` | `StorageManager`, `StorageTransferService`, adapterهای storage |
+| سفارش و پرداخت فروشگاه | `orders`, `payments`, `store_order_items`, `store_library_items` | سرویس‌های checkout/payment و `StoreCourseEnrollmentService` برای اعطای enrollment |
+| پیشرفت دوره | `store_course_enrollments`, `store_course_lesson_progress` | `StoreCourseProgressService` |
+| اعلان شخصی | `farast_notifications` | `NotificationService`; اطلاعیه عمومی `Announcement`/ `AnnouncementService` یک aggregate جداست |
+
+**محدودیت شواهد:** این snapshot از Git tree، کد، Migrationها و نتایج CI استخراج شده است. به دیتابیس نصب‌شده، secrets، سرویس‌های خارجی یا محیط محلی دسترسی اجرایی نداشته‌ام؛ بنابراین سلامت داده‌های production، backup قابل بازیابی و وضعیت واقعی providerها را تأیید نمی‌کند.
+
 ## 1. وضعیت فعلی مخزن
 
 | شاخص | مقدار در خط مبنای جاری |
