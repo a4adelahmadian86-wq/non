@@ -928,6 +928,16 @@ class AuthorizationService
                 return (int) $recordTeamId === (int) $teamId;
             }
 
+            if ($record instanceof User) {
+                return \\App\\Models\\Team::query()
+                    ->whereKey((int) $teamId)
+                    ->where(function ($query) use ($record): void {
+                        $query->where('supervisor_id', $record->id)
+                            ->orWhereHas('members', fn ($members) => $members->whereKey($record->id));
+                    })
+                    ->exists();
+            }
+
             $ownerId = $record->getAttribute('user_id')
                 ?? $record->getAttribute('owner_id')
                 ?? $record->getAttribute('created_by');
