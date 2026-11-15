@@ -975,4 +975,35 @@ class AdminSectionScopeAuthorizationTest extends TestCase
     }
 
 
+
+    public function test_direct_team_grant_can_target_an_admin_with_explicit_team_assignment(): void
+    {
+        $organization = Organization::create(['name' => 'Admin Team Grant Org', 'slug' => 'admin-team-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123457014', User::ROLE_ADMIN);
+        $admin = $this->makeUser('09123457015', User::ROLE_ADMIN);
+        $team = Team::create(['organization_id' => $organization->id, 'name' => 'Explicit Admin Team', 'slug' => 'explicit-admin-team']);
+
+        $this->assignScopedAdminRole($admin, 'explicit-admin-team-viewer', ['dashboard.view'], 'team', $organization->id, $team->id);
+
+        app(AuthorizationService::class)->grantDirectPermission(
+            $root,
+            $admin,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $this->assertDatabaseHas('user_permission_grants', [
+            'user_id' => $admin->id,
+            'permission_id' => Permission::query()->where('key', 'store.manage')->value('id'),
+            'effect' => 'allow',
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+        ]);
+    }
+
+
 }
