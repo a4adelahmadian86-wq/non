@@ -20,7 +20,7 @@
 
     <section class="ac-panel" aria-label="جست‌وجوی یکپارچه">
         <h2><i class="fa-solid fa-magnifying-glass"></i> جست‌وجوی ارتباطات</h2>
-        <form method="GET" action="{{ $canManageAllTickets ? route('admin.communications.index') : route('platform.communications') }}" style="display:flex;gap:9px;flex-wrap:wrap">
+        <form method="GET" action="{{ ($isAdmin && $canManageAllTickets) ? route('admin.communications.index') : route('platform.communications') }}" style="display:flex;gap:9px;flex-wrap:wrap">
             <input type="search" name="q" value="{{ $searchTerm }}" minlength="2" maxlength="120" placeholder="جست‌وجو در تیکت‌ها، پیام‌های مجاز، گفت‌وگوها و اعلان‌ها…" aria-label="عبارت جست‌وجو" style="flex:1;min-width:220px;border:1px solid #dbe3ee;border-radius:10px;padding:11px 13px;font:inherit">
             <button class="ac-btn primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i> جست‌وجو</button>
             @if($searchTerm !== '')
