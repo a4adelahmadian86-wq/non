@@ -86,7 +86,7 @@ class CommunicationSearchService
                         }
                     }
                 })
-                ->when(! $isAdmin, fn ($query) => $query->where(function ($visible) {
+                ->when(! $canAccessSupportInbox, fn ($query) => $query->where(function ($visible) {
                     $visible->where('is_internal', false)->orWhereNull('is_internal');
                 }))
                 ->orderByDesc('created_at')
