@@ -129,6 +129,17 @@ class BlogController extends Controller
         ];
     }
 
+    public static function searchIndex(): array
+    {
+        return array_values(array_map(static fn (array $article): array => [
+            'slug' => (string) $article['slug'],
+            'title' => (string) $article['title'],
+            'excerpt' => (string) $article['excerpt'],
+            'category' => (string) ($article['category'] ?? ''),
+            'tags' => array_values(array_filter((array) ($article['tags'] ?? []), 'is_string')),
+        ], self::articles()));
+    }
+
     public static function articleExists(string $slug): bool
     {
         return array_key_exists($slug, self::articles());
