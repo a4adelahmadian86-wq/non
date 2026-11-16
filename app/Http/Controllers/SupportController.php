@@ -14,6 +14,7 @@ use App\Services\SupportSlaService;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
+use App\Services\SupportTicketStatusPolicy;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
