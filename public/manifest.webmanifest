@@ -17,20 +17,20 @@
   "theme_color": "#0b1734",
   "icons": [
     {
-      "src": "/images/farast-ai-mark.webp",
+      "src": "/icons/farast-192.png",
       "sizes": "192x192",
-      "type": "image/webp",
+      "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/icons/farast-icon.svg",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
       "src": "/icons/farast-maskable.svg",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
     }
@@ -48,9 +48,9 @@
       "url": "/editor",
       "icons": [
         {
-          "src": "/icons/farast-icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icons/farast-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     },
@@ -61,9 +61,9 @@
       "url": "/store",
       "icons": [
         {
-          "src": "/icons/farast-icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icons/farast-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     },
@@ -74,9 +74,9 @@
       "url": "/dashboard",
       "icons": [
         {
-          "src": "/icons/farast-icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icons/farast-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     }
