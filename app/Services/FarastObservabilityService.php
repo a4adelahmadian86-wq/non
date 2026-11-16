@@ -265,9 +265,15 @@ class FarastObservabilityService
             if ($result['terminal_failed'] > 0) {
                 $result['status'] = 'critical';
                 $result['message'] = 'یک یا چند هشدار SLA به سقف تلاش مجدد رسیده‌اند.';
-            } elseif ($result['retryable_failed'] > 0 || $result['stale_processing'] > 0) {
+            } elseif (
+                $result['retryable_failed'] > 0
+                || $result['stale_processing'] > 0
+                || ($result['due'] > 0 && $result['oldest_due_minutes'] >= 5)
+            ) {
                 $result['status'] = 'warning';
-                $result['message'] = 'صف اعلان SLA دارای تلاش ناموفق یا قفل پردازش منقضی‌شده است.';
+                $result['message'] = $result['due'] > 0 && $result['oldest_due_minutes'] >= 5
+                    ? 'صف اعلان SLA بیش از پنج دقیقه در انتظار پردازش است.'
+                    : 'صف اعلان SLA دارای تلاش ناموفق یا قفل پردازش منقضی‌شده است.';
             } else {
                 $result['status'] = 'healthy';
             }
