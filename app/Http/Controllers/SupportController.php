@@ -753,6 +753,8 @@ class SupportController extends Controller
                 ->where('submission_key', strtolower($data['submission_key']))
                 ->first();
             if ($submittedTicket) {
+                abort_unless((int) $submittedTicket->user_id === (int) $user->id, 404);
+
                 $replayData = [
                     'subject' => Str::limit($data['body'], 80),
                     'body' => $data['body'],
