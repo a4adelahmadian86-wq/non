@@ -59,7 +59,7 @@ self.addEventListener('fetch', event => {
   // Cache only versionable public assets. APIs, uploads, previews, downloads,
   // account routes and all other dynamic responses remain network-only.
   const isPublicAsset =
-    /^\/(?:css|js|fonts|icons)\//.test(url.pathname) ||
+    /^\/(?:css|js|fonts|icons|images)\//.test(url.pathname) ||
     url.pathname === '/manifest.webmanifest' ||
     url.pathname === '/offline.html';
 
