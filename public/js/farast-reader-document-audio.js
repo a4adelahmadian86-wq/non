@@ -32,6 +32,7 @@
     let stopped = false;
     let paused = document.visibilityState === 'hidden';
     let controller = null;
+    let resumeRequested = false;
 
     const clearPollTimer = () => {
       if (!pollTimer) return;
@@ -80,7 +81,8 @@
       }
       if (paused && !stopped) {
         paused = false;
-        schedulePoll(0);
+        if (inFlight) resumeRequested = true;
+        else schedulePoll(0);
       }
     };
     const onPageHide = () => {
@@ -91,7 +93,8 @@
     const onPageShow = () => {
       if (!stopped && document.visibilityState !== 'hidden') {
         paused = false;
-        schedulePoll(0);
+        if (inFlight) resumeRequested = true;
+        else schedulePoll(0);
       }
     };
     const pollAudioReadiness = async () => {
@@ -141,8 +144,9 @@
         }
         nextDelay = retryAfterDelay(response) ?? retryDelay;
       } catch (error) {
-        if (error?.name === 'AbortError') return;
-        // Network failures are transient; keep polling with bounded backoff.
+        if (error?.name !== 'AbortError') {
+          // Network failures are transient; keep polling with bounded backoff.
+        }
       } finally {
         inFlight = false;
         controller = null;
@@ -150,6 +154,11 @@
 
       if (stopped || paused || !root.isConnected) {
         if (!root.isConnected) stopPolling();
+        return;
+      }
+      if (resumeRequested) {
+        resumeRequested = false;
+        schedulePoll(0);
         return;
       }
       retryDelay = Math.min(maximumDelay, Math.max(initialDelay, retryDelay * 2));
