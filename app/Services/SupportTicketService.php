@@ -530,6 +530,18 @@ class SupportTicketService
             \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
         }
 
+        if (! $created) {
+            if (is_array($managed) && ! empty($managed['disk']) && ! empty($managed['path'])) {
+                try {
+                    app(StorageManager::class)->delete((string) $managed['disk'], (string) $managed['path']);
+                } catch (\\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            return $message;
+        }
+
         if ($notify && ! $isInternal) {
             if ($isStaff) {
                 $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
