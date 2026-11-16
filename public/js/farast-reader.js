@@ -748,10 +748,13 @@
   };
 
   const buildPdfThumbs=async()=>{
-    if(!pdfDoc||!thumbsHost)return;
-    thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
+    const document=pdfDoc;
+    const host=thumbsHost;
+    if(!document||!host)return;
+    const totalPages=document.numPages;
+    host.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
     const fragment=document.createDocumentFragment();
-    for(let n=1;n<=pdfDoc.numPages;n++){
+    for(let n=1;n<=totalPages;n++){
       const button=document.createElement('button');
       button.type='button';
       button.className='farast-reader-thumb'+(n===1?' is-active':'');
@@ -769,29 +772,35 @@
       button.addEventListener('click',()=>navigatePdfPage(n).catch(showPdfError));
       fragment.append(button);
     }
-    thumbsHost.append(fragment);
+    if(document!==pdfDoc||host!==thumbsHost)return;
+    host.append(fragment);
     // Render only thumbnails entering the sidebar viewport; never rasterize dozens
     // of off-screen pages just because a document was opened.
     const renderThumbnail=async button=>{
-      if(!button||button.dataset.thumbRendered==='1')return;
+      if(!button||button.dataset.thumbRendered==='1'||document!==pdfDoc||host!==thumbsHost||!button.isConnected)return;
       button.dataset.thumbRendered='1';
       const pageNumber=Number(button.dataset.pdfPage);
       const canvas=button.querySelector('canvas');
       if(!canvas)return;
       try{
-        const page=await pdfDoc.getPage(pageNumber);
+        const page=await document.getPage(pageNumber);
+        if(document!==pdfDoc||host!==thumbsHost||!button.isConnected){page.cleanup?.();return;}
         const base=page.getViewport({scale:1});
         const viewport=page.getViewport({scale:Math.min(40/base.width,54/base.height)});
         const ctx=canvas.getContext('2d',{alpha:false});
         canvas.width=Math.max(1,Math.floor(viewport.width));
         canvas.height=Math.max(1,Math.floor(viewport.height));
-        await page.render({canvasContext:ctx,viewport}).promise;
+        const task=page.render({canvasContext:ctx,viewport});
+        await task.promise;
+        if(document!==pdfDoc||host!==thumbsHost||!button.isConnected){try{task.cancel();}catch(_){}page.cleanup?.();return;}
         paintPdfWatermark(canvas);
+        page.cleanup?.();
       }catch(_){button.dataset.thumbRendered='0';}
     };
     if('IntersectionObserver' in window){
       const observer=new IntersectionObserver(entries=>{
         entries.forEach(entry=>{
+          if(document!==pdfDoc||host!==thumbsHost){observer.disconnect();return;}
           if(entry.isIntersecting){
             observer.unobserve(entry.target);
             renderThumbnail(entry.target);
@@ -807,32 +816,41 @@
   };
 
   const loadPdfOutline=async()=>{
-    if(!pdfDoc||!outlineHost||!outlineSection)return;
+    const document=pdfDoc;
+    const host=outlineHost;
+    const section=outlineSection;
+    if(!document||!host||!section)return;
     try{
-      const outline=await pdfDoc.getOutline();
-      outlineHost.innerHTML='';
-      if(!outline?.length){outlineSection.hidden=true;return;}
+      const outline=await document.getOutline();
+      if(document!==pdfDoc||host!==outlineHost)return;
+      host.replaceChildren();
+      if(!outline?.length){section.hidden=true;return;}
       const appendItems=async(items,depth=0)=>{
         for(const item of items||[]){
+          if(document!==pdfDoc||host!==outlineHost)return;
           let destination=item.dest;
-          if(typeof destination==='string')destination=await pdfDoc.getDestination(destination);
+          if(typeof destination==='string')destination=await document.getDestination(destination);
+          if(document!==pdfDoc||host!==outlineHost)return;
           if(Array.isArray(destination)&&destination[0]){
             try{
-              const page=(await pdfDoc.getPageIndex(destination[0]))+1;
+              const page=(await document.getPageIndex(destination[0]))+1;
+              if(document!==pdfDoc||host!==outlineHost)return;
               const button=document.createElement('button');
               button.type='button';
               button.textContent=item.title||('صفحه '+faNumber(page));
               button.style.paddingInlineStart=(8+depth*14)+'px';
               button.addEventListener('click',()=>navigatePdfPage(page).catch(showPdfError));
-              outlineHost.append(button);
+              host.append(button);
             }catch(_){}
           }
           if(item.items?.length)await appendItems(item.items,Math.min(depth+1,6));
         }
       };
       await appendItems(outline);
-      outlineSection.hidden=!outlineHost.childElementCount;
-    }catch(_){outlineSection.hidden=true;}
+      if(document===pdfDoc&&host===outlineHost)section.hidden=!host.childElementCount;
+    }catch(_){
+      if(document===pdfDoc&&host===outlineHost)section.hidden=true;
+    }
   };
 
   const getPdfOptionalContentEntries=config=>{
