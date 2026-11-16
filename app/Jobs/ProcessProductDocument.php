@@ -93,55 +93,29 @@ class ProcessProductDocument implements ShouldQueue
                 if (! is_string($docxBytes) || $docxBytes === '') {
                     throw new \RuntimeException('product_docx_source_read_failed');
                 }
-                $readerPdfArtifact = $document->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
-                $readerPdfOldPath = $readerPdfArtifact?->path;
-                $readerPdfOldDisk = $readerPdfArtifact?->disk ?: 'private';
+                $readerPdfArtifact = $document->artifacts()
+                    ->where('artifact_type', 'reader_pdf')
+                    ->where('version', 1)
+                    ->first();
                 $readerPdfPath = $readerPdfArtifact?->path;
                 $readerPdfDisk = $readerPdfArtifact?->disk ?: 'private';
-                $readerPdfExists = $readerPdfArtifact && $readerPdfPath && $storage->exists($readerPdfDisk, $readerPdfPath);
-                $pdfBytes = $readerPdfExists
+                $readerPdfSourceHash = data_get($readerPdfArtifact?->metadata_json, 'source_sha256');
+                $readerPdfExists = $readerPdfArtifact
+                    && $readerPdfPath
+                    && $storage->exists($readerPdfDisk, $readerPdfPath)
+                    && (! is_string($readerPdfSourceHash)
+                        || hash_equals((string) $document->source_sha256, $readerPdfSourceHash));
+
+                $readerPdfBytes = $readerPdfExists
                     ? $storage->get($readerPdfDisk, $readerPdfPath)
-                    : app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($docxBytes);
-                if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 25 * 1024 * 1024) {
-                    throw new \RuntimeException('product_docx_conversion_invalid');
+                    : app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+
+                if (! is_string($readerPdfBytes)
+                    || ! str_starts_with($readerPdfBytes, '%PDF-')
+                    || strlen($readerPdfBytes) > 25 * 1024 * 1024) {
+                    throw new \\RuntimeException('product_docx_conversion_invalid');
                 }
-                if (! $readerPdfExists) {
-                    $managed = $storage->storeContents(
-                        $pdfBytes,
-                        'reader-v1.pdf',
-                        'application/pdf',
-                        StorageManager::CRITICAL,
-                        'store-product-artifact',
-                        StoreProductDocumentArtifact::class,
-                        null,
-                        (int) $product->id,
-                        'private'
-                    );
-                    try {
-                        [$artifact, $readerPdfPath, $readerPdfDisk] = DB::transaction(function () use ($document, $managed, $pdfBytes, $storage, $product) {
-                            $artifact = $document->artifacts()->updateOrCreate(
-                                ['artifact_type' => 'reader_pdf', 'version' => 1],
-                                [
-                                    'disk' => $managed['disk'],
-                                    'path' => $managed['path'],
-                                    'mime' => 'application/pdf',
-                                    'size_bytes' => strlen($pdfBytes),
-                                    'sha256' => hash('sha256', $pdfBytes),
-                                    'metadata_json' => [
-                                        'source_sha256' => $document->source_sha256,
-                                        'conversion_engine' => 'phpword_dompdf',
-                                        'generated_once' => true,
-                                    ],
-                                ]
-                            );
-                            $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $product->id);
-                            return [$artifact, $artifact->path, $artifact->disk];
-                        });
-                    } catch (\Throwable $exception) {
-                        $storage->delete($managed['disk'], $managed['path']);
-                        throw $exception;
-                    }
-                }
+
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
                     throw new \RuntimeException('product_docx_review_stream_failed');
