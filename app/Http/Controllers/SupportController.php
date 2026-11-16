@@ -365,19 +365,12 @@ class SupportController extends Controller
                 ->map(fn ($id) => (int) $id)
                 ->values();
 
-            $visibleAssigneeIds = $availableAssigneeIds;
-            if ($visibleUserIds !== null) {
-                $allowedAssigneeUserIds = array_merge(
-                    array_map('intval', $visibleUserIds),
-                    [(int) auth()->id()],
-                );
-                $visibleAssigneeIds = $availableAssigneeIds
-                    ->filter(fn (int $id) => in_array($id, $allowedAssigneeUserIds, true))
-                    ->values();
-            }
-
-            $assigneeOptions = $visibleAssigneeIds->isNotEmpty()
-                ? User::query()->whereIn('id', $visibleAssigneeIds)->orderBy('name')->get(['id', 'name', 'email'])
+            // Assignee IDs are derived only from tickets the operator may see.
+            // Do not intersect them with visibleUserIds: that list represents
+            // ticket owners and intentionally excludes staff/admin accounts,
+            // which are valid assignees and already visible on these ticket rows.
+            $assigneeOptions = $availableAssigneeIds->isNotEmpty()
+                ? User::query()->whereIn('id', $availableAssigneeIds)->orderBy('name')->get(['id', 'name', 'email'])
                 : collect();
         }
 
