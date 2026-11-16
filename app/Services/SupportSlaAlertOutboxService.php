@@ -24,6 +24,7 @@ class SupportSlaAlertOutboxService
     public function __construct(
         private readonly SupportNotificationService $notifier,
         private readonly AuditEventService $audit,
+        private readonly SupportSlaService $sla,
     ) {}
 
     /**
@@ -93,6 +94,101 @@ class SupportSlaAlertOutboxService
         }
 
         return (int) $stored->id;
+    }
+
+    /**
+     * Return a reason when an alert no longer represents actionable/current SLA state.
+     * Breaches are historical evidence and remain deliverable after close or deadline edits;
+     * warnings are suppressed when their deadline or active state has changed.
+     */
+    private function skipReason(Ticket $ticket, SupportSlaAlertOutbox $alert): ?string
+    {
+        $deadline = $alert->kind === 'first_response'
+            ? $ticket->sla_first_due_at
+            : $ticket->sla_resolve_due_at;
+
+        if (! $deadline) {
+            return 'SLA deadline no longer exists.';
+        }
+
+        if ($alert->event === 'breached') {
+            $hasBreachMarker = $alert->kind === 'first_response'
+                ? ! empty($ticket->sla_first_breached_at)
+                : ! empty($ticket->sla_resolve_breached_at);
+
+            return $hasBreachMarker ? null : 'SLA breach marker is no longer present.';
+        }
+
+        if ($alert->event !== 'warning') {
+            return 'Unsupported SLA alert event.';
+        }
+
+        $deadlineIdentity = substr(hash('sha256', $deadline->format('U.u')), 0, 24);
+        $expectedIdentity = 'sla:'.$alert->kind.':warning:'.$deadlineIdentity;
+        if (! hash_equals($expectedIdentity, (string) $alert->event_identity)) {
+            return 'SLA deadline changed before warning delivery.';
+        }
+
+        if ($alert->kind === 'first_response') {
+            if ($ticket->first_response_at) {
+                return 'First response was recorded before warning delivery.';
+            }
+
+            if ($ticket->status === 'closed') {
+                return 'Ticket closed before first-response warning delivery.';
+            }
+        } elseif (in_array($ticket->status, ['pending', 'closed'], true) || $ticket->resolved_at) {
+            return 'Resolution SLA is no longer active.';
+        }
+
+        $minutesLeft = $this->sla->minutesUntilDeadline($deadline);
+        if ($minutesLeft < 0) {
+            return 'Warning window expired before delivery.';
+        }
+
+        $warnBefore = max(0, (int) config('support.warn_before_minutes', 30));
+        if ($minutesLeft > $warnBefore) {
+            return 'Ticket is outside the configured warning window.';
+        }
+
+        return null;
+    }
+
+    private function markSkipped(SupportSlaAlertOutbox $alert, string $leaseToken, string $reason): void
+    {
+        DB::transaction(function () use ($alert, $leaseToken, $reason): void {
+            $changed = SupportSlaAlertOutbox::query()
+                ->whereKey($alert->id)
+                ->where('status', 'processing')
+                ->where('lease_token', $leaseToken)
+                ->update([
+                    'status' => 'skipped',
+                    'delivered_at' => null,
+                    'locked_at' => null,
+                    'lease_token' => null,
+                    'last_error' => mb_substr($reason, 0, 2000),
+                    'updated_at' => now(),
+                ]);
+
+            if ($changed > 0) {
+                $this->audit->record(
+                    'support.ticket.sla_alert_skipped',
+                    null,
+                    null,
+                    'ticket',
+                    (int) $alert->ticket_id,
+                    [
+                        'outbox_id' => (int) $alert->id,
+                        'kind' => $alert->kind,
+                        'event' => $alert->event,
+                        'event_identity' => $alert->event_identity,
+                        'attempts' => (int) $alert->attempts,
+                        'reason' => mb_substr($reason, 0, 500),
+                    ],
+                    'support'
+                );
+            }
+        });
     }
 
     /**
@@ -186,14 +282,13 @@ class SupportSlaAlertOutboxService
             try {
                 $ticket = Ticket::query()->with(['assignee', 'user'])->find($alert->ticket_id);
                 if (! $ticket) {
-                    SupportSlaAlertOutbox::query()->whereKey($id)->where('status', 'processing')->where('lease_token', $leaseToken)->update([
-                        'status' => 'skipped',
-                        'delivered_at' => null,
-                        'locked_at' => null,
-                        'lease_token' => null,
-                        'last_error' => 'Ticket no longer exists.',
-                        'updated_at' => now(),
-                    ]);
+                    $this->markSkipped($alert, $leaseToken, 'Ticket no longer exists.');
+                    continue;
+                }
+
+                $skipReason = $this->skipReason($ticket, $alert);
+                if ($skipReason !== null) {
+                    $this->markSkipped($alert, $leaseToken, $skipReason);
                     continue;
                 }
 
