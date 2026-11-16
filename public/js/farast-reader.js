@@ -460,7 +460,7 @@
   const releaseContinuousPage=wrapper=>{
     if(!wrapper)return;
     wrapper.dataset.keepRendered='0';
-    if(wrapper.dataset.rendering==='1')return;
+    if(wrapper.dataset.rendering==='1'){try{wrapper._renderTask?.cancel();}catch(_){}return;}
     wrapper.dataset.rendered='0';
     const canvas=wrapper.querySelector('canvas');
     if(canvas){canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';}
@@ -494,6 +494,7 @@
   const renderContinuousPage=async(number)=>{
     if(!pdfDoc||!continuousHost)return;
     const renderDocument=pdfDoc;
+    const renderHost=continuousHost;
     const renderGeneration=continuousRenderGeneration;
     const wrapper=continuousHost.querySelector('[data-pdf-cont-page="'+number+'"]');
     const canvas=wrapper?.querySelector('canvas');
@@ -505,7 +506,7 @@
     const page=await renderDocument.getPage(number);
     wrapper._pdfPage=page;
     // A document swap or continuous-mode rebuild invalidates this async render.
-    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
     const availableHeight=Math.max(280,(stage?.clientHeight||700)-80);
@@ -524,7 +525,10 @@
     context.setTransform(ratio,0,0,ratio,0,0);
     const renderOptions={canvasContext:context,viewport};
     if(pdfOptionalContentConfig)renderOptions.optionalContentConfigPromise=Promise.resolve(pdfOptionalContentConfig);
-    await page.render(renderOptions).promise;
+    const renderTask=page.render(renderOptions);
+    wrapper._renderTask=renderTask;
+    await renderTask.promise;
+    if(wrapper._renderTask===renderTask)wrapper._renderTask=null;
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     paintPdfWatermark(canvas);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
@@ -550,7 +554,11 @@
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     wrapper.dataset.rendered='1';
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
+    }catch(error){
+      if(error?.name==='RenderingCancelledException'||error?.name==='AbortException')return;
+      throw error;
     }finally{
+      wrapper._renderTask=null;
       const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
       delete wrapper.dataset.rerenderAfterRender;
       delete wrapper.dataset.rendering;
@@ -1057,6 +1065,7 @@
     }
     const pdfActive=isPdf();
     if(!pdfActive&&pdfDoc){
+      continuousRenderGeneration++;
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
       continuousRenderGeneration++;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
       releaseAllContinuousPages();
