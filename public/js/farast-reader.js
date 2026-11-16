@@ -753,20 +753,20 @@
     if(!pdfDocument||!host)return;
     const totalPages=pdfDocument.numPages;
     host.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
-    const fragment=pdfDocument.createDocumentFragment();
+    const fragment=document.createDocumentFragment();
     for(let n=1;n<=totalPages;n++){
-      const button=pdfDocument.createElement('button');
+      const button=document.createElement('button');
       button.type='button';
       button.className='farast-reader-thumb'+(n===1?' is-active':'');
       button.dataset.pdfPage=String(n);
       button.setAttribute('aria-label','رفتن به صفحه '+n);
       button.setAttribute('aria-current',n===1?'page':'false');
-      const preview=pdfDocument.createElement('span');
+      const preview=document.createElement('span');
       preview.className='farast-reader-thumb-preview';
-      const canvas=pdfDocument.createElement('canvas');
+      const canvas=document.createElement('canvas');
       canvas.width=40;canvas.height=54;
       preview.append(canvas);
-      const label=pdfDocument.createElement('span');
+      const label=document.createElement('span');
       label.textContent='صفحه '+faNumber(n);
       button.append(preview,label);
       button.addEventListener('click',()=>navigatePdfPage(n).catch(showPdfError));
@@ -835,7 +835,7 @@
             try{
               const page=(await pdfDocument.getPageIndex(destination[0]))+1;
               if(pdfDocument!==pdfDoc||host!==outlineHost)return;
-              const button=pdfDocument.createElement('button');
+              const button=document.createElement('button');
               button.type='button';
               button.textContent=item.title||('صفحه '+faNumber(page));
               button.style.paddingInlineStart=(8+depth*14)+'px';
@@ -894,11 +894,11 @@
       host.replaceChildren();
       const visibleGroups=entries.filter(([,group])=>group&&typeof group==='object');
       if(!visibleGroups.length){section.hidden=true;return;}
-      const fragment=pdfDocument.createDocumentFragment();
+      const fragment=document.createDocumentFragment();
       visibleGroups.forEach(([id,group],index)=>{
-        const label=pdfDocument.createElement('label');
+        const label=document.createElement('label');
         label.className='farast-reader-layer-option';
-        const input=pdfDocument.createElement('input');
+        const input=document.createElement('input');
         input.type='checkbox';
         input.checked=group.visible!==false;
         input.dataset.ocgId=String(id);
@@ -911,7 +911,7 @@
             else await renderPdfPage(pdfPage);
           }catch(error){showPdfError(error);}
         });
-        const name=pdfDocument.createElement('span');
+        const name=document.createElement('span');
         name.textContent=String(group.name||('لایه '+faNumber(index+1)));
         label.append(input,name);
         fragment.append(label);
