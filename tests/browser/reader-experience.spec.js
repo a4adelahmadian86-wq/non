@@ -2581,6 +2581,37 @@ test('jitters document-audio retries after transient network failures', async ({
   expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([4000]);
 });
 
+test('honors HTTP-date Retry-After without applying client jitter', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-status="pending" data-reader-audio-poll-url="/audio/readiness">' +
+      '<div data-reader-audio-pending hidden></div>' +
+    '</section>'
+  );
+  await page.evaluate(() => {
+    window.__audioPollTimers = [];
+    let timerId = 0;
+    Date.now = () => Date.parse('2026-11-16T17:00:00Z');
+    Math.random = () => 0;
+    window.setTimeout = (callback, delay) => {
+      const timer = { id: ++timerId, callback, delay, cleared: false };
+      window.__audioPollTimers.push(timer);
+      return timer.id;
+    };
+    window.clearTimeout = id => {
+      const timer = window.__audioPollTimers.find(item => item.id === id);
+      if (timer) timer.cleared = true;
+    };
+    window.fetch = async () => new Response(null, {
+      status: 429,
+      headers: { 'Retry-After': 'Mon, 16 Nov 2026 17:00:05 GMT' }
+    });
+  });
+  await page.addScriptTag({ url: '/js/farast-reader-document-audio.js' });
+  await expect.poll(() => page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).length)).toBe(1);
+  expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([5000]);
+});
+
 test('pauses and aborts document-audio polling while hidden, then resumes immediately', async ({ page }) => {
   await page.goto('/');
   await page.setContent(
