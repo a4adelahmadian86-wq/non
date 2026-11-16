@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\AdminConsoleService;
 use App\Services\SupportTicketService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -392,6 +393,34 @@ class SupportAdminInboxQueryTest extends TestCase
                 'status' => 'answered',
             ]
         )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
+    }
+
+
+    public function test_scoped_inbox_keeps_staff_assignees_from_visible_tickets_in_the_filter(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Scoped Inbox Staff Assignee']);
+
+        Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'Ticket in scoped inbox with staff assignee',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agent->id,
+        ]);
+
+        // visibleUserIds contains ticket owners, not staff/admin assignees.
+        // Assignee choices must be derived from the already-scoped ticket set.
+        $console = Mockery::mock(AdminConsoleService::class);
+        $console->shouldReceive('visibleUserIds')->once()->with($admin)->andReturn([$admin->id]);
+        $this->app->instance(AdminConsoleService::class, $console);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management'))
+            ->assertOk()
+            ->assertSee('Ticket in scoped inbox with staff assignee')
+            ->assertSee('Scoped Inbox Staff Assignee');
     }
 
 
