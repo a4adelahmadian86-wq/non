@@ -216,8 +216,8 @@ class SupportNotificationEventIdentityTest extends TestCase
         ]);
 
         $service = new SupportNotificationService(
-            \\Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
-            \\Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
             app(NotificationService::class),
         );
 
