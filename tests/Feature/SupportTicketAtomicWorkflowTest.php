@@ -449,4 +449,35 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->assertCount(1, Storage::disk('private')->allFiles());
     }
 
+
+    public function test_message_submission_key_cannot_be_replayed_against_another_ticket(): void
+    {
+        $customer = User::factory()->create();
+        $firstTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'First ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $secondTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Second ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->addMessage($firstTicket, $customer, 'Same text', $options);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->addMessage($secondTicket, $customer, 'Same text', $options);
+    }
+
 }
