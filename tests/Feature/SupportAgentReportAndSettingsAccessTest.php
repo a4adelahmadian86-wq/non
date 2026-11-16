@@ -7,8 +7,11 @@ use App\Models\RolePermission;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Http\Controllers\SupportReportController;
 use App\Services\AuthorizationService;
+use App\Services\SupportSlaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -97,6 +100,89 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
                 && $csat['avg'] === 2.8
                 && $csat['distribution'] === [1 => 1, 2 => 2, 3 => 0, 4 => 1, 5 => 1];
         });
+    }
+
+
+    public function test_report_queries_apply_effective_scope_and_redact_out_of_scope_agent_names(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_blocked' => false,
+        ]);
+        $hiddenAgent = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'name' => 'Secret Out Of Scope Agent',
+            'is_blocked' => false,
+        ]);
+        $outsideCustomer = User::factory()->create();
+
+        $ownTicket = Ticket::create([
+            'user_id' => $admin->id,
+            'assigned_to' => $hiddenAgent->id,
+            'subject' => 'Own scoped support ticket',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'first_response_at' => now()->subMinutes(30),
+            'sla_first_due_at' => now()->subHour(),
+            'sla_resolve_due_at' => now()->subHour(),
+            'resolved_at' => now(),
+            'closed_at' => now(),
+            'csat_score' => 5,
+            'csat_at' => now(),
+        ]);
+        $ownTicket->messages()->create([
+            'user_id' => $hiddenAgent->id,
+            'body' => 'Public response by an out-of-scope agent',
+            'is_internal' => false,
+            'is_staff' => true,
+        ]);
+
+        Ticket::create([
+            'user_id' => $outsideCustomer->id,
+            'assigned_to' => $hiddenAgent->id,
+            'subject' => 'Outside scoped support ticket',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(10),
+            'sla_resolve_due_at' => now()->subMinutes(10),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The route intentionally requires global support_admin scope. Exercise the
+        // controller boundary directly as a defense-in-depth contract so a future
+        // route-scope change cannot silently reintroduce cross-scope aggregates.
+        $request = Request::create('/admin/support-report', 'GET');
+        $request->setUserResolver(fn () => $admin);
+        $request->attributes->set('farast.scope', 'own');
+
+        $view = app(SupportReportController::class)(
+            $request,
+            app(SupportSlaService::class),
+        );
+        $data = $view->getData();
+        $names = collect($data['report']['agents'])->pluck('name')->all();
+        $hiddenAgentRow = collect($data['report']['agents'])->firstWhere('name', 'کارشناس خارج از محدوده');
+
+        $this->assertSame(1, $data['report']['totals']['tickets']);
+        $this->assertSame(1, $data['report']['totals']['closed']);
+        $this->assertNotNull($hiddenAgentRow);
+        $this->assertSame(1, $hiddenAgentRow['assigned']);
+        $this->assertSame(1, $hiddenAgentRow['replies']);
+        $this->assertSame(1, $hiddenAgentRow['first_response_total']);
+        $this->assertNotContains('Secret Out Of Scope Agent', $names);
+        $this->assertSame(1, $data['breached']);
+        $this->assertSame(0, $data['backlog']);
+        $this->assertSame(0, $data['needsReply']);
+        $this->assertSame(1, $data['openInRange']);
+        $this->assertSame(1, $data['closedInRange']);
+        $this->assertSame(1, $data['csat']['count']);
+        $this->assertSame(5.0, $data['csat']['avg']);
+        $rendered = view('admin.support-report', $data)->render();
+        $this->assertStringNotContainsString('Secret Out Of Scope Agent', $rendered);
+        $this->assertStringContainsString('کارشناس خارج از محدوده', $rendered);
     }
 
     public function test_scoped_support_agent_can_open_and_update_support_sms_settings(): void

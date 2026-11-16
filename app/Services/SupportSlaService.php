@@ -401,7 +401,7 @@ class SupportSlaService
     }
 
     /** @return array{agents:array<int,array>,totals:array,from:Carbon,to:Carbon} */
-    public function agentReport(?Carbon $from = null, ?Carbon $to = null): array
+    public function agentReport(?Carbon $from = null, ?Carbon $to = null, ?array $visibleUserIds = null): array
     {
         $from = $from ?: now()->subDays(30)->startOfDay();
         $to = $to ?: now()->endOfDay();
@@ -439,10 +439,15 @@ class SupportSlaService
 
         // Keep ticket hydration bounded and never hydrate message bodies or all
         // public replies. Counts and first-reply candidates are aggregated in SQL.
+        $visibleUserIds = $visibleUserIds === null
+            ? null
+            : array_values(array_unique(array_map('intval', $visibleUserIds)));
+
         Ticket::query()
             ->whereBetween('created_at', [$from, $to])
+            ->when($visibleUserIds !== null, fn ($query) => $query->whereIn('user_id', $visibleUserIds))
             ->with('assignee')
-            ->chunkById(100, function ($tickets) use (&$agents, &$totals, &$allFirstHistogram, &$allFirstSum, &$allFirstCount, $ensureAgent): void {
+            ->chunkById(100, function ($tickets) use (&$agents, &$totals, &$allFirstHistogram, &$allFirstSum, &$allFirstCount, $ensureAgent, $visibleUserIds): void {
                 $ticketIds = $tickets->modelKeys();
                 if ($ticketIds === []) {
                     return;
@@ -478,6 +483,12 @@ class SupportSlaService
                 foreach ($replyCounts as $replyCount) {
                     $authorId = (int) $replyCount->user_id;
                     $authorName = $replyCount->author_name ?: ($replyCount->author_email ?: 'کارشناس نامشخص');
+
+                    if ($visibleUserIds !== null && ! in_array($authorId, $visibleUserIds, true)) {
+                        $authorId = -1;
+                        $authorName = 'کارشناس خارج از محدوده';
+                    }
+
                     $ensureAgent($authorId, $authorName);
                     $agents[$authorId]['replies'] += (int) $replyCount->reply_count;
                 }
@@ -524,9 +535,15 @@ class SupportSlaService
                     $assignedName = $ticket->assignee?->name
                         ?? $ticket->assignee?->email
                         ?? 'بدون ارجاع';
+
+                    if ($assignedId > 0 && $visibleUserIds !== null && ! in_array($assignedId, $visibleUserIds, true)) {
+                        $assignedId = -1;
+                        $assignedName = 'کارشناس خارج از محدوده';
+                    }
+
                     $ensureAgent($assignedId, $assignedName);
 
-                    if ($assignedId > 0) {
+                    if ($assignedId !== 0) {
                         $agents[$assignedId]['assigned']++;
                         if ($ticket->status === 'closed') {
                             $agents[$assignedId]['closed']++;
@@ -559,9 +576,15 @@ class SupportSlaService
                     // If a legacy/system public response has no actor ID, retain
                     // the previous fallback to the assigned agent.
                     $responderId = (int) (($firstStaff?->user_id) ?: $assignedId);
-                    if ($responderId > 0) {
-                        $responderName = $firstStaff?->author_name
-                            ?: ($firstStaff?->author_email ?: $assignedName);
+                    $responderName = $firstStaff?->author_name
+                        ?: ($firstStaff?->author_email ?: $assignedName);
+
+                    if ($responderId > 0 && $visibleUserIds !== null && ! in_array($responderId, $visibleUserIds, true)) {
+                        $responderId = -1;
+                        $responderName = 'کارشناس خارج از محدوده';
+                    }
+
+                    if ($responderId !== 0) {
                         $ensureAgent($responderId, $responderName);
                         $agents[$responderId]['first_response_total']++;
                         $agents[$responderId]['first_response_sum'] += $minutes;
