@@ -197,4 +197,50 @@ class SupportGuestIsolationTest extends TestCase
             ->get(route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => 0]))
             ->assertForbidden();
     }
+
+    public function test_guest_first_message_retry_returns_the_same_ticket(): void
+    {
+        $key = (string) \Illuminate\Support\Str::uuid();
+        $payload = [
+            'body' => 'Initial guest support request',
+            'name' => 'Guest Owner',
+            'email' => 'retry-owner@example.test',
+            'submission_key' => $key,
+        ];
+
+        $first = $this->postJson('/api/support/guest-message', $payload)->assertOk();
+        $retry = $this->postJson('/api/support/guest-message', $payload)->assertOk();
+
+        $this->assertSame($first->json('ticket_id'), $retry->json('ticket_id'));
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertDatabaseCount('farast_workflow_events', 1);
+    }
+
+    public function test_guest_follow_up_retry_does_not_append_a_second_message(): void
+    {
+        $initial = $this->postJson('/api/support/guest-message', [
+            'body' => 'Initial conversation',
+            'name' => 'Guest Owner',
+            'email' => 'followup-owner@example.test',
+            'submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ])->assertOk();
+        $ticketId = (int) $initial->json('ticket_id');
+        $payload = [
+            'body' => 'One follow-up message',
+            'email' => 'followup-owner@example.test',
+            'ticket_id' => $ticketId,
+            'submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $first = $this->postJson('/api/support/guest-message', $payload)->assertOk();
+        $retry = $this->postJson('/api/support/guest-message', $payload)->assertOk();
+
+        $this->assertSame($ticketId, (int) $first->json('ticket_id'));
+        $this->assertSame($ticketId, (int) $retry->json('ticket_id'));
+        $this->assertSame(2, Ticket::findOrFail($ticketId)->messages()->count());
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 2);
+    }
+
 }
