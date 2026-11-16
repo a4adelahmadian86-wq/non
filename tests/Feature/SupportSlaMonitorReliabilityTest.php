@@ -636,6 +636,107 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         ]);
     }
 
+
+    public function test_closing_after_resolution_deadline_enqueues_historical_resolution_breach(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close after resolution SLA deadline',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->subMinutes(10),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertNotNull($ticket->sla_resolve_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_closing_after_first_response_deadline_enqueues_first_response_breach(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close without first response after deadline',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(10),
+            'sla_resolve_due_at' => now()->addHours(3),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertNotNull($ticket->sla_first_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'first_response',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_closing_before_both_deadlines_does_not_create_breach_outbox_rows(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close within SLA',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addMinutes(20),
+            'sla_resolve_due_at' => now()->addHours(2),
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now(),
+        ]);
+
+        app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticketId,
+            'sla_first_breached_at' => null,
+            'sla_resolve_breached_at' => null,
+        ]);
+    }
+
     public function test_expired_worker_cannot_mark_alert_delivered_after_another_worker_reclaims_lease(): void
     {
         $customer = User::factory()->create();
