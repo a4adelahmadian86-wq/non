@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AuditEventService;
 use App\Services\SupportNotificationService;
+use App\Services\SupportSlaService;
 use App\Services\SupportSlaAlertOutboxService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
