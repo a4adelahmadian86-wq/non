@@ -2563,6 +2563,7 @@ test('pauses and aborts document-audio polling while hidden, then resumes immedi
   );
   await page.evaluate(() => {
     window.__audioPollCalls = 0;
+    Math.random = () => 0.5;
     window.__audioPollSignals = [];
     window.__audioPollTimers = [];
     let timerId = 0;
