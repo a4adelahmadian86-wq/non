@@ -1236,14 +1236,15 @@
       }
       return;
     }
-    if(!pdfDoc){
+    const searchDocument=pdfDoc;
+    if(!searchDocument){
       if(searchCount)searchCount.textContent='سند هنوز بارگذاری نشده';
       searchGroup?.setAttribute('aria-busy','false');
       return;
     }
 
     pdfMatches=[];matchIndex=-1;searchTotalMatches=0;
-    const totalPages=pdfDoc.numPages;
+    const totalPages=searchDocument.numPages;
     const pageResults=new Array(totalPages);
     const progressInterval=Math.max(1,Math.ceil(totalPages/20));
     let nextPage=1,completedPages=0;
@@ -1257,12 +1258,14 @@
       while(request===searchRequest){
         const pageNumber=nextPage++;
         if(pageNumber>totalPages)return;
-        const page=await pdfDoc.getPage(pageNumber);
+        const page=await searchDocument.getPage(pageNumber);
+        if(request!==searchRequest||searchDocument!==pdfDoc){page.cleanup?.();return;}
         const content=await page.getTextContent();
-        if(request!==searchRequest)return;
+        if(request!==searchRequest||searchDocument!==pdfDoc){page.cleanup?.();return;}
         const pageText=normalizePdfSearchText(content.items.map(item=>item.str||'').join(' '));
         const count=countPdfSearchMatches(pageText,query);
         if(count>0)pageResults[pageNumber-1]={page:pageNumber,count};
+        page.cleanup?.();
         completedPages++;
         if(completedPages===totalPages||completedPages%progressInterval===0)updateSearchProgress();
       }
@@ -1271,7 +1274,7 @@
     try{
       const workerCount=Math.min(4,totalPages);
       const outcomes=await Promise.allSettled(Array.from({length:workerCount},()=>scanWorker()));
-      if(request!==searchRequest)return;
+      if(request!==searchRequest||searchDocument!==pdfDoc)return;
       const failure=outcomes.find(outcome=>outcome.status==='rejected');
       if(failure)throw failure.reason;
       pdfMatches=pageResults.filter(Boolean);
