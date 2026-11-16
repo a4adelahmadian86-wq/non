@@ -290,4 +290,45 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->service()->changeStatus($ticket, 'user_replied', $staff);
     }
 
+    public function test_reassignment_notifies_the_previous_and_new_assignee_once(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $formerAgent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $nextAgent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'assigned_to' => $formerAgent->id,
+            'subject' => 'Assignment handoff',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('assignmentRemoved')
+            ->once()
+            ->withArgs(fn ($fresh, $previous, $identity) => (int) $fresh->assigned_to === (int) $nextAgent->id
+                && (int) $previous->id === (int) $formerAgent->id
+                && str_starts_with((string) $identity, 'message:'));
+        $notifier->shouldReceive('assigned')
+            ->once()
+            ->withArgs(fn ($fresh, $next, $identity) => (int) $fresh->assigned_to === (int) $nextAgent->id
+                && (int) $next->id === (int) $nextAgent->id
+                && str_starts_with((string) $identity, 'message:'));
+
+        $service = new SupportTicketService($notifier, new SupportSlaService());
+        $updated = $service->assign($ticket, $nextAgent, $actor);
+
+        $this->assertSame($nextAgent->id, (int) $updated->assigned_to);
+        $this->assertDatabaseHas('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticket->id,
+            'event_type' => 'support.ticket.assignment_changed',
+        ]);
+        $this->assertDatabaseHas('ticket_messages', [
+            'ticket_id' => $ticket->id,
+            'body' => '[سیستم] تیکت به «'.$nextAgent->name.'» ارجاع شد.',
+            'is_internal' => true,
+        ]);
+    }
+
 }

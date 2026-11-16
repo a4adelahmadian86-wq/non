@@ -586,12 +586,12 @@ class SupportTicketService
             return $ticket;
         }
 
-        [$fresh, $assignmentMessageId, $changed] = app(SupportAssignmentMutex::class)->synchronized(
+        [$fresh, $previousAgent, $assignmentMessageId, $changed] = app(SupportAssignmentMutex::class)->synchronized(
             fn () => DB::transaction(function () use ($ticket, $agent, $actor): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
             if ((int) ($locked->assigned_to ?? 0) === (int) ($agent?->id ?? 0)) {
-                return [$locked->fresh(['assignee']), null, false];
+                return [$locked->fresh(['assignee']), null, null, false];
             }
 
             if ($agent !== null) {
@@ -599,6 +599,7 @@ class SupportTicketService
             }
 
             $previousAssigneeId = $locked->assigned_to ? (int) $locked->assigned_to : null;
+            $previousAgent = $previousAssigneeId ? User::query()->find($previousAssigneeId) : null;
             $nextAssigneeId = $agent?->id ? (int) $agent->id : null;
             $locked->update(['assigned_to' => $nextAssigneeId]);
 
@@ -609,8 +610,10 @@ class SupportTicketService
 
             $assignmentMessage = null;
             if ($actor) {
-                $name = $agent?->name ?? $agent?->email ?? 'هیچ‌کس';
-                $assignmentMessage = $this->addMessage($locked, $actor, '[سیستم] تیکت به «'.$name.'» ارجاع شد.', [
+                $messageBody = $agent
+                    ? '[سیستم] تیکت به «'.($agent->name ?: $agent->email).'» ارجاع شد.'
+                    : '[سیستم] ارجاع تیکت لغو شد.';
+                $assignmentMessage = $this->addMessage($locked, $actor, $messageBody, [
                     'is_staff' => true,
                     'is_internal' => true,
                     'touch_status' => false,
@@ -618,7 +621,7 @@ class SupportTicketService
                 ]);
             }
 
-            return [$locked->fresh(['assignee']), $assignmentMessage?->id, true];
+            return [$locked->fresh(['assignee']), $previousAgent, $assignmentMessage?->id, true];
             })
         );
 
@@ -626,11 +629,15 @@ class SupportTicketService
             return $fresh;
         }
 
-        $this->safeNotify(fn () => $this->notifier->assigned(
-            $fresh,
-            $agent,
-            $assignmentMessageId ? 'message:'.$assignmentMessageId : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
-        ));
+        $eventIdentity = $assignmentMessageId
+            ? 'message:'.$assignmentMessageId
+            : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown');
+
+        if ($previousAgent && (int) $previousAgent->id !== (int) ($agent?->id ?? 0)) {
+            $this->safeNotify(fn () => $this->notifier->assignmentRemoved($fresh, $previousAgent, $eventIdentity));
+        }
+
+        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $eventIdentity));
 
         return $fresh;
     }
