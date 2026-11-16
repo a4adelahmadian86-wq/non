@@ -10,7 +10,7 @@ use App\Services\SupportSlaService;
 use App\Services\SupportSlaAlertOutboxService;
 use App\Services\SupportTicketService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\RefreshDatabaseWithoutOuterTransactionForMySql;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Mockery;
@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 class SupportSlaMonitorReliabilityTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseWithoutOuterTransactionForMySql;
 
     protected function setUp(): void
     {
