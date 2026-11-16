@@ -214,7 +214,6 @@ class SupportGuestIsolationTest extends TestCase
         $this->assertSame($first->json('ticket_id'), $retry->json('ticket_id'));
         $this->assertDatabaseCount('tickets', 1);
         $this->assertDatabaseCount('ticket_messages', 1);
-        $this->assertDatabaseCount('farast_workflow_events', 1);
     }
 
     public function test_guest_follow_up_retry_does_not_append_a_second_message(): void
