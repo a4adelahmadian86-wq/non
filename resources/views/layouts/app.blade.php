@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/farast-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/farast-192.png"><link rel="stylesheet" href="/css/farast-pwa.css?v=20261108pwa1"><link rel="stylesheet" href="/css/farast-mobile-dock.css?v=20261108dock1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست"><link rel="manifest" href="/manifest.webmanifest?v=20261116ai1"><link rel="icon" href="/icons/farast-icon.svg?v=20261116ai1" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/farast-192.png"><link rel="stylesheet" href="/css/farast-pwa.css?v=20261108pwa1"><link rel="stylesheet" href="/css/farast-mobile-dock.css?v=20261108dock1">
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
@@ -16,7 +16,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
 @endif
 @if(!$isReader)
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
-@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-search.css?v=20261115global1"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
+@if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css?v=20261116ai1"><link rel="stylesheet" href="/css/farast-search.css?v=20261115global1"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css?v=20261110storecheckout1">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
