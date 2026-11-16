@@ -331,4 +331,93 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         ]);
     }
 
+
+    public function test_retried_ticket_creation_returns_the_original_ticket_and_message(): void
+    {
+        $customer = User::factory()->create();
+        $data = [
+            'subject' => 'Retry-safe support request',
+            'body' => 'Please help with this request',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->createTicket($customer, $data);
+        $retry = $service->createTicket($customer, $data);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertDatabaseCount('farast_workflow_events', 1);
+    }
+
+    public function test_ticket_creation_rejects_reusing_a_submission_key_for_different_content(): void
+    {
+        $customer = User::factory()->create();
+        $data = [
+            'subject' => 'Original request',
+            'body' => 'Original body',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->createTicket($customer, $data);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->createTicket($customer, array_merge($data, ['body' => 'Changed body']));
+    }
+
+    public function test_retried_ticket_message_returns_the_original_message(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Retry-safe reply',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->addMessage($ticket, $customer, 'Same reply', $options);
+        $retry = $service->addMessage($ticket, $customer, 'Same reply', $options);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('ticket_messages', 1);
+    }
+
+    public function test_message_submission_key_cannot_be_reused_for_different_content(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Conflicting retry',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->addMessage($ticket, $customer, 'First body', $options);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->addMessage($ticket, $customer, 'Different body', $options);
+    }
+
 }
