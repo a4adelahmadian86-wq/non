@@ -2294,3 +2294,66 @@ test('stops section narration independently from pause and resets its playback p
   });
   expect(await page.evaluate(() => window.__readerStopAudio.paused)).toBe(false);
 });
+
+
+test('ignores malformed document-audio timings and resolves the active segment from the sorted timeline', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        window.__documentAudioFixture = this;
+      }
+      setAttribute() {}
+      play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        return Promise.resolve();
+      }
+      pause() {
+        if (!this.paused) {
+          this.paused = true;
+          this.dispatchEvent(new Event('pause'));
+        }
+      }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'سلام', start: 0.1, end: 0.8, page: 1 },
+    { text: 'قطعه نامعتبر', start: 0.15, end: 0.6, page: 0 },
+    { text: 'زمان نامعتبر', start: -1, end: 0.4, page: 1 },
+    { text: '   ', start: 0.2, end: 0.5, page: 1 }
+  ];
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-url="/reader-full.wav">' +
+      '<script id="reader-audio-timing" type="application/json">' + JSON.stringify(timings) + '</script>' +
+      '<section data-reader-audio>' +
+        '<button type="button" data-audio-play></button>' +
+        '<input type="range" data-audio-seek value="0">' +
+        '<span data-audio-current></span><span data-audio-duration></span>' +
+        '<select data-audio-speed><option value="1">1</option></select>' +
+        '<span data-audio-status></span>' +
+      '</section>' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">' +
+        '<div data-reader-text-layer><div class="reader-document-line" data-reader-audio-text="سلام">سلام</div></div>' +
+      '</article>' +
+      '<div data-reader-audio-pending hidden></div>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+  await expect(page.locator('[data-reader-audio]')).toBeVisible();
+  await page.locator('[data-audio-play]').click();
+  await page.evaluate(() => {
+    const audio = window.__documentAudioFixture;
+    audio.currentTime = 0.2;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect(page.locator('.reader-document-line')).toHaveClass(/is-audio-active/);
+  expect(await page.locator('.reader-document-line.is-audio-active').textContent()).toBe('سلام');
+});
