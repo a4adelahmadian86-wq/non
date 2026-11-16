@@ -226,6 +226,21 @@ class SupportTicketService
                 }
             }
 
+            if ($submission && $exception instanceof QueryException) {
+                $concurrentReplay = Ticket::query()
+                    ->where('submission_scope', $submission['scope'])
+                    ->where('submission_key', $submission['key'])
+                    ->first();
+
+                if ($concurrentReplay) {
+                    if (! hash_equals((string) $concurrentReplay->submission_fingerprint, $submission['fingerprint'])) {
+                        throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                    }
+
+                    return $concurrentReplay->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+                }
+            }
+
             throw $exception;
         }
 
