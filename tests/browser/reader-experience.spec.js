@@ -522,6 +522,26 @@ test.describe('FARAST sample reader interactions', () => {
     expect(errors).toEqual([]);
   });
 
+  test('releases continuous PDF page resources when rendering fails', async ({ page }) => {
+    await mountPdfReader(page, 2, false, false, async page => {
+      await page.evaluate(() => {
+        const originalGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (...args) {
+          if (this.closest('.farast-pdf-cont-page')) return null;
+          return originalGetContext.apply(this, args);
+        };
+      });
+    });
+    const root = page.locator('[data-reader-root]');
+    await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    await root.locator('#reader-scroll-mode').click();
+    const firstPage = root.locator('.farast-pdf-cont-page').first();
+    await expect.poll(() => firstPage.evaluate(element => element.dataset.rendering)).toBeUndefined();
+    await expect.poll(() => firstPage.evaluate(element => element._pdfPage === null)).toBe(true);
+    await expect.poll(() => firstPage.locator('canvas').evaluate(canvas => canvas.width)).toBe(0);
+    await expect(firstPage).toHaveAttribute('data-rendered', '0');
+  });
+
   test('continuous PDF mode releases canvases outside the viewport window', async ({ page }) => {
     await mountPdfReader(page, 12);
     const root = page.locator('[data-reader-root]');
