@@ -409,7 +409,7 @@ class SupportTicketService
                 $resolutionBreachDetected = false;
 
                 if ($submission) {
-                    $existing = $locked->messages()
+                    $existing = TicketMessage::query()
                         ->where('submission_scope', $submission['scope'])
                         ->where('submission_key', $submission['key'])
                         ->lockForUpdate()
