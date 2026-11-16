@@ -232,10 +232,10 @@ class SupportNotificationEventIdentityTest extends TestCase
         ]);
     }
 
-    public function test_former_assignee_with_revoked_ticket_access_receives_no_assignment_notice(): void
+    public function test_blocked_former_assignee_receives_no_assignment_notice(): void
     {
         $customer = User::factory()->create();
-        $formerAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $formerAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE, 'is_blocked' => true]);
         $ticket = Ticket::create([
             'user_id' => $customer->id,
             'subject' => 'Restricted assignment handoff',
