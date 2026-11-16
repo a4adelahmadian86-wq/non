@@ -2417,3 +2417,29 @@ test('ignores malformed document-audio timings and resolves the active segment f
   await expect(page.locator('.reader-document-line')).toHaveClass(/is-audio-active/);
   expect(await page.locator('.reader-document-line.is-audio-active').textContent()).toBe('سلام');
 });
+
+test('keeps large PDFs within the continuous viewport rendering budget', async ({ page }) => {
+  const pageCount = 72;
+  await mountPdfReader(page, pageCount);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await expect(root.locator('.farast-reader-thumb[data-pdf-page]')).toHaveCount(pageCount);
+
+  await root.locator('#reader-scroll-mode').click();
+  const pages = root.locator('.farast-pdf-cont-page');
+  await expect(pages).toHaveCount(pageCount);
+  await expect.poll(() => pages.locator('canvas').evaluateAll(canvases =>
+    canvases.filter(canvas => canvas.width > 0 && canvas.height > 0).length
+  )).toBeGreaterThan(0);
+  await expect.poll(() => pages.locator('canvas').evaluateAll(canvases =>
+    canvases.filter(canvas => canvas.width > 0 && canvas.height > 0).length
+  )).toBeLessThan(16);
+
+  await root.locator('#reader-page-number').fill(String(pageCount));
+  await root.locator('#reader-page-number').dispatchEvent('change');
+  await expect.poll(() => pages.last().locator('canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+  await expect.poll(() => pages.first().locator('canvas').evaluate(canvas => canvas.width)).toBe(0);
+  await expect.poll(() => pages.locator('canvas').evaluateAll(canvases =>
+    canvases.filter(canvas => canvas.width > 0 && canvas.height > 0).length
+  )).toBeLessThan(16);
+});
