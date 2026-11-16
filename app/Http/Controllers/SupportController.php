@@ -598,8 +598,24 @@ class SupportController extends Controller
             'touch_status' => ! $isInternal || ! empty($data['status']),
         ]);
 
+        // The reply POST body also contains a `status` field for the destination
+        // ticket state. Read inbox filters from the query string so the reply
+        // destination cannot overwrite the active inbox status filter.
+        $inboxFilters = array_intersect_key($request->query(), array_flip([
+            'status',
+            'q',
+            'department',
+            'priority',
+            'source',
+            'topic_area',
+            'sla',
+            'assigned',
+            'created_from',
+            'created_to',
+        ]));
+
         return redirect()
-            ->route('admin.support.management', ['ticket' => $ticket->id] + $request->only(['status', 'q', 'department', 'priority']))
+            ->route('admin.support.management', ['ticket' => $ticket->id] + $inboxFilters)
             ->with('status', $isInternal ? 'یادداشت داخلی ثبت شد.' : 'پاسخ ثبت شد.');
     }
 
