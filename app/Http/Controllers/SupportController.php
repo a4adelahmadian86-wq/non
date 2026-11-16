@@ -200,6 +200,7 @@ class SupportController extends Controller
             'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_SERVICES), 'nullable', 'string', 'max:80'],
             'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === SupportTicketService::TOPIC_AREA_STORE), 'nullable', 'integer', Rule::exists('store_products', 'id')],
             'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
+            'submission_key' => 'required|uuid',
         ], [
             'department.required' => 'دپارتمان را انتخاب کنید.',
             'priority.required' => 'اولویت را انتخاب کنید.',
@@ -231,6 +232,8 @@ class SupportController extends Controller
             'related_service' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_SERVICES ? ($data['related_service'] ?? null) : null,
             'related_product_id' => $data['topic_area'] === SupportTicketService::TOPIC_AREA_STORE ? ($data['related_product_id'] ?? null) : null,
             'source' => SupportTicketService::SOURCE_DASHBOARD,
+            '_submission_scope' => 'user:'.auth()->id(),
+            '_submission_key' => $data['submission_key'],
         ], $request->file('attachment'));
 
         return redirect()->route('support.show', $ticket)->with('status', 'تیکت '.$ticket->displayCode().' ثبت شد.');
@@ -244,11 +247,14 @@ class SupportController extends Controller
         $data = $request->validate([
             'body' => 'required|string|max:5000',
             'attachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,gif,pdf,txt,zip',
+            'submission_key' => 'required|uuid',
         ]);
 
         $msg = $this->tickets->addMessage($ticket, auth()->user(), $data['body'], [
             'is_staff' => false,
             'attachment' => $request->file('attachment'),
+            '_submission_scope' => 'user:'.auth()->id(),
+            '_submission_key' => $data['submission_key'],
         ]);
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -618,6 +624,7 @@ class SupportController extends Controller
             'status' => 'nullable|in:'.implode(',', SupportTicketStatusPolicy::STAFF_MANAGED_STATUSES),
             'is_internal' => 'nullable|boolean',
             'attachment' => 'nullable|file|max:8192|mimes:jpg,jpeg,png,gif,pdf,txt,zip,doc,docx',
+            'submission_key' => 'required|uuid',
         ]);
 
         $isInternal = (bool) ($data['is_internal'] ?? false);
@@ -628,6 +635,8 @@ class SupportController extends Controller
             'status' => $data['status'] ?? 'answered',
             'attachment' => $request->file('attachment'),
             'touch_status' => ! $isInternal || ! empty($data['status']),
+            '_submission_scope' => 'user:'.auth()->id(),
+            '_submission_key' => $data['submission_key'],
         ]);
 
         // The reply POST body also contains a `status` field for the destination
@@ -700,6 +709,7 @@ class SupportController extends Controller
             'name' => 'nullable|string|max:80',
             'email' => 'nullable|email|max:160',
             'ticket_id' => 'nullable|integer|exists:tickets,id',
+            'submission_key' => 'required|uuid',
         ]);
 
         $user = auth()->user();
@@ -723,9 +733,15 @@ class SupportController extends Controller
                     'source' => SupportTicketService::SOURCE_WIDGET,
                     'department' => SupportTicketService::DEPARTMENT_SUPPORT,
                     'priority' => SupportTicketService::PRIORITY_NORMAL,
+                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_key' => $data['submission_key'],
                 ]);
             } else {
-                $this->tickets->addMessage($ticket, $user, $data['body'], ['is_staff' => false]);
+                $this->tickets->addMessage($ticket, $user, $data['body'], [
+                    'is_staff' => false,
+                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_key' => $data['submission_key'],
+                ]);
             }
 
             return response()->json([
@@ -767,12 +783,18 @@ class SupportController extends Controller
                 'source' => SupportTicketService::SOURCE_WIDGET,
                 'department' => SupportTicketService::DEPARTMENT_SUPPORT,
                 'priority' => SupportTicketService::PRIORITY_NORMAL,
+                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_key' => $data['submission_key'],
             ]);
 
             $sessionTicketIds->push((int) $ticket->id);
             session(['support_guest_ticket_ids' => $sessionTicketIds->unique()->take(-10)->values()->all()]);
         } else {
-            $this->tickets->addMessage($ticket, null, $data['body'], ['is_staff' => false]);
+            $this->tickets->addMessage($ticket, null, $data['body'], [
+                'is_staff' => false,
+                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_key' => $data['submission_key'],
+            ]);
         }
 
         return response()->json([
