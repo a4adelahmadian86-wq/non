@@ -529,7 +529,7 @@
     wrapper._renderTask=renderTask;
     await renderTask.promise;
     if(wrapper._renderTask===renderTask)wrapper._renderTask=null;
-    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     paintPdfWatermark(canvas);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
     if(textLayer&&window.pdfjsLib?.TextLayer){
@@ -538,10 +538,10 @@
       textLayer.style.height=viewport.height+'px';
       textLayer.style.pointerEvents='auto';textLayer.style.userSelect='text';textLayer.style.webkitUserSelect='text';
       const textContent=await page.getTextContent();
-      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
+      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
       const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
       await layer.render();
-      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
+      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
       const query=normalizePdfSearchText(searchInput?.value||'');
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.pointerEvents='auto';span.style.userSelect='text';span.style.webkitUserSelect='text';
@@ -550,8 +550,8 @@
       });
     }
     const annotationLayer=wrapper.querySelector('.farast-pdf-annotation-layer');
-    if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>renderGeneration===continuousRenderGeneration&&renderDocument===pdfDoc&&continuousHost.contains(wrapper)&&wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
-    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
+    if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>renderGeneration===continuousRenderGeneration&&renderDocument===pdfDoc&&renderHost===continuousHost&&renderHost.contains(wrapper)&&wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     wrapper.dataset.rendered='1';
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }catch(error){
