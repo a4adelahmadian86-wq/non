@@ -67,6 +67,7 @@
     </div>
     <div class="farast-audio-controls">
       <button type="button" class="farast-audio-play" data-audio-play aria-label="پخش"><i class="fa-solid fa-play"></i></button>
+      <button type="button" class="farast-audio-stop" data-audio-stop aria-label="توقف و بازگشت به ابتدا" title="توقف و بازگشت به ابتدا"><i class="fa-solid fa-stop" aria-hidden="true"></i></button>
       <div class="farast-audio-timeline">
         <input type="range" min="0" max="1000" value="0" step="1" data-audio-seek aria-label="موقعیت پخش">
         <div class="farast-audio-time"><span data-audio-current>۰۰:۰۰</span><span data-audio-duration>۰۰:۰۰</span></div>
@@ -83,7 +84,7 @@
     .farast-audio-dock{position:sticky;bottom:0;z-index:30;margin-top:auto;padding:12px clamp(12px,3vw,28px) 10px;background:rgba(13,24,42,.97);color:#edf4ff;border-top:1px solid rgba(148,180,225,.2);box-shadow:0 -12px 34px rgba(0,0,0,.22);backdrop-filter:blur(16px)}
     .farast-audio-top,.farast-audio-controls,.farast-audio-foot{display:flex;align-items:center;gap:14px}.farast-audio-top{min-height:34px}.farast-audio-title{display:flex;align-items:center;gap:10px;min-width:150px}.farast-audio-title strong{display:block;font-size:.78rem}.farast-audio-title small{display:block;color:#9db0ca;font-size:.65rem;margin-top:2px}.farast-audio-pulse{width:9px;height:9px;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.13)}.farast-audio-dock.is-playing .farast-audio-pulse{background:#34d399;animation:farast-audio-pulse 1.5s infinite}
     @keyframes farast-audio-pulse{50%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
-    .farast-audio-caption{flex:1;min-width:0;text-align:center;color:#dce8fa;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.farast-audio-collapse{border:0;background:transparent;color:#9db0ca;cursor:pointer;padding:7px}.farast-audio-controls{margin-top:8px}.farast-audio-play{width:38px;height:38px;border:0;border-radius:50%;background:#3b82f6;color:white;cursor:pointer;flex:0 0 auto}.farast-audio-timeline{flex:1;min-width:100px}.farast-audio-timeline input{width:100%;accent-color:#60a5fa;cursor:pointer}.farast-audio-time{display:flex;justify-content:space-between;color:#9db0ca;font-size:.63rem;font-variant-numeric:tabular-nums}.farast-audio-speed,.farast-audio-volume{display:flex;align-items:center;gap:7px;color:#aebfd7;font-size:.65rem;white-space:nowrap}.farast-audio-speed select{border:1px solid rgba(148,180,225,.22);border-radius:7px;background:#172941;color:#edf4ff;padding:5px}.farast-audio-volume input{width:76px;accent-color:#60a5fa}.farast-audio-foot{justify-content:space-between;margin-top:6px;color:#8298b7;font-size:.6rem}.farast-audio-dock.is-collapsed .farast-audio-controls,.farast-audio-dock.is-collapsed .farast-audio-foot{display:none}.farast-audio-dock.is-collapsed .farast-audio-collapse i{transform:rotate(180deg)}
+    .farast-audio-caption{flex:1;min-width:0;text-align:center;color:#dce8fa;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.farast-audio-collapse{border:0;background:transparent;color:#9db0ca;cursor:pointer;padding:7px}.farast-audio-controls{margin-top:8px}.farast-audio-play,.farast-audio-stop{width:38px;height:38px;border:0;border-radius:50%;cursor:pointer;flex:0 0 auto}.farast-audio-play{background:#3b82f6;color:white}.farast-audio-stop{background:rgba(148,163,184,.16);color:#dbeafe;border:1px solid rgba(148,180,225,.25)}.farast-audio-play:focus-visible,.farast-audio-stop:focus-visible{outline:2px solid #93c5fd;outline-offset:3px}.farast-audio-timeline{flex:1;min-width:100px}.farast-audio-timeline input{width:100%;accent-color:#60a5fa;cursor:pointer}.farast-audio-time{display:flex;justify-content:space-between;color:#9db0ca;font-size:.63rem;font-variant-numeric:tabular-nums}.farast-audio-speed,.farast-audio-volume{display:flex;align-items:center;gap:7px;color:#aebfd7;font-size:.65rem;white-space:nowrap}.farast-audio-speed select{border:1px solid rgba(148,180,225,.22);border-radius:7px;background:#172941;color:#edf4ff;padding:5px}.farast-audio-volume input{width:76px;accent-color:#60a5fa}.farast-audio-foot{justify-content:space-between;margin-top:6px;color:#8298b7;font-size:.6rem}.farast-audio-dock.is-collapsed .farast-audio-controls,.farast-audio-dock.is-collapsed .farast-audio-foot{display:none}.farast-audio-dock.is-collapsed .farast-audio-collapse i{transform:rotate(180deg)}
     .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current,.reader-document-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read,.reader-document-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
     .reader-speech-target-control{display:inline-flex;align-items:center;justify-content:center;margin-inline-start:6px;padding:2px 6px;min-width:24px;min-height:24px;border:1px solid rgba(59,130,246,.35);border-radius:6px;background:rgba(59,130,246,.08);color:#2563eb;font-size:.72em;line-height:1;cursor:pointer;vertical-align:middle;opacity:.58}
     .reader-speech-target-control:hover,.reader-speech-target-control:focus-visible{opacity:1;background:rgba(59,130,246,.16);outline:2px solid #60a5fa;outline-offset:2px}
@@ -98,6 +99,7 @@
   audio.setAttribute('playsinline', '');
   const $ = selector => dock.querySelector(selector);
   const playButton = $('[data-audio-play]');
+  const stopButton = $('[data-audio-stop]');
   const seek = $('[data-audio-seek]');
   const currentLabel = $('[data-audio-current]');
   const durationLabel = $('[data-audio-duration]');
@@ -336,11 +338,24 @@
       : 'زمان‌بندی واژه‌ها تقریبی است؛ برای خواندن دقیق، جمله را انتخاب کنید';
   };
 
+  const stopAudio = () => {
+    rangeEnd = null;
+    audio.pause();
+    if (audio.readyState > 0) {
+      try { audio.currentTime = 0; } catch (_) {}
+    }
+    seek.value = '0';
+    currentLabel.textContent = formatTime(0);
+    updateHighlight(0);
+    caption.textContent = 'پخش متوقف شد؛ برای شروع دوباره پخش را انتخاب کنید.';
+    status.textContent = 'صوت متوقف شد';
+  };
   playButton.addEventListener('click', () => {
     if (!activeTrack) return;
     if (audio.paused) audio.play().catch(() => { status.textContent = 'پخش صوت ممکن نشد؛ دسترسی فایل را بررسی کنید.'; });
     else audio.pause();
   });
+  stopButton.addEventListener('click', stopAudio);
   audio.addEventListener('play', () => { playButton.innerHTML = '<i class="fa-solid fa-pause"></i>'; playButton.setAttribute('aria-label', 'مکث'); dock.classList.add('is-playing'); status.textContent = 'در حال همراهی با متن'; startFrameLoop(); });
   audio.addEventListener('pause', () => { playButton.innerHTML = '<i class="fa-solid fa-play"></i>'; playButton.setAttribute('aria-label', 'پخش'); dock.classList.remove('is-playing'); cancelAnimationFrame(raf); });
   audio.addEventListener('loadedmetadata', () => { durationLabel.textContent = formatTime(audio.duration); });
@@ -719,6 +734,7 @@
     selectSection,
     playRange,
     pause() { rangeEnd = null; audio.pause(); },
+    stop: stopAudio,
     setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); buildDocumentWordMarks(activePage); },
     destroy() { audio.pause(); observer.disconnect(); cancelAnimationFrame(raf); clearMarks(); }
   };
