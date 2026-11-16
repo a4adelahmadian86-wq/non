@@ -139,4 +139,38 @@ class SlaAlertOutboxObservabilityTest extends TestCase
         $this->assertFalse($component['available']);
         $this->assertNull($component['pending']);
     }
+    public function test_due_backlog_older_than_five_minutes_is_warned_while_fresh_due_rows_remain_healthy(): void
+    {
+        $now = now();
+        $id = DB::table('support_sla_alert_outbox')->insertGetId([
+            'ticket_id' => 9006,
+            'kind' => 'first_response',
+            'event' => 'breached',
+            'event_identity' => 'sla:first_response:breached:age-threshold',
+            'idempotency_key' => 'observability:sla:age-threshold',
+            'status' => 'pending',
+            'attempts' => 0,
+            'available_at' => $now->copy()->subMinutes(4),
+            'locked_at' => null,
+            'lease_token' => null,
+            'delivered_at' => null,
+            'last_error' => null,
+            'created_at' => $now->copy()->subMinutes(4),
+            'updated_at' => $now,
+        ]);
+
+        $fresh = app(FarastObservabilityService::class)->snapshot()['components']['sla_alerts'];
+        $this->assertSame('healthy', $fresh['status']);
+        $this->assertSame(4, $fresh['oldest_due_minutes']);
+
+        DB::table('support_sla_alert_outbox')->where('id', $id)->update([
+            'available_at' => $now->copy()->subMinutes(6),
+        ]);
+
+        $stalled = app(FarastObservabilityService::class)->snapshot()['components']['sla_alerts'];
+        $this->assertSame('warning', $stalled['status']);
+        $this->assertSame(6, $stalled['oldest_due_minutes']);
+        $this->assertSame(1, $stalled['due']);
+    }
+
 }
