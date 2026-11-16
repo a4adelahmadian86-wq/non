@@ -176,7 +176,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false) {
   return Buffer.from(pdf, 'binary');
 }
 
-async function mountPdfReader(page, pageCount = 1, withAnnotations = false, withLayers = false) {
+async function mountPdfReader(page, pageCount = 1, withAnnotations = false, withLayers = false, beforeReaderScript = null) {
   page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
   page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
   page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
@@ -225,6 +225,7 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
   );
   await page.addStyleTag({ url: new URL('/vendor/pdfjs/legacy/web/pdf_viewer.css', page.url()).href });
   await page.addStyleTag({ content: '.farast-pdf-document{position:relative}.farast-pdf-annotation-layer.annotationLayer{position:absolute;inset:0;z-index:4}#reader-stage{height:600px;max-height:600px;overflow-y:scroll!important;overflow-x:hidden;display:block}.farast-reader-canvas{height:auto;overflow:visible}.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-document.is-continuous .farast-pdf-continuous-pages{display:grid;grid-template-columns:1fr;gap:20px}.farast-pdf-cont-page{display:block;position:relative;min-height:792px;margin:0 auto 20px}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  if (beforeReaderScript) await beforeReaderScript(page);
   await page.evaluate(() => {
     window.__pdfLayerDiagnostics = [];
     document.querySelector('[data-reader-root]')?.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
@@ -232,6 +233,41 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
+test('discards a PDF load that completes after navigation leaves its document', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  let signalPdfRequestStarted;
+  const pdfRequestStarted = new Promise(resolve => { signalPdfRequestStarted = resolve; });
+  await mountPdfReader(page, 2, false, false, async page => {
+    await page.evaluate(() => {
+      const article = document.querySelector('.farast-reader-page-item');
+      const next = document.createElement('article');
+      next.className = 'farast-reader-page-item';
+      next.dataset.index = '1';
+      next.innerHTML = '<div class="farast-reader-page-content"><p>Non-PDF destination</p></div>';
+      article.parentElement.append(next);
+    });
+    await page.route('**/reader-fixture.pdf', async route => {
+      signalPdfRequestStarted();
+      await new Promise(resolve => setTimeout(resolve, 350));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/pdf',
+        body: makePdfFixture(2, false),
+      });
+    });
+  });
+
+  const root = page.locator('[data-reader-root]');
+  await pdfRequestStarted;
+  await root.locator('#reader-next').click();
+  await expect(root.locator('.farast-reader-page-item[data-index="1"]')).toHaveClass(/is-active/);
+  await expect(root.locator('.farast-pdf-document')).toHaveCount(1);
+  await root.locator('#reader-prev').click();
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await expect.poll(() => root.locator('.farast-pdf-canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+  expect(pageErrors).toEqual([]);
+});
 test('PDF annotations expose safe external links and interactive AcroForm text fields', async ({ page }) => {
   await mountPdfReader(page, 2, true);
   const root = page.locator('[data-reader-root]');
@@ -465,6 +501,24 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
     // Detached canvases must release their backing stores when continuous mode exits.
     expect(await renderedCanvasBeforeExit.evaluate(canvas => canvas.width)).toBe(0);
+  });
+
+  test('rapid continuous-mode rebuilds ignore stale PDF page renders', async ({ page }) => {
+    await mountPdfReader(page, 8);
+    const root = page.locator('[data-reader-root]');
+    await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    for (let index = 0; index < 3; index++) {
+      await root.locator('#reader-scroll-mode').click();
+      await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
+      await root.locator('#reader-scroll-mode').click();
+      await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
+    }
+    await root.locator('#reader-scroll-mode').click();
+    await expect(root.locator('.farast-pdf-cont-page[data-pdf-cont-page="1"]')).toHaveAttribute('data-rendered', '1');
+    await expect.poll(() => root.locator('.farast-pdf-cont-page canvas').first().evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
   });
 
   test('continuous PDF mode releases canvases outside the viewport window', async ({ page }) => {
