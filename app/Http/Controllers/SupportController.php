@@ -349,6 +349,31 @@ class SupportController extends Controller
             ->addSelect(['last_public_message_body' => $latestPublicMessageBody])
             ->with(['user', 'relatedProduct', 'assignee']);
 
+        // Build assignee filter choices exclusively from tickets already inside
+        // the current operator's record scope. Do not enumerate the global user
+        // directory from a scoped inbox.
+        $assigneeOptions = collect();
+        $availableAssigneeIds = collect();
+        if (Schema::hasColumn('tickets', 'assigned_to')) {
+            $scopedAssigneeQuery = $scopeQuery(Ticket::query())
+                ->whereNotNull('tickets.assigned_to');
+
+            $availableAssigneeIds = (clone $scopedAssigneeQuery)
+                ->distinct()
+                ->orderBy('tickets.assigned_to')
+                ->pluck('tickets.assigned_to')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            // Assignee IDs are derived only from tickets the operator may see.
+            // Do not intersect them with visibleUserIds: that list represents
+            // ticket owners and intentionally excludes staff/admin accounts,
+            // which are valid assignees and already visible on these ticket rows.
+            $assigneeOptions = $availableAssigneeIds->isNotEmpty()
+                ? User::query()->whereIn('id', $availableAssigneeIds)->orderBy('name')->get(['id', 'name', 'email'])
+                : collect();
+        }
+
         $statusFilter = $request->input('status');
         if (is_string($statusFilter)
             && $statusFilter !== 'all'
@@ -388,6 +413,13 @@ class SupportController extends Controller
                 $query->where('assigned_to', auth()->id());
             } elseif ($assignedFilter === SupportTicketService::ASSIGNMENT_FILTER_UNASSIGNED) {
                 $query->whereNull('assigned_to');
+            } elseif (is_string($assignedFilter)
+                && ctype_digit($assignedFilter)
+                && (int) $assignedFilter > 0
+                && $availableAssigneeIds->contains((int) $assignedFilter)) {
+                // A forged/unknown assignee ID is ignored; even valid IDs only
+                // narrow the already-scoped ticket query above.
+                $query->where('assigned_to', (int) $assignedFilter);
             }
         }
 
@@ -574,7 +606,7 @@ class SupportController extends Controller
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
         ]);
 
-        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'activeHistory', 'auditEvents', 'auditUserLabels'));
+        return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents', 'assigneeOptions', 'activeHistory', 'auditEvents', 'auditUserLabels'));
     }
 
     public function adminReply(Request $request, Ticket $ticket)

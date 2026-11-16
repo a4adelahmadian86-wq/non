@@ -181,6 +181,9 @@
                     @foreach(\App\Services\SupportTicketService::ASSIGNMENT_FILTERS as $assignmentFilter)
                         <option value="{{ $assignmentFilter }}" @selected(request('assigned') === $assignmentFilter)>{{ $assignmentFilterLabels[$assignmentFilter] ?? $assignmentFilter }}</option>
                     @endforeach
+                    @foreach(($assigneeOptions ?? collect()) as $assigneeOption)
+                        <option value="{{ $assigneeOption->id }}" @selected((string) request('assigned') === (string) $assigneeOption->id)>کارشناس: {{ $assigneeOption->name ?? $assigneeOption->email }}</option>
+                    @endforeach
                 </select>
             </label>
             <label class="sd-filter-field">

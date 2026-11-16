@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\AdminConsoleService;
 use App\Services\SupportTicketService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -393,5 +394,72 @@ class SupportAdminInboxQueryTest extends TestCase
             ]
         )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
     }
+
+
+    public function test_scoped_inbox_keeps_staff_assignees_from_visible_tickets_in_the_filter(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agent = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Scoped Inbox Staff Assignee']);
+
+        Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'Ticket in scoped inbox with staff assignee',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agent->id,
+        ]);
+
+        // visibleUserIds contains ticket owners, not staff/admin assignees.
+        // Assignee choices must be derived from the already-scoped ticket set.
+        $console = Mockery::mock(AdminConsoleService::class);
+        $console->shouldReceive('visibleUserIds')->once()->with($admin)->andReturn([$admin->id]);
+        $console->shouldReceive('sectionAllowed')->andReturn(true);
+        $this->app->instance(AdminConsoleService::class, $console);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management'))
+            ->assertOk()
+            ->assertSee('Ticket in scoped inbox with staff assignee')
+            ->assertSee('Scoped Inbox Staff Assignee');
+    }
+
+
+    public function test_admin_inbox_filters_tickets_by_a_specific_assignee_from_scoped_ticket_records(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agentA = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Inbox Agent Alpha']);
+        $agentB = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Inbox Agent Beta']);
+
+        Ticket::create([
+            'subject' => 'Ticket assigned to alpha',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agentA->id,
+        ]);
+        Ticket::create([
+            'subject' => 'Ticket assigned to beta',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agentB->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['assigned' => (string) $agentA->id]))
+            ->assertOk()
+            ->assertSee('Ticket assigned to alpha')
+            ->assertDontSee('Ticket assigned to beta')
+            ->assertSee('Inbox Agent Alpha')
+            ->assertSee('Inbox Agent Beta');
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['assigned' => (string) $agentB->id]))
+            ->assertOk()
+            ->assertSee('Ticket assigned to beta')
+            ->assertDontSee('Ticket assigned to alpha');
+    }
+
 
 }
