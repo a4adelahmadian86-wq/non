@@ -467,6 +467,24 @@ test.describe('FARAST sample reader interactions', () => {
     expect(await renderedCanvasBeforeExit.evaluate(canvas => canvas.width)).toBe(0);
   });
 
+  test('rapid continuous-mode rebuilds ignore stale PDF page renders', async ({ page }) => {
+    await mountPdfReader(page, 8);
+    const root = page.locator('[data-reader-root]');
+    await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    for (let index = 0; index < 3; index++) {
+      await root.locator('#reader-scroll-mode').click();
+      await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
+      await root.locator('#reader-scroll-mode').click();
+      await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
+    }
+    await root.locator('#reader-scroll-mode').click();
+    await expect(root.locator('.farast-pdf-cont-page[data-pdf-cont-page="1"]')).toHaveAttribute('data-rendered', '1');
+    await expect.poll(() => root.locator('.farast-pdf-cont-page canvas').first().evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
+  });
+
   test('continuous PDF mode releases canvases outside the viewport window', async ({ page }) => {
     await mountPdfReader(page, 12);
     const root = page.locator('[data-reader-root]');
