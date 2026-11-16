@@ -237,6 +237,39 @@ class FinancialIdempotencyAndRetentionTest extends TestCase
         );
     }
 
+
+    public function test_database_rejects_null_and_blank_idempotency_keys_for_orders_and_payments(): void
+    {
+        $user = $this->user('09140001007');
+        $order = $this->order($user, 'required-order-idempotency');
+
+        $this->assertQueryException(
+            fn () => DB::table('orders')->where('id', $order->id)->update(['idempotency_key' => null]),
+            'The database must reject null order idempotency keys.'
+        );
+        $this->assertQueryException(
+            fn () => DB::table('orders')->where('id', $order->id)->update(['idempotency_key' => '   ']),
+            'The database must reject blank order idempotency keys.'
+        );
+
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'amount_rials' => 10000,
+            'status' => 'pending',
+            'idempotency_key' => 'required-payment-idempotency',
+        ]);
+
+        $this->assertQueryException(
+            fn () => DB::table('payments')->where('id', $payment->id)->update(['idempotency_key' => null]),
+            'The database must reject null payment idempotency keys.'
+        );
+        $this->assertQueryException(
+            fn () => DB::table('payments')->where('id', $payment->id)->update(['idempotency_key' => '   ']),
+            'The database must reject blank payment idempotency keys.'
+        );
+    }
+
     private function assertQueryException(callable $operation, string $message): void
     {
         try {
