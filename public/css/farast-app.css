@@ -39,3 +39,9 @@ p{font-size:1rem}
 @media(max-width:860px){.premium-header{height:auto!important}.header-inner{height:auto;min-height:68px!important;grid-template-columns:1fr auto auto;grid-template-areas:"brand nav actions" "search search search";padding:9px 14px!important}.premium-brand{grid-area:brand}.main-nav{grid-area:nav}.header-actions{grid-area:actions}.header-search{grid-area:search;max-width:none;width:100%}.farast-service-grid{grid-template-columns:1fr}.farast-product-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){html{font-size:14px}.premium-brand small{display:none}.premium-brand b{font-size:.95rem!important}.header-inner{grid-template-columns:1fr auto;grid-template-areas:"brand actions" "search search"}.main-nav{display:none!important}.header-cta span{display:none}.header-cta{width:40px;padding:0!important;justify-content:center}.farast-section-head{align-items:flex-start;flex-direction:column}.farast-product-grid{grid-template-columns:1fr}.farast-connectivity{bottom:10px}.farast-connectivity-copy span{font-size:.72rem}}
 @media(prefers-reduced-motion:reduce){.farast-connectivity-card,.farast-spinner{animation:none!important}.farast-service-card,.farast-product-card,.farast-cart-drawer{transition:none!important}}
+
+
+/* FARAST AI identity mark — raster source is intentionally kept separate from wordmark typography. */
+.farast-brand-icon{display:block;width:44px;height:44px;flex:0 0 44px;object-fit:contain;object-position:center;background:transparent;border:0;border-radius:0;box-shadow:none}
+.footer-brand .farast-brand-icon--footer{width:39px;height:39px;flex-basis:39px}
+@media(max-width:650px){.premium-brand .farast-brand-icon{width:40px;height:40px;flex-basis:40px}}

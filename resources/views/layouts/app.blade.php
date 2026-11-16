@@ -35,7 +35,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
   <div class="farast-public-topline"><div class="farast-public-topline__inner"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i> محصولات دیجیتال و ابزارهای کار با سند</span><a href="{{ route('editor') }}">شروع با تایپ و ویرایش سند <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a></div></div>
   <div class="header-inner">
     <a class="brand premium-brand" href="{{ route('home') }}" aria-label="فراست">
-      <span class="brand-mark farast-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
+      <img class="farast-brand-icon" src="{{ asset('images/farast-ai-mark.webp') }}" alt="" width="44" height="44" aria-hidden="true" decoding="async">
       <span><b>FARAST</b><small>فراست | محصولات دیجیتال و خدمات سند</small></span>
     </a>
     <form class="header-search" id="farastGlobalSearchForm" action="{{ route('search') }}" method="get" role="search" autocomplete="off">
@@ -106,7 +106,7 @@ if(!$isReader&&!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Faca
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer farast-site-footer" dir="rtl">
   <div class="footer-top farast-footer-compact">
     <div class="footer-about">
-      <a class="footer-brand" href="{{ route('home') }}" aria-label="فراست"><span class="brand-mark farast-symbol"><i></i><i></i><i></i><i></i><b></b></span><b>فراست</b></a>
+      <a class="footer-brand" href="{{ route('home') }}" aria-label="فراست"><img class="farast-brand-icon farast-brand-icon--footer" src="{{ asset('images/farast-ai-mark.webp') }}" alt="" width="39" height="39" aria-hidden="true" decoding="async"><b>فراست</b></a>
       <p>ابزارهای کار با سند و مجموعه‌ای از فایل‌ها و دوره‌های دیجیتال.</p>
       @if(count($footerSocial))
         <div class="footer-social" aria-label="شبکه‌های اجتماعی">
