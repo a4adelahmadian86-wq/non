@@ -234,6 +234,8 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
 }
 
 test('discards a PDF load that completes after navigation leaves its document', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   let signalPdfRequestStarted;
   const pdfRequestStarted = new Promise(resolve => { signalPdfRequestStarted = resolve; });
   await mountPdfReader(page, 2, false, false, async page => {
@@ -264,6 +266,7 @@ test('discards a PDF load that completes after navigation leaves its document', 
   await root.locator('#reader-prev').click();
   await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
   await expect.poll(() => root.locator('.farast-pdf-canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+  expect(pageErrors).toEqual([]);
 });
 test('PDF annotations expose safe external links and interactive AcroForm text fields', async ({ page }) => {
   await mountPdfReader(page, 2, true);
