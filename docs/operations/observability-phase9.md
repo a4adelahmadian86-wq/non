@@ -29,6 +29,8 @@ The admin page is available at `/admin/observability` and uses the existing glob
 
 - Database connectivity.
 - Queue driver, pending jobs, oldest pending age and failed jobs; `sync` is explicitly marked as non-measurable for backlog.
+- Durable SLA alert outbox: pending and processing counts, retryable and terminal failures, due backlog age, and processing leases older than the worker's 15-minute stale-lease window. The probe reports counts only and never exposes provider error text, recipients, or idempotency keys.
+- Since the delivery command is scheduled every minute, a due backlog whose oldest item has waited at least five minutes raises a warning; fresh due rows remain informational.
 - Private storage directory writability, volume inventory and pending/failed transfers.
 - Log directory writability, configured daily retention, and a bounded count of recent JSON error records from today's daily log file (last 15 minutes, at most 1 MiB read). The count is null when the configured daily channel cannot be read; a partial tail is explicitly marked incomplete.
 - Existing Product Supervisor and document-audio readiness, through the existing cached readiness service.
