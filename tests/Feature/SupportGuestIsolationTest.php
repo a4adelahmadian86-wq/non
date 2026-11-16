@@ -39,6 +39,7 @@ class SupportGuestIsolationTest extends TestCase
         $response = $this->postJson('/api/support/guest-message', [
             'body' => 'Unauthorized message',
             'email' => 'victim@example.test',
+            'submission_key' => 'a3d9e110-8b1a-4f80-8db7-7f9c6d3a2211',
             'ticket_id' => $ticket->id,
         ])->assertOk();
 
