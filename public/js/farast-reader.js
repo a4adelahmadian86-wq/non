@@ -153,7 +153,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
-  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0,continuousRenderGeneration=0;
+  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0,continuousRenderGeneration=0,pdfLoadGeneration=0,pdfLoadingTask=null,pdfLoadingUrl=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -896,12 +896,21 @@
     const nextUrl=surface?.dataset.pdfUrl;
     if(!surface||!nextUrl){showPdfError(new Error('PDF preview URL unavailable'));return;}
 
+    let loadGeneration=pdfLoadGeneration;
     if(activePdfUrl!==nextUrl){
+      loadGeneration=++pdfLoadGeneration;
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
       continuousRenderGeneration++;
       releaseAllContinuousPages();
-      if(pdfDoc){try{await pdfDoc.destroy();}catch(_){}pdfDoc=null;}
+      const previousLoadingTask=pdfLoadingTask;
+      pdfLoadingTask=null;pdfLoadingUrl=null;
+      if(previousLoadingTask){try{previousLoadingTask.destroy().catch(()=>{});}catch(_){}}
+      const previousDocument=pdfDoc;
+      pdfDoc=null;
+      if(previousDocument){try{await previousDocument.destroy();}catch(_){}}
+      if(loadGeneration!==pdfLoadGeneration||!isPdf()||activeArticle()?.querySelector('.farast-pdf-document')?.dataset.pdfUrl!==nextUrl)return;
       continuousObserver?.disconnect();continuousObserver=null;continuousMode=false;
+      clearContinuousFallback();
       pdfSurface?.classList.remove('is-continuous');
       if(continuousHost)continuousHost.innerHTML='';
       pdfSurface=surface;
@@ -926,15 +935,36 @@
     try{
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
+        if(loadGeneration!==pdfLoadGeneration||activePdfUrl!==nextUrl||!isPdf())return;
         pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
-        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
-        loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
-        pdfDoc=await loadingTask.promise;
-        if(typeof pdfDoc.getOptionalContentConfig==='function'){
-          try{pdfOptionalContentConfig=await pdfDoc.getOptionalContentConfig({intent:'display'});}catch(_){pdfOptionalContentConfig=null;}
+        let loadingTask=pdfLoadingTask;
+        if(!loadingTask||pdfLoadingUrl!==nextUrl){
+          loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
+          pdfLoadingTask=loadingTask;
+          pdfLoadingUrl=nextUrl;
+          loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
+        }
+        const loadedDocument=await loadingTask.promise;
+        if(loadGeneration!==pdfLoadGeneration||activePdfUrl!==nextUrl||!isPdf()){
+          if(pdfDoc!==loadedDocument){try{await loadedDocument.destroy();}catch(_){}}
+          return;
+        }
+        pdfDoc=loadedDocument;
+        if(pdfLoadingTask===loadingTask){pdfLoadingTask=null;pdfLoadingUrl=null;}
+        if(typeof loadedDocument.getOptionalContentConfig==='function'){
+          try{
+            const optionalContentConfig=await loadedDocument.getOptionalContentConfig({intent:'display'});
+            if(loadGeneration!==pdfLoadGeneration||pdfDoc!==loadedDocument||activePdfUrl!==nextUrl)return;
+            pdfOptionalContentConfig=optionalContentConfig;
+          }catch(_){
+            if(loadGeneration!==pdfLoadGeneration||pdfDoc!==loadedDocument)return;
+            pdfOptionalContentConfig=null;
+          }
         }
       }
-      if(pdfDoc.isPureXfa){
+      const loadedDocument=pdfDoc;
+      if(loadGeneration!==pdfLoadGeneration||!loadedDocument||activePdfUrl!==nextUrl||!isPdf())return;
+      if(loadedDocument.isPureXfa){
         if(pdfLoading){
           pdfLoading.hidden=false;
           pdfLoading.style.display='grid';
@@ -944,9 +974,15 @@
       }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
+      if(loadGeneration!==pdfLoadGeneration||pdfDoc!==loadedDocument||activePdfUrl!==nextUrl||!isPdf())return;
       await loadPdfOutline();
+      if(loadGeneration!==pdfLoadGeneration||pdfDoc!==loadedDocument)return;
       await loadPdfLayers();
-    }catch(error){if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
+    }catch(error){
+      if(loadGeneration!==pdfLoadGeneration||activePdfUrl!==nextUrl)return;
+      if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;
+      showPdfError(error);
+    }
   };
 
   const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
@@ -1064,7 +1100,11 @@
       scrollModeButton?.setAttribute('aria-pressed','false');
     }
     const pdfActive=isPdf();
-    if(!pdfActive&&pdfDoc){
+    if(!pdfActive&&(pdfDoc||pdfLoadingTask)){
+      pdfLoadGeneration++;
+      const pendingPdfLoad=pdfLoadingTask;
+      pdfLoadingTask=null;pdfLoadingUrl=null;
+      if(pendingPdfLoad){try{pendingPdfLoad.destroy().catch(()=>{});}catch(_){}}
       continuousRenderGeneration++;
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
       continuousRenderGeneration++;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
