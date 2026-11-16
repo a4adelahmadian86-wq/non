@@ -2215,3 +2215,146 @@ test('does not rewrite durable reading progress when only the PDF zoom changes',
   expect(writes[0].state.progress).toEqual({ section: 0, page: 1 });
 });
 
+
+
+test('stops section narration independently from pause and resets its playback position', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.readyState = 1;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        window.__readerStopAudio = this;
+      }
+      setAttribute() {}
+      load() { this.dispatchEvent(new Event('loadedmetadata')); }
+      play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        return Promise.resolve();
+      }
+      pause() {
+        if (!this.paused) {
+          this.paused = true;
+          this.dispatchEvent(new Event('pause'));
+        }
+      }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [{ text: 'سلام جهان', start: 0.1, end: 1.2, page: 1 }];
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root>' +
+      '<input id="reader-page-number" value="1">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" ' +
+        'data-audio-url="/reader-full.wav" data-audio-timing="' + JSON.stringify(timings).replace(/"/g, '&quot;') + '">' +
+        '<div class="farast-pdf-text-layer"><span>سلام جهان</span></div>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+  await expect(page.locator('[data-audio-stop]')).toBeVisible();
+
+  await page.evaluate(() => window.FarastAudioReader.playRange(0.4, 0.8, 'خواندن انتخاب‌شده'));
+  await expect.poll(() => page.evaluate(() => window.__readerStopAudio.currentTime)).toBe(0.4);
+  await page.evaluate(() => {
+    const audio = window.__readerStopAudio;
+    audio.currentTime = 0.6;
+    document.querySelector('[data-audio-seek]').value = '300';
+  });
+  await page.locator('[data-audio-stop]').click();
+
+  const stopped = await page.evaluate(() => ({
+    paused: window.__readerStopAudio.paused,
+    currentTime: window.__readerStopAudio.currentTime,
+    seek: document.querySelector('[data-audio-seek]').value,
+    status: document.querySelector('[data-audio-status]').textContent,
+    caption: document.querySelector('[data-audio-caption]').textContent
+  }));
+  expect(stopped).toMatchObject({
+    paused: true,
+    currentTime: 0,
+    seek: '0',
+    status: 'صوت متوقف شد'
+  });
+  expect(stopped.caption).toContain('پخش متوقف شد');
+
+  await page.evaluate(() => {
+    const audio = window.__readerStopAudio;
+    audio.currentTime = 1;
+    audio.play();
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  expect(await page.evaluate(() => window.__readerStopAudio.paused)).toBe(false);
+});
+
+
+test('ignores malformed document-audio timings and resolves the active segment from the sorted timeline', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        window.__documentAudioFixture = this;
+      }
+      setAttribute() {}
+      play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        return Promise.resolve();
+      }
+      pause() {
+        if (!this.paused) {
+          this.paused = true;
+          this.dispatchEvent(new Event('pause'));
+        }
+      }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'دیرتر', start: 0.5, end: 0.8, page: 1 },
+    { text: 'سلام', start: 0.1, end: 0.4, page: 1 },
+    { text: 'قطعه نامعتبر', start: 0.15, end: 0.6, page: 0 },
+    { text: 'زمان نامعتبر', start: -1, end: 0.4, page: 1 },
+    { text: '   ', start: 0.2, end: 0.5, page: 1 }
+  ];
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-url="/reader-full.wav">' +
+      '<script id="reader-audio-timing" type="application/json">' + JSON.stringify(timings) + '</script>' +
+      '<section data-reader-audio>' +
+        '<button type="button" data-audio-play></button>' +
+        '<input type="range" data-audio-seek value="0">' +
+        '<span data-audio-current></span><span data-audio-duration></span>' +
+        '<select data-audio-speed><option value="1">1</option></select>' +
+        '<span data-audio-status></span>' +
+      '</section>' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">' +
+        '<div data-reader-text-layer><div class="reader-document-line" data-reader-audio-text="سلام">سلام</div></div>' +
+      '</article>' +
+      '<div data-reader-audio-pending hidden></div>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+  await expect(page.locator('[data-reader-audio]')).toBeVisible();
+  await page.locator('[data-audio-play]').click();
+  await page.evaluate(() => {
+    const audio = window.__documentAudioFixture;
+    audio.currentTime = 0.2;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect(page.locator('.reader-document-line')).toHaveClass(/is-audio-active/);
+  expect(await page.locator('.reader-document-line.is-audio-active').textContent()).toBe('سلام');
+});

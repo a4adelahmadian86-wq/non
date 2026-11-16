@@ -103,9 +103,20 @@
   let timings = [];
   try {
     const parsed = JSON.parse(timingNode.textContent || '[]');
-    timings = Array.isArray(parsed) ? parsed.filter(item =>
-      item && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end)) && Number(item.end) > Number(item.start)
-    ) : [];
+    timings = Array.isArray(parsed) ? parsed.filter(item => {
+      if (!item || typeof item.text !== 'string' || !item.text.trim()) return false;
+      const start = Number(item.start);
+      const end = Number(item.end);
+      const page = Number(item.page ?? 1);
+      return Number.isFinite(start) && start >= 0
+        && Number.isFinite(end) && end > start
+        && Number.isSafeInteger(page) && page > 0;
+    }).map(item => ({
+      ...item,
+      start: Number(item.start),
+      end: Number(item.end),
+      page: Number(item.page ?? 1)
+    })).sort((left, right) => left.start - right.start || left.page - right.page) : [];
   } catch (_) {
     timings = [];
   }
@@ -185,7 +196,19 @@
 
   const updateSegment = () => {
     const time = audio.currentTime;
-    const index = timings.findIndex(item => time >= Number(item.start) && time < Number(item.end));
+    let low = 0;
+    let high = timings.length - 1;
+    let candidate = -1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (timings[middle].start <= time) {
+        candidate = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    const index = candidate >= 0 && time < timings[candidate].end ? candidate : -1;
     if (index < 0) {
       if (activeSegmentIndex !== -1) clearHighlights();
       activeSegmentIndex = -1;
@@ -194,7 +217,7 @@
     if (index === activeSegmentIndex) return;
     activeSegmentIndex = index;
     const segment = timings[index];
-    activePage = Number(segment.page) || activePage;
+    activePage = segment.page;
     highlightSegment(segment);
   };
 
