@@ -2571,3 +2571,147 @@ test('pauses and aborts document-audio polling while hidden, then resumes immedi
   await expect.poll(() => page.evaluate(() => window.__audioPollCalls)).toBe(2);
   expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([5000]);
 });
+
+test('aborts stale document page requests and reloads a page when it becomes active again', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-mode="document">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page-1">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+      '<article class="farast-reader-page-item" data-index="1" data-reader-page="2" data-reader-page-url="/protected-page-2">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+    '</section>'
+  );
+
+  let firstPageRequests = 0;
+  let releaseFirstPage;
+  const firstPageGate = new Promise(resolve => { releaseFirstPage = resolve; });
+  await page.route('**/protected-page-1', async route => {
+    firstPageRequests += 1;
+    if (firstPageRequests === 1) {
+      await firstPageGate;
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ page_number: 1, content_text: 'پاسخ منقضی صفحه اول' })
+        });
+      } catch (_) {}
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ page_number: 1, content_text: 'پاسخ تازه صفحه اول' })
+    });
+  });
+  await page.route('**/protected-page-2', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ page_number: 2, content_text: 'محتوای صفحه دوم' })
+  }));
+
+  try {
+    await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+    await expect.poll(() => firstPageRequests).toBe(1);
+    await page.evaluate(() => {
+      const root = document.querySelector('[data-reader-root]');
+      root.querySelector('[data-index="0"]').classList.remove('is-active');
+      root.querySelector('[data-index="1"]').classList.add('is-active');
+      root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 1 } }));
+    });
+    const second = page.locator('.farast-reader-page-item[data-index="1"]');
+    await expect.poll(() => second.getAttribute('data-reader-loaded')).toBe('1');
+
+    await page.evaluate(() => {
+      const root = document.querySelector('[data-reader-root]');
+      root.querySelector('[data-index="1"]').classList.remove('is-active');
+      root.querySelector('[data-index="0"]').classList.add('is-active');
+      root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } }));
+    });
+    await expect.poll(() => firstPageRequests).toBe(2);
+    const first = page.locator('.farast-reader-page-item[data-index="0"]');
+    await expect.poll(() => first.getAttribute('data-reader-loaded')).toBe('1');
+    await expect(first.locator('.reader-document-paragraph')).toHaveText('پاسخ تازه صفحه اول');
+
+    releaseFirstPage();
+    await expect(first.locator('.reader-document-paragraph')).toHaveText('پاسخ تازه صفحه اول');
+  } finally {
+    releaseFirstPage();
+  }
+});
+
+test('restarts a protected document page request after the reader returns from pagehide', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-mode="document">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page-resume">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+    '</section>'
+  );
+  let requests = 0;
+  let releaseFirst;
+  const firstGate = new Promise(resolve => { releaseFirst = resolve; });
+  await page.route('**/protected-page-resume', async route => {
+    requests += 1;
+    if (requests === 1) {
+      await firstGate;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ content_text: 'پاسخ قدیمی' }) }); } catch (_) {}
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ page_number: 1, content_text: 'پاسخ پس از بازگشت' })
+    });
+  });
+  try {
+    await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+    await expect.poll(() => requests).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.evaluate(() => window.dispatchEvent(new Event('pageshow')));
+    await expect.poll(() => requests).toBe(2);
+    const first = page.locator('[data-reader-text-layer]');
+    await expect.poll(() => page.locator('[data-reader-root] article').getAttribute('data-reader-loaded')).toBe('1');
+    await expect(first.locator('.reader-document-paragraph')).toHaveText('پاسخ پس از بازگشت');
+    releaseFirst();
+    await expect(first.locator('.reader-document-paragraph')).toHaveText('پاسخ پس از بازگشت');
+  } finally {
+    releaseFirst();
+  }
+});
+
+test('offers an in-reader retry when a protected document page request fails', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-mode="document">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page-retry">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+    '</section>'
+  );
+  let requests = 0;
+  await page.route('**/protected-page-retry', async route => {
+    requests += 1;
+    if (requests === 1) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'خطای موقت سرویس' }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ page_number: 1, content_text: 'صفحه با موفقیت بازیابی شد' })
+    });
+  });
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  const loading = page.locator('.farast-pdf-loading');
+  await expect(loading).toContainText('خطای موقت سرویس');
+  await expect(loading.locator('.farast-pdf-retry')).toHaveText('تلاش دوباره');
+  await loading.locator('.farast-pdf-retry').click();
+  await expect.poll(() => page.locator('[data-reader-root] article').getAttribute('data-reader-loaded')).toBe('1');
+  await expect(page.locator('.reader-document-paragraph')).toHaveText('صفحه با موفقیت بازیابی شد');
+  expect(requests).toBe(2);
+});
