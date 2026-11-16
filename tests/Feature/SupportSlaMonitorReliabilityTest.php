@@ -404,4 +404,73 @@ class SupportSlaMonitorReliabilityTest extends TestCase
         ]);
     }
 
+    public function test_batch_delivery_refreshes_each_lease_when_earlier_alerts_take_longer_than_the_lease_window(): void
+    {
+        $base = Carbon::parse('2026-11-16 10:00:00', config('app.timezone'));
+        Carbon::setTestNow($base);
+
+        try {
+            $customer = User::factory()->create();
+            $ticketIds = [];
+
+            foreach ([1, 2] as $number) {
+                $ticketIds[] = DB::table('tickets')->insertGetId([
+                    'user_id' => $customer->id,
+                    'subject' => 'Sequential SLA lease '.$number,
+                    'status' => 'open',
+                    'priority' => 'normal',
+                    'department' => 'support',
+                    'sla_first_due_at' => $base->copy()->subMinutes(5),
+                    'created_at' => $base->copy()->subHour(),
+                    'updated_at' => $base,
+                ]);
+            }
+
+            Artisan::call('support:check-sla');
+
+            $secondOutbox = DB::table('support_sla_alert_outbox')
+                ->where('ticket_id', $ticketIds[1])
+                ->first();
+            $this->assertNotNull($secondOutbox);
+
+            $notifier = Mockery::mock(SupportNotificationService::class);
+            $notifier->shouldReceive('slaBreached')->twice()->andReturnUsing(
+                function ($ticket, $kind, $identity) use ($ticketIds, $secondOutbox, $base): void {
+                    if ((int) $ticket->id === $ticketIds[0]) {
+                        // Simulate a slow first delivery while the second row is waiting
+                        // in the same batch with a lease timestamp from the initial claim.
+                        Carbon::setTestNow($base->copy()->addMinutes(16));
+
+                        return;
+                    }
+
+                    $this->assertSame($ticketIds[1], (int) $ticket->id);
+                    $this->assertSame('first_response', $kind);
+                    $this->assertSame($secondOutbox->event_identity, $identity);
+
+                    $lockedAt = Carbon::parse(
+                        DB::table('support_sla_alert_outbox')->where('id', $secondOutbox->id)->value('locked_at')
+                    );
+
+                    $this->assertSame(
+                        Carbon::now()->timestamp,
+                        $lockedAt->timestamp,
+                        'A row must receive a fresh lease when its own delivery starts, not when the whole batch was claimed.'
+                    );
+                }
+            );
+            $this->app->instance(SupportNotificationService::class, $notifier);
+
+            $this->assertSame(2, app(SupportSlaAlertOutboxService::class)->processPending());
+
+            $this->assertDatabaseHas('support_sla_alert_outbox', [
+                'id' => $secondOutbox->id,
+                'status' => 'delivered',
+                'lease_token' => null,
+            ]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
 }
