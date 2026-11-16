@@ -565,7 +565,7 @@ class SupportTicketService
             if (is_array($managed) && ! empty($managed['disk']) && ! empty($managed['path'])) {
                 try {
                     app(StorageManager::class)->delete((string) $managed['disk'], (string) $managed['path']);
-                } catch (\\Throwable $cleanupException) {
+                } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                 }
             }
