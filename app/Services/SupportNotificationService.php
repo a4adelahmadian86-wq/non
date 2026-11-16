@@ -198,8 +198,10 @@ class SupportNotificationService
         $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
         $identity = $eventIdentity ?? 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown').':threshold:'.$minutesLeft;
         $failures = [];
+        $attempted = false;
 
         foreach ($this->staffTargets($ticket) as $staff) {
+            $attempted = true;
             try {
                 $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
             } catch (\Throwable $exception) {
@@ -219,14 +221,17 @@ class SupportNotificationService
         try {
             if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
                 $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-                if ($mobile && ! $this->sms->sendEvent(
-                    $mobile,
-                    'ticket_sla_warning',
-                    'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
-                    ['token' => $ticket->displayCode(), 'token2' => (string) $minutesLeft],
-                    'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$identity
-                )) {
-                    $failures[] = 'sms';
+                if ($mobile) {
+                    $attempted = true;
+                    if (! $this->sms->sendEvent(
+                        $mobile,
+                        'ticket_sla_warning',
+                        'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
+                        ['token' => $ticket->displayCode(), 'token2' => (string) $minutesLeft],
+                        'support:ticket:'.$ticket->id.':sla-warning:'.$kind.':'.$identity
+                    )) {
+                        $failures[] = 'sms';
+                    }
                 }
             }
         } catch (\Throwable $exception) {
@@ -247,8 +252,10 @@ class SupportNotificationService
         $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
         $identity = $eventIdentity ?? 'cycle:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
         $failures = [];
+        $attempted = false;
 
         foreach ($this->staffTargets($ticket) as $staff) {
+            $attempted = true;
             try {
                 $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind, eventIdentity: $identity, throwOnFailure: true);
             } catch (\Throwable $exception) {
@@ -268,14 +275,17 @@ class SupportNotificationService
         try {
             if ($this->smsEnabled('ticket_sla_breach')) {
                 $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile($ticket);
-                if ($mobile && ! $this->sms->sendEvent(
-                    $mobile,
-                    'ticket_sla_breach',
-                    'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
-                    ['token' => $ticket->displayCode()],
-                    'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$identity
-                )) {
-                    $failures[] = 'sms';
+                if ($mobile) {
+                    $attempted = true;
+                    if (! $this->sms->sendEvent(
+                        $mobile,
+                        'ticket_sla_breach',
+                        'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
+                        ['token' => $ticket->displayCode()],
+                        'support:ticket:'.$ticket->id.':sla-breached:'.$kind.':'.$identity
+                    )) {
+                        $failures[] = 'sms';
+                    }
                 }
             }
         } catch (\Throwable $exception) {
