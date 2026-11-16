@@ -882,7 +882,7 @@ class SupportTicketService
     private function enqueueFirstResponseBreachAlert(Ticket $ticket): void
     {
         if (empty($ticket->sla_first_breached_at) || ! $ticket->sla_first_due_at) {
-            throw new \\RuntimeException('A first-response breach alert requires its canonical SLA marker and deadline.');
+            throw new \RuntimeException('A first-response breach alert requires its canonical SLA marker and deadline.');
         }
 
         $minutesLeft = $this->sla->minutesUntilDeadline($ticket->sla_first_due_at);
@@ -900,7 +900,7 @@ class SupportTicketService
     private function enqueueResolutionBreachAlert(Ticket $ticket): void
     {
         if (empty($ticket->sla_resolve_breached_at) || ! $ticket->sla_resolve_due_at) {
-            throw new \\RuntimeException('A resolution breach alert requires its canonical SLA marker and deadline.');
+            throw new \RuntimeException('A resolution breach alert requires its canonical SLA marker and deadline.');
         }
 
         $breachAt = $ticket->sla_paused_at ?: now();
