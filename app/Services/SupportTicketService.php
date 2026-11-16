@@ -9,6 +9,7 @@ use App\Http\Middleware\ResolveAdminScope;
 use App\Services\WorkflowEngine;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -523,6 +524,21 @@ class SupportTicketService
                     report($cleanupException);
                 }
             }
+            if ($submission && $exception instanceof QueryException) {
+                $concurrentReplay = TicketMessage::query()
+                    ->where('submission_scope', $submission['scope'])
+                    ->where('submission_key', $submission['key'])
+                    ->first();
+
+                if ($concurrentReplay) {
+                    if (! hash_equals((string) $concurrentReplay->submission_fingerprint, $submission['fingerprint'])) {
+                        throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                    }
+
+                    return $concurrentReplay;
+                }
+            }
+
             throw $exception;
         }
 
