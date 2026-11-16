@@ -146,6 +146,7 @@ test('renders annotation overlays only for live continuous pages and releases of
   await page.evaluate(()=>{
     const root=document.querySelector('[data-reader-root]');
     const wrapper=root.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="1"]');
+    wrapper.dataset.rendered='0';
     root.dispatchEvent(new CustomEvent('farast:reader-page-released',{detail:{page:1,wrapper}}));
   });
   await expect(first.locator('.farast-annotation-layer')).toHaveCount(0);
