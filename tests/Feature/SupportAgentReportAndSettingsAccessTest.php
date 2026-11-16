@@ -7,8 +7,11 @@ use App\Models\RolePermission;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Http\Controllers\SupportReportController;
 use App\Services\AuthorizationService;
+use App\Services\SupportSlaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
