@@ -2784,7 +2784,6 @@ test('deduplicates concurrent requests for the same protected document page', as
     root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } }));
   });
   expect(await page.evaluate(() => window.__deduplicatedPageRequests)).toBe(1);
-  await page.evaluate(() => window.__resolveDeduplicatedPage  expect(await page.evaluate(() => window.__deduplicatedPageRequests)).toBe(1);
   await page.evaluate(() => window.__resolveDeduplicatedPage(new Response(JSON.stringify({
     page_number: 1,
     content_text: 'درخواست یکتای صفحه'
