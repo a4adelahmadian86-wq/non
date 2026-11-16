@@ -344,9 +344,15 @@ class SupportTicketService
                 $previousStatus = (string) $locked->status;
                 $resolutionBreachDetected = false;
 
-                // A customer reply must not race past a concurrent ticket close.
-                if (! $isStaff && ! $isInternal && $previousStatus === 'closed') {
-                    throw new \InvalidArgumentException('این تیکت بسته شده و امکان ارسال پاسخ ندارد.');
+                // Validate the event origin and destination against the canonical
+                // status policy while holding the ticket row lock.
+                if ($touchStatus && ! $isInternal) {
+                    $statusPolicy = app(SupportTicketStatusPolicy::class);
+                    if ($isStaff) {
+                        $statusPolicy->assertWorkflowTarget((string) ($options['status'] ?? 'answered'));
+                    } else {
+                        $statusPolicy->assertCustomerReplyAllowed($previousStatus);
+                    }
                 }
 
                 $message = $locked->messages()->create($payload);
@@ -390,7 +396,7 @@ class SupportTicketService
 
                     $targetStatus = $isStaff
                         ? (string) ($options['status'] ?? 'answered')
-                        : 'user_replied';
+                        : SupportTicketStatusPolicy::CUSTOMER_REPLY_STATUS;
 
                     if ($isStaff && Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
                         $update['first_response_at'] = now();
@@ -508,9 +514,7 @@ class SupportTicketService
 
     public function changeStatus(Ticket $ticket, string $status, ?User $actor = null, bool $systemNote = true): Ticket
     {
-        if (! in_array($status, self::STATUSES, true)) {
-            throw new \InvalidArgumentException('وضعیت نامعتبر است.');
-        }
+        app(SupportTicketStatusPolicy::class)->assertWorkflowTarget($status);
 
         [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = app(SupportAssignmentMutex::class)->synchronized(
             fn () => DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {

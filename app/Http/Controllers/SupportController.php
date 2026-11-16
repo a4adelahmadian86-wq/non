@@ -14,6 +14,7 @@ use App\Services\SupportSlaService;
 use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
+use App\Services\SupportTicketStatusPolicy;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -582,7 +583,7 @@ class SupportController extends Controller
 
         $data = $request->validate([
             'body' => 'required|string|max:8000',
-            'status' => 'nullable|in:'.implode(',', SupportTicketService::STATUSES),
+            'status' => 'nullable|in:'.implode(',', SupportTicketStatusPolicy::STAFF_MANAGED_STATUSES),
             'is_internal' => 'nullable|boolean',
             'attachment' => 'nullable|file|max:8192|mimes:jpg,jpeg,png,gif,pdf,txt,zip,doc,docx',
         ]);
@@ -607,7 +608,7 @@ class SupportController extends Controller
         $this->authorize('manage', $ticket);
 
         $data = $request->validate([
-            'status' => 'required|in:'.implode(',', SupportTicketService::STATUSES),
+            'status' => 'required|in:'.implode(',', SupportTicketStatusPolicy::STAFF_MANAGED_STATUSES),
         ]);
 
         $this->tickets->changeStatus($ticket, $data['status'], auth()->user(), true);
