@@ -14,6 +14,9 @@ class TicketMessage extends Model
         'attachments',
         'is_internal',
         'is_staff',
+        'submission_scope',
+        'submission_key',
+        'submission_fingerprint',
     ];
 
     protected function casts(): array
