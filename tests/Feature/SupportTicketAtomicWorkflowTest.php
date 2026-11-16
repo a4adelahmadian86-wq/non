@@ -481,4 +481,30 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $service->addMessage($secondTicket, $customer, 'Same text', $options);
     }
 
+
+    public function test_retried_ticket_creation_does_not_restore_the_initial_attachment(): void
+    {
+        Storage::fake('private');
+        $customer = User::factory()->create();
+        $attachment = UploadedFile::fake()->createWithContent('initial.txt', 'initial attachment');
+        $data = [
+            'subject' => 'Attachment-safe creation retry',
+            'body' => 'Please review this file',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->createTicket($customer, $data, $attachment);
+        $filesAfterFirst = count(Storage::disk('private')->allFiles());
+        $retry = $service->createTicket($customer, $data, $attachment);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertSame($filesAfterFirst, count(Storage::disk('private')->allFiles()));
+    }
+
 }
