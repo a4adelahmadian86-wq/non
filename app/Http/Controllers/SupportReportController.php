@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Ticket;
+use App\Http\Middleware\ResolveAdminScope;
 use App\Services\SupportSlaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -18,17 +19,35 @@ class SupportReportController extends Controller
         $fromAt = Carbon::parse($from)->startOfDay();
         $toAt = Carbon::parse($to)->endOfDay();
 
-        $report = $sla->agentReport($fromAt, $toAt);
+        $actor = $request->user();
+        $requestScope = $request->attributes->get('farast.scope');
+        $scope = is_string($requestScope)
+            ? $requestScope
+            : ResolveAdminScope::scopeWithConfiguredOverride($actor);
+        $visibleUserIds = ResolveAdminScope::visibleUserIds($actor, $scope);
 
-        $breached = Ticket::query()->slaBreached()->count();
-        $backlog = Ticket::query()->openQueue()->count();
-        $needsReply = Ticket::query()->needsReply()->count();
-        $openInRange = Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->count();
+        // Apply one canonical ownership boundary to every report metric. A null
+        // visible-user list means global scope; an empty list intentionally returns
+        // no customer-owned records. Guest tickets (user_id IS NULL) remain global-only.
+        $scopedTickets = static function ($query) use ($visibleUserIds) {
+            if ($visibleUserIds !== null) {
+                $query->whereIn('user_id', $visibleUserIds);
+            }
+
+            return $query;
+        };
+
+        $report = $sla->agentReport($fromAt, $toAt, $visibleUserIds);
+
+        $breached = $scopedTickets(Ticket::query())->slaBreached()->count();
+        $backlog = $scopedTickets(Ticket::query())->openQueue()->count();
+        $needsReply = $scopedTickets(Ticket::query())->needsReply()->count();
+        $openInRange = $scopedTickets(Ticket::query())->whereBetween('created_at', [$fromAt, $toAt])->count();
         $closedInRange = Schema::hasColumn('tickets', 'closed_at')
-            ? Ticket::query()->where('status', 'closed')->whereBetween('closed_at', [$fromAt, $toAt])->count()
-            : Ticket::query()->where('status', 'closed')->whereBetween('updated_at', [$fromAt, $toAt])->count();
+            ? $scopedTickets(Ticket::query())->where('status', 'closed')->whereBetween('closed_at', [$fromAt, $toAt])->count()
+            : $scopedTickets(Ticket::query())->where('status', 'closed')->whereBetween('updated_at', [$fromAt, $toAt])->count();
         $breachRate = $openInRange > 0
-            ? round(100 * Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->slaBreached()->count() / max(1, $openInRange), 1)
+            ? round(100 * $scopedTickets(Ticket::query())->whereBetween('created_at', [$fromAt, $toAt])->slaBreached()->count() / max(1, $openInRange), 1)
             : null;
 
         $csat = [
@@ -40,7 +59,7 @@ class SupportReportController extends Controller
         if (Schema::hasColumn('tickets', 'csat_score') && Schema::hasColumn('tickets', 'csat_at')) {
             // Aggregate in SQL instead of hydrating every rated ticket into PHP.
             // Report memory now stays constant as the historical rating volume grows.
-            $rated = Ticket::query()
+            $rated = $scopedTickets(Ticket::query())
                 ->whereNotNull('csat_score')
                 ->whereBetween('csat_at', [$fromAt, $toAt])
                 ->selectRaw('COUNT(*) AS rated_count, AVG(csat_score) AS rated_average')
