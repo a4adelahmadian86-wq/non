@@ -238,6 +238,10 @@ class SupportNotificationService
             $failures[] = 'sms';
         }
 
+        if (! $attempted) {
+            $failures[] = 'no-eligible-recipient';
+        }
+
         if ($failures !== []) {
             throw new \RuntimeException('SLA warning delivery incomplete: '.implode(',', array_unique($failures)));
         }
@@ -290,6 +294,10 @@ class SupportNotificationService
             }
         } catch (\Throwable $exception) {
             $failures[] = 'sms';
+        }
+
+        if (! $attempted) {
+            $failures[] = 'no-eligible-recipient';
         }
 
         if ($failures !== []) {
