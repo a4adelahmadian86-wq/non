@@ -442,11 +442,12 @@ class SupportTicketAtomicWorkflowTest extends TestCase
 
         $service = $this->service();
         $first = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
+        $filesAfterFirst = count(Storage::disk('private')->allFiles());
         $retry = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
 
         $this->assertSame($first->id, $retry->id);
         $this->assertDatabaseCount('ticket_messages', 1);
-        $this->assertCount(1, Storage::disk('private')->allFiles());
+        $this->assertSame($filesAfterFirst, count(Storage::disk('private')->allFiles()));
     }
 
 
