@@ -2715,3 +2715,45 @@ test('offers an in-reader retry when a protected document page request fails', a
   await expect(page.locator('.reader-document-paragraph')).toHaveText('صفحه با موفقیت بازیابی شد');
   expect(requests).toBe(2);
 });
+
+
+test('aborts protected page requests while hidden and resumes on visibility', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-mode="document">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page-visibility">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.evaluate(() => {
+    window.__pageSignals = [];
+    window.fetch = (_url, options) => {
+      window.__pageSignals.push(options.signal);
+      if (window.__pageSignals.length === 1) {
+        return new Promise((resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        page_number: 1,
+        content_text: 'محتوای تازه پس از بازگشت'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    };
+  });
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await expect.poll(() => page.evaluate(() => window.__pageSignals.length)).toBe(1);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__pageSignals[0].aborted)).toBe(true);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__pageSignals.length)).toBe(2);
+  const article = page.locator('[data-reader-root] article');
+  await expect.poll(() => article.getAttribute('data-reader-loaded')).toBe('1');
+  await expect(page.locator('.reader-document-paragraph')).toHaveText('محتوای تازه پس از بازگشت');
+});
