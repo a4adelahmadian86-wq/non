@@ -497,4 +497,84 @@ class SupportTicketAuditLedgerTest extends TestCase
             ->count());
     }
 
+
+    public function test_explicit_reopen_preserves_previous_close_and_resolution_times_in_audit(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Explicit reopen lifecycle evidence',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('statusChanged')->twice();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $service = app(SupportTicketService::class);
+        $service->changeStatus($ticket, 'closed', $admin, false);
+        $closed = $ticket->fresh();
+        $closedAt = $closed->closed_at->toIso8601String();
+        $resolvedAt = $closed->resolved_at->toIso8601String();
+
+        $service->changeStatus($ticket->fresh(), 'open', $admin, false);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.status_transitioned')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('closed', $event->payload_meta['from_status']);
+        $this->assertSame('open', $event->payload_meta['to_status']);
+        $this->assertSame($closedAt, $event->payload_meta['sla_before']['closed_at']);
+        $this->assertSame($resolvedAt, $event->payload_meta['sla_before']['resolved_at']);
+        $this->assertNull($event->payload_meta['sla_after']['closed_at']);
+        $this->assertNull($event->payload_meta['sla_after']['resolved_at']);
+        $this->assertNotEmpty($event->payload_meta['reopened_at']);
+        $this->assertNull($ticket->fresh()->closed_at);
+        $this->assertNull($ticket->fresh()->resolved_at);
+    }
+
+    public function test_staff_reply_reopen_preserves_previous_close_and_resolution_times_in_audit(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $closedAt = now()->subMinutes(20)->startOfSecond();
+        $resolvedAt = now()->subMinutes(18)->startOfSecond();
+        $ticket = Ticket::create([
+            'subject' => 'Staff reply reopen lifecycle evidence',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'closed_at' => $closedAt,
+            'resolved_at' => $resolvedAt,
+        ]);
+
+        app(SupportTicketService::class)->addMessage($ticket, $admin, 'پیگیری مجدد توسط کارشناس', [
+            'is_staff' => true,
+            'status' => 'answered',
+            'notify' => false,
+        ]);
+
+        $event = FarastAuditEvent::query()
+            ->where('aggregate_type', 'ticket')
+            ->where('aggregate_id', $ticket->id)
+            ->where('event_type', 'support.ticket.status_transitioned')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('closed', $event->payload_meta['from_status']);
+        $this->assertSame('answered', $event->payload_meta['to_status']);
+        $this->assertSame($closedAt->toIso8601String(), $event->payload_meta['sla_before']['closed_at']);
+        $this->assertSame($resolvedAt->toIso8601String(), $event->payload_meta['sla_before']['resolved_at']);
+        $this->assertNull($event->payload_meta['sla_after']['closed_at']);
+        $this->assertNull($event->payload_meta['sla_after']['resolved_at']);
+        $this->assertNotEmpty($event->payload_meta['reopened_at']);
+        $this->assertNull($ticket->fresh()->closed_at);
+        $this->assertNull($ticket->fresh()->resolved_at);
+    }
+
 }
