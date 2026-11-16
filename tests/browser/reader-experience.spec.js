@@ -2325,7 +2325,8 @@ test('ignores malformed document-audio timings and resolves the active segment f
   });
   await page.goto('/');
   const timings = [
-    { text: 'سلام', start: 0.1, end: 0.8, page: 1 },
+    { text: 'دیرتر', start: 0.5, end: 0.8, page: 1 },
+    { text: 'سلام', start: 0.1, end: 0.4, page: 1 },
     { text: 'قطعه نامعتبر', start: 0.15, end: 0.6, page: 0 },
     { text: 'زمان نامعتبر', start: -1, end: 0.4, page: 1 },
     { text: '   ', start: 0.2, end: 0.5, page: 1 }
