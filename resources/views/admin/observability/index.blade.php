@@ -35,6 +35,7 @@
                         @switch($key)
                             @case('database') پایگاه داده @break
                             @case('queue') صف و پردازش پس‌زمینه @break
+                            @case('sla_alerts') صف اعلان‌های SLA @break
                             @case('storage') ذخیره‌سازی @break
                             @case('product_services') سرویس‌های پردازش محصول و صوت @break
                             @default ثبت لاگ
