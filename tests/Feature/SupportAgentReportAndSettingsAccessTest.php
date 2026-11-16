@@ -99,6 +99,87 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
         });
     }
 
+
+    public function test_restricted_admin_report_limits_every_metric_and_redacts_out_of_scope_agent_names(): void
+    {
+        $overrideKey = 'support_report_scope_'.spl_object_id($this);
+        $previousOverrideKey = config('farast_admin.scope_override_key');
+        config(['farast_admin.scope_override_key' => $overrideKey]);
+        SiteSetting::write($overrideKey, 'own');
+
+        try {
+            $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+            $hiddenAgent = User::factory()->create([
+                'role' => User::ROLE_ADMIN,
+                'name' => 'Secret Out Of Scope Agent',
+                'is_blocked' => false,
+            ]);
+            $outsideCustomer = User::factory()->create();
+
+            $ownTicket = Ticket::create([
+                'user_id' => $admin->id,
+                'assigned_to' => $hiddenAgent->id,
+                'subject' => 'Own scoped support ticket',
+                'status' => 'closed',
+                'priority' => 'normal',
+                'department' => 'support',
+                'first_response_at' => now()->subMinutes(30),
+                'sla_first_due_at' => now()->subHour(),
+                'sla_resolve_due_at' => now()->subHour(),
+                'resolved_at' => now(),
+                'closed_at' => now(),
+                'csat_score' => 5,
+                'csat_at' => now(),
+            ]);
+            $ownTicket->messages()->create([
+                'user_id' => $hiddenAgent->id,
+                'body' => 'Public response by an out-of-scope agent',
+                'is_internal' => false,
+                'is_staff' => true,
+            ]);
+
+            Ticket::create([
+                'user_id' => $outsideCustomer->id,
+                'assigned_to' => $hiddenAgent->id,
+                'subject' => 'Outside scoped support ticket',
+                'status' => 'open',
+                'priority' => 'high',
+                'department' => 'support',
+                'sla_first_due_at' => now()->subMinutes(10),
+                'sla_resolve_due_at' => now()->subMinutes(10),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $response = $this->actingAs($admin)->get(route('admin.support.report'));
+
+            $response->assertOk()
+                ->assertDontSee('Secret Out Of Scope Agent')
+                ->assertViewHas('report', function (array $report): bool {
+                    $names = collect($report['agents'])->pluck('name')->all();
+                    $hiddenAgentRow = collect($report['agents'])->firstWhere('name', 'کارشناس خارج از محدوده');
+
+                    return $report['totals']['tickets'] === 1
+                        && $report['totals']['closed'] === 1
+                        && $hiddenAgentRow !== null
+                        && $hiddenAgentRow['assigned'] === 1
+                        && $hiddenAgentRow['replies'] === 1
+                        && $hiddenAgentRow['first_response_total'] === 1
+                        && in_array('کارشناس خارج از محدوده', $names, true)
+                        && ! in_array('Secret Out Of Scope Agent', $names, true);
+                })
+                ->assertViewHas('breached', 1)
+                ->assertViewHas('backlog', 0)
+                ->assertViewHas('needsReply', 0)
+                ->assertViewHas('openInRange', 1)
+                ->assertViewHas('closedInRange', 1)
+                ->assertViewHas('csat', fn (array $csat): bool => $csat['count'] === 1 && $csat['avg'] === 5.0);
+        } finally {
+            SiteSetting::query()->where('key', $overrideKey)->delete();
+            config(['farast_admin.scope_override_key' => $previousOverrideKey]);
+        }
+    }
+
     public function test_scoped_support_agent_can_open_and_update_support_sms_settings(): void
     {
         config(['farast_admin.multi_role_console' => true]);
