@@ -18,8 +18,9 @@
 
   let ticketId = sessionStorage.getItem('farast_support_ticket_id') || null;
   let pendingBody = null;
-  let pendingSubmissionKey = null;
-  let pendingSubmissionBody = null;
+  let pendingSubmissionKey = sessionStorage.getItem('farast_support_pending_submission_key') || null;
+  let pendingSubmissionBody = sessionStorage.getItem('farast_support_pending_submission_body') || null;
+  if (pendingSubmissionBody && textarea) textarea.value = pendingSubmissionBody;
   const newSubmissionKey = () => {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -78,10 +79,14 @@
       // retry keeps the prior identity and is deduplicated server-side.
       pendingSubmissionKey = null;
       pendingSubmissionBody = null;
+      sessionStorage.removeItem('farast_support_pending_submission_key');
+      sessionStorage.removeItem('farast_support_pending_submission_body');
     }
     if (!pendingSubmissionKey) {
       pendingSubmissionKey = newSubmissionKey();
       pendingSubmissionBody = body;
+      sessionStorage.setItem('farast_support_pending_submission_key', pendingSubmissionKey);
+      sessionStorage.setItem('farast_support_pending_submission_body', body);
     }
     const payload = {
       body,
@@ -121,6 +126,8 @@
       if (res.status >= 400 && res.status < 500) {
         pendingSubmissionKey = null;
         pendingSubmissionBody = null;
+        sessionStorage.removeItem('farast_support_pending_submission_key');
+        sessionStorage.removeItem('farast_support_pending_submission_body');
       }
       return false;
     }
@@ -137,6 +144,8 @@
     }
     pendingSubmissionKey = null;
     pendingSubmissionBody = null;
+    sessionStorage.removeItem('farast_support_pending_submission_key');
+    sessionStorage.removeItem('farast_support_pending_submission_body');
     return true;
   }
 
