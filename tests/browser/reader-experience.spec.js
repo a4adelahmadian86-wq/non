@@ -234,6 +234,8 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
 }
 
 test('discards a PDF load that completes after navigation leaves its document', async ({ page }) => {
+  let signalPdfRequestStarted;
+  const pdfRequestStarted = new Promise(resolve => { signalPdfRequestStarted = resolve; });
   await mountPdfReader(page, 2, false, false, async page => {
     await page.evaluate(() => {
       const article = document.querySelector('.farast-reader-page-item');
@@ -244,6 +246,7 @@ test('discards a PDF load that completes after navigation leaves its document', 
       article.parentElement.append(next);
     });
     await page.route('**/reader-fixture.pdf', async route => {
+      signalPdfRequestStarted();
       await new Promise(resolve => setTimeout(resolve, 350));
       await route.fulfill({
         status: 200,
@@ -254,6 +257,7 @@ test('discards a PDF load that completes after navigation leaves its document', 
   });
 
   const root = page.locator('[data-reader-root]');
+  await pdfRequestStarted;
   await root.locator('#reader-next').click();
   await expect(root.locator('.farast-reader-page-item[data-index="1"]')).toHaveClass(/is-active/);
   await expect(root.locator('.farast-pdf-document')).toHaveCount(1);
