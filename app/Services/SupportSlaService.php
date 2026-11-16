@@ -543,7 +543,7 @@ class SupportSlaService
 
                     $ensureAgent($assignedId, $assignedName);
 
-                    if ($assignedId > 0) {
+                    if ($assignedId !== 0) {
                         $agents[$assignedId]['assigned']++;
                         if ($ticket->status === 'closed') {
                             $agents[$assignedId]['closed']++;
@@ -584,7 +584,7 @@ class SupportSlaService
                         $responderName = 'کارشناس خارج از محدوده';
                     }
 
-                    if ($responderId > 0) {
+                    if ($responderId !== 0) {
                         $ensureAgent($responderId, $responderName);
                         $agents[$responderId]['first_response_total']++;
                         $agents[$responderId]['first_response_sum'] += $minutes;
