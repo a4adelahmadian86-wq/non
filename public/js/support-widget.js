@@ -148,8 +148,15 @@
     const body = pendingBody || 'سلام، نیاز به پشتیبانی دارم.';
     try {
       const sent = await sendMessage(body);
-      if (sent) pendingBody = null;
-      else contactBox?.classList.add('is-visible');
+      if (sent) {
+        pendingBody = null;
+        if (textarea) {
+          textarea.value = '';
+          textarea.style.height = 'auto';
+        }
+      } else {
+        contactBox?.classList.add('is-visible');
+      }
     } catch (_) {
       appendMsg('خطای شبکه. درخواست حفظ شده است؛ دوباره تلاش کنید.', 'bot');
       contactBox?.classList.add('is-visible');
