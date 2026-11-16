@@ -592,4 +592,30 @@ class ProcessProductDocument implements ShouldQueue
             ]);
         });
     }
+    /**
+     * Best-effort cleanup for staged managed objects. Cleanup must never replace
+     * the primary processing exception or turn a committed document into a failed job.
+     */
+    private function cleanupManagedArtifact(StorageManager $storage, ?array $managed, string $artifactType): void
+    {
+        if (! is_array($managed) || empty($managed['disk']) || empty($managed['path'])) {
+            return;
+        }
+
+        try {
+            $storage->delete((string) $managed['disk'], (string) $managed['path']);
+        } catch (Throwable $cleanupException) {
+            try {
+                Log::warning('Product document managed artifact cleanup failed', [
+                    'document_id' => $this->documentId,
+                    'artifact_type' => $artifactType,
+                    'managed_file_id' => $managed['managed_file_id'] ?? null,
+                    'exception' => class_basename($cleanupException),
+                ]);
+            } catch (Throwable) {
+                // The original processing result takes precedence over cleanup/logging failures.
+            }
+        }
+    }
+
 }
