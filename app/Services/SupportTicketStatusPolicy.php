@@ -22,14 +22,14 @@ class SupportTicketStatusPolicy
 
     public const CUSTOMER_REPLY_STATUS = 'user_replied';
 
-    public function assertStaffManagedTarget(string $targetStatus): void
+    public function assertWorkflowTarget(string $targetStatus): void
     {
         if (! in_array($targetStatus, self::STAFF_MANAGED_STATUSES, true)) {
             if ($targetStatus === self::CUSTOMER_REPLY_STATUS) {
-                throw new InvalidArgumentException('کارشناس نمی‌تواند وضعیت «پاسخ کاربر» را مستقیماً ثبت کند.');
+                throw new InvalidArgumentException('وضعیت «پاسخ کاربر» فقط با ثبت پاسخ عمومی مشتری یا مهمان ایجاد می‌شود.');
             }
 
-            throw new InvalidArgumentException('وضعیت مقصد برای عملیات کارشناس معتبر نیست.');
+            throw new InvalidArgumentException('وضعیت مقصد برای این عملیات معتبر نیست.');
         }
     }
 
