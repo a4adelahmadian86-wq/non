@@ -405,9 +405,10 @@
     const request=++pdfRenderSequence;
     const pageNumber=clamp(Number(number)||1,1,renderDocument.numPages);
     pdfPage=pageNumber;
+    let page=null;
     try{
     if(renderTask){try{renderTask.cancel();}catch(_){}}
-    const page=await renderDocument.getPage(pageNumber);
+    page=await renderDocument.getPage(pageNumber);
     if(request!==pdfRenderSequence||renderDocument!==pdfDoc||canvas!==pdfCanvas)return;
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
@@ -467,6 +468,8 @@
     }catch(error){
       if(!isCurrent()||error?.name==='RenderingCancelledException'||error?.name==='AbortException')return;
       showPdfError(error);
+    }finally{
+      try{page?.cleanup?.();}catch(_){}
     }
   };
 
