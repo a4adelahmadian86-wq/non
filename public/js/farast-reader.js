@@ -219,20 +219,20 @@
     }catch(_){}
   };
   const remoteStateUrl=root.dataset.readerStateUrl||'';
-  let remoteSyncTimer=null;
+  let remoteSyncTimer=null,remoteSyncInFlight=Promise.resolve();
   const queueRemoteSync=()=>{
     if(!remoteStateUrl)return;
     if(remoteSyncTimer)clearTimeout(remoteSyncTimer);
-    remoteSyncTimer=setTimeout(async()=>{
+    remoteSyncTimer=setTimeout(()=>{
       const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
-      try{
-        await fetch(remoteStateUrl,{
-          method:'PUT',
-          credentials:'same-origin',
-          headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrf,'X-Requested-With':'XMLHttpRequest'},
-          body:JSON.stringify({progress:readerState.progress,bookmarks:readerState.bookmarks})
-        });
-      }catch(_){}
+      const body=JSON.stringify({progress:readerState.progress,bookmarks:readerState.bookmarks});
+      // Keep writes ordered: a slower older PUT must never finish after and overwrite a newer snapshot.
+      remoteSyncInFlight=remoteSyncInFlight.catch(()=>{}).then(()=>fetch(remoteStateUrl,{
+        method:'PUT',
+        credentials:'same-origin',
+        headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrf,'X-Requested-With':'XMLHttpRequest'},
+        body
+      })).catch(()=>{});
     },650);
   };
   const loadRemoteReaderState=async()=>{
