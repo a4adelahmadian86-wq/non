@@ -722,6 +722,10 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
         app(SupportTicketService::class)->changeStatus(
             Ticket::query()->findOrFail($ticketId),
             'closed',
