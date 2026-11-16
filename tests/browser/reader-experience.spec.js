@@ -2463,3 +2463,111 @@ test('ignores malformed document-audio timings and resolves the active segment f
   await expect(page.locator('.reader-document-line')).toHaveClass(/is-audio-active/);
   expect(await page.locator('.reader-document-line.is-audio-active').textContent()).toBe('سلام');
 });
+
+test('retries document-audio readiness with server Retry-After and bounded backoff', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-status="pending" data-reader-audio-poll-url="/audio/readiness">' +
+      '<div data-reader-audio-pending hidden></div>' +
+    '</section>'
+  );
+  await page.evaluate(() => {
+    window.__audioPollCalls = [];
+    window.__audioPollTimers = [];
+    let timerId = 0;
+    window.setTimeout = (callback, delay) => {
+      const timer = { id: ++timerId, callback, delay, cleared: false };
+      window.__audioPollTimers.push(timer);
+      return timer.id;
+    };
+    window.clearTimeout = id => {
+      const timer = window.__audioPollTimers.find(item => item.id === id);
+      if (timer) timer.cleared = true;
+    };
+    window.fetch = async (url, options) => {
+      window.__audioPollCalls.push({ url, method: options.method, credentials: options.credentials, cache: options.cache });
+      if (window.__audioPollCalls.length === 1) {
+        return new Response(null, { status: 429, headers: { 'Retry-After': '2' } });
+      }
+      return new Response(null, { status: 503 });
+    };
+  });
+  await page.addScriptTag({ url: '/js/farast-reader-document-audio.js' });
+  await expect.poll(() => page.evaluate(() => window.__audioPollCalls.length)).toBe(1);
+  expect(await page.evaluate(() => window.__audioPollCalls[0])).toEqual({
+    url: '/audio/readiness',
+    method: 'HEAD',
+    credentials: 'same-origin',
+    cache: 'no-store'
+  });
+  expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([2000]);
+
+  await page.evaluate(() => {
+    const timer = window.__audioPollTimers.find(item => !item.cleared);
+    timer.cleared = true;
+    timer.callback();
+  });
+  await expect.poll(() => page.evaluate(() => window.__audioPollCalls.length)).toBe(2);
+  expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([10000]);
+
+  await page.evaluate(() => {
+    const timer = window.__audioPollTimers.find(item => !item.cleared);
+    timer.cleared = true;
+    timer.callback();
+  });
+  await expect.poll(() => page.evaluate(() => window.__audioPollCalls.length)).toBe(3);
+  expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([20000]);
+});
+
+test('pauses and aborts document-audio polling while hidden, then resumes immediately', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-status="pending" data-reader-audio-poll-url="/audio/readiness">' +
+      '<div data-reader-audio-pending hidden></div>' +
+    '</section>'
+  );
+  await page.evaluate(() => {
+    window.__audioPollCalls = 0;
+    window.__audioPollSignals = [];
+    window.__audioPollTimers = [];
+    let timerId = 0;
+    window.setTimeout = (callback, delay) => {
+      const timer = { id: ++timerId, callback, delay, cleared: false };
+      window.__audioPollTimers.push(timer);
+      return timer.id;
+    };
+    window.clearTimeout = id => {
+      const timer = window.__audioPollTimers.find(item => item.id === id);
+      if (timer) timer.cleared = true;
+    };
+    window.fetch = (_url, options) => {
+      window.__audioPollCalls += 1;
+      window.__audioPollSignals.push(options.signal);
+      if (window.__audioPollCalls === 1) {
+        return new Promise((resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+        });
+      }
+      return Promise.resolve(new Response(null, { status: 503 }));
+    };
+  });
+  await page.addScriptTag({ url: '/js/farast-reader-document-audio.js' });
+  await expect.poll(() => page.evaluate(() => window.__audioPollCalls)).toBe(1);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__audioPollSignals[0].aborted)).toBe(true);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__audioPollTimers.some(timer => !timer.cleared && timer.delay === 0))).toBe(true);
+  await page.evaluate(() => {
+    const timer = window.__audioPollTimers.find(item => !item.cleared && item.delay === 0);
+    timer.cleared = true;
+    timer.callback();
+  });
+  await expect.poll(() => page.evaluate(() => window.__audioPollCalls)).toBe(2);
+  expect(await page.evaluate(() => window.__audioPollTimers.filter(timer => !timer.cleared).map(timer => timer.delay))).toEqual([5000]);
+});
