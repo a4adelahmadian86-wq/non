@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
-use App\Services\SupportNotificationService;
+use App\Services\SupportTicketService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -344,10 +344,6 @@ class SupportAdminInboxQueryTest extends TestCase
             'topic_area' => 'store',
         ]);
 
-        $notifier = Mockery::mock(SupportNotificationService::class);
-        $notifier->shouldReceive('staffReplied')->once();
-        $this->app->instance(SupportNotificationService::class, $notifier);
-
         $filters = [
             'status' => 'open',
             'q' => 'filter-context',
@@ -361,17 +357,36 @@ class SupportAdminInboxQueryTest extends TestCase
             'created_to' => '2026-11-15',
         ];
 
-        $this->actingAs($admin)
-            ->post(
-                route('admin.tickets.reply', $ticket).'?'.http_build_query($filters),
-                [
-                    'body' => 'پاسخ کارشناسی',
-                    'status' => 'answered',
-                ]
-            )
-            ->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
+        $page = $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id] + $filters))
+            ->assertOk();
 
-        $this->assertSame('answered', $ticket->fresh()->status);
+        preg_match('/<form class="sd-composer"[^>]*action="([^"]+)"/', $page->getContent(), $formMatch);
+        $this->assertNotEmpty($formMatch[1] ?? null);
+        $formAction = html_entity_decode($formMatch[1], ENT_QUOTES);
+        $this->assertStringContainsString(http_build_query($filters), $formAction);
+
+        $tickets = Mockery::mock(SupportTicketService::class);
+        $tickets->shouldReceive('addMessage')
+            ->once()
+            ->withArgs(function ($candidate, $actor, $body, $options) use ($ticket, $admin): bool {
+                return $candidate instanceof Ticket
+                    && $candidate->is($ticket)
+                    && $actor instanceof User
+                    && (int) $actor->id === (int) $admin->id
+                    && $body === 'پاسخ کارشناسی'
+                    && ($options['status'] ?? null) === 'answered'
+                    && ($options['is_staff'] ?? false) === true;
+            })
+            ->andReturn(new TicketMessage());
+        $this->app->instance(SupportTicketService::class, $tickets);
+
+        $this->post(
+            route('admin.tickets.reply', $ticket).'?'.http_build_query(['ticket' => $ticket->id] + $filters),
+            [
+                'body' => 'پاسخ کارشناسی',
+                'status' => 'answered',
+            ]
+        )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
     }
-
 }
