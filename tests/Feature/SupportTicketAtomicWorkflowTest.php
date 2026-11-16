@@ -331,4 +331,180 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         ]);
     }
 
+
+    public function test_retried_ticket_creation_returns_the_original_ticket_and_message(): void
+    {
+        $customer = User::factory()->create();
+        $data = [
+            'subject' => 'Retry-safe support request',
+            'body' => 'Please help with this request',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->createTicket($customer, $data);
+        $retry = $service->createTicket($customer, $data);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertDatabaseCount('farast_workflow_events', 1);
+    }
+
+    public function test_ticket_creation_rejects_reusing_a_submission_key_for_different_content(): void
+    {
+        $customer = User::factory()->create();
+        $data = [
+            'subject' => 'Original request',
+            'body' => 'Original body',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->createTicket($customer, $data);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->createTicket($customer, array_merge($data, ['body' => 'Changed body']));
+    }
+
+    public function test_retried_ticket_message_returns_the_original_message(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Retry-safe reply',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->addMessage($ticket, $customer, 'Same reply', $options);
+        $retry = $service->addMessage($ticket, $customer, 'Same reply', $options);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('ticket_messages', 1);
+    }
+
+    public function test_message_submission_key_cannot_be_reused_for_different_content(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Conflicting retry',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->addMessage($ticket, $customer, 'First body', $options);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->addMessage($ticket, $customer, 'Different body', $options);
+    }
+
+
+    public function test_retried_message_with_attachment_does_not_create_a_second_managed_file(): void
+    {
+        Storage::fake('private');
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Attachment retry',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $attachment = UploadedFile::fake()->createWithContent('proof.txt', 'same attachment payload');
+        $options = [
+            'is_staff' => false,
+            'attachment' => $attachment,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
+        $filesAfterFirst = count(Storage::disk('private')->allFiles());
+        $retry = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertSame($filesAfterFirst, count(Storage::disk('private')->allFiles()));
+    }
+
+
+    public function test_message_submission_key_cannot_be_replayed_against_another_ticket(): void
+    {
+        $customer = User::factory()->create();
+        $firstTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'First ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $secondTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Second ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $options = [
+            'is_staff' => false,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $service->addMessage($firstTicket, $customer, 'Same text', $options);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->addMessage($secondTicket, $customer, 'Same text', $options);
+    }
+
+
+    public function test_retried_ticket_creation_does_not_restore_the_initial_attachment(): void
+    {
+        Storage::fake('private');
+        $customer = User::factory()->create();
+        $attachment = UploadedFile::fake()->createWithContent('initial.txt', 'initial attachment');
+        $data = [
+            'subject' => 'Attachment-safe creation retry',
+            'body' => 'Please review this file',
+            'priority' => 'normal',
+            'department' => 'support',
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->createTicket($customer, $data, $attachment);
+        $filesAfterFirst = count(Storage::disk('private')->allFiles());
+        $retry = $service->createTicket($customer, $data, $attachment);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertSame($filesAfterFirst, count(Storage::disk('private')->allFiles()));
+    }
+
 }

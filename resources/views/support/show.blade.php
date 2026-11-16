@@ -105,6 +105,7 @@
                 <div class="tk-reply-box" id="replyBox">
                     <form method="post" action="{{ route('support.message', $ticket) }}" enctype="multipart/form-data" id="chatComposer" class="tk-reply-form">
                         @csrf
+                        <input type="hidden" name="submission_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                         <div class="tk-reply-inner">
                             <textarea name="body" id="composerBody" rows="4" required maxlength="5000" placeholder="متن پاسخ شما ..." dir="auto"></textarea>
                             <input type="file" name="attachment" id="composerFile" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.doc,.docx" hidden>
@@ -209,7 +210,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261114pollcursor-managedattachments"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261116idempotency"></script>
 <script>
 (function () {
     const form = document.getElementById('csatForm');

@@ -18,6 +18,16 @@
 
   let ticketId = sessionStorage.getItem('farast_support_ticket_id') || null;
   let pendingBody = null;
+  let pendingSubmissionKey = sessionStorage.getItem('farast_support_pending_submission_key') || null;
+  let pendingSubmissionBody = sessionStorage.getItem('farast_support_pending_submission_body') || null;
+  if (pendingSubmissionBody && textarea) textarea.value = pendingSubmissionBody;
+  const newSubmissionKey = () => {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  };
 
   const open = () => {
     widget.classList.add('is-open');
@@ -64,7 +74,25 @@
   }
 
   async function sendMessage(body) {
-    const payload = { body, ticket_id: ticketId ? Number(ticketId) : null };
+    if (pendingSubmissionKey && pendingSubmissionBody !== body) {
+      // A different deliberate message gets its own identity; an unchanged
+      // retry keeps the prior identity and is deduplicated server-side.
+      pendingSubmissionKey = null;
+      pendingSubmissionBody = null;
+      sessionStorage.removeItem('farast_support_pending_submission_key');
+      sessionStorage.removeItem('farast_support_pending_submission_body');
+    }
+    if (!pendingSubmissionKey) {
+      pendingSubmissionKey = newSubmissionKey();
+      pendingSubmissionBody = body;
+      sessionStorage.setItem('farast_support_pending_submission_key', pendingSubmissionKey);
+      sessionStorage.setItem('farast_support_pending_submission_body', body);
+    }
+    const payload = {
+      body,
+      ticket_id: ticketId ? Number(ticketId) : null,
+      submission_key: pendingSubmissionKey,
+    };
     if (!isAuth) {
       const nameInput = contactForm?.querySelector('[name="name"]');
       const emailInput = contactForm?.querySelector('[name="email"]');
@@ -90,12 +118,18 @@
       pendingBody = body;
       contactBox?.classList.add('is-visible');
       appendMsg(data.message || 'لطفاً نام و ایمیل را وارد کنید.', 'bot');
-      return;
+      return false;
     }
 
     if (!res.ok || !data.ok) {
       appendMsg(data.message || 'ارسال پیام ممکن نشد. دوباره تلاش کنید.', 'bot');
-      return;
+      if (res.status >= 400 && res.status < 500) {
+        pendingSubmissionKey = null;
+        pendingSubmissionBody = null;
+        sessionStorage.removeItem('farast_support_pending_submission_key');
+        sessionStorage.removeItem('farast_support_pending_submission_body');
+      }
+      return false;
     }
 
     if (data.ticket_id) {
@@ -108,6 +142,11 @@
     if (isAuth && data.redirect) {
       appendMsg('می‌توانید ادامه گفتگو را در داشبورد → پشتیبانی ببینید.', 'bot');
     }
+    pendingSubmissionKey = null;
+    pendingSubmissionBody = null;
+    sessionStorage.removeItem('farast_support_pending_submission_key');
+    sessionStorage.removeItem('farast_support_pending_submission_body');
+    return true;
   }
 
   form?.addEventListener('submit', async (e) => {
@@ -115,12 +154,14 @@
     const body = (textarea?.value || '').trim();
     if (!body) return;
     appendMsg(body, 'user');
-    textarea.value = '';
-    textarea.style.height = 'auto';
     try {
-      await sendMessage(body);
+      const sent = await sendMessage(body);
+      if (sent) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+      }
     } catch (_) {
-      appendMsg('خطای شبکه. دوباره تلاش کنید.', 'bot');
+      appendMsg('خطای شبکه. پیام حفظ شده است؛ دوباره تلاش کنید.', 'bot');
     }
   });
 
@@ -128,11 +169,20 @@
     e.preventDefault();
     contactBox?.classList.remove('is-visible');
     const body = pendingBody || 'سلام، نیاز به پشتیبانی دارم.';
-    pendingBody = null;
     try {
-      await sendMessage(body);
+      const sent = await sendMessage(body);
+      if (sent) {
+        pendingBody = null;
+        if (textarea) {
+          textarea.value = '';
+          textarea.style.height = 'auto';
+        }
+      } else {
+        contactBox?.classList.add('is-visible');
+      }
     } catch (_) {
-      appendMsg('خطای شبکه. دوباره تلاش کنید.', 'bot');
+      appendMsg('خطای شبکه. درخواست حفظ شده است؛ دوباره تلاش کنید.', 'bot');
+      contactBox?.classList.add('is-visible');
     }
   });
 
@@ -144,7 +194,7 @@
       try {
         await sendMessage(text);
       } catch (_) {
-        appendMsg('خطای شبکه. دوباره تلاش کنید.', 'bot');
+        appendMsg('خطای شبکه. درخواست حفظ شده است؛ دوباره تلاش کنید.', 'bot');
       }
     });
   });

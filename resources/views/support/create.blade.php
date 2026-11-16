@@ -30,6 +30,7 @@
 
             <form method="post" action="{{ route('support.create') }}" enctype="multipart/form-data" class="tk-create-form" id="createTicketForm">
                 @csrf
+                <input type="hidden" name="submission_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
 
                 <div class="tk-row-2">
                     <div class="tk-field-block">

@@ -67,6 +67,7 @@ class SupportTicketScopedAgentAccessTest extends TestCase
             ->post(route('admin.tickets.reply', $ticket), [
                 'body' => 'یادداشت داخلی کارشناس',
                 'is_internal' => true,
+                'submission_key' => 'c6f9d230-6b3c-4da2-8fd9-9b1e8f5c4433',
             ])
             ->assertRedirect();
 

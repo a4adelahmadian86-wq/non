@@ -37,6 +37,9 @@ class Ticket extends Model
         'csat_score',
         'csat_comment',
         'csat_at',
+        'submission_scope',
+        'submission_key',
+        'submission_fingerprint',
     ];
 
     protected function casts(): array

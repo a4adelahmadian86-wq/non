@@ -286,6 +286,15 @@
         } catch (_) {}
         if (body) body.value = '';
         clearFile();
+        const submissionKey = form.querySelector('[name="submission_key"]');
+        if (submissionKey) {
+          submissionKey.value = window.crypto?.randomUUID
+            ? window.crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+                const r = Math.random() * 16 | 0;
+                return (ch === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+              });
+        }
         if (stateText) stateText.textContent = 'ارسال شد';
         return;
       }

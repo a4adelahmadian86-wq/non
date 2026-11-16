@@ -9,10 +9,12 @@ use App\Http\Middleware\ResolveAdminScope;
 use App\Services\WorkflowEngine;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * هسته یکپارچه سیستم پشتیبانی — ایجاد، پاسخ، وضعیت، ارجاع خودکار، مهمان، اطلاع‌رسانی، SLA، CSAT.
@@ -89,10 +91,31 @@ class SupportTicketService
     public function createTicket(?User $user, array $data, ?UploadedFile $attachment = null): Ticket
     {
         $initialMessage = null;
+        $created = false;
+        $submission = $this->submissionIdentity(
+            $data['_submission_scope'] ?? null,
+            $data['_submission_key'] ?? null,
+            collect($data)->except(['_submission_scope', '_submission_key'])->all(),
+            $attachment,
+        );
 
         try {
-            $ticket = app(SupportAssignmentMutex::class)->synchronized(function () use ($user, $data, $attachment, &$initialMessage) {
-                return DB::transaction(function () use ($user, $data, $attachment, &$initialMessage) {
+            $ticket = app(SupportAssignmentMutex::class)->synchronized(function () use ($user, $data, $attachment, &$initialMessage, &$created, $submission) {
+                return DB::transaction(function () use ($user, $data, $attachment, &$initialMessage, &$created, $submission) {
+                if ($submission) {
+                    $existing = Ticket::query()
+                        ->where('submission_scope', $submission['scope'])
+                        ->where('submission_key', $submission['key'])
+                        ->lockForUpdate()
+                        ->first();
+                    if ($existing) {
+                        if (! hash_equals((string) $existing->submission_fingerprint, $submission['fingerprint'])) {
+                            throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                        }
+                        return $existing->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+                    }
+                }
+
                 $payload = [
                     'user_id' => $user?->id,
                     'subject' => $data['subject'],
@@ -126,7 +149,14 @@ class SupportTicketService
                     $payload['last_reply_at'] = now();
                 }
     
+                if ($submission) {
+                    $payload['submission_scope'] = $submission['scope'];
+                    $payload['submission_key'] = $submission['key'];
+                    $payload['submission_fingerprint'] = $submission['fingerprint'];
+                }
+
                 $ticket = Ticket::create($payload);
+                $created = true;
 
                 // Ticket creation is the first durable lifecycle event. Keep the
                 // audit entry in this transaction and exclude subject, message,
@@ -196,7 +226,26 @@ class SupportTicketService
                 }
             }
 
+            if ($submission && $exception instanceof QueryException) {
+                $concurrentReplay = Ticket::query()
+                    ->where('submission_scope', $submission['scope'])
+                    ->where('submission_key', $submission['key'])
+                    ->first();
+
+                if ($concurrentReplay) {
+                    if (! hash_equals((string) $concurrentReplay->submission_fingerprint, $submission['fingerprint'])) {
+                        throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                    }
+
+                    return $concurrentReplay->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+                }
+            }
+
             throw $exception;
+        }
+
+        if (! $created) {
+            return $ticket;
         }
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
@@ -277,6 +326,20 @@ class SupportTicketService
 
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
     {
+        $created = false;
+        $submission = $this->submissionIdentity(
+            $options['_submission_scope'] ?? null,
+            $options['_submission_key'] ?? null,
+            [
+                'ticket_id' => (int) $ticket->id,
+                'body' => $body,
+                'is_staff' => (bool) ($options['is_staff'] ?? false),
+                'is_internal' => (bool) ($options['is_internal'] ?? false),
+                'status' => $options['status'] ?? null,
+                'touch_status' => $options['touch_status'] ?? true,
+            ],
+            $options['attachment'] ?? null,
+        );
         $isStaff = (bool) ($options['is_staff'] ?? false);
         $isInternal = (bool) ($options['is_internal'] ?? false);
         $touchStatus = $options['touch_status'] ?? true;
@@ -290,6 +353,22 @@ class SupportTicketService
 
         if (Schema::hasColumn('ticket_messages', 'is_staff')) {
             $payload['is_staff'] = $isStaff;
+        }
+
+        if ($submission) {
+            $payload['submission_scope'] = $submission['scope'];
+            $payload['submission_key'] = $submission['key'];
+            $payload['submission_fingerprint'] = $submission['fingerprint'];
+            $existing = TicketMessage::query()
+                ->where('submission_scope', $submission['scope'])
+                ->where('submission_key', $submission['key'])
+                ->first();
+            if ($existing) {
+                if (! hash_equals((string) $existing->submission_fingerprint, $submission['fingerprint'])) {
+                    throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                }
+                return $existing;
+            }
         }
 
         $temporaryPath = null;
@@ -338,11 +417,25 @@ class SupportTicketService
 
         try {
             $persistMessage = fn () => DB::transaction(function () use (
-                $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus
+                $ticket, $actor, $body, $options, $payload, $isStaff, $isInternal, $touchStatus, $submission, &$created
             ): array {
                 $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
                 $previousStatus = (string) $locked->status;
                 $resolutionBreachDetected = false;
+
+                if ($submission) {
+                    $existing = TicketMessage::query()
+                        ->where('submission_scope', $submission['scope'])
+                        ->where('submission_key', $submission['key'])
+                        ->lockForUpdate()
+                        ->first();
+                    if ($existing) {
+                        if (! hash_equals((string) $existing->submission_fingerprint, $submission['fingerprint'])) {
+                            throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                        }
+                        return [$existing, $previousStatus, $locked->fresh(), false];
+                    }
+                }
 
                 // Validate the event origin and destination against the canonical
                 // status policy while holding the ticket row lock.
@@ -356,6 +449,7 @@ class SupportTicketService
                 }
 
                 $message = $locked->messages()->create($payload);
+                $created = true;
 
                 foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
                     if (! empty($attachment['managed_file_id'])) {
@@ -429,9 +523,9 @@ class SupportTicketService
                     }
                 }
 
-                return [$message, $previousStatus, $locked->fresh()];
+                return [$message, $previousStatus, $locked->fresh(), true];
             });
-            [$message, $previousStatus, $fresh] = ($touchStatus && ! $isInternal)
+            [$message, $previousStatus, $fresh, $created] = ($touchStatus && ! $isInternal)
                 ? app(SupportAssignmentMutex::class)->synchronized($persistMessage)
                 : $persistMessage();
         } catch (\Throwable $exception) {
@@ -445,11 +539,38 @@ class SupportTicketService
                     report($cleanupException);
                 }
             }
+            if ($submission && $exception instanceof QueryException) {
+                $concurrentReplay = TicketMessage::query()
+                    ->where('submission_scope', $submission['scope'])
+                    ->where('submission_key', $submission['key'])
+                    ->first();
+
+                if ($concurrentReplay) {
+                    if (! hash_equals((string) $concurrentReplay->submission_fingerprint, $submission['fingerprint'])) {
+                        throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال قبلاً برای محتوای دیگری استفاده شده است.']);
+                    }
+
+                    return $concurrentReplay;
+                }
+            }
+
             throw $exception;
         }
 
         if ($temporaryPath !== null && $temporaryPath !== '') {
             \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
+        }
+
+        if (! $created) {
+            if (is_array($managed) && ! empty($managed['disk']) && ! empty($managed['path'])) {
+                try {
+                    app(StorageManager::class)->delete((string) $managed['disk'], (string) $managed['path']);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            return $message;
         }
 
         if ($notify && ! $isInternal) {
@@ -464,6 +585,37 @@ class SupportTicketService
         }
 
         return $message;
+    }
+
+    /**
+     * Build a stable, actor-scoped request identity. The payload fingerprint
+     * prevents a client from reusing one key for different content.
+     */
+    private function submissionIdentity(?string $scope, ?string $key, array $payload, ?UploadedFile $attachment = null): ?array
+    {
+        if ($scope === null && $key === null) {
+            return null;
+        }
+
+        if (! is_string($scope) || $scope === '' || ! is_string($key) || ! Str::isUuid($key)) {
+            throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال معتبر نیست.']);
+        }
+
+        $fileFingerprint = null;
+        if ($attachment instanceof UploadedFile && $attachment->isValid()) {
+            $path = $attachment->getRealPath();
+            $fileFingerprint = $path ? hash_file('sha256', $path) : null;
+        }
+
+        return [
+            'scope' => hash('sha256', $scope),
+            'key' => strtolower($key),
+            'fingerprint' => hash('sha256', json_encode([
+                'payload' => $payload,
+                'attachment_sha256' => $fileFingerprint,
+                'attachment_name' => $attachment?->getClientOriginalName(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+        ];
     }
 
     /**

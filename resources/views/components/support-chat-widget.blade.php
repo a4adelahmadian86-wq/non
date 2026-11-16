@@ -1,6 +1,6 @@
 @unless(request()->is('editor*') || request()->is('admin*') || request()->routeIs('dashboard') || request()->routeIs('support*') || request()->routeIs('admin.*') || request()->routeIs('wallet') || request()->routeIs('platform.*'))
 
-<link rel="stylesheet" href="{{ asset('css/support-widget.css') }}?v=20261018goft">
+<link rel="stylesheet" href="{{ asset('css/support-widget.css') }}?v=20261116idempotency">
 
 {{-- حباب شناور سمت راست --}}
 <div id="fsw-holder" class="fsw-holder" dir="rtl">
@@ -85,5 +85,5 @@
     </div>
 </div>
 
-<script src="{{ asset('js/support-widget.js') }}?v=20261018goft" defer></script>
+<script src="{{ asset('js/support-widget.js') }}?v=20261116idempotency" defer></script>
 @endunless

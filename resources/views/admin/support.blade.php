@@ -545,6 +545,7 @@
 
             <form class="sd-composer" method="post" action="{{ route('admin.tickets.reply', $active) }}{{ request()->getQueryString() ? '?'.request()->getQueryString() : '' }}" enctype="multipart/form-data">
                 @csrf
+                <input type="hidden" name="submission_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                 <div class="sd-composer-inner" style="flex-wrap:wrap">
                     <div class="sd-input-wrap" style="flex:1 1 100%">
                         <textarea name="body" id="adminReplyBody" rows="3" required maxlength="8000" placeholder="پاسخ حرفه‌ای بنویسید..." dir="auto"></textarea>
