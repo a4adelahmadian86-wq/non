@@ -304,6 +304,71 @@ class ProcessProductDocument implements ShouldQueue
             }
 
             $structure = (array) ($locked->structure_json ?? []);
+
+            $readerPdfPathForReader = null;
+            $readerPdfDiskForReader = 'private';
+            if ($sourceExtension === 'docx') {
+                $existingReader = $locked->artifacts()
+                    ->where('artifact_type', 'reader_pdf')
+                    ->where('version', 1)
+                    ->lockForUpdate()
+                    ->first();
+                $existingReaderPath = $existingReader?->path;
+                $existingReaderDisk = $existingReader?->disk ?: 'private';
+                $existingReaderSourceHash = data_get($existingReader?->metadata_json, 'source_sha256');
+                $existingReaderIsCurrent = $existingReader
+                    && $existingReaderPath
+                    && $storage->exists($existingReaderDisk, $existingReaderPath)
+                    && (! is_string($existingReaderSourceHash)
+                        || hash_equals((string) $locked->source_sha256, $existingReaderSourceHash));
+
+                if ($existingReaderIsCurrent) {
+                    $readerPdfPathForReader = $existingReaderPath;
+                    $readerPdfDiskForReader = $existingReaderDisk;
+                } elseif ($readerPdfManaged && is_string($readerPdfBytes)) {
+                    $artifact = $locked->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'reader_pdf', 'version' => 1],
+                        [
+                            'disk' => $readerPdfManaged['disk'],
+                            'path' => $readerPdfManaged['path'],
+                            'mime' => 'application/pdf',
+                            'size_bytes' => strlen($readerPdfBytes),
+                            'sha256' => hash('sha256', $readerPdfBytes),
+                            'metadata_json' => [
+                                'source_sha256' => $locked->source_sha256,
+                                'conversion_engine' => 'phpword_dompdf',
+                                'generated_once' => true,
+                            ],
+                        ]
+                    );
+                    $storage->bindReference(
+                        (int) $readerPdfManaged['managed_file_id'],
+                        StoreProductDocumentArtifact::class,
+                        (int) $artifact->id,
+                        (int) $locked->product_id
+                    );
+                    $readerPdfManagedBound = true;
+
+                    if ($existingReaderPath
+                        && ($existingReaderPath !== $artifact->path || $existingReaderDisk !== $artifact->disk)) {
+                        $oldReaderPreviewQuery = StoreProductPreview::query()
+                            ->where('product_id', $locked->product_id)
+                            ->where('path', $existingReaderPath);
+                        if ($existingReaderDisk === 'private') {
+                            $oldReaderPreviewQuery->where(fn ($query) => $query->where('disk', 'private')->orWhereNull('disk'));
+                        } else {
+                            $oldReaderPreviewQuery->where('disk', $existingReaderDisk);
+                        }
+                        $oldReaderPreviewQuery->update(['disk' => $artifact->disk, 'path' => $artifact->path]);
+                    }
+
+                    $readerPdfPathForReader = $artifact->path;
+                    $readerPdfDiskForReader = $artifact->disk ?: 'private';
+                } else {
+                    throw new \\RuntimeException('product_docx_reader_artifact_unavailable');
+                }
+            }
+
             $structure['inspection'] = $inspection;
             $structure['reader'] = [
                 'ready' => $pageBuild['page_count'] > 0,
