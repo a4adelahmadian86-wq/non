@@ -518,8 +518,9 @@
     wrapper.dataset.keepRendered='1';
     if(wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
     wrapper.dataset.rendering='1';
+    let page=null,renderSucceeded=false;
     try{
-    const page=await renderDocument.getPage(number);
+    page=await renderDocument.getPage(number);
     wrapper._pdfPage=page;
     // A document swap or continuous-mode rebuild invalidates this async render.
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
@@ -569,13 +570,25 @@
     if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>renderGeneration===continuousRenderGeneration&&renderDocument===pdfDoc&&renderHost===continuousHost&&renderHost.contains(wrapper)&&wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     wrapper.dataset.rendered='1';
+    renderSucceeded=true;
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }catch(error){
       if(error?.name==='RenderingCancelledException'||error?.name==='AbortException')return;
       throw error;
     }finally{
       wrapper._renderTask=null;
-      const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
+      if(!renderSucceeded){
+        if(page){try{page.cleanup?.();}catch(_){}}
+        if(wrapper._pdfPage===page)wrapper._pdfPage=null;
+        if(wrapper.dataset.keepRendered==='1'){
+          const failedCanvas=wrapper.querySelector('canvas');
+          if(failedCanvas){failedCanvas.width=0;failedCanvas.height=0;failedCanvas.style.width='';failedCanvas.style.height='';}
+          wrapper.querySelector('.farast-pdf-cont-text')?.replaceChildren();
+          wrapper.querySelector('.farast-pdf-annotation-layer')?.replaceChildren();
+          wrapper.dataset.rendered='0';
+        }
+      }
+      const rerender=renderSucceeded&&wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
       delete wrapper.dataset.rerenderAfterRender;
       delete wrapper.dataset.rendering;
       if(wrapper.dataset.keepRendered==='0')releaseContinuousPage(wrapper);
@@ -785,9 +798,10 @@
       const pageNumber=Number(button.dataset.pdfPage);
       const canvas=button.querySelector('canvas');
       if(!canvas)return;
+      let page=null;
       try{
-        const page=await pdfDocument.getPage(pageNumber);
-        if(pdfDocument!==pdfDoc||host!==thumbsHost||!button.isConnected){page.cleanup?.();return;}
+        page=await pdfDocument.getPage(pageNumber);
+        if(pdfDocument!==pdfDoc||host!==thumbsHost||!button.isConnected)return;
         const base=page.getViewport({scale:1});
         const viewport=page.getViewport({scale:Math.min(40/base.width,54/base.height)});
         const ctx=canvas.getContext('2d',{alpha:false});
@@ -795,10 +809,13 @@
         canvas.height=Math.max(1,Math.floor(viewport.height));
         const task=page.render({canvasContext:ctx,viewport});
         await task.promise;
-        if(pdfDocument!==pdfDoc||host!==thumbsHost||!button.isConnected){try{task.cancel();}catch(_){}page.cleanup?.();return;}
+        if(pdfDocument!==pdfDoc||host!==thumbsHost||!button.isConnected){try{task.cancel();}catch(_){}return;}
         paintPdfWatermark(canvas);
-        page.cleanup?.();
-      }catch(_){button.dataset.thumbRendered='0';}
+      }catch(_){
+        button.dataset.thumbRendered='0';
+      }finally{
+        try{page?.cleanup?.();}catch(_){}
+      }
     };
     if('IntersectionObserver' in window){
       const observer=new IntersectionObserver(entries=>{
@@ -1262,15 +1279,18 @@
         const pageNumber=nextPage++;
         if(pageNumber>totalPages)return;
         const page=await searchDocument.getPage(pageNumber);
-        if(request!==searchRequest||searchDocument!==pdfDoc){page.cleanup?.();return;}
-        const content=await page.getTextContent();
-        if(request!==searchRequest||searchDocument!==pdfDoc){page.cleanup?.();return;}
-        const pageText=normalizePdfSearchText(content.items.map(item=>item.str||'').join(' '));
-        const count=countPdfSearchMatches(pageText,query);
-        if(count>0)pageResults[pageNumber-1]={page:pageNumber,count};
-        page.cleanup?.();
-        completedPages++;
-        if(completedPages===totalPages||completedPages%progressInterval===0)updateSearchProgress();
+        try{
+          if(request!==searchRequest||searchDocument!==pdfDoc)return;
+          const content=await page.getTextContent();
+          if(request!==searchRequest||searchDocument!==pdfDoc)return;
+          const pageText=normalizePdfSearchText(content.items.map(item=>item.str||'').join(' '));
+          const count=countPdfSearchMatches(pageText,query);
+          if(count>0)pageResults[pageNumber-1]={page:pageNumber,count};
+          completedPages++;
+          if(completedPages===totalPages||completedPages%progressInterval===0)updateSearchProgress();
+        }finally{
+          try{page.cleanup?.();}catch(_){}
+        }
       }
     };
 
