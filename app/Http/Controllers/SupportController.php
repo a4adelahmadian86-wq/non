@@ -717,6 +717,33 @@ class SupportController extends Controller
         if ($user) {
             $this->tickets->claimGuestTickets($user);
 
+            // A lost response to the very first widget request has no ticket_id
+            // in the browser yet. Resolve its original creation key before
+            // falling back to the user's latest active widget conversation.
+            $submissionScope = hash('sha256', 'user:'.$user->id);
+            $submittedTicket = Ticket::query()
+                ->where('submission_scope', $submissionScope)
+                ->where('submission_key', strtolower($data['submission_key']))
+                ->first();
+            if ($submittedTicket) {
+                $ticket = $this->tickets->createTicket($user, [
+                    'subject' => Str::limit($data['body'], 80),
+                    'body' => $data['body'],
+                    'source' => SupportTicketService::SOURCE_WIDGET,
+                    'department' => SupportTicketService::DEPARTMENT_SUPPORT,
+                    'priority' => SupportTicketService::PRIORITY_NORMAL,
+                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_key' => $data['submission_key'],
+                ]);
+
+                return response()->json([
+                    'ok' => true,
+                    'ticket_id' => $ticket->id,
+                    'reply' => 'پیام شما ثبت شد. تاریخچه در داشبورد → پشتیبانی.',
+                    'redirect' => route('support.show', $ticket),
+                ]);
+            }
+
             $ticket = null;
             if (! empty($data['ticket_id'])) {
                 $ticket = Ticket::where('id', $data['ticket_id'])->where('user_id', $user->id)->where('status', '!=', 'closed')->first();
