@@ -86,6 +86,8 @@ class ProcessProductDocument implements ShouldQueue
             $readerSourceStream = null;
             $readerSourceFilename = null;
             $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
+            $readerPdfBytes = null;
+            $readerPdfExists = false;
             if ($sourceExtension === 'docx') {
                 $docxBytes = stream_get_contents($stream);
                 if (! is_string($docxBytes) || $docxBytes === '') {
