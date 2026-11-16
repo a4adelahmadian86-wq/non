@@ -11,6 +11,7 @@ use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 
 class CommunicationCenterTest extends TestCase
@@ -253,6 +254,64 @@ class CommunicationCenterTest extends TestCase
             ->assertDontSee('تیکت خارج از دامنه')
             ->assertDontSee('scope-hidden-ticket-message-271');
     }
+
+    public function test_admin_with_own_scope_cannot_search_or_open_other_customers_support_tickets(): void
+    {
+        $overrideKey = 'communications_own_scope_'.spl_object_id($this);
+        $previousOverrideKey = config('farast_admin.scope_override_key');
+        config(['farast_admin.scope_override_key' => $overrideKey]);
+        SiteSetting::write($overrideKey, 'own');
+
+        try {
+            $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+            $other = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+
+            $ownTicket = Ticket::create([
+                'user_id' => $admin->id,
+                'subject' => 'تیکت شخصی مدیر محدودشده',
+                'status' => 'open',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+            TicketMessage::create([
+                'ticket_id' => $ownTicket->id,
+                'user_id' => $admin->id,
+                'body' => 'پیام عمومی مدیر در دامنه شخصی',
+                'is_internal' => false,
+                'is_staff' => false,
+            ]);
+            $otherTicket = Ticket::create([
+                'user_id' => $other->id,
+                'subject' => 'رکورد محرمانه خارج از دامنه',
+                'status' => 'open',
+                'priority' => 'normal',
+                'department' => 'support',
+            ]);
+
+            $this->actingAs($admin)
+                ->get(route('platform.communications', ['q' => 'رکورد محرمانه خارج از دامنه']))
+                ->assertOk()
+                ->assertSee('تیکت شخصی مدیر محدودشده')
+                ->assertDontSee('<strong>'.$otherTicket->displayCode().' — '.$otherTicket->subject.'</strong>', false)
+                ->assertSee(route('support.show', $ownTicket), false)
+                ->assertDontSee(route('admin.support.management', ['ticket' => $ownTicket->id]), false);
+
+            $this->get(route('platform.communications', ['q' => 'پیام عمومی مدیر در دامنه شخصی']))
+                ->assertOk()
+                ->assertSee(route('support.show', $ownTicket), false)
+                ->assertDontSee(route('admin.support.management', ['ticket' => $ownTicket->id]), false);
+
+            $this->get(route('support.show', $ownTicket))->assertOk();
+            $this->assertTrue(Gate::forUser($admin)->allows('view', $ownTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('view', $otherTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('reply', $otherTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('close', $otherTicket));
+        } finally {
+            SiteSetting::query()->where('key', $overrideKey)->delete();
+            config(['farast_admin.scope_override_key' => $previousOverrideKey]);
+        }
+    }
+
     public function test_non_admin_cannot_open_staff_communication_center(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
