@@ -229,4 +229,65 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $service->submitCsat($staleTicket, 3, 'دوباره');
     }
+    public function test_customer_reply_owns_the_user_replied_status(): void
+    {
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Customer reply status ownership',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->service()->addMessage($ticket, $customer, 'پیگیری درخواست', [
+            'is_staff' => false,
+            'is_internal' => false,
+            'notify' => false,
+        ]);
+
+        $this->assertSame('user_replied', $ticket->fresh()->status);
+    }
+
+    public function test_staff_cannot_forge_the_customer_owned_user_replied_status(): void
+    {
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Staff cannot forge customer reply state',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        try {
+            $this->service()->addMessage($ticket, $staff, 'پاسخ کارشناسی', [
+                'is_staff' => true,
+                'status' => 'user_replied',
+                'notify' => false,
+            ]);
+            $this->fail('A staff reply must not impersonate a customer-originated status.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('کارشناس نمی‌تواند وضعیت «پاسخ کاربر» را مستقیماً ثبت کند.', $exception->getMessage());
+        }
+
+        $this->assertSame('open', $ticket->fresh()->status);
+        $this->assertSame(0, $ticket->messages()->count());
+    }
+
+    public function test_explicit_status_transition_cannot_forge_customer_reply_state(): void
+    {
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Explicit transition cannot forge customer reply state',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('کارشناس نمی‌تواند وضعیت «پاسخ کاربر» را مستقیماً ثبت کند.');
+
+        $this->service()->changeStatus($ticket, 'user_replied', $staff);
+    }
+
 }
