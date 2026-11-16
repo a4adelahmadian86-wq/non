@@ -1109,9 +1109,10 @@
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
       continuousRenderGeneration++;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
       releaseAllContinuousPages();
-      try{await pdfDoc.destroy();}catch(_){}
+      const previousDocument=pdfDoc;
       pdfDoc=null;activePdfUrl=null;pdfCanvas=null;pdfSurface=null;pdfLoading=null;continuousHost=null;
       scrollModeButton?.setAttribute('aria-pressed','false');
+      if(previousDocument){try{await previousDocument.destroy();}catch(_){}}
     }
     if(scrollModeButton)scrollModeButton.hidden=!pdfActive;
     if(searchGroup)searchGroup.hidden=!pdfActive;
