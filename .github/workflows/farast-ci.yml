@@ -175,7 +175,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
       # MySQL support checks cover inbox filters, assignment locks, SLA reporting/outbox SQL, and workload validation.
-      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportAdminInboxQueryTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|SupportSlaBusinessMinuteTest|SupportSlaMonitorReliabilityTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
+      - run: php artisan test --filter='AuditIntegrityServiceTest|AuditEventObservabilityTest|SupportAdminInboxQueryTest|SupportTicketAuditLedgerTest|SupportAssignmentMutexTest|SupportTicketAssignmentLoadTest|SupportSlaBusinessMinuteTest|SupportSlaMonitorReliabilityTest|FinancialIdempotencyAndRetentionTest|CommerceLedgerForeignKeyTest|FarastFeedbackEvidenceSchemaTest|FeedbackPipelineSchemaTest'
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
