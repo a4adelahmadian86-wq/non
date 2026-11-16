@@ -11,6 +11,7 @@ use App\Models\SiteSetting;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -755,5 +756,254 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->actingAs($employee)->get('/admin/support-report')->assertForbidden();
         $this->actingAs($manager)->get('/admin/support-report')->assertForbidden();
     }
+
+
+    public function test_direct_own_grant_cannot_unlock_an_organization_scoped_admin_section(): void
+    {
+        $organization = Organization::create(['name' => 'Direct Grant Org', 'slug' => 'direct-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123457001', User::ROLE_ADMIN);
+        $manager = $this->makeUser('09123457002', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        config(['farast_admin.sections.direct_grant_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'organization',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission($root, $manager, 'store.manage', 'allow', 'own');
+
+        $this->assertTrue($authorization->allows($manager, 'store.manage'));
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($manager, 'direct_grant_scope_test'));
+
+        $authorization->grantDirectPermission(
+            $root,
+            $manager,
+            'store.manage',
+            'allow',
+            'organization',
+            $organization->id,
+        );
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($manager, 'direct_grant_scope_test'));
+    }
+
+    public function test_organization_grants_must_cover_every_visible_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Org Grant A', 'slug' => 'org-grant-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Org Grant B', 'slug' => 'org-grant-b', 'status' => 'active']);
+        $root = $this->makeUser('09123457003', User::ROLE_ADMIN);
+        $admin = $this->makeUser('09123457004', User::ROLE_ADMIN);
+
+        $this->assignScopedAdminRole($admin, 'multi-org-dashboard-a', ['dashboard.view'], 'organization', $organizationA->id);
+        $this->assignScopedAdminRole($admin, 'multi-org-dashboard-b', ['dashboard.view'], 'organization', $organizationB->id);
+
+        config(['farast_admin.sections.multi_org_direct_grant_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'organization',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission($root, $admin, 'store.manage', 'allow', 'organization', $organizationA->id);
+
+        $this->assertTrue($authorization->allows($admin, 'store.manage'));
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($admin, 'multi_org_direct_grant_test'));
+
+        $authorization->grantDirectPermission($root, $admin, 'store.manage', 'allow', 'organization', $organizationB->id);
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($admin, 'multi_org_direct_grant_test'));
+    }
+
+    public function test_team_scoped_section_grants_must_cover_every_visible_team(): void
+    {
+        $organization = Organization::create(['name' => 'Multi Team Grant Org', 'slug' => 'multi-team-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123457005', User::ROLE_ADMIN);
+        $supervisor = $this->makeUser('09123457006', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Grant Team A',
+            'slug' => 'grant-team-a',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $teamB = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Grant Team B',
+            'slug' => 'grant-team-b',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $supervisor->teams()->attach([
+            $teamA->id => ['team_role' => 'manager'],
+            $teamB->id => ['team_role' => 'manager'],
+        ]);
+
+        config(['farast_admin.sections.direct_team_grant_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission($root, $supervisor, 'store.manage', 'allow', 'team', $organization->id, $teamA->id);
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'direct_team_grant_scope_test'));
+
+        $authorization->grantDirectPermission($root, $supervisor, 'store.manage', 'allow', 'team', $organization->id, $teamB->id);
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'direct_team_grant_scope_test'));
+    }
+
+    public function test_organization_grant_does_not_cover_team_sections_spanning_another_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Grant Org A', 'slug' => 'grant-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Grant Org B', 'slug' => 'grant-org-b', 'status' => 'active']);
+        $root = $this->makeUser('09123457007', User::ROLE_ADMIN);
+        $admin = $this->makeUser('09123457008', User::ROLE_ADMIN);
+        $teamA = Team::create(['organization_id' => $organizationA->id, 'name' => 'Org A Team', 'slug' => 'org-a-team']);
+        $teamB = Team::create(['organization_id' => $organizationB->id, 'name' => 'Org B Team', 'slug' => 'org-b-team']);
+
+        $this->assignScopedAdminRole($admin, 'cross-org-team-a', ['dashboard.view'], 'team', $organizationA->id, $teamA->id);
+        $this->assignScopedAdminRole($admin, 'cross-org-team-b', ['dashboard.view'], 'team', $organizationB->id, $teamB->id);
+
+        config(['farast_admin.sections.cross_org_team_grant_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission($root, $admin, 'store.manage', 'allow', 'organization', $organizationA->id);
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($admin, 'cross_org_team_grant_test'));
+
+        $authorization->grantDirectPermission($root, $admin, 'store.manage', 'allow', 'organization', $organizationB->id);
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($admin, 'cross_org_team_grant_test'));
+    }
+
+    public function test_team_grant_cannot_unlock_an_own_scope_section_with_unbounded_owner_records(): void
+    {
+        $organization = Organization::create(['name' => 'Own Scope Grant Org', 'slug' => 'own-scope-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123457009', User::ROLE_ADMIN);
+        $employee = $this->makeUser('09123457010', User::ROLE_EMPLOYEE, $organization->id);
+        $team = Team::create(['organization_id' => $organization->id, 'name' => 'Own Scope Team', 'slug' => 'own-scope-team']);
+        $employee->teams()->attach($team->id, ['team_role' => 'employee']);
+
+        config(['farast_admin.sections.team_grant_own_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'own',
+        ]]);
+
+        app(AuthorizationService::class)->grantDirectPermission(
+            $root,
+            $employee,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($employee, 'team_grant_own_scope_test'));
+    }
+
+    public function test_role_assignment_permission_must_cover_every_visible_team(): void
+    {
+        $organization = Organization::create(['name' => 'Role Scope Org', 'slug' => 'role-scope-org', 'status' => 'active']);
+        $supervisor = $this->makeUser('09123457011', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create(['organization_id' => $organization->id, 'name' => 'Role Team A', 'slug' => 'role-team-a']);
+        $teamB = Team::create(['organization_id' => $organization->id, 'name' => 'Role Team B', 'slug' => 'role-team-b']);
+        $supervisor->teams()->attach([
+            $teamA->id => ['team_role' => 'manager'],
+            $teamB->id => ['team_role' => 'manager'],
+        ]);
+
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        $this->assignScopedAdminRole($supervisor, 'team-store-operator-a', ['store.manage'], 'team', $organization->id, $teamA->id);
+        $this->assignScopedAdminRole($supervisor, 'team-store-operator-b', [], 'team', $organization->id, $teamB->id);
+
+        config(['farast_admin.sections.team_role_scope_test' => [
+            'permission' => 'store.manage',
+            'min_scope' => 'team',
+        ]]);
+
+        $this->assertFalse(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'team_role_scope_test'));
+
+        RolePermission::firstOrCreate(['role' => 'team-store-operator-b', 'permission_id' => $storePermission->id]);
+
+        $this->assertTrue(app(AdminConsoleService::class)->sectionAllowed($supervisor, 'team_role_scope_test'));
+    }
+
+
+
+    public function test_invalid_explicit_team_assignment_does_not_fall_back_to_legacy_managed_teams(): void
+    {
+        $organization = Organization::create(['name' => 'Invalid Team Scope Org', 'slug' => 'invalid-team-scope-org', 'status' => 'active']);
+        $actor = $this->makeUser('09123457012', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $target = $this->makeUser('09123457013', User::ROLE_EMPLOYEE, $organization->id);
+        $unmanagedAssignedTeam = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Explicit But Unmanaged Team',
+            'slug' => 'explicit-but-unmanaged-team',
+        ]);
+        $legacyManagedTeam = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Legacy Managed Team',
+            'slug' => 'legacy-managed-team',
+            'supervisor_id' => $actor->id,
+        ]);
+        $legacyManagedTeam->members()->attach($target->id, ['team_role' => 'employee']);
+
+        $this->assignScopedAdminRole(
+            $actor,
+            'invalid-explicit-team-access-manager',
+            ['access.manage'],
+            'team',
+            $organization->id,
+            $unmanagedAssignedTeam->id,
+        );
+
+        $this->actingAs($actor)->postJson('/admin/access-control/users/'.$target->id.'/roles', [
+            'role_key' => 'user',
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $legacyManagedTeam->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('role_assignments', [
+            'user_id' => $target->id,
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $legacyManagedTeam->id,
+        ]);
+    }
+
+
+
+    public function test_direct_team_grant_can_target_an_admin_with_explicit_team_assignment(): void
+    {
+        $organization = Organization::create(['name' => 'Admin Team Grant Org', 'slug' => 'admin-team-grant-org', 'status' => 'active']);
+        $root = $this->makeUser('09123457014', User::ROLE_ADMIN);
+        $admin = $this->makeUser('09123457015', User::ROLE_ADMIN);
+        $team = Team::create(['organization_id' => $organization->id, 'name' => 'Explicit Admin Team', 'slug' => 'explicit-admin-team']);
+
+        $this->assignScopedAdminRole($admin, 'explicit-admin-team-viewer', ['dashboard.view'], 'team', $organization->id, $team->id);
+
+        app(AuthorizationService::class)->grantDirectPermission(
+            $root,
+            $admin,
+            'store.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $team->id,
+        );
+
+        $this->assertDatabaseHas('user_permission_grants', [
+            'user_id' => $admin->id,
+            'permission_id' => Permission::query()->where('key', 'store.manage')->value('id'),
+            'effect' => 'allow',
+            'scope' => 'team',
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+        ]);
+    }
+
 
 }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Permission;
 use App\Models\RolePermission;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -147,6 +148,236 @@ class AuthorizationService
         $this->decisionCache[$cacheKey] = $decision;
 
         return $decision;
+    }
+
+    /**
+     * Evaluate a section permission against the complete effective console scope.
+     *
+     * The generic allows() method answers whether any grant exists. A section
+     * query can expose several organizations or teams, so a scoped grant must
+     * cover every record set represented by that query.
+     */
+    public function allowsWithinEffectiveScope(?User $user, string $permission, ?string $effectiveScope = null): bool
+    {
+        if (! $this->activeUser($user) || trim($permission) === '' || ! $this->allows($user, $permission)) {
+            return false;
+        }
+
+        $scope = in_array($effectiveScope, self::SCOPES, true)
+            ? $effectiveScope
+            : $this->effectiveScope($user);
+
+        if ($this->rolePermissionAllowsInEffectiveScope($user, $permission, $scope)) {
+            return true;
+        }
+
+        $allowGrants = $this->activeDirectGrants($user, $permission)
+            ->where('effect', 'allow');
+        if ($allowGrants->isEmpty()) {
+            return false;
+        }
+
+        if ($allowGrants->contains(fn (object $grant): bool => $grant->scope === 'global')) {
+            return true;
+        }
+
+        $grantedOrganizationIds = $allowGrants
+            ->where('scope', 'organization')
+            ->pluck('organization_id')
+            ->filter(fn ($id): bool => $id !== null)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($scope === 'organization') {
+            $visibleOrganizationIds = $this->consoleOrganizationIds($user);
+
+            return $visibleOrganizationIds !== []
+                && array_diff($visibleOrganizationIds, $grantedOrganizationIds) === [];
+        }
+
+        if ($scope === 'team') {
+            $visibleTeamIds = $this->consoleTeamIds($user);
+            if ($visibleTeamIds === []) {
+                return false;
+            }
+
+            $visibleTeams = Team::query()
+                ->whereIn('id', $visibleTeamIds)
+                ->get(['id', 'organization_id']);
+            if ($visibleTeams->count() !== count($visibleTeamIds)) {
+                return false;
+            }
+
+            $teamGrants = $allowGrants->where('scope', 'team');
+
+            return $visibleTeams->every(
+                fn (Team $team): bool => in_array((int) $team->organization_id, $grantedOrganizationIds, true)
+                    || $teamGrants->contains(
+                        fn (object $grant): bool => $grant->team_id !== null
+                            && $grant->organization_id !== null
+                            && (int) $grant->team_id === (int) $team->id
+                            && (int) $grant->organization_id === (int) $team->organization_id
+                    )
+            );
+        }
+
+        if ($scope === 'own') {
+            if ($allowGrants->contains(fn (object $grant): bool => $grant->scope === 'own')) {
+                return true;
+            }
+
+            $ownOrganizationIds = $user->organization_id !== null
+                ? [(int) $user->organization_id]
+                : ($user->isAdmin() ? $this->consoleOrganizationIds($user) : []);
+
+            return array_intersect($ownOrganizationIds, $grantedOrganizationIds) !== [];
+        }
+
+        return false;
+    }
+
+    private function rolePermissionAllowsInEffectiveScope(User $user, string $permission, string $scope): bool
+    {
+        $assignments = $this->activeAssignments($user);
+        if ($assignments->isEmpty()) {
+            if ($user->access_control_managed) {
+                return false;
+            }
+
+            if ($user->role === User::ROLE_ADMIN) {
+                return true;
+            }
+
+            $permissionId = $this->permissionId($permission);
+
+            return $permissionId !== null && RolePermission::query()
+                ->where('role', $user->role)
+                ->where('permission_id', $permissionId)
+                ->exists();
+        }
+
+        $permissionId = $this->permissionId($permission);
+        if ($permissionId === null) {
+            return false;
+        }
+
+        $roleKeysWithPermission = RolePermission::query()
+            ->where('permission_id', $permissionId)
+            ->pluck('role')
+            ->flip();
+        $permissionAssignments = $assignments->filter(
+            fn (object $assignment): bool => $roleKeysWithPermission->has($assignment->role_key)
+        );
+        if ($permissionAssignments->isEmpty()) {
+            return false;
+        }
+
+        if ($scope === 'global') {
+            return $permissionAssignments->contains(
+                fn (object $assignment): bool => $assignment->scope === 'global'
+            );
+        }
+
+        if ($scope === 'organization') {
+            $visibleOrganizationIds = $this->consoleOrganizationIds($user);
+            if ($visibleOrganizationIds === []) {
+                return false;
+            }
+
+            return collect($visibleOrganizationIds)->every(
+                fn (int $organizationId): bool => $permissionAssignments->contains(
+                    fn (object $assignment): bool => $assignment->scope === 'global'
+                        || ($assignment->scope === 'organization'
+                            && (int) $assignment->organization_id === $organizationId)
+                )
+            );
+        }
+
+        if ($scope === 'own') {
+            return $permissionAssignments->contains(function (object $assignment) use ($user): bool {
+                if ($assignment->scope === 'global') {
+                    return true;
+                }
+
+                if ($assignment->scope === 'organization') {
+                    if ($user->organization_id !== null) {
+                        return (int) $assignment->organization_id === (int) $user->organization_id;
+                    }
+
+                    // A scoped admin may be downgraded to an own-only view when
+                    // an additional team assignment is outside its organization boundary.
+                    // The valid organization assignment still grants the own-only section.
+                    return $user->isAdmin()
+                        && in_array((int) $assignment->organization_id, $this->consoleOrganizationIds($user), true);
+                }
+
+                return $assignment->scope === 'own';
+            });
+        }
+
+        if ($scope === 'team') {
+            $visibleTeamIds = $this->consoleTeamIds($user);
+            if ($visibleTeamIds === []) {
+                return false;
+            }
+
+            $visibleTeams = Team::query()
+                ->whereIn('id', $visibleTeamIds)
+                ->get(['id', 'organization_id']);
+            if ($visibleTeams->count() !== count($visibleTeamIds)) {
+                return false;
+            }
+
+            return $visibleTeams->every(function (Team $team) use ($permissionAssignments): bool {
+                return $permissionAssignments->contains(function (object $assignment) use ($team): bool {
+                    return $assignment->scope === 'global'
+                        || ($assignment->scope === 'organization'
+                            && (int) $assignment->organization_id === (int) $team->organization_id)
+                        || ($assignment->scope === 'team'
+                            && (int) $assignment->team_id === (int) $team->id
+                            && (int) $assignment->organization_id === (int) $team->organization_id);
+                });
+            });
+        }
+
+        return false;
+    }
+
+    private function consoleOrganizationIds(User $user): array
+    {
+        $assigned = $this->effectiveOrganizationIds($user);
+        if ($assigned !== null) {
+            return collect($assigned)->map(fn ($id): int => (int) $id)->unique()->values()->all();
+        }
+
+        return $user->organization_id !== null ? [(int) $user->organization_id] : [];
+    }
+
+    /**
+     * Resolve every team represented by the current console scope. Explicit
+     * assignments take precedence; legacy supervisors/managers retain their
+     * existing team membership behavior during migration.
+     */
+    private function consoleTeamIds(User $user): array
+    {
+        $assigned = $this->effectiveTeamIds($user);
+        if ($assigned !== null) {
+            return collect($assigned)->map(fn ($id): int => (int) $id)->unique()->values()->all();
+        }
+
+        return Team::query()
+            ->where('supervisor_id', $user->id)
+            ->orWhereIn('id', function ($query) use ($user): void {
+                $query->select('team_id')
+                    ->from('team_user')
+                    ->where('user_id', $user->id)
+                    ->where('team_role', 'manager');
+            })
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     private function resolvePermissionDecision(User $user, string $permission): bool
@@ -604,7 +835,7 @@ class AuthorizationService
             $allowedTeamIds = $allowedTeamIds->intersect($validTeamIds)->values();
         }
 
-        if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin()) {
+        if ($actorScope === 'team' && $allowedTeamIds->isEmpty() && ! $actor->isAdmin() && ! $hasExplicitTeamManagementScope && $effectiveTeamIds === null) {
             $managedTeamsQuery = \App\Models\Team::query();
             if ($actor->organization_id !== null) {
                 $managedTeamsQuery->where('organization_id', (int) $actor->organization_id);
@@ -628,9 +859,25 @@ class AuthorizationService
         }
 
         if ($scope === 'organization') {
-            return $organizationId !== null
-                && (int) $subject->organization_id === $organizationId
-                && ($actorScope === 'global' || $allowedOrganizationIds->contains($organizationId));
+            if ($organizationId === null || ($actorScope !== 'global' && ! $allowedOrganizationIds->contains($organizationId))) {
+                return false;
+            }
+
+            $subjectOrganizationIds = $this->effectiveOrganizationIds($subject);
+            if ($subjectOrganizationIds !== null) {
+                return in_array($organizationId, $subjectOrganizationIds, true);
+            }
+
+            if ($subject->organization_id !== null && (int) $subject->organization_id === $organizationId) {
+                return true;
+            }
+
+            $subjectTeamIds = $this->consoleTeamIds($subject);
+
+            return $subjectTeamIds !== [] && Team::query()
+                ->whereIn('id', $subjectTeamIds)
+                ->where('organization_id', $organizationId)
+                ->exists();
         }
 
         if ($scope === 'team') {
@@ -639,12 +886,17 @@ class AuthorizationService
             }
 
             $team = \App\Models\Team::query()->whereKey($teamId)->first(['id', 'organization_id']);
-            if (! $team
-                || ($organizationId !== null && (int) $team->organization_id !== $organizationId)
-                || ! \App\Models\Team::query()->whereKey($teamId)->where(function ($query) use ($subject): void {
+            $subjectTeamIds = $this->effectiveTeamIds($subject);
+            $subjectHasTeamAccess = $subjectTeamIds !== null
+                ? in_array($teamId, $subjectTeamIds, true)
+                : Team::query()->whereKey($teamId)->where(function ($query) use ($subject): void {
                     $query->where('supervisor_id', $subject->id)
                         ->orWhereHas('members', fn ($members) => $members->whereKey($subject->id));
-                })->exists()) {
+                })->exists();
+
+            if (! $team
+                || ($organizationId !== null && (int) $team->organization_id !== $organizationId)
+                || ! $subjectHasTeamAccess) {
                 return false;
             }
 
