@@ -1087,6 +1087,7 @@
 
   const showItem=async(index)=>{
     readerNavigationRevision++;
+    const navigationRevision=readerNavigationRevision;
     const nextIndex=clamp(Number(index)||0,0,articles.length-1);
     if(nextIndex!==itemIndex){searchRequest++;pdfMatches=[];matchIndex=-1;}
     itemIndex=nextIndex;
@@ -1113,6 +1114,7 @@
       pdfDoc=null;activePdfUrl=null;pdfCanvas=null;pdfSurface=null;pdfLoading=null;continuousHost=null;
       scrollModeButton?.setAttribute('aria-pressed','false');
       if(previousDocument){try{await previousDocument.destroy();}catch(_){}}
+      if(readerNavigationRevision!==navigationRevision)return;
     }
     if(scrollModeButton)scrollModeButton.hidden=!pdfActive;
     if(searchGroup)searchGroup.hidden=!pdfActive;
@@ -1126,6 +1128,7 @@
     root.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
     if(isPdf()){
       await loadPdf();
+      if(readerNavigationRevision!==navigationRevision)return;
       if(pdfDoc)await buildPdfThumbs();
     }else{
       setPageControls(itemIndex+1,articles.length);
