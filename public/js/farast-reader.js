@@ -401,9 +401,11 @@
     const canvas=pdfCanvas;
     const surface=pdfSurface;
     if(!renderDocument||!canvas)return;
+    const isCurrent=()=>request===pdfRenderSequence&&renderDocument===pdfDoc&&canvas===pdfCanvas;
     const request=++pdfRenderSequence;
     const pageNumber=clamp(Number(number)||1,1,renderDocument.numPages);
     pdfPage=pageNumber;
+    try{
     if(renderTask){try{renderTask.cancel();}catch(_){}}
     const page=await renderDocument.getPage(pageNumber);
     if(request!==pdfRenderSequence||renderDocument!==pdfDoc||canvas!==pdfCanvas)return;
@@ -462,6 +464,10 @@
     if(pdfLoading){pdfLoading.hidden=true;pdfLoading.style.display='none';}
     setPageControls(pageNumber,renderDocument.numPages);
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:pageNumber}}));
+    }catch(error){
+      if(!isCurrent()||error?.name==='RenderingCancelledException'||error?.name==='AbortException')return;
+      showPdfError(error);
+    }
   };
 
   const releaseContinuousPage=wrapper=>{
