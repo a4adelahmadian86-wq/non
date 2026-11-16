@@ -177,4 +177,74 @@ class FinancialIdempotencyAndRetentionTest extends TestCase
         $this->expectException(QueryException::class);
         $user->delete();
     }
+    public function test_database_enforces_unique_order_and_payment_idempotency_and_gateway_references(): void
+    {
+        $user = $this->user('09140001006');
+        $order = $this->order($user, 'database-order-idempotency');
+
+        $this->assertQueryException(
+            fn () => $this->order($user, 'database-order-idempotency'),
+            'The database must reject duplicate order idempotency keys.'
+        );
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => 'authority-once',
+            'transaction_id' => 'transaction-once',
+            'amount_rials' => 10000,
+            'status' => 'pending',
+            'idempotency_key' => 'payment-idempotency-once',
+        ]);
+
+        $this->assertQueryException(
+            fn () => Payment::create([
+                'order_id' => $order->id,
+                'gateway' => 'zarinpal',
+                'authority' => 'authority-second',
+                'transaction_id' => 'transaction-second',
+                'amount_rials' => 10000,
+                'status' => 'pending',
+                'idempotency_key' => 'payment-idempotency-once',
+            ]),
+            'The database must reject duplicate payment idempotency keys.'
+        );
+
+        $this->assertQueryException(
+            fn () => Payment::create([
+                'order_id' => $order->id,
+                'gateway' => 'zarinpal',
+                'authority' => 'authority-once',
+                'transaction_id' => 'transaction-third',
+                'amount_rials' => 10000,
+                'status' => 'pending',
+                'idempotency_key' => 'payment-idempotency-third',
+            ]),
+            'The database must reject duplicate gateway authorities.'
+        );
+
+        $this->assertQueryException(
+            fn () => Payment::create([
+                'order_id' => $order->id,
+                'gateway' => 'zarinpal',
+                'authority' => 'authority-fourth',
+                'transaction_id' => 'transaction-once',
+                'amount_rials' => 10000,
+                'status' => 'pending',
+                'idempotency_key' => 'payment-idempotency-fourth',
+            ]),
+            'The database must reject duplicate gateway transaction IDs.'
+        );
+    }
+
+    private function assertQueryException(callable $operation, string $message): void
+    {
+        try {
+            $operation();
+            $this->fail($message);
+        } catch (QueryException) {
+            $this->assertTrue(true);
+        }
+    }
+
 }
