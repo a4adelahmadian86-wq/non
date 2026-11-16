@@ -344,7 +344,6 @@ class SupportTicketService
             $payload['submission_key'] = $submission['key'];
             $payload['submission_fingerprint'] = $submission['fingerprint'];
             $existing = TicketMessage::query()
-                ->where('ticket_id', $ticket->id)
                 ->where('submission_scope', $submission['scope'])
                 ->where('submission_key', $submission['key'])
                 ->first();
