@@ -158,11 +158,27 @@ class SupportSlaAlertOutboxService
         foreach ($claims as $claim) {
             $id = $claim['id'];
             $leaseToken = $claim['lease_token'];
-            $alert = SupportSlaAlertOutbox::query()
-                ->whereKey($id)
-                ->where('status', 'processing')
-                ->where('lease_token', $leaseToken)
-                ->first();
+            // Batch claims are acquired together, but delivery is sequential. Refresh
+            // this row's lease immediately before its provider calls so later rows do
+            // not expire while earlier alerts in the same batch are being delivered.
+            // The token check fences out a worker whose lease has already been reclaimed.
+            $alert = DB::transaction(function () use ($id, $leaseToken): ?SupportSlaAlertOutbox {
+                $claimed = SupportSlaAlertOutbox::query()
+                    ->whereKey($id)
+                    ->where('status', 'processing')
+                    ->where('lease_token', $leaseToken)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $claimed) {
+                    return null;
+                }
+
+                $claimed->forceFill(['locked_at' => now()])->save();
+
+                return $claimed;
+            });
+
             if (! $alert) {
                 continue;
             }
