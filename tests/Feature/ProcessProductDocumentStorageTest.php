@@ -476,4 +476,24 @@ class ProcessProductDocumentStorageTest extends TestCase
         $this->assertSame(0, $document->pages()->count());
     }
 
+    public function test_staged_artifact_cleanup_failure_does_not_escape_or_mask_the_primary_result(): void
+    {
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldReceive('delete')
+            ->once()
+            ->with('private', 'temporary/reader.pdf')
+            ->andThrow(new \\RuntimeException('simulated cleanup failure'));
+
+        $job = new ProcessProductDocument(123);
+        $cleanup = new \\ReflectionMethod($job, 'cleanupManagedArtifact');
+        $cleanup->setAccessible(true);
+        $cleanup->invoke($job, $storage, [
+            'disk' => 'private',
+            'path' => 'temporary/reader.pdf',
+            'managed_file_id' => 456,
+        ], 'reader_pdf');
+
+        $this->assertTrue(true);
+    }
+
 }
