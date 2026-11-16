@@ -49,8 +49,6 @@ class ProcessProductDocument implements ShouldQueue
         $product = $document->product;
         $sourceDisk = $file->disk ?: 'private';
         $sourcePath = (string) $file->path;
-        $readerPdfOldPath = null;
-        $readerPdfOldDisk = 'private';
         $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-source-');
         if (! is_string($sourceTemporaryPath)) {
             $document->update(['processing_status' => 'failed', 'failure_code' => 'source_temp_unavailable']);
@@ -102,9 +100,9 @@ class ProcessProductDocument implements ShouldQueue
                 $readerPdfSourceHash = data_get($readerPdfArtifact?->metadata_json, 'source_sha256');
                 $readerPdfExists = $readerPdfArtifact
                     && $readerPdfPath
-                    && $storage->exists($readerPdfDisk, $readerPdfPath)
-                    && (! is_string($readerPdfSourceHash)
-                        || hash_equals((string) $document->source_sha256, $readerPdfSourceHash));
+                    && is_string($readerPdfSourceHash)
+                    && hash_equals((string) $document->source_sha256, $readerPdfSourceHash)
+                    && $storage->exists($readerPdfDisk, $readerPdfPath);
 
                 $readerPdfBytes = $readerPdfExists
                     ? $storage->get($readerPdfDisk, $readerPdfPath)
@@ -187,7 +185,10 @@ class ProcessProductDocument implements ShouldQueue
 
             $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
         $existingSampleBefore = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+        $existingSampleSourceHash = data_get($existingSampleBefore?->metadata_json, 'source_sha256');
         $existingSampleAvailable = $existingSampleBefore
+            && is_string($existingSampleSourceHash)
+            && hash_equals((string) $document->source_sha256, $existingSampleSourceHash)
             && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
         if ($file->is_primary && ! $existingSampleAvailable && is_string($sampleBase64) && $sampleBase64 !== '') {
             $sampleBytes = base64_decode($sampleBase64, true);
@@ -320,9 +321,9 @@ class ProcessProductDocument implements ShouldQueue
                 $existingReaderSourceHash = data_get($existingReader?->metadata_json, 'source_sha256');
                 $existingReaderIsCurrent = $existingReader
                     && $existingReaderPath
-                    && $storage->exists($existingReaderDisk, $existingReaderPath)
-                    && (! is_string($existingReaderSourceHash)
-                        || hash_equals((string) $locked->source_sha256, $existingReaderSourceHash));
+                    && is_string($existingReaderSourceHash)
+                    && hash_equals((string) $locked->source_sha256, $existingReaderSourceHash)
+                    && $storage->exists($existingReaderDisk, $existingReaderPath);
 
                 if ($existingReaderIsCurrent) {
                     $readerPdfPathForReader = $existingReaderPath;
@@ -400,7 +401,11 @@ class ProcessProductDocument implements ShouldQueue
                 $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->lockForUpdate()->first();
                 $samplePathForReader = null;
                 $sampleDiskForReader = 'private';
-                if ($existingSample && $storage->exists($existingSample->disk ?: 'private', $existingSample->path)) {
+                $existingSampleSourceHash = data_get($existingSample?->metadata_json, 'source_sha256');
+                if ($existingSample
+                    && is_string($existingSampleSourceHash)
+                    && hash_equals((string) $locked->source_sha256, $existingSampleSourceHash)
+                    && $storage->exists($existingSample->disk ?: 'private', $existingSample->path)) {
                     $samplePathForReader = $existingSample->path;
                     $sampleDiskForReader = $existingSample->disk ?: 'private';
                     $structure['sample'] = [
