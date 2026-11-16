@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\SupportTicketService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 class SupportAdminInboxQueryTest extends TestCase
@@ -329,4 +331,66 @@ class SupportAdminInboxQueryTest extends TestCase
         $this->assertStringContainsString('created_to=2026-11-14', $statusChipMatch[1]);
     }
 
+
+    public function test_staff_reply_preserves_all_inbox_filters_without_confusing_reply_status_with_filter_status(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Reply preserves inbox filter context',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ]);
+
+        $filters = [
+            'status' => 'open',
+            'q' => 'filter-context',
+            'department' => 'support',
+            'priority' => 'normal',
+            'source' => 'widget',
+            'topic_area' => 'store',
+            'sla' => 'breached',
+            'assigned' => 'unassigned',
+            'created_from' => '2026-11-01',
+            'created_to' => '2026-11-15',
+        ];
+
+        $page = $this->actingAs($admin)
+            ->get(route('admin.support.management', ['ticket' => $ticket->id] + $filters))
+            ->assertOk();
+
+        preg_match('/<form class="sd-composer"[^>]*action="([^"]+)"/', $page->getContent(), $formMatch);
+        $this->assertNotEmpty($formMatch[1] ?? null);
+        $formAction = html_entity_decode($formMatch[1], ENT_QUOTES);
+        parse_str((string) parse_url($formAction, PHP_URL_QUERY), $formQuery);
+        $this->assertSame((string) $ticket->id, (string) ($formQuery['ticket'] ?? ''));
+        foreach ($filters as $key => $value) {
+            $this->assertSame($value, $formQuery[$key] ?? null, 'Missing inbox filter in reply form action: '.$key);
+        }
+
+        $tickets = Mockery::mock(SupportTicketService::class);
+        $tickets->shouldReceive('addMessage')
+            ->once()
+            ->withArgs(function ($candidate, $actor, $body, $options) use ($ticket, $admin): bool {
+                return $candidate instanceof Ticket
+                    && $candidate->is($ticket)
+                    && $actor instanceof User
+                    && (int) $actor->id === (int) $admin->id
+                    && $body === 'پاسخ کارشناسی'
+                    && ($options['status'] ?? null) === 'answered'
+                    && ($options['is_staff'] ?? false) === true;
+            })
+            ->andReturn(new TicketMessage());
+        $this->app->instance(SupportTicketService::class, $tickets);
+
+        $this->post(
+            route('admin.tickets.reply', $ticket).'?'.http_build_query(['ticket' => $ticket->id] + $filters),
+            [
+                'body' => 'پاسخ کارشناسی',
+                'status' => 'answered',
+            ]
+        )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
+    }
 }
