@@ -414,6 +414,7 @@ class SupportAdminInboxQueryTest extends TestCase
         // Assignee choices must be derived from the already-scoped ticket set.
         $console = Mockery::mock(AdminConsoleService::class);
         $console->shouldReceive('visibleUserIds')->once()->with($admin)->andReturn([$admin->id]);
+        $console->shouldReceive('sectionAllowed')->andReturn(true);
         $this->app->instance(AdminConsoleService::class, $console);
 
         $this->actingAs($admin)
