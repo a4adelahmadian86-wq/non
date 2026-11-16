@@ -108,19 +108,19 @@ class ProcessProductDocument implements ShouldQueue
 
                 $readerPdfBytes = $readerPdfExists
                     ? $storage->get($readerPdfDisk, $readerPdfPath)
-                    : app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                    : app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($docxBytes);
 
                 if (! is_string($readerPdfBytes)
                     || ! str_starts_with($readerPdfBytes, '%PDF-')
                     || strlen($readerPdfBytes) > 25 * 1024 * 1024) {
-                    throw new \\RuntimeException('product_docx_conversion_invalid');
+                    throw new \RuntimeException('product_docx_conversion_invalid');
                 }
 
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
                     throw new \RuntimeException('product_docx_review_stream_failed');
                 }
-                fwrite($reviewStream, $pdfBytes);
+                fwrite($reviewStream, $readerPdfBytes);
                 rewind($reviewStream);
                 $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
                 $readerSourceStream = fopen('php://temp', 'w+b');
@@ -214,13 +214,15 @@ class ProcessProductDocument implements ShouldQueue
         }
 
         try {
-        $committed = DB::transaction(function () use ($document, $file, $product, $sourceExtension, $currentHash, $payload, $chunks, $storage, $readerPdfManaged, $readerPdfBytes, &$readerPdfManagedBound, $sampleManaged, $sampleHash, $samplePageNumbers, &$sampleManagedBound, &$totalCharacters, &$totalWords): bool {
+        $committed = DB::transaction(function () use ($document, $file, $product, $sourceExtension, $sourceDisk, $sourcePath, $currentHash, $payload, $chunks, $storage, $readerPdfManaged, $readerPdfBytes, &$readerPdfManagedBound, $sampleManaged, $sampleHash, $samplePageNumbers, &$sampleManagedBound, &$totalCharacters, &$totalWords): bool {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $file = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
 
             // Revalidate the source after the external provider call and while both
             // the document and file rows are locked, before deleting published data.
             $sourceStillCurrent = (int) $locked->product_file_id === (int) $file->id
+                && (string) ($file->disk ?: 'private') === $sourceDisk
+                && (string) $file->path === $sourcePath
                 && hash_equals((string) $locked->source_sha256, $currentHash)
                 && hash_equals((string) $file->sha256, $currentHash);
 
@@ -365,7 +367,7 @@ class ProcessProductDocument implements ShouldQueue
                     $readerPdfPathForReader = $artifact->path;
                     $readerPdfDiskForReader = $artifact->disk ?: 'private';
                 } else {
-                    throw new \\RuntimeException('product_docx_reader_artifact_unavailable');
+                    throw new \RuntimeException('product_docx_reader_artifact_unavailable');
                 }
             }
 
