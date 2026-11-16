@@ -364,7 +364,11 @@ class SupportAdminInboxQueryTest extends TestCase
         preg_match('/<form class="sd-composer"[^>]*action="([^"]+)"/', $page->getContent(), $formMatch);
         $this->assertNotEmpty($formMatch[1] ?? null);
         $formAction = html_entity_decode($formMatch[1], ENT_QUOTES);
-        $this->assertStringContainsString(http_build_query($filters), $formAction);
+        parse_str((string) parse_url($formAction, PHP_URL_QUERY), $formQuery);
+        $this->assertSame((string) $ticket->id, (string) ($formQuery['ticket'] ?? ''));
+        foreach ($filters as $key => $value) {
+            $this->assertSame($value, $formQuery[$key] ?? null, 'Missing inbox filter in reply form action: '.$key);
+        }
 
         $tickets = Mockery::mock(SupportTicketService::class);
         $tickets->shouldReceive('addMessage')
