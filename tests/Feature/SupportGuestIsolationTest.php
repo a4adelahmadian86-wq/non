@@ -60,6 +60,7 @@ class SupportGuestIsolationTest extends TestCase
         $this->postJson('/api/support/guest-message', [
             'body' => 'Follow-up from same browser session',
             'email' => 'owner@example.test',
+            'submission_key' => 'b5e8c120-7a2b-4c91-9ec8-8a0d7e4b3322',
             'ticket_id' => $ticket->id,
         ])->assertOk()->assertJsonPath('ticket_id', $ticket->id);
 
