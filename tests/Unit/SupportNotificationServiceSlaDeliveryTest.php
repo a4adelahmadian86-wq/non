@@ -55,11 +55,10 @@ class SupportNotificationServiceSlaDeliveryTest extends TestCase
 
     private function ticket(): Ticket
     {
-        $ticket = new Ticket([
-            'subject' => 'SLA test without an eligible recipient',
-            'priority' => 'normal',
-            'ticket_code' => 'SLA-NO-RECIPIENT',
-        ]);
+        $ticket = new Ticket();
+        $ticket->subject = 'SLA test without an eligible recipient';
+        $ticket->priority = 'normal';
+        $ticket->ticket_code = 'SLA-NO-RECIPIENT';
         $ticket->id = 4242;
         $ticket->setRelation('assignee', null);
         $ticket->setRelation('user', null);
