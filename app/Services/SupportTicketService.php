@@ -399,12 +399,16 @@ class SupportTicketService
                     $slaBefore = $this->slaAuditSnapshot($locked);
                     $transition = $this->buildStatusTransitionUpdate($locked, $targetStatus);
                     $update = array_merge($update, $transition['attributes']);
+                    $firstResponseBreachDetected = $transition['first_response_breach_detected'];
                     $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
                     if ($update !== []) {
                         $locked->update($update);
                     }
 
+                    if ($firstResponseBreachDetected) {
+                        $this->enqueueFirstResponseBreachAlert($locked);
+                    }
                     if ($resolutionBreachDetected) {
                         $this->enqueueResolutionBreachAlert($locked);
                     }
@@ -461,7 +465,7 @@ class SupportTicketService
      * initiated explicitly or as part of a conversation reply. This keeps
      * timestamps and SLA pause/resume behavior consistent across both paths.
      *
-     * @return array{attributes: array<string, mixed>, resolution_breach_detected: bool}
+     * @return array{attributes: array<string, mixed>, first_response_breach_detected: bool, resolution_breach_detected: bool}
      */
     private function buildStatusTransitionUpdate(Ticket $ticket, string $targetStatus): array
     {
@@ -501,6 +505,8 @@ class SupportTicketService
 
         return [
             'attributes' => $attributes,
+            'first_response_breach_detected' => ! empty($attributes['sla_first_breached_at'])
+                && empty($ticket->sla_first_breached_at),
             'resolution_breach_detected' => ! empty($attributes['sla_resolve_breached_at'])
                 && empty($ticket->sla_resolve_breached_at),
         ];
@@ -524,8 +530,12 @@ class SupportTicketService
             $slaBefore = $this->slaAuditSnapshot($locked);
             $transition = $this->buildStatusTransitionUpdate($locked, $status);
             $locked->update($transition['attributes']);
+            $firstResponseBreachDetected = $transition['first_response_breach_detected'];
             $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
+            if ($firstResponseBreachDetected) {
+                $this->enqueueFirstResponseBreachAlert($locked);
+            }
             if ($resolutionBreachDetected) {
                 $this->enqueueResolutionBreachAlert($locked);
             }
@@ -860,6 +870,26 @@ class SupportTicketService
             'resolved_at' => $ticket->resolved_at?->toIso8601String(),
             'closed_at' => $ticket->closed_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Persist a newly detected first-response breach in the durable SLA outbox.
+     * This runs in the ticket mutation transaction so marker and delivery intent
+     * cannot diverge if audit or database persistence fails.
+     */
+    private function enqueueFirstResponseBreachAlert(Ticket $ticket): void
+    {
+        if (empty($ticket->sla_first_breached_at) || ! $ticket->sla_first_due_at) {
+            throw new \\RuntimeException('A first-response breach alert requires its canonical SLA marker and deadline.');
+        }
+
+        $minutesLeft = $this->sla->minutesUntilDeadline($ticket->sla_first_due_at);
+
+        app(SupportSlaAlertOutboxService::class)->enqueue($ticket, 'first_response', [
+            'event' => 'breached',
+            'minutes' => $minutesLeft,
+            'column' => 'sla_first_breached_at',
+        ]);
     }
 
     /**
