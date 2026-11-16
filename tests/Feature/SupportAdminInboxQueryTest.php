@@ -391,6 +391,7 @@ class SupportAdminInboxQueryTest extends TestCase
             [
                 'body' => 'پاسخ کارشناسی',
                 'status' => 'answered',
+                'submission_key' => '9f8d5e10-9a6b-4f4f-8b20-4c5b7c0e6d11',
             ]
         )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
     }
