@@ -161,8 +161,14 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
                 ->assertViewHas('report', function (array $report): bool {
                     $names = collect($report['agents'])->pluck('name')->all();
 
+                    $hiddenAgentRow = collect($report['agents'])->firstWhere('name', 'کارشناس خارج از محدوده');
+
                     return $report['totals']['tickets'] === 1
                         && $report['totals']['closed'] === 1
+                        && $hiddenAgentRow !== null
+                        && $hiddenAgentRow['assigned'] === 1
+                        && $hiddenAgentRow['replies'] === 1
+                        && $hiddenAgentRow['first_response_total'] === 1
                         && in_array('کارشناس خارج از محدوده', $names, true)
                         && ! in_array('Secret Out Of Scope Agent', $names, true);
                 })
