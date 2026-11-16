@@ -137,7 +137,7 @@
           finishWithMessage('دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
           return;
         }
-        const retryable = [408, 425, 429].includes(response.status) || response.status >= 500;
+        const retryable = [202, 204, 408, 425, 429].includes(response.status) || response.status >= 500;
         if (!retryable) {
           finishWithMessage('وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.');
           return;
