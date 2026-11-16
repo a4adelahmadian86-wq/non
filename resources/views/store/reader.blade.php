@@ -139,7 +139,7 @@
 
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111durable4"></script>
-<script src="/js/farast-reader.js?v=20261116pdfcleanup1"></script>
+<script src="/js/farast-reader.js?v=20261116stalerender1"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261116stop1" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
