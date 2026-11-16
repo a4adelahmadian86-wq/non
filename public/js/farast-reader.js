@@ -153,7 +153,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
-  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0,continuousRenderGeneration=0,pdfLoadGeneration=0,pdfLoadingTask=null,pdfLoadingUrl=null;
+  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0,continuousRenderGeneration=0,pdfLoadGeneration=0,pdfLoadingTask=null,pdfLoadingUrl=null,pdfLoadPromise=null,pdfLoadPromiseUrl=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -891,7 +891,7 @@
     }
   };
 
-  const loadPdf=async()=>{
+  const loadPdfDocument=async()=>{
     const surface=activeArticle()?.querySelector('.farast-pdf-document');
     const nextUrl=surface?.dataset.pdfUrl;
     if(!surface||!nextUrl){showPdfError(new Error('PDF preview URL unavailable'));return;}
@@ -983,6 +983,20 @@
       if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;
       showPdfError(error);
     }
+  };
+
+  const loadPdf=()=>{
+    const nextUrl=activeArticle()?.querySelector('.farast-pdf-document')?.dataset.pdfUrl;
+    if(!nextUrl)return loadPdfDocument();
+    if(pdfLoadPromise&&pdfLoadPromiseUrl===nextUrl)return pdfLoadPromise;
+    const promise=loadPdfDocument();
+    pdfLoadPromise=promise;
+    pdfLoadPromiseUrl=nextUrl;
+    const clear=()=>{
+      if(pdfLoadPromise===promise){pdfLoadPromise=null;pdfLoadPromiseUrl=null;}
+    };
+    promise.then(clear,clear);
+    return promise;
   };
 
   const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
@@ -1101,7 +1115,7 @@
       scrollModeButton?.setAttribute('aria-pressed','false');
     }
     const pdfActive=isPdf();
-    if(!pdfActive&&(pdfDoc||pdfLoadingTask)){
+    if(!pdfActive&&(pdfDoc||pdfLoadingTask||activePdfUrl||pdfLoadPromise)){
       pdfLoadGeneration++;
       const pendingPdfLoad=pdfLoadingTask;
       pdfLoadingTask=null;pdfLoadingUrl=null;
