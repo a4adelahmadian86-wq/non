@@ -459,8 +459,12 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-zoom-in').click();
     await expect(root.locator('#reader-zoom-label')).toContainText('۱۲۰');
     await expect(root.locator('#reader-prev')).toBeEnabled();
+    const renderedCanvasBeforeExit = await root.locator('.farast-pdf-cont-page canvas').first().elementHandle();
+    expect(await renderedCanvasBeforeExit.evaluate(canvas => canvas.width)).toBeGreaterThan(0);
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
+    // Detached canvases must release their backing stores when continuous mode exits.
+    expect(await renderedCanvasBeforeExit.evaluate(canvas => canvas.width)).toBe(0);
   });
 
   test('continuous PDF mode releases canvases outside the viewport window', async ({ page }) => {
