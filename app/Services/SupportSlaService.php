@@ -29,13 +29,31 @@ class SupportSlaService
 
         // Once a public first response exists, its original deadline is immutable.
         if ($hasFirstDueAt && ! $ticket->first_response_at) {
-            $targets['sla_first_due_at'] = $this->addSlaMinutes($base->copy(), $firstMins);
+            $firstDueAt = $this->addSlaMinutes($base->copy(), $firstMins);
+            $targets['sla_first_due_at'] = $firstDueAt;
+
+            if (Schema::hasColumn('tickets', 'sla_first_warned_at')
+                && empty($ticket->sla_first_breached_at)
+                && (! $ticket->sla_first_due_at
+                    || ! Carbon::parse($ticket->sla_first_due_at)->equalTo($firstDueAt))) {
+                // A new deadline is a new warning window. Old pending outbox
+                // rows are fenced by their deadline identity and this marker
+                // permits the monitor to enqueue the new warning when relevant.
+                $targets['sla_first_warned_at'] = null;
+            }
         }
 
         $resolveDueAt = null;
         if ($hasResolveDueAt) {
             $resolveDueAt = $this->addSlaMinutes($base->copy(), $resolveMins);
             $targets['sla_resolve_due_at'] = $resolveDueAt;
+
+            if (Schema::hasColumn('tickets', 'sla_resolve_warned_at')
+                && empty($ticket->sla_resolve_breached_at)
+                && (! $ticket->sla_resolve_due_at
+                    || ! Carbon::parse($ticket->sla_resolve_due_at)->equalTo($resolveDueAt))) {
+                $targets['sla_resolve_warned_at'] = null;
+            }
         }
 
         // A priority change while waiting for the customer must also update
@@ -292,14 +310,29 @@ class SupportSlaService
             return [];
         }
 
+        // First-response time continues while waiting for the customer. Record
+        // a breach on the next lifecycle transition if the monitor has not yet
+        // observed the overdue first response.
+        $attributes = [];
+        if (Schema::hasColumn('tickets', 'sla_first_due_at')
+            && Schema::hasColumn('tickets', 'sla_first_breached_at')
+            && $ticket->sla_first_due_at
+            && empty($ticket->sla_first_breached_at)) {
+            $firstResponseLate = $ticket->first_response_at
+                ? $ticket->first_response_at->gt($ticket->sla_first_due_at)
+                : $this->minutesUntilDeadline($ticket->sla_first_due_at) < 0;
+
+            if ($firstResponseLate) {
+                $attributes['sla_first_breached_at'] = now();
+            }
+        }
+
         if ($newStatus === 'pending' && $oldStatus !== 'pending') {
             $dueAt = $ticket->sla_resolve_due_at;
             $pausedAt = now();
             $remaining = $dueAt ? $this->minutesUntilDeadline($dueAt, $pausedAt) : null;
-            $attributes = [
-                'sla_paused_at' => $pausedAt,
-                'sla_resolve_remaining_minutes' => $remaining === null ? null : max(0, $remaining),
-            ];
+            $attributes['sla_paused_at'] = $pausedAt;
+            $attributes['sla_resolve_remaining_minutes'] = $remaining === null ? null : max(0, $remaining);
 
             if ($remaining !== null
                 && $remaining < 0
@@ -313,17 +346,35 @@ class SupportSlaService
 
         if ($oldStatus === 'pending' && $newStatus !== 'pending' && $ticket->sla_paused_at) {
             $remaining = $ticket->sla_resolve_remaining_minutes;
-
-            return [
+            $attributes = array_merge($attributes, [
                 'sla_resolve_due_at' => $remaining === null
                     ? $ticket->sla_resolve_due_at
                     : $this->addSlaMinutes(now(), (int) $remaining),
                 'sla_paused_at' => null,
                 'sla_resolve_remaining_minutes' => null,
-            ];
+            ]);
+
+            if (Schema::hasColumn('tickets', 'sla_resolve_warned_at')
+                && empty($ticket->sla_resolve_breached_at)) {
+                // Resuming starts a new resolution deadline identity and warning window.
+                $attributes['sla_resolve_warned_at'] = null;
+            }
+
+            return $attributes;
         }
 
-        return [];
+        // Closed tickets leave the active SLA scan. Capture any breach that
+        // became due before closure so the durable outbox can still deliver it.
+        if ($newStatus === 'closed'
+            && $oldStatus !== 'pending'
+            && Schema::hasColumn('tickets', 'sla_resolve_breached_at')
+            && $ticket->sla_resolve_due_at
+            && empty($ticket->sla_resolve_breached_at)
+            && $this->minutesUntilDeadline($ticket->sla_resolve_due_at) < 0) {
+            $attributes['sla_resolve_breached_at'] = now();
+        }
+
+        return $attributes;
     }
 
     /**
