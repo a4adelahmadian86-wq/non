@@ -2215,3 +2215,82 @@ test('does not rewrite durable reading progress when only the PDF zoom changes',
   expect(writes[0].state.progress).toEqual({ section: 0, page: 1 });
 });
 
+
+
+test('stops section narration independently from pause and resets its playback position', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.readyState = 1;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        window.__readerStopAudio = this;
+      }
+      setAttribute() {}
+      load() { this.dispatchEvent(new Event('loadedmetadata')); }
+      play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        return Promise.resolve();
+      }
+      pause() {
+        if (!this.paused) {
+          this.paused = true;
+          this.dispatchEvent(new Event('pause'));
+        }
+      }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [{ text: 'سلام جهان', start: 0.1, end: 1.2, page: 1 }];
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root>' +
+      '<input id="reader-page-number" value="1">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" ' +
+        'data-audio-url="/reader-full.wav" data-audio-timing="' + JSON.stringify(timings).replace(/"/g, '&quot;') + '">' +
+        '<div class="farast-pdf-text-layer"><span>سلام جهان</span></div>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+  await expect(page.locator('[data-audio-stop]')).toBeVisible();
+
+  await page.evaluate(() => window.FarastAudioReader.playRange(0.4, 0.8, 'خواندن انتخاب‌شده'));
+  await expect.poll(() => page.evaluate(() => window.__readerStopAudio.currentTime)).toBe(0.4);
+  await page.evaluate(() => {
+    const audio = window.__readerStopAudio;
+    audio.currentTime = 0.6;
+    document.querySelector('[data-audio-seek]').value = '300';
+  });
+  await page.locator('[data-audio-stop]').click();
+
+  const stopped = await page.evaluate(() => ({
+    paused: window.__readerStopAudio.paused,
+    currentTime: window.__readerStopAudio.currentTime,
+    seek: document.querySelector('[data-audio-seek]').value,
+    status: document.querySelector('[data-audio-status]').textContent,
+    caption: document.querySelector('[data-audio-caption]').textContent
+  }));
+  expect(stopped).toMatchObject({
+    paused: true,
+    currentTime: 0,
+    seek: '0',
+    status: 'صوت متوقف شد'
+  });
+  expect(stopped.caption).toContain('پخش متوقف شد');
+
+  await page.evaluate(() => {
+    const audio = window.__readerStopAudio;
+    audio.currentTime = 1;
+    audio.play();
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  expect(await page.evaluate(() => window.__readerStopAudio.paused)).toBe(false);
+});
