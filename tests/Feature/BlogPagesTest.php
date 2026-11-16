@@ -8,11 +8,14 @@ class BlogPagesTest extends TestCase
 {
     public function test_blog_index_displays_the_featured_story_and_article_collection(): void
     {
-        $this->get(route('blog'))
-            ->assertOk()
+        $response = $this->get(route('blog'));
+
+        $response->assertOk()
             ->assertSee('مجله فراست')
             ->assertSee('از صفحه سفید تا متن نهایی')
             ->assertSee('تازه‌های مجله');
+
+        $this->assertSame(1, substr_count($response->getContent(), '/js/blog.js?v=20261107b'));
     }
 
     public function test_blog_search_filters_the_article_collection(): void
