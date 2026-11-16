@@ -189,6 +189,30 @@ class SupportNotificationService
         }
     }
 
+    /**
+     * Notify a former assignee when a ticket is moved away from them.
+     * The recipient must still be authorized for the ticket; revoked access
+     * must never be bypassed merely to deliver an assignment-change notice.
+     */
+    public function assignmentRemoved(Ticket $ticket, User $formerAgent, ?string $eventIdentity = null): void
+    {
+        if (! ($this->agentDirectory ?? app(SupportAgentDirectory::class))->allows($formerAgent, $ticket)) {
+            return;
+        }
+
+        $identity = $eventIdentity ?? 'assignment:'.($ticket->updated_at?->format('U.u') ?? 'unknown');
+
+        $this->pushInApp(
+            $formerAgent->id,
+            'ticket_assignment_removed',
+            'تغییر ارجاع تیکت '.$ticket->displayCode(),
+            'این تیکت دیگر به شما ارجاع نشده است.',
+            $ticket,
+            staff: true,
+            eventIdentity: $identity
+        );
+    }
+
     /** @param  'first_response'|'resolution'  $kind */
     public function slaWarning(Ticket $ticket, string $kind, int $minutesLeft, ?string $eventIdentity = null): void
     {
