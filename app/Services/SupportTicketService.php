@@ -349,7 +349,7 @@ class SupportTicketService
                 if ($touchStatus && ! $isInternal) {
                     $statusPolicy = app(SupportTicketStatusPolicy::class);
                     if ($isStaff) {
-                        $statusPolicy->assertStaffManagedTarget((string) ($options['status'] ?? 'answered'));
+                        $statusPolicy->assertWorkflowTarget((string) ($options['status'] ?? 'answered'));
                     } else {
                         $statusPolicy->assertCustomerReplyAllowed($previousStatus);
                     }
@@ -396,7 +396,7 @@ class SupportTicketService
 
                     $targetStatus = $isStaff
                         ? (string) ($options['status'] ?? 'answered')
-                        : 'user_replied';
+                        : SupportTicketStatusPolicy::CUSTOMER_REPLY_STATUS;
 
                     if ($isStaff && Schema::hasColumn('tickets', 'first_response_at') && empty($locked->first_response_at)) {
                         $update['first_response_at'] = now();
@@ -514,7 +514,7 @@ class SupportTicketService
 
     public function changeStatus(Ticket $ticket, string $status, ?User $actor = null, bool $systemNote = true): Ticket
     {
-        app(SupportTicketStatusPolicy::class)->assertStaffManagedTarget($status);
+        app(SupportTicketStatusPolicy::class)->assertWorkflowTarget($status);
 
         [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = app(SupportAssignmentMutex::class)->synchronized(
             fn () => DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
