@@ -2474,6 +2474,7 @@ test('retries document-audio readiness with server Retry-After and bounded backo
   await page.evaluate(() => {
     window.__audioPollCalls = [];
     window.__audioPollTimers = [];
+    Math.random = () => 0.5;
     let timerId = 0;
     window.setTimeout = (callback, delay) => {
       const timer = { id: ++timerId, callback, delay, cleared: false };
