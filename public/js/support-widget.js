@@ -19,6 +19,7 @@
   let ticketId = sessionStorage.getItem('farast_support_ticket_id') || null;
   let pendingBody = null;
   let pendingSubmissionKey = null;
+  let pendingSubmissionBody = null;
   const newSubmissionKey = () => {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -72,7 +73,16 @@
   }
 
   async function sendMessage(body) {
-    pendingSubmissionKey = pendingSubmissionKey || newSubmissionKey();
+    if (pendingSubmissionKey && pendingSubmissionBody !== body) {
+      // A different deliberate message gets its own identity; an unchanged
+      // retry keeps the prior identity and is deduplicated server-side.
+      pendingSubmissionKey = null;
+      pendingSubmissionBody = null;
+    }
+    if (!pendingSubmissionKey) {
+      pendingSubmissionKey = newSubmissionKey();
+      pendingSubmissionBody = body;
+    }
     const payload = {
       body,
       ticket_id: ticketId ? Number(ticketId) : null,
@@ -108,7 +118,10 @@
 
     if (!res.ok || !data.ok) {
       appendMsg(data.message || 'ارسال پیام ممکن نشد. دوباره تلاش کنید.', 'bot');
-      if (res.status >= 400 && res.status < 500) pendingSubmissionKey = null;
+      if (res.status >= 400 && res.status < 500) {
+        pendingSubmissionKey = null;
+        pendingSubmissionBody = null;
+      }
       return false;
     }
 
@@ -123,6 +136,7 @@
       appendMsg('می‌توانید ادامه گفتگو را در داشبورد → پشتیبانی ببینید.', 'bot');
     }
     pendingSubmissionKey = null;
+    pendingSubmissionBody = null;
     return true;
   }
 
