@@ -2757,3 +2757,40 @@ test('aborts protected page requests while hidden and resumes on visibility', as
   await expect.poll(() => article.getAttribute('data-reader-loaded')).toBe('1');
   await expect(page.locator('.reader-document-paragraph')).toHaveText('محتوای تازه پس از بازگشت');
 });
+
+test('deduplicates concurrent requests for the same protected document page', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-mode="document">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page-deduplicate">' +
+        '<div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>' +
+      '</article>' +
+    '</section>'
+  );
+  let requests = 0;
+  let resolveRequest;
+  await page.evaluate(() => {
+    window.__deduplicatedPageRequests = 0;
+    window.fetch = () => {
+      window.__deduplicatedPageRequests += 1;
+      return new Promise(resolve => {
+        window.__resolveDeduplicatedPage = resolve;
+      });
+    };
+  });
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await expect.poll(() => page.evaluate(() => window.__deduplicatedPageRequests)).toBe(1);
+  await page.evaluate(() => {
+    const root = document.querySelector('[data-reader-root]');
+    root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } }));
+    root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } }));
+  });
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => window.__deduplicatedPageRequests)).toBe(1);
+  await page.evaluate(() => window.__resolveDeduplicatedPage(new Response(JSON.stringify({
+    page_number: 1,
+    content_text: 'درخواست یکتای صفحه'
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+  await expect.poll(() => page.locator('[data-reader-root] article').getAttribute('data-reader-loaded')).toBe('1');
+  await expect(page.locator('.reader-document-paragraph')).toHaveText('درخواست یکتای صفحه');
+});
