@@ -540,7 +540,7 @@
             </div>
             @endif
 
-            <form class="sd-composer" method="post" action="{{ route('admin.tickets.reply', $active) }}" enctype="multipart/form-data">
+            <form class="sd-composer" method="post" action="{{ route('admin.tickets.reply', $active) }}{{ request()->getQueryString() ? '?'.request()->getQueryString() : '' }}" enctype="multipart/form-data">
                 @csrf
                 <div class="sd-composer-inner" style="flex-wrap:wrap">
                     <div class="sd-input-wrap" style="flex:1 1 100%">
