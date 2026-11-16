@@ -6,7 +6,9 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\AuditEventService;
 use App\Services\SupportNotificationService;
+use App\Services\SupportSlaService;
 use App\Services\SupportSlaAlertOutboxService;
+use App\Services\SupportTicketService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -314,6 +316,428 @@ class SupportSlaMonitorReliabilityTest extends TestCase
             'aggregate_type' => 'ticket',
             'aggregate_id' => $ticketId,
             'event_type' => 'support.ticket.sla_alert_queued',
+        ]);
+    }
+
+
+    public function test_first_response_warning_is_skipped_if_a_public_response_arrives_before_delivery(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Stale first-response warning',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addMinutes(10),
+            'sla_resolve_due_at' => now()->addHours(3),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')
+            ->where('ticket_id', $ticketId)
+            ->where('kind', 'first_response')
+            ->where('event', 'warning')
+            ->first();
+        $this->assertNotNull($outbox);
+
+        DB::table('tickets')->where('id', $ticketId)->update([
+            'status' => 'answered',
+            'first_response_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldNotReceive('slaWarning');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'skipped',
+            'lease_token' => null,
+        ]);
+        $this->assertDatabaseHas('farast_audit_events', [
+            'aggregate_type' => 'ticket',
+            'aggregate_id' => $ticketId,
+            'event_type' => 'support.ticket.sla_alert_skipped',
+        ]);
+    }
+
+    public function test_resolution_warning_is_skipped_after_ticket_enters_customer_wait_state(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Paused resolution warning',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->addMinutes(10),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')
+            ->where('ticket_id', $ticketId)
+            ->where('kind', 'resolution')
+            ->where('event', 'warning')
+            ->first();
+        $this->assertNotNull($outbox);
+
+        DB::table('tickets')->where('id', $ticketId)->update([
+            'status' => 'pending',
+            'sla_paused_at' => now(),
+            'sla_resolve_remaining_minutes' => 10,
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldNotReceive('slaWarning');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'skipped',
+            'lease_token' => null,
+        ]);
+    }
+
+    public function test_historical_breach_alert_remains_deliverable_after_ticket_is_closed(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Historical SLA breach',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(10),
+            'sla_resolve_due_at' => now()->addHours(3),
+            'created_at' => now()->subHour(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')
+            ->where('ticket_id', $ticketId)
+            ->where('kind', 'first_response')
+            ->where('event', 'breached')
+            ->first();
+        $this->assertNotNull($outbox);
+
+        DB::table('tickets')->where('id', $ticketId)->update([
+            'status' => 'closed',
+            'closed_at' => now(),
+            'resolved_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('slaBreached')->once()->withArgs(
+            fn ($ticket, $kind, $identity): bool => (int) $ticket->id === $ticketId
+                && $kind === 'first_response'
+                && $identity === $outbox->event_identity
+        );
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(1, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'delivered',
+        ]);
+    }
+
+    public function test_priority_deadline_change_resets_warning_marker_and_fences_old_outbox_event(): void
+    {
+        config([
+            'support.sla_first_response_minutes.normal' => 20,
+            'support.sla_first_response_minutes.high' => 60,
+            'support.business_hours_only' => false,
+        ]);
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Priority changes SLA warning window',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addMinutes(20),
+            'sla_resolve_due_at' => now()->addHours(3),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('support:check-sla');
+        $outbox = DB::table('support_sla_alert_outbox')
+            ->where('ticket_id', $ticketId)
+            ->where('kind', 'first_response')
+            ->where('event', 'warning')
+            ->first();
+        $this->assertNotNull($outbox);
+        $this->assertNotNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_warned_at'));
+
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $ticket->priority = 'high';
+        $ticket->save();
+        app(SupportSlaService::class)->applyTargets($ticket->fresh());
+
+        $this->assertNull(DB::table('tickets')->where('id', $ticketId)->value('sla_first_warned_at'));
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldNotReceive('slaWarning');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $this->assertSame(0, app(SupportSlaAlertOutboxService::class)->processPending());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'id' => $outbox->id,
+            'status' => 'skipped',
+        ]);
+    }
+
+    public function test_resuming_a_paused_ticket_starts_a_new_resolution_warning_window(): void
+    {
+        $ticket = new Ticket();
+        $ticket->status = 'pending';
+        $ticket->sla_resolve_due_at = now()->addMinutes(20);
+        $ticket->sla_paused_at = now()->subMinutes(10);
+        $ticket->sla_resolve_remaining_minutes = 10;
+        $ticket->sla_resolve_warned_at = now()->subMinutes(2);
+
+        $attributes = app(SupportSlaService::class)->statusTransitionAttributes($ticket, 'open');
+
+        $this->assertArrayHasKey('sla_resolve_warned_at', $attributes);
+        $this->assertNull($attributes['sla_resolve_warned_at']);
+        $this->assertArrayHasKey('sla_resolve_due_at', $attributes);
+    }
+
+
+    public function test_status_transition_into_pending_enqueues_resolution_breach_in_the_durable_outbox(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Resolution breach while pausing',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->subMinutes(10),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'pending',
+            null,
+            false,
+        );
+
+        $this->assertSame('pending', $ticket->status);
+        $this->assertNotNull($ticket->sla_resolve_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_staff_reply_that_moves_ticket_to_pending_enqueues_resolution_breach(): void
+    {
+        $customer = User::factory()->create();
+        $staff = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Reply while pausing overdue resolution',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->subMinutes(10),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $message = app(SupportTicketService::class)->addMessage(
+            Ticket::query()->findOrFail($ticketId),
+            $staff,
+            'برای ادامه رسیدگی به اطلاعات بیشتری نیاز داریم.',
+            ['is_staff' => true, 'status' => 'pending'],
+        );
+
+        $this->assertNotNull($message->id);
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticketId,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_priority_change_that_discovers_paused_resolution_breach_enqueues_outbox_atomically(): void
+    {
+        config([
+            'support.sla_resolution_minutes.low' => 10,
+            'support.sla_resolution_minutes.normal' => 120,
+            'support.business_hours_only' => false,
+        ]);
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Priority edit discovers paused SLA breach',
+            'status' => 'pending',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->addMinutes(60),
+            'sla_paused_at' => now()->subMinutes(30),
+            'sla_resolve_remaining_minutes' => 60,
+            'created_at' => now()->subMinutes(60),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->updateMeta(
+            Ticket::query()->findOrFail($ticketId),
+            ['priority' => 'low'],
+        );
+
+        $this->assertNotNull($ticket->sla_resolve_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+
+    public function test_closing_after_resolution_deadline_enqueues_historical_resolution_breach(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close after resolution SLA deadline',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addHours(3),
+            'sla_resolve_due_at' => now()->subMinutes(10),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertNotNull($ticket->sla_resolve_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_closing_after_first_response_deadline_enqueues_first_response_breach(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close without first response after deadline',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->subMinutes(10),
+            'sla_resolve_due_at' => now()->addHours(3),
+            'created_at' => now()->subHours(2),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $ticket = app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertNotNull($ticket->sla_first_breached_at);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticketId,
+            'kind' => 'first_response',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_closing_before_both_deadlines_does_not_create_breach_outbox_rows(): void
+    {
+        $customer = User::factory()->create();
+        $ticketId = DB::table('tickets')->insertGetId([
+            'user_id' => $customer->id,
+            'subject' => 'Close within SLA',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'sla_first_due_at' => now()->addMinutes(20),
+            'sla_resolve_due_at' => now()->addHours(2),
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now(),
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class)->shouldIgnoreMissing();
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        app(SupportTicketService::class)->changeStatus(
+            Ticket::query()->findOrFail($ticketId),
+            'closed',
+            null,
+            false,
+        );
+
+        $this->assertDatabaseMissing('support_sla_alert_outbox', ['ticket_id' => $ticketId]);
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticketId,
+            'sla_first_breached_at' => null,
+            'sla_resolve_breached_at' => null,
         ]);
     }
 
