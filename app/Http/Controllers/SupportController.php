@@ -721,6 +721,27 @@ class SupportController extends Controller
             // in the browser yet. Resolve its original creation key before
             // falling back to the user's latest active widget conversation.
             $submissionScope = hash('sha256', 'user:'.$user->id);
+            $submittedMessage = TicketMessage::query()
+                ->where('submission_scope', $submissionScope)
+                ->where('submission_key', strtolower($data['submission_key']))
+                ->first();
+            if ($submittedMessage) {
+                $ticket = $submittedMessage->ticket;
+                abort_unless($ticket && (int) $ticket->user_id === (int) $user->id, 404);
+                $this->tickets->addMessage($ticket, $user, $data['body'], [
+                    'is_staff' => false,
+                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_key' => $data['submission_key'],
+                ]);
+
+                return response()->json([
+                    'ok' => true,
+                    'ticket_id' => $ticket->id,
+                    'reply' => 'پیام شما ثبت شد. تاریخچه در داشبورد → پشتیبانی.',
+                    'redirect' => route('support.show', $ticket),
+                ]);
+            }
+
             $submittedTicket = Ticket::query()
                 ->where('submission_scope', $submissionScope)
                 ->where('submission_key', strtolower($data['submission_key']))
@@ -796,6 +817,31 @@ class SupportController extends Controller
             ->values();
         $requestedTicketId = (int) ($data['ticket_id'] ?? 0);
         $ticket = null;
+
+        $guestSubmissionScope = hash('sha256', 'guest:'.session()->getId());
+        $submittedMessage = TicketMessage::query()
+            ->where('submission_scope', $guestSubmissionScope)
+            ->where('submission_key', strtolower($data['submission_key']))
+            ->first();
+        if ($submittedMessage) {
+            $ticket = $submittedMessage->ticket;
+            abort_unless(
+                $ticket && $ticket->isGuest()
+                && hash_equals((string) $ticket->guest_email, $email),
+                404
+            );
+            $this->tickets->addMessage($ticket, null, $data['body'], [
+                'is_staff' => false,
+                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_key' => $data['submission_key'],
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'ticket_id' => $ticket->id,
+                'reply' => 'پیام شما ثبت شد. برای پیگیری، همین گفتگو را ادامه دهید.',
+            ]);
+        }
 
         if ($requestedTicketId > 0 && $sessionTicketIds->contains($requestedTicketId)) {
             $ticket = $this->tickets->findOpenGuestTicket($email, $requestedTicketId);
