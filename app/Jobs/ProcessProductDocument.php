@@ -526,13 +526,26 @@ class ProcessProductDocument implements ShouldQueue
                 'failure_code' => null,
                 'processed_at' => now(),
             ]);
+
+            return true;
         });
         } catch (Throwable $exception) {
-            if ($sampleManaged) $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+            $this->cleanupManagedArtifact($storage, $readerPdfManaged, 'reader_pdf');
+            $this->cleanupManagedArtifact($storage, $sampleManaged, 'sample_pdf');
             throw $exception;
         }
+
+        if (! $committed) {
+            $this->cleanupManagedArtifact($storage, $readerPdfManaged, 'reader_pdf');
+            $this->cleanupManagedArtifact($storage, $sampleManaged, 'sample_pdf');
+            return;
+        }
+
+        if ($readerPdfManaged && ! $readerPdfManagedBound) {
+            $this->cleanupManagedArtifact($storage, $readerPdfManaged, 'reader_pdf');
+        }
         if ($sampleManaged && ! $sampleManagedBound) {
-            $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+            $this->cleanupManagedArtifact($storage, $sampleManaged, 'sample_pdf');
         }
 
         $processedDocument = $document->fresh();
