@@ -329,4 +329,47 @@ class SupportAdminInboxQueryTest extends TestCase
         $this->assertStringContainsString('created_to=2026-11-14', $statusChipMatch[1]);
     }
 
+
+    public function test_staff_reply_preserves_all_inbox_filters_without_confusing_reply_status_with_filter_status(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'subject' => 'Reply preserves inbox filter context',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'source' => 'widget',
+            'topic_area' => 'store',
+        ]);
+
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('staffReplied')->once();
+        $this->app->instance(SupportNotificationService::class, $notifier);
+
+        $filters = [
+            'status' => 'open',
+            'q' => 'filter-context',
+            'department' => 'support',
+            'priority' => 'normal',
+            'source' => 'widget',
+            'topic_area' => 'store',
+            'sla' => 'breached',
+            'assigned' => 'unassigned',
+            'created_from' => '2026-11-01',
+            'created_to' => '2026-11-15',
+        ];
+
+        $this->actingAs($admin)
+            ->post(
+                route('admin.tickets.reply', $ticket).'?'.http_build_query($filters),
+                [
+                    'body' => 'پاسخ کارشناسی',
+                    'status' => 'answered',
+                ]
+            )
+            ->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
+
+        $this->assertSame('answered', $ticket->fresh()->status);
+    }
+
 }
