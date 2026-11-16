@@ -151,7 +151,8 @@
         nextDelay = serverRetryDelay ?? jitteredRetryDelay(retryDelay);
       } catch (error) {
         if (error?.name !== 'AbortError') {
-          // Network failures are transient; keep polling with bounded backoff.
+          // Network failures are transient; jitter them too to avoid retry herds.
+          nextDelay = jitteredRetryDelay(retryDelay);
         }
       } finally {
         inFlight = false;
