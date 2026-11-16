@@ -412,12 +412,12 @@ class SupportTicketService
                     }
 
                     if ($previousStatus !== $targetStatus) {
-                        $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
-                            'from_status' => $previousStatus,
-                            'to_status' => $targetStatus,
-                            'sla_before' => $slaBefore,
-                            'sla_after' => $this->slaAuditSnapshot($locked->fresh()),
-                        ]);
+                        $this->recordSupportAuditEvent(
+                            $locked,
+                            $actor,
+                            'support.ticket.status_transitioned',
+                            $this->statusTransitionAuditMetadata($previousStatus, $targetStatus, $slaBefore, $locked->fresh())
+                        );
                     }
                 }
 
@@ -530,12 +530,12 @@ class SupportTicketService
             $locked->update($transition['attributes']);
             $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
-            $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
-                'from_status' => $old,
-                'to_status' => $status,
-                'sla_before' => $slaBefore,
-                'sla_after' => $this->slaAuditSnapshot($locked->fresh()),
-            ]);
+            $this->recordSupportAuditEvent(
+                $locked,
+                $actor,
+                'support.ticket.status_transitioned',
+                $this->statusTransitionAuditMetadata($old, $status, $slaBefore, $locked->fresh())
+            );
 
             $transitionMessage = null;
             if ($systemNote && $actor) {
@@ -825,6 +825,30 @@ class SupportTicketService
     public function needsAgentReply(Ticket $ticket): bool
     {
         return in_array($ticket->status, ['open', 'user_replied'], true);
+    }
+
+    /**
+     * Build the append-only status transition evidence shared by explicit
+     * status changes and reply-driven transitions. The SLA snapshots already
+     * preserve the previous closed_at/resolved_at values; reopened_at records
+     * the distinct moment this closed ticket entered a new active lifecycle.
+     *
+     * @return array<string, mixed>
+     */
+    private function statusTransitionAuditMetadata(string $fromStatus, string $toStatus, array $slaBefore, Ticket $ticket): array
+    {
+        $metadata = [
+            'from_status' => $fromStatus,
+            'to_status' => $toStatus,
+            'sla_before' => $slaBefore,
+            'sla_after' => $this->slaAuditSnapshot($ticket),
+        ];
+
+        if ($fromStatus === 'closed' && $toStatus !== 'closed') {
+            $metadata['reopened_at'] = now()->toIso8601String();
+        }
+
+        return $metadata;
     }
 
     /**
