@@ -873,20 +873,27 @@
   };
 
   const loadPdfLayers=async()=>{
-    if(!pdfDoc||!layersSection||!layersHost)return;
+    const document=pdfDoc;
+    const host=layersHost;
+    const section=layersSection;
+    if(!document||!section||!host)return;
     try{
-      if(!pdfOptionalContentConfig&&typeof pdfDoc.getOptionalContentConfig==='function'){
-        pdfOptionalContentConfig=await pdfDoc.getOptionalContentConfig({intent:'display'});
+      let config=pdfOptionalContentConfig;
+      if(!config&&typeof document.getOptionalContentConfig==='function'){
+        config=await document.getOptionalContentConfig({intent:'display'});
+        if(document!==pdfDoc||host!==layersHost)return;
+        pdfOptionalContentConfig=config;
       }
-      const entries=getPdfOptionalContentEntries(pdfOptionalContentConfig);
+      if(document!==pdfDoc||host!==layersHost)return;
+      const entries=getPdfOptionalContentEntries(config);
       root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
-        supported:typeof pdfDoc.getOptionalContentConfig==='function',
+        supported:typeof document.getOptionalContentConfig==='function',
         count:entries.length,
         groups:entries.map(([id,group])=>({id:String(id),name:String(group?.name||''),visible:group?.visible!==false}))
       }}));
-      layersHost.replaceChildren();
+      host.replaceChildren();
       const visibleGroups=entries.filter(([,group])=>group&&typeof group==='object');
-      if(!visibleGroups.length){layersSection.hidden=true;return;}
+      if(!visibleGroups.length){section.hidden=true;return;}
       const fragment=document.createDocumentFragment();
       visibleGroups.forEach(([id,group],index)=>{
         const label=document.createElement('label');
@@ -896,7 +903,8 @@
         input.checked=group.visible!==false;
         input.dataset.ocgId=String(id);
         input.addEventListener('change',async()=>{
-          pdfOptionalContentConfig.setVisibility(id,input.checked);
+          if(document!==pdfDoc||pdfOptionalContentConfig!==config)return;
+          config.setVisibility(id,input.checked);
           refreshPdfLayerControls();
           try{
             if(continuousMode)await refreshContinuousVisiblePages(true);
@@ -908,17 +916,19 @@
         label.append(input,name);
         fragment.append(label);
       });
-      layersHost.append(fragment);
-      layersSection.hidden=false;
+      if(document!==pdfDoc||host!==layersHost)return;
+      host.append(fragment);
+      section.hidden=false;
     }catch(error){
+      if(document!==pdfDoc||host!==layersHost)return;
       root.dispatchEvent(new CustomEvent('farast:reader-pdf-layers-ready',{detail:{
-        supported:typeof pdfDoc?.getOptionalContentConfig==='function',
+        supported:typeof document.getOptionalContentConfig==='function',
         count:0,
         groups:[],
         error:String(error?.message||error)
       }}));
-      layersHost.replaceChildren();
-      layersSection.hidden=true;
+      host.replaceChildren();
+      section.hidden=true;
     }
   };
 
