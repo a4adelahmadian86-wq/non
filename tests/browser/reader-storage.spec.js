@@ -154,3 +154,57 @@ test('legacy migration cannot overwrite a newer concurrent IndexedDB write',asyn
  expect(result.migration).toBe('legacy-stale-state');
  expect(result.restored).toBe('new-user-state');
 });
+
+test('serializes account reader-state writes so older slow requests cannot overwrite newer progress',async({page})=>{
+ let releaseFirst;
+ let firstStartedResolve;
+ const firstStarted=new Promise(resolve=>{firstStartedResolve=resolve;});
+ const firstGate=new Promise(resolve=>{releaseFirst=resolve;});
+ const requests=[];
+ await page.route('**/reader-state-sync-fixture',async route=>{
+  if(route.request().method()==='GET'){
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({progress:null,bookmarks:[],updated_at:null})});
+   return;
+  }
+  requests.push(route.request().postDataJSON());
+  if(requests.length===1){
+   firstStartedResolve();
+   await firstGate;
+  }
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({saved:true})});
+ });
+ await page.goto('/');
+ await page.setContent(`
+  <section class="farast-reader" data-reader-root data-product-id="remote-sync-order-fixture" data-reader-state-url="/reader-state-sync-fixture">
+   <nav class="farast-reader-toolbar">
+    <button id="reader-prev" type="button">قبلی</button>
+    <label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ 2</span></label>
+    <button id="reader-next" type="button">بعدی</button>
+    <output id="reader-zoom-label">۱۰۰٪</output>
+    <button id="reader-resume" type="button" hidden><span>ادامه مطالعه</span></button>
+    <button id="reader-bookmark-toggle" type="button" aria-pressed="false"></button>
+    <button id="reader-bookmarks-open" type="button" aria-expanded="false"></button>
+    <div id="reader-bookmarks-panel" hidden></div>
+   </nav>
+   <div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>
+   <div id="reader-stage">
+    <article class="farast-reader-page-item is-active" data-index="0"><div class="farast-reader-page-content">صفحه نخست</div></article>
+    <article class="farast-reader-page-item" data-index="1"><div class="farast-reader-page-content">صفحه دوم</div></article>
+   </div>
+  </section>
+ `);
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader.js')});
+ await expect.poll(()=>page.locator('#reader-page-number').inputValue()).toBe('1');
+ await page.locator('#reader-next').click();
+ await firstStarted;
+ expect(requests).toHaveLength(1);
+ expect(requests[0].progress).toEqual({section:1,page:1});
+ await page.locator('#reader-prev').click();
+ await page.waitForTimeout(850);
+ // The second snapshot is queued behind the first PUT, not sent concurrently.
+ expect(requests).toHaveLength(1);
+ releaseFirst();
+ await expect.poll(()=>requests.length).toBe(2);
+ expect(requests[1].progress).toEqual({section:0,page:1});
+});
