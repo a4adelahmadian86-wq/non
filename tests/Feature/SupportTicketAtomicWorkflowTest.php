@@ -420,4 +420,33 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $service->addMessage($ticket, $customer, 'Different body', $options);
     }
 
+
+    public function test_retried_message_with_attachment_does_not_create_a_second_managed_file(): void
+    {
+        Storage::fake('private');
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Attachment retry',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $attachment = UploadedFile::fake()->createWithContent('proof.txt', 'same attachment payload');
+        $options = [
+            'is_staff' => false,
+            'attachment' => $attachment,
+            '_submission_scope' => 'user:'.$customer->id,
+            '_submission_key' => (string) \Illuminate\Support\Str::uuid(),
+        ];
+
+        $service = $this->service();
+        $first = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
+        $retry = $service->addMessage($ticket, $customer, 'Please review the attachment', $options);
+
+        $this->assertSame($first->id, $retry->id);
+        $this->assertDatabaseCount('ticket_messages', 1);
+        $this->assertCount(1, Storage::disk('private')->allFiles());
+    }
+
 }
