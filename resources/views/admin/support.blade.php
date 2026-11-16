@@ -485,6 +485,21 @@
                                     @elseif(!empty($slaBefore['resolution_paused_at']) && empty($slaAfter['resolution_paused_at']))
                                         <div style="margin-top:4px;font-size:.72rem;color:#047857">ساعت SLA حل از سر گرفته شد</div>
                                     @endif
+                                    @if(!empty($auditMeta['reopened_at']))
+                                        <div style="margin-top:4px;font-size:.72rem;color:#047857">
+                                            زمان بازگشایی: {{ \Illuminate\Support\Carbon::parse($auditMeta['reopened_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                        </div>
+                                        @if(!empty($slaBefore['closed_at']))
+                                            <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
+                                                آخرین زمان بسته‌شدن: {{ \Illuminate\Support\Carbon::parse($slaBefore['closed_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                            </div>
+                                        @endif
+                                        @if(!empty($slaBefore['resolved_at']))
+                                            <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
+                                                آخرین زمان حل: {{ \Illuminate\Support\Carbon::parse($slaBefore['resolved_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                            </div>
+                                        @endif
+                                    @endif
                                 @elseif(in_array($auditEvent->event_type, ['support.ticket.sla_alert_queued', 'support.ticket.sla_alert_dispatched'], true))
                                     <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
                                         @if(($auditMeta['event'] ?? null) === 'warning' && isset($auditMeta['minutes_left']))
