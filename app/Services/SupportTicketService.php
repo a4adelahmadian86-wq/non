@@ -403,7 +403,9 @@ class SupportTicketService
                     $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
                     if ($update !== []) {
-                        $locked->update($update);
+                        // Lifecycle attributes include protected SLA evidence fields;
+                        // persist this internally-built payload without mass-assignment filtering.
+                        $locked->forceFill($update)->save();
                     }
 
                     if ($firstResponseBreachDetected) {
@@ -529,7 +531,7 @@ class SupportTicketService
 
             $slaBefore = $this->slaAuditSnapshot($locked);
             $transition = $this->buildStatusTransitionUpdate($locked, $status);
-            $locked->update($transition['attributes']);
+            $locked->forceFill($transition['attributes'])->save();
             $firstResponseBreachDetected = $transition['first_response_breach_detected'];
             $resolutionBreachDetected = $transition['resolution_breach_detected'];
 
