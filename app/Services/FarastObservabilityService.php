@@ -28,6 +28,7 @@ class FarastObservabilityService
         $components = [
             'database' => $this->database(),
             'queue' => $this->queue(),
+            'sla_alerts' => $this->slaAlerts(),
             'storage' => $this->storage(),
             'logging' => $this->logging(),
             'product_services' => [
@@ -202,6 +203,84 @@ class FarastObservabilityService
             $this->recordProbeFailure('queue', $exception);
             $result['status'] = 'critical';
             $result['message'] = 'خواندن وضعیت صف ناموفق است.';
+        }
+
+        return $result;
+    }
+
+    /**
+     * Observe the existing durable SLA outbox without exposing provider errors,
+     * recipient data, or idempotency material in the operations dashboard.
+     */
+    private function slaAlerts(): array
+    {
+        $result = [
+            'status' => 'warning',
+            'available' => false,
+            'pending' => null,
+            'processing' => null,
+            'retryable_failed' => null,
+            'terminal_failed' => null,
+            'stale_processing' => null,
+            'due' => null,
+            'oldest_due_minutes' => null,
+        ];
+
+        try {
+            if (! Schema::hasTable('support_sla_alert_outbox')) {
+                $result['message'] = 'جدول صف پایدار اعلان‌های SLA نصب نشده است.';
+                return $result;
+            }
+
+            $outbox = DB::table('support_sla_alert_outbox');
+            $now = now();
+            $staleBefore = $now->copy()->subMinutes(15);
+
+            $result['pending'] = (int) (clone $outbox)->where('status', 'pending')->count();
+            $result['processing'] = (int) (clone $outbox)->where('status', 'processing')->count();
+            $result['retryable_failed'] = (int) (clone $outbox)
+                ->where('status', 'failed')
+                ->where('attempts', '<', 8)
+                ->count();
+            $result['terminal_failed'] = (int) (clone $outbox)
+                ->where('status', 'failed')
+                ->where('attempts', '>=', 8)
+                ->count();
+            $result['stale_processing'] = (int) (clone $outbox)
+                ->where('status', 'processing')
+                ->whereNotNull('locked_at')
+                ->where('locked_at', '<=', $staleBefore)
+                ->count();
+
+            $dueQuery = (clone $outbox)
+                ->whereIn('status', ['pending', 'failed'])
+                ->where('available_at', '<=', $now);
+            $result['due'] = (int) (clone $dueQuery)->count();
+            $oldestDueAt = (clone $dueQuery)->min('available_at');
+            $result['oldest_due_minutes'] = $oldestDueAt
+                ? max(0, (int) floor(($now->timestamp - \Illuminate\Support\Carbon::parse($oldestDueAt)->timestamp) / 60))
+                : 0;
+            $result['available'] = true;
+
+            if ($result['terminal_failed'] > 0) {
+                $result['status'] = 'critical';
+                $result['message'] = 'یک یا چند هشدار SLA به سقف تلاش مجدد رسیده‌اند.';
+            } elseif (
+                $result['retryable_failed'] > 0
+                || $result['stale_processing'] > 0
+                || ($result['due'] > 0 && $result['oldest_due_minutes'] >= 5)
+            ) {
+                $result['status'] = 'warning';
+                $result['message'] = $result['due'] > 0 && $result['oldest_due_minutes'] >= 5
+                    ? 'صف اعلان SLA بیش از پنج دقیقه در انتظار پردازش است.'
+                    : 'صف اعلان SLA دارای تلاش ناموفق یا قفل پردازش منقضی‌شده است.';
+            } else {
+                $result['status'] = 'healthy';
+            }
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('sla_alerts', $exception);
+            $result['status'] = 'critical';
+            $result['message'] = 'خواندن وضعیت صف اعلان‌های SLA ناموفق است.';
         }
 
         return $result;
