@@ -24,69 +24,151 @@
       ? 'نسخهٔ دقیق‌تر صوت در حال آماده‌سازی است؛ نسخهٔ فعلی همچنان قابل پخش است.'
       : 'صدای کامل سند در حال آماده‌سازی است؛ پس از تکمیل، خوانشگر خودکار به‌روزرسانی می‌شود.';
 
-    let attempts = 0;
+    const initialDelay = 5000;
+    const maximumDelay = 60000;
+    let retryDelay = initialDelay;
+    let pollTimer = 0;
     let inFlight = false;
     let stopped = false;
-    let pollTimer = 0;
-    const pollAudioReadiness = async () => {
-      if (stopped || inFlight || attempts >= 40) return;
+    let paused = document.visibilityState === 'hidden';
+    let controller = null;
+    let resumeRequested = false;
+
+    const clearPollTimer = () => {
+      if (!pollTimer) return;
+      window.clearTimeout(pollTimer);
+      pollTimer = 0;
+    };
+    const stopPolling = () => {
+      stopped = true;
+      clearPollTimer();
+      controller?.abort();
+      controller = null;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+    const schedulePoll = (delay) => {
+      if (stopped || paused || !root.isConnected) return;
+      clearPollTimer();
+      pollTimer = window.setTimeout(() => {
+        pollTimer = 0;
+        pollAudioReadiness();
+      }, Math.max(0, delay));
+    };
+    const retryAfterDelay = (response) => {
+      const value = response.headers?.get?.('Retry-After');
+      if (!value) return null;
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.min(maximumDelay * 5, seconds * 1000);
+      }
+      const date = Date.parse(value);
+      return Number.isFinite(date)
+        ? Math.min(maximumDelay * 5, Math.max(0, date - Date.now()))
+        : null;
+    };
+    const finishWithMessage = (message) => {
+      stopPolling();
+      pendingStatus.textContent = message;
+    };
+    const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        pollTimer = window.setTimeout(pollAudioReadiness, 15000);
+        paused = true;
+        clearPollTimer();
+        controller?.abort();
         return;
       }
+      if (paused && !stopped) {
+        paused = false;
+        if (inFlight) resumeRequested = true;
+        else schedulePoll(0);
+      }
+    };
+    const onPageHide = () => {
+      paused = true;
+      clearPollTimer();
+      controller?.abort();
+    };
+    const onPageShow = () => {
+      if (!stopped && document.visibilityState !== 'hidden') {
+        paused = false;
+        if (inFlight) resumeRequested = true;
+        else schedulePoll(0);
+      }
+    };
+    const pollAudioReadiness = async () => {
+      if (stopped || paused || inFlight) return;
+      if (!root.isConnected) {
+        stopPolling();
+        return;
+      }
+
       inFlight = true;
-      attempts += 1;
+      controller = new AbortController();
+      let nextDelay = retryDelay;
       try {
         const response = await fetch(pollUrl, {
           method: 'HEAD',
           credentials: 'same-origin',
           cache: 'no-store',
-          headers: { Accept: 'audio/wav' }
+          headers: { Accept: 'audio/wav' },
+          signal: controller.signal
         });
         if ([200, 206].includes(response.status)) {
-          stopped = true;
+          stopPolling();
           pendingStatus.textContent = 'صوت آماده شد؛ در حال بارگذاری زمان‌بندی دقیق…';
           window.location.reload();
           return;
         }
         if (response.status === 409) {
-          stopped = true;
-          pendingStatus.textContent = 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.';
+          finishWithMessage('آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.');
           return;
         }
         if (response.status === 410) {
-          stopped = true;
-          pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+          finishWithMessage('سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.');
           return;
         }
         if (response.status === 404) {
-          stopped = true;
-          pendingStatus.textContent = 'وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.';
+          finishWithMessage('وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.');
           return;
         }
         if ([401, 403].includes(response.status)) {
-          stopped = true;
-          pendingStatus.textContent = 'دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.';
+          finishWithMessage('دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
           return;
         }
-      } catch (_) {
-        // Temporary network failures are retried with the same authenticated endpoint.
+        const retryable = [202, 204, 408, 425, 429].includes(response.status) || response.status >= 500;
+        if (!retryable) {
+          finishWithMessage('وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.');
+          return;
+        }
+        nextDelay = retryAfterDelay(response) ?? retryDelay;
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          // Network failures are transient; keep polling with bounded backoff.
+        }
       } finally {
         inFlight = false;
+        controller = null;
       }
-      if (attempts >= 40) {
-        pendingStatus.textContent = 'آماده‌سازی صوت بیش از حد طول کشید؛ برای بررسی وضعیت، صفحه را دوباره بارگذاری کنید.';
+
+      if (stopped || paused || !root.isConnected) {
+        if (!root.isConnected) stopPolling();
         return;
       }
-      pollTimer = window.setTimeout(pollAudioReadiness, attempts <= 6 ? 5000 : 15000);
-    };
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && !stopped && !inFlight) {
-        window.clearTimeout(pollTimer);
-        pollAudioReadiness();
+      if (resumeRequested) {
+        resumeRequested = false;
+        schedulePoll(0);
+        return;
       }
-    });
-    pollAudioReadiness();
+      retryDelay = Math.min(maximumDelay, Math.max(initialDelay, retryDelay * 2));
+      schedulePoll(nextDelay);
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    if (!paused) pollAudioReadiness();
   }
   const playButton = dock?.querySelector('[data-audio-play]');
   const seek = dock?.querySelector('[data-audio-seek]');
