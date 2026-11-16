@@ -203,4 +203,33 @@ class SupportNotificationEventIdentityTest extends TestCase
         ]);
     }
 
+    public function test_former_assignee_removal_notice_is_idempotent(): void
+    {
+        $customer = User::factory()->create();
+        $formerAgent = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'تغییر مسئول تیکت',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $service = new SupportNotificationService(
+            \\Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \\Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            app(NotificationService::class),
+        );
+
+        $service->assignmentRemoved($ticket, $formerAgent, 'message:assignment-77');
+        $service->assignmentRemoved($ticket, $formerAgent, 'message:assignment-77');
+
+        $this->assertDatabaseCount('farast_notifications', 1);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $formerAgent->id,
+            'type' => 'ticket_assignment_removed',
+            'dedupe_key' => 'support:ticket:'.$ticket->id.':event:ticket_assignment_removed:identity:message:assignment-77:user:'.$formerAgent->id,
+        ]);
+    }
+
 }
