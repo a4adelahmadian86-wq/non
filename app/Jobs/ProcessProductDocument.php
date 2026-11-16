@@ -163,10 +163,29 @@ class ProcessProductDocument implements ShouldQueue
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
+        $readerPdfManaged = null;
+        $readerPdfManagedBound = false;
         $sampleManaged = null;
+        $sampleManagedBound = false;
         $sampleHash = null;
         $samplePageNumbers = [];
-        $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
+
+        try {
+            if ($sourceExtension === 'docx' && ! $readerPdfExists && is_string($readerPdfBytes)) {
+                $readerPdfManaged = $storage->storeContents(
+                    $readerPdfBytes,
+                    'reader-v1.pdf',
+                    'application/pdf',
+                    StorageManager::CRITICAL,
+                    'store-product-artifact',
+                    StoreProductDocumentArtifact::class,
+                    null,
+                    (int) $product->id,
+                    'private'
+                );
+            }
+
+            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
         $existingSampleBefore = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
         $existingSampleAvailable = $existingSampleBefore
             && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
@@ -188,12 +207,33 @@ class ProcessProductDocument implements ShouldQueue
                 );
             }
         }
+        } catch (Throwable $exception) {
+            $this->cleanupManagedArtifact($storage, $readerPdfManaged, 'reader_pdf');
+            $this->cleanupManagedArtifact($storage, $sampleManaged, 'sample_pdf');
+            throw $exception;
+        }
 
-        $sampleManagedBound = false;
         try {
-        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, $readerPdfOldPath, $readerPdfOldDisk, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
+        $committed = DB::transaction(function () use ($document, $file, $product, $sourceExtension, $currentHash, $payload, $chunks, $storage, $readerPdfManaged, $readerPdfBytes, &$readerPdfManagedBound, $sampleManaged, $sampleHash, $samplePageNumbers, &$sampleManagedBound, &$totalCharacters, &$totalWords): bool {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $file = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
+
+            // Revalidate the source after the external provider call and while both
+            // the document and file rows are locked, before deleting published data.
+            $sourceStillCurrent = (int) $locked->product_file_id === (int) $file->id
+                && hash_equals((string) $locked->source_sha256, $currentHash)
+                && hash_equals((string) $file->sha256, $currentHash);
+
+            if (! $sourceStillCurrent) {
+                $locked->update([
+                    'processing_status' => 'stale',
+                    'failure_code' => 'source_changed_during_processing',
+                    'updated_at' => now(),
+                ]);
+
+                return false;
+            }
+
             $locked->chunks()->delete();
             $locked->facts()->delete();
 
