@@ -66,6 +66,7 @@ const renderPage=number=>{
 const article=active();if(!article)return;
 const target=Number(number)||Number(root.querySelector('#reader-page-number')?.value)||1;
 const el=article.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="'+target+'"]')||host(article);
+if(el?.classList.contains('farast-pdf-cont-page')&&el.dataset.rendered!=='1')return;
 if(el)renderElement(article,el);
 };
 const renderActiveSection=()=>{
