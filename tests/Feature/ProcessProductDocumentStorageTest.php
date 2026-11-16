@@ -482,10 +482,10 @@ class ProcessProductDocumentStorageTest extends TestCase
         $storage->shouldReceive('delete')
             ->once()
             ->with('private', 'temporary/reader.pdf')
-            ->andThrow(new \\RuntimeException('simulated cleanup failure'));
+            ->andThrow(new \RuntimeException('simulated cleanup failure'));
 
         $job = new ProcessProductDocument(123);
-        $cleanup = new \\ReflectionMethod($job, 'cleanupManagedArtifact');
+        $cleanup = new \ReflectionMethod($job, 'cleanupManagedArtifact');
         $cleanup->setAccessible(true);
         $cleanup->invoke($job, $storage, [
             'disk' => 'private',
