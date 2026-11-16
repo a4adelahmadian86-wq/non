@@ -154,13 +154,13 @@ class SupportAgentReportAndSettingsAccessTest extends TestCase
         // The route intentionally requires global support_admin scope. Exercise the
         // controller boundary directly as a defense-in-depth contract so a future
         // route-scope change cannot silently reintroduce cross-scope aggregates.
-        $request = \\Illuminate\\Http\\Request::create('/admin/support-report', 'GET');
+        $request = Request::create('/admin/support-report', 'GET');
         $request->setUserResolver(fn () => $admin);
         $request->attributes->set('farast.scope', 'own');
 
-        $view = app(\\App\\Http\\Controllers\\SupportReportController::class)(
+        $view = app(SupportReportController::class)(
             $request,
-            app(\\App\\Services\\SupportSlaService::class),
+            app(SupportSlaService::class),
         );
         $data = $view->getData();
         $names = collect($data['report']['agents'])->pluck('name')->all();
