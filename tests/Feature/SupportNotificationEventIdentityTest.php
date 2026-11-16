@@ -232,4 +232,27 @@ class SupportNotificationEventIdentityTest extends TestCase
         ]);
     }
 
+    public function test_former_assignee_with_revoked_ticket_access_receives_no_assignment_notice(): void
+    {
+        $customer = User::factory()->create();
+        $formerAgent = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Restricted assignment handoff',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $service = new SupportNotificationService(
+            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            app(NotificationService::class),
+        );
+
+        $service->assignmentRemoved($ticket, $formerAgent, 'message:assignment-88');
+
+        $this->assertDatabaseCount('farast_notifications', 0);
+    }
+
 }
