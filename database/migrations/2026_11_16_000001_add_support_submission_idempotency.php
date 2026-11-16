@@ -40,7 +40,7 @@ return new class extends Migration
 
         Schema::table('ticket_messages', function (Blueprint $table): void {
             if (! Schema::hasIndex('ticket_messages', 'ticket_messages_submission_unique')) {
-                $table->unique(['ticket_id', 'submission_scope', 'submission_key'], 'ticket_messages_submission_unique');
+                $table->unique(['submission_scope', 'submission_key'], 'ticket_messages_submission_unique');
             }
         });
     }
