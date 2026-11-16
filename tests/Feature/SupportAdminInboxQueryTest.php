@@ -394,4 +394,42 @@ class SupportAdminInboxQueryTest extends TestCase
         )->assertRedirect(route('admin.support.management', ['ticket' => $ticket->id] + $filters));
     }
 
+
+    public function test_admin_inbox_filters_tickets_by_a_specific_assignee_from_scoped_ticket_records(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $agentA = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Inbox Agent Alpha']);
+        $agentB = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Inbox Agent Beta']);
+
+        Ticket::create([
+            'subject' => 'Ticket assigned to alpha',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agentA->id,
+        ]);
+        Ticket::create([
+            'subject' => 'Ticket assigned to beta',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+            'assigned_to' => $agentB->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['assigned' => (string) $agentA->id]))
+            ->assertOk()
+            ->assertSee('Ticket assigned to alpha')
+            ->assertDontSee('Ticket assigned to beta')
+            ->assertSee('Inbox Agent Alpha')
+            ->assertSee('Inbox Agent Beta');
+
+        $this->actingAs($admin)
+            ->get(route('admin.support.management', ['assigned' => (string) $agentB->id]))
+            ->assertOk()
+            ->assertSee('Ticket assigned to beta')
+            ->assertDontSee('Ticket assigned to alpha');
+    }
+
+
 }
