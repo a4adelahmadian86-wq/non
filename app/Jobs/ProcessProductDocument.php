@@ -184,30 +184,34 @@ class ProcessProductDocument implements ShouldQueue
             }
 
             $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-        $existingSampleBefore = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-        $existingSampleSourceHash = data_get($existingSampleBefore?->metadata_json, 'source_sha256');
-        $existingSampleAvailable = $existingSampleBefore
-            && is_string($existingSampleSourceHash)
-            && hash_equals((string) $document->source_sha256, $existingSampleSourceHash)
-            && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
-        if ($file->is_primary && ! $existingSampleAvailable && is_string($sampleBase64) && $sampleBase64 !== '') {
-            $sampleBytes = base64_decode($sampleBase64, true);
-            if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
-                $sampleHash = hash('sha256', $sampleBytes);
-                $samplePageNumbers = array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int'));
-                $sampleManaged = $storage->storeContents(
-                    $sampleBytes,
-                    'sample-v1.pdf',
-                    'application/pdf',
-                    StorageManager::CRITICAL,
-                    'store-product-artifact',
-                    StoreProductDocumentArtifact::class,
-                    null,
-                    (int) $product->id,
-                    'private'
-                );
+            $existingSampleBefore = $document->artifacts()
+                ->where('artifact_type', 'sample_pdf')
+                ->where('version', 1)
+                ->first();
+            $existingSampleSourceHash = data_get($existingSampleBefore?->metadata_json, 'source_sha256');
+            $existingSampleAvailable = $existingSampleBefore
+                && is_string($existingSampleSourceHash)
+                && hash_equals((string) $document->source_sha256, $existingSampleSourceHash)
+                && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
+
+            if ($file->is_primary && ! $existingSampleAvailable && is_string($sampleBase64) && $sampleBase64 !== '') {
+                $sampleBytes = base64_decode($sampleBase64, true);
+                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
+                    $sampleHash = hash('sha256', $sampleBytes);
+                    $samplePageNumbers = array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int'));
+                    $sampleManaged = $storage->storeContents(
+                        $sampleBytes,
+                        'sample-v1.pdf',
+                        'application/pdf',
+                        StorageManager::CRITICAL,
+                        'store-product-artifact',
+                        StoreProductDocumentArtifact::class,
+                        null,
+                        (int) $product->id,
+                        'private'
+                    );
+                }
             }
-        }
         } catch (Throwable $exception) {
             $this->cleanupManagedArtifact($storage, $readerPdfManaged, 'reader_pdf');
             $this->cleanupManagedArtifact($storage, $sampleManaged, 'sample_pdf');
