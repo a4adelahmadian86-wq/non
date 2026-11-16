@@ -495,6 +495,7 @@
     const height=Number(wrapper.dataset.renderedHeight)||0;
     wrapper.style.width=width>0?width+'px':'';
     wrapper.style.minHeight=height>0?height+'px':'';
+    root.dispatchEvent(new CustomEvent('farast:reader-page-released',{detail:{page:Number(wrapper.dataset.pdfContPage)||0,wrapper}}));
   };
   const releaseAllContinuousPages=()=>{
     if(!continuousHost)return;

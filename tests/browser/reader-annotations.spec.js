@@ -123,3 +123,42 @@ test('reader exposes local storage durability status to the user',async({page})=
   await page.locator('[data-action="storage"]').click();
   await expect.poll(()=>page.locator('.farast-annotation-status').textContent()).toContain('مگابایت');
 });
+
+test('renders annotation overlays only for live continuous pages and releases offscreen overlays',async({page})=>{
+  await page.goto('/');
+  const wrappers=Array.from({length:72},(_,index)=>'<div class="farast-pdf-cont-page" data-pdf-cont-page="'+(index+1)+'" data-rendered="'+([0,71].includes(index)?'1':'0')+'"><canvas></canvas></div>').join('');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-virtualization-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-continuous-pages">'+wrappers+'</div></div></article></section>');
+  const key='farast-reader:annotations:v1:annotation-virtualization-test';
+  await page.evaluate(key=>localStorage.setItem(key,JSON.stringify([
+    {id:'page-one',type:'note',page:'0:1',x:.1,y:.1,text:'صفحه یک'},
+    {id:'page-two',type:'note',page:'0:2',x:.1,y:.1,text:'صفحه دو'},
+    {id:'page-last',type:'note',page:'0:72',x:.1,y:.1,text:'صفحه آخر'}
+  ])),key);
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
+  const first=page.locator('.farast-pdf-cont-page[data-pdf-cont-page="1"]');
+  const second=page.locator('.farast-pdf-cont-page[data-pdf-cont-page="2"]');
+  const last=page.locator('.farast-pdf-cont-page[data-pdf-cont-page="72"]');
+  await expect(page.locator('.farast-pdf-cont-page .farast-annotation-layer')).toHaveCount(2);
+  await expect(first.locator('.farast-annotation-note')).toHaveText('یادداشت');
+  await expect(second.locator('.farast-annotation-layer')).toHaveCount(0);
+  await expect(last.locator('.farast-annotation-note')).toHaveText('یادداشت');
+  await page.evaluate(()=>{
+    const root=document.querySelector('[data-reader-root]');
+    const wrapper=root.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="1"]');
+    wrapper.dataset.rendered='0';
+    root.dispatchEvent(new CustomEvent('farast:reader-page-released',{detail:{page:1,wrapper}}));
+  });
+  await expect(first.locator('.farast-annotation-layer')).toHaveCount(0);
+  await page.evaluate(()=>document.querySelector('[data-reader-root]').dispatchEvent(new CustomEvent('farast:reader-page-change',{detail:{page:1}})));
+  await page.waitForTimeout(150);
+  await expect(first.locator('.farast-annotation-layer')).toHaveCount(0);
+  await page.evaluate(()=>{
+    const root=document.querySelector('[data-reader-root]');
+    const wrapper=root.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="1"]');
+    wrapper.dataset.rendered='1';
+    root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:1}}));
+  });
+  await expect(first.locator('.farast-annotation-note')).toHaveText('یادداشت');
+  await expect(page.locator('.farast-pdf-cont-page .farast-annotation-layer')).toHaveCount(2);
+});
