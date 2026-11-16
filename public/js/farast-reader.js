@@ -518,8 +518,9 @@
     wrapper.dataset.keepRendered='1';
     if(wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
     wrapper.dataset.rendering='1';
+    let page=null,renderSucceeded=false;
     try{
-    const page=await renderDocument.getPage(number);
+    page=await renderDocument.getPage(number);
     wrapper._pdfPage=page;
     // A document swap or continuous-mode rebuild invalidates this async render.
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
@@ -569,13 +570,25 @@
     if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>renderGeneration===continuousRenderGeneration&&renderDocument===pdfDoc&&renderHost===continuousHost&&renderHost.contains(wrapper)&&wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
     if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||renderHost!==continuousHost||!renderHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     wrapper.dataset.rendered='1';
+    renderSucceeded=true;
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }catch(error){
       if(error?.name==='RenderingCancelledException'||error?.name==='AbortException')return;
       throw error;
     }finally{
       wrapper._renderTask=null;
-      const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
+      if(!renderSucceeded){
+        if(page){try{page.cleanup?.();}catch(_){}}
+        if(wrapper._pdfPage===page)wrapper._pdfPage=null;
+        if(wrapper.dataset.keepRendered==='1'){
+          const failedCanvas=wrapper.querySelector('canvas');
+          if(failedCanvas){failedCanvas.width=0;failedCanvas.height=0;failedCanvas.style.width='';failedCanvas.style.height='';}
+          wrapper.querySelector('.farast-pdf-cont-text')?.replaceChildren();
+          wrapper.querySelector('.farast-pdf-annotation-layer')?.replaceChildren();
+          wrapper.dataset.rendered='0';
+        }
+      }
+      const rerender=renderSucceeded&&wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
       delete wrapper.dataset.rerenderAfterRender;
       delete wrapper.dataset.rendering;
       if(wrapper.dataset.keepRendered==='0')releaseContinuousPage(wrapper);
