@@ -153,7 +153,7 @@
 
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfOptionalContentConfig=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
-  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0;
+  let continuousNavigationTarget=null,continuousNavigationSequence=0,readerNavigationRevision=0,continuousRenderGeneration=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -493,6 +493,8 @@
 
   const renderContinuousPage=async(number)=>{
     if(!pdfDoc||!continuousHost)return;
+    const renderDocument=pdfDoc;
+    const renderGeneration=continuousRenderGeneration;
     const wrapper=continuousHost.querySelector('[data-pdf-cont-page="'+number+'"]');
     const canvas=wrapper?.querySelector('canvas');
     if(!wrapper||!canvas)return;
@@ -500,10 +502,10 @@
     if(wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
     wrapper.dataset.rendering='1';
     try{
-    const page=await pdfDoc.getPage(number);
+    const page=await renderDocument.getPage(number);
     wrapper._pdfPage=page;
-    // The page may have left the pre-render window while getPage() was pending.
-    if(wrapper.dataset.keepRendered!=='1')return;
+    // A document swap or continuous-mode rebuild invalidates this async render.
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
     const availableHeight=Math.max(280,(stage?.clientHeight||700)-80);
@@ -523,6 +525,7 @@
     const renderOptions={canvasContext:context,viewport};
     if(pdfOptionalContentConfig)renderOptions.optionalContentConfigPromise=Promise.resolve(pdfOptionalContentConfig);
     await page.render(renderOptions).promise;
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     paintPdfWatermark(canvas);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
     if(textLayer&&window.pdfjsLib?.TextLayer){
@@ -531,8 +534,10 @@
       textLayer.style.height=viewport.height+'px';
       textLayer.style.pointerEvents='auto';textLayer.style.userSelect='text';textLayer.style.webkitUserSelect='text';
       const textContent=await page.getTextContent();
+      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
       const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
       await layer.render();
+      if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
       const query=normalizePdfSearchText(searchInput?.value||'');
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.pointerEvents='auto';span.style.userSelect='text';span.style.webkitUserSelect='text';
@@ -541,7 +546,8 @@
       });
     }
     const annotationLayer=wrapper.querySelector('.farast-pdf-annotation-layer');
-    if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
+    if(annotationLayer)await renderPdfAnnotationLayer(page,viewport,annotationLayer,()=>renderGeneration===continuousRenderGeneration&&renderDocument===pdfDoc&&continuousHost.contains(wrapper)&&wrapper.dataset.keepRendered==='1'&&wrapper.dataset.rendering==='1');
+    if(renderGeneration!==continuousRenderGeneration||renderDocument!==pdfDoc||!continuousHost.contains(wrapper)||wrapper.dataset.keepRendered!=='1')return;
     wrapper.dataset.rendered='1';
     root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }finally{
@@ -591,6 +597,7 @@
     continuousObserver?.disconnect();
     continuousObserver=null;
     clearContinuousFallback();
+    continuousRenderGeneration++;
     releaseAllContinuousPages();
     continuousHost.innerHTML='';
     const fragment=document.createDocumentFragment();
@@ -883,6 +890,7 @@
 
     if(activePdfUrl!==nextUrl){
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
+      continuousRenderGeneration++;
       releaseAllContinuousPages();
       if(pdfDoc){try{await pdfDoc.destroy();}catch(_){}pdfDoc=null;}
       continuousObserver?.disconnect();continuousObserver=null;continuousMode=false;
@@ -1041,7 +1049,7 @@
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
     root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: itemIndex } }));
     if(!isPdf()&&continuousMode){
-      continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
+      continuousRenderGeneration++;continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
       releaseAllContinuousPages();
       pdfSurface?.classList.remove('is-continuous');
       if(continuousHost)continuousHost.innerHTML='';
@@ -1050,7 +1058,7 @@
     const pdfActive=isPdf();
     if(!pdfActive&&pdfDoc){
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
-      continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
+      continuousRenderGeneration++;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
       releaseAllContinuousPages();
       try{await pdfDoc.destroy();}catch(_){}
       pdfDoc=null;activePdfUrl=null;pdfCanvas=null;pdfSurface=null;pdfLoading=null;continuousHost=null;
