@@ -1221,6 +1221,7 @@
         await buildContinuousPages();
         await navigatePdfPage(pdfPage);
       }else{
+        continuousRenderGeneration++;
         continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
         releaseAllContinuousPages();
         pdfSurface?.classList.remove('is-continuous');
