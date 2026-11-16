@@ -487,16 +487,16 @@
                                     @endif
                                     @if(!empty($auditMeta['reopened_at']))
                                         <div style="margin-top:4px;font-size:.72rem;color:#047857">
-                                            زمان بازگشایی: {{ \\Illuminate\\Support\\Carbon::parse($auditMeta['reopened_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                            زمان بازگشایی: {{ \Illuminate\Support\Carbon::parse($auditMeta['reopened_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
                                         </div>
                                         @if(!empty($slaBefore['closed_at']))
                                             <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
-                                                آخرین زمان بسته‌شدن: {{ \\Illuminate\\Support\\Carbon::parse($slaBefore['closed_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                                آخرین زمان بسته‌شدن: {{ \Illuminate\Support\Carbon::parse($slaBefore['closed_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
                                             </div>
                                         @endif
                                         @if(!empty($slaBefore['resolved_at']))
                                             <div style="margin-top:4px;font-size:.72rem;color:var(--sd-muted)">
-                                                آخرین زمان حل: {{ \\Illuminate\\Support\\Carbon::parse($slaBefore['resolved_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                                آخرین زمان حل: {{ \Illuminate\Support\Carbon::parse($slaBefore['resolved_at'])->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
                                             </div>
                                         @endif
                                     @endif
