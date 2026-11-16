@@ -468,31 +468,15 @@ class ProcessProductDocument implements ShouldQueue
             if ($file->is_primary && ($product->download_policy ?? 'signed') === 'reader_only') {
                 $fullReaderPath = null;
                 $fullReaderDisk = 'private';
-                $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
                 if ($sourceExtension === 'pdf') {
                     $fullReaderPath = $file->path;
                     $fullReaderDisk = $file->disk ?: 'private';
                 } elseif ($sourceExtension === 'docx') {
-                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->lockForUpdate()->first();
-                    if ($readerPdf) {
-                        $fullReaderPath = $readerPdf->path;
-                        $fullReaderDisk = $readerPdf->disk ?: 'private';
-                    }
+                    $fullReaderPath = $readerPdfPathForReader;
+                    $fullReaderDisk = $readerPdfDiskForReader;
                 }
 
                 if ($fullReaderPath && $storage->exists($fullReaderDisk, $fullReaderPath)) {
-                    if ($sourceExtension === 'docx' && ! empty($readerPdfOldPath)
-                        && ($readerPdfOldPath !== $fullReaderPath || $readerPdfOldDisk !== $fullReaderDisk)) {
-                        $oldPreviewQuery = StoreProductPreview::query()
-                            ->where('product_id', $locked->product_id)
-                            ->where('path', $readerPdfOldPath);
-                        if ($readerPdfOldDisk === 'private') {
-                            $oldPreviewQuery->where(fn ($query) => $query->where('disk', 'private')->orWhereNull('disk'));
-                        } else {
-                            $oldPreviewQuery->where('disk', $readerPdfOldDisk);
-                        }
-                        $oldPreviewQuery->update(['disk' => $fullReaderDisk, 'path' => $fullReaderPath]);
-                    }
                     StoreProductPreview::query()->updateOrCreate(
                         ['product_id' => $locked->product_id, 'path' => $fullReaderPath],
                         [
