@@ -753,15 +753,20 @@ class SupportController extends Controller
                 ->where('submission_key', strtolower($data['submission_key']))
                 ->first();
             if ($submittedTicket) {
-                $ticket = $this->tickets->createTicket($user, [
+                $replayData = [
                     'subject' => Str::limit($data['body'], 80),
                     'body' => $data['body'],
                     'source' => SupportTicketService::SOURCE_WIDGET,
                     'department' => SupportTicketService::DEPARTMENT_SUPPORT,
                     'priority' => SupportTicketService::PRIORITY_NORMAL,
-                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_scope' => $widgetSubmissionScope,
                     '_submission_key' => $data['submission_key'],
-                ]);
+                ];
+                if (filled($submittedTicket->guest_email)) {
+                    $replayData['guest_name'] = $submittedTicket->guest_name;
+                    $replayData['guest_email'] = $submittedTicket->guest_email;
+                }
+                $ticket = $this->tickets->createTicket($user, $replayData);
 
                 return response()->json([
                     'ok' => true,
@@ -787,13 +792,13 @@ class SupportController extends Controller
                     'source' => SupportTicketService::SOURCE_WIDGET,
                     'department' => SupportTicketService::DEPARTMENT_SUPPORT,
                     'priority' => SupportTicketService::PRIORITY_NORMAL,
-                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_scope' => $widgetSubmissionScope,
                     '_submission_key' => $data['submission_key'],
                 ]);
             } else {
                 $this->tickets->addMessage($ticket, $user, $data['body'], [
                     'is_staff' => false,
-                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_scope' => $widgetSubmissionScope,
                     '_submission_key' => $data['submission_key'],
                 ]);
             }
@@ -862,7 +867,7 @@ class SupportController extends Controller
                 'source' => SupportTicketService::SOURCE_WIDGET,
                 'department' => SupportTicketService::DEPARTMENT_SUPPORT,
                 'priority' => SupportTicketService::PRIORITY_NORMAL,
-                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_scope' => $widgetSubmissionScope,
                 '_submission_key' => $data['submission_key'],
             ]);
 
@@ -871,7 +876,7 @@ class SupportController extends Controller
         } else {
             $this->tickets->addMessage($ticket, null, $data['body'], [
                 'is_staff' => false,
-                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_scope' => $widgetSubmissionScope,
                 '_submission_key' => $data['submission_key'],
             ]);
         }
