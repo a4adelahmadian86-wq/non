@@ -713,6 +713,12 @@ class SupportController extends Controller
         ]);
 
         $user = auth()->user();
+        $widgetScopeToken = session('support_widget_submission_scope');
+        if (! is_string($widgetScopeToken) || ! Str::isUuid($widgetScopeToken)) {
+            $widgetScopeToken = (string) Str::uuid();
+            session(['support_widget_submission_scope' => $widgetScopeToken]);
+        }
+        $widgetSubmissionScope = 'widget:'.$widgetScopeToken;
 
         if ($user) {
             $this->tickets->claimGuestTickets($user);
@@ -720,7 +726,7 @@ class SupportController extends Controller
             // A lost response to the very first widget request has no ticket_id
             // in the browser yet. Resolve its original creation key before
             // falling back to the user's latest active widget conversation.
-            $submissionScope = hash('sha256', 'user:'.$user->id);
+            $submissionScope = hash('sha256', $widgetSubmissionScope);
             $submittedMessage = TicketMessage::query()
                 ->where('submission_scope', $submissionScope)
                 ->where('submission_key', strtolower($data['submission_key']))
@@ -730,7 +736,7 @@ class SupportController extends Controller
                 abort_unless($ticket && (int) $ticket->user_id === (int) $user->id, 404);
                 $this->tickets->addMessage($ticket, $user, $data['body'], [
                     'is_staff' => false,
-                    '_submission_scope' => 'user:'.$user->id,
+                    '_submission_scope' => $widgetSubmissionScope,
                     '_submission_key' => $data['submission_key'],
                 ]);
 
@@ -818,7 +824,7 @@ class SupportController extends Controller
         $requestedTicketId = (int) ($data['ticket_id'] ?? 0);
         $ticket = null;
 
-        $guestSubmissionScope = hash('sha256', 'guest:'.session()->getId());
+        $guestSubmissionScope = hash('sha256', $widgetSubmissionScope);
         $submittedMessage = TicketMessage::query()
             ->where('submission_scope', $guestSubmissionScope)
             ->where('submission_key', strtolower($data['submission_key']))
@@ -832,7 +838,7 @@ class SupportController extends Controller
             );
             $this->tickets->addMessage($ticket, null, $data['body'], [
                 'is_staff' => false,
-                '_submission_scope' => 'guest:'.session()->getId(),
+                '_submission_scope' => $widgetSubmissionScope,
                 '_submission_key' => $data['submission_key'],
             ]);
 
