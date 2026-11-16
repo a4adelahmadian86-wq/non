@@ -505,6 +505,16 @@ class ProcessProductDocument implements ShouldQueue
             $structure['completeness'] = $processingState['completeness'];
             $structure['reader']['ready'] = $processingState['reader_ready'];
             $structure['reader']['status'] = $processingState['status'];
+            if ($file->purpose === 'product_download'
+                && (bool) $processingState['reader_ready']
+                && $locked->chunks()->exists()) {
+                // Keep an older playable artifact available while a newer version is generated.
+                $hasExistingAudioArtifact = $locked->artifacts()
+                    ->where('artifact_type', 'audio_full_wav')
+                    ->where('version', '>=', 2)
+                    ->exists();
+                $structure['audio'] = ['status' => $hasExistingAudioArtifact ? 'upgrading' : 'pending'];
+            }
 
             $locked->update([
                 'processing_status' => $processingState['status'],
