@@ -578,8 +578,12 @@ class SupportTicketService
      */
     private function submissionIdentity(?string $scope, ?string $key, array $payload, ?UploadedFile $attachment = null): ?array
     {
-        if (! is_string($scope) || $scope === '' || ! is_string($key) || ! Str::isUuid($key)) {
+        if ($scope === null && $key === null) {
             return null;
+        }
+
+        if (! is_string($scope) || $scope === '' || ! is_string($key) || ! Str::isUuid($key)) {
+            throw ValidationException::withMessages(['submission_key' => 'شناسه ارسال معتبر نیست.']);
         }
 
         $fileFingerprint = null;
