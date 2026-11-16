@@ -37,9 +37,8 @@ class SupportPendingResolutionBreachTest extends TestCase
         ]);
 
         $notifier = $this->notifier();
-        $notifier->shouldReceive('slaBreached')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'resolution');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
 
         $service = new SupportTicketService($notifier, new SupportSlaService());
         $updated = $service->changeStatus($ticket, 'pending', null, false);
@@ -47,6 +46,18 @@ class SupportPendingResolutionBreachTest extends TestCase
         $this->assertNotNull($updated->sla_resolve_breached_at);
         $this->assertSame(0, (int) $updated->sla_resolve_remaining_minutes);
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
 
         $status = app(SupportSlaService::class)->resolutionStatus($updated);
         $this->assertSame('paused', $status['state']);
@@ -67,9 +78,8 @@ class SupportPendingResolutionBreachTest extends TestCase
         ]);
 
         $notifier = $this->notifier();
-        $notifier->shouldReceive('slaBreached')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'resolution');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
 
         $service = new SupportTicketService($notifier, new SupportSlaService());
         $service->changeStatus($ticket, 'pending', null, false);
@@ -92,6 +102,13 @@ class SupportPendingResolutionBreachTest extends TestCase
         $this->assertNotNull($closed->sla_resolve_breached_at);
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
         $this->assertSame('breached', app(SupportSlaService::class)->resolutionStatus($closed)['state']);
+        $this->assertDatabaseCount('support_sla_alert_outbox', 1);
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_staff_reply_transition_to_pending_also_records_a_preexisting_resolution_breach(): void
@@ -106,9 +123,8 @@ class SupportPendingResolutionBreachTest extends TestCase
         ]);
 
         $notifier = $this->notifier();
-        $notifier->shouldReceive('slaBreached')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'resolution');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
 
         $service = new SupportTicketService($notifier, new SupportSlaService());
         $service->addMessage($ticket, $staff, 'لطفاً اطلاعات تکمیلی را ارسال کنید.', [
@@ -120,6 +136,12 @@ class SupportPendingResolutionBreachTest extends TestCase
         $this->assertSame('pending', $updated->status);
         $this->assertNotNull($updated->sla_resolve_breached_at);
         $this->assertTrue(Ticket::query()->slaBreached()->whereKey($ticket->id)->exists());
+        $this->assertDatabaseHas('support_sla_alert_outbox', [
+            'ticket_id' => $ticket->id,
+            'kind' => 'resolution',
+            'event' => 'breached',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_priority_change_during_pending_can_reveal_a_breach_that_existed_at_pause_time(): void
@@ -139,9 +161,8 @@ class SupportPendingResolutionBreachTest extends TestCase
         $ticket->forceFill(['created_at' => $createdAt])->saveQuietly();
 
         $notifier = $this->notifier();
-        $notifier->shouldReceive('slaBreached')
-            ->once()
-            ->with(Mockery::on(fn (Ticket $candidate) => $candidate->is($ticket)), 'resolution');
+        $notifier->shouldNotReceive('slaBreached');
+        $this->app->instance(SupportNotificationService::class, $notifier);
 
         $service = new SupportTicketService($notifier, new SupportSlaService());
         $updated = $service->updateMeta($ticket, ['priority' => 'high']);
