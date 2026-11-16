@@ -1117,6 +1117,7 @@
     const pdfActive=isPdf();
     if(!pdfActive&&(pdfDoc||pdfLoadingTask||activePdfUrl||pdfLoadPromise)){
       pdfLoadGeneration++;
+      pdfLoadPromise=null;pdfLoadPromiseUrl=null;
       const pendingPdfLoad=pdfLoadingTask;
       pdfLoadingTask=null;pdfLoadingUrl=null;
       if(pendingPdfLoad){try{pendingPdfLoad.destroy().catch(()=>{});}catch(_){}}
