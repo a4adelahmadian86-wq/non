@@ -243,4 +243,35 @@ class SupportTicketAuditTimelineTest extends TestCase
             ->assertSee('امتیاز ثبت‌شده: 4 از ۵');
     }
 
+
+    public function test_reopen_timeline_displays_reopen_and_previous_lifecycle_timestamps(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $closedAt = now()->subMinutes(30)->startOfSecond();
+        $resolvedAt = now()->subMinutes(25)->startOfSecond();
+        $ticket = Ticket::create([
+            'subject' => 'Reopen timeline lifecycle evidence',
+            'status' => 'closed',
+            'priority' => 'normal',
+            'department' => 'support',
+            'closed_at' => $closedAt,
+            'resolved_at' => $resolvedAt,
+        ]);
+
+        app(SupportTicketService::class)->addMessage($ticket, $admin, 'پاسخ پس از بازگشایی', [
+            'is_staff' => true,
+            'status' => 'answered',
+            'notify' => false,
+        ]);
+
+        $response = $this->actingAs($admin)->get(
+            route('admin.support.management', ['ticket' => $ticket->id])
+        );
+
+        $response->assertOk()
+            ->assertSee('زمان بازگشایی:')
+            ->assertSee('آخرین زمان بسته‌شدن:')
+            ->assertSee('آخرین زمان حل:');
+    }
+
 }
