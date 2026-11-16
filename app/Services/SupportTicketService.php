@@ -405,6 +405,10 @@ class SupportTicketService
                         $locked->update($update);
                     }
 
+                    if ($resolutionBreachDetected) {
+                        $this->enqueueResolutionBreachAlert($locked);
+                    }
+
                     if ($previousStatus !== $targetStatus) {
                         $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
                             'from_status' => $previousStatus,
@@ -415,9 +419,9 @@ class SupportTicketService
                     }
                 }
 
-                return [$message, $previousStatus, $locked->fresh(), $resolutionBreachDetected];
+                return [$message, $previousStatus, $locked->fresh()];
             });
-            [$message, $previousStatus, $fresh, $resolutionBreachDetected] = ($touchStatus && ! $isInternal)
+            [$message, $previousStatus, $fresh] = ($touchStatus && ! $isInternal)
                 ? app(SupportAssignmentMutex::class)->synchronized($persistMessage)
                 : $persistMessage();
         } catch (\Throwable $exception) {
@@ -436,10 +440,6 @@ class SupportTicketService
 
         if ($temporaryPath !== null && $temporaryPath !== '') {
             \Illuminate\Support\Facades\Storage::disk('private')->delete($temporaryPath);
-        }
-
-        if ($resolutionBreachDetected) {
-            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
         }
 
         if ($notify && ! $isInternal) {
@@ -512,19 +512,23 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
-        [$fresh, $old, $transitionMessageId, $changed, $resolutionBreachDetected] = app(SupportAssignmentMutex::class)->synchronized(
+        [$fresh, $old, $transitionMessageId, $changed] = app(SupportAssignmentMutex::class)->synchronized(
             fn () => DB::transaction(function () use ($ticket, $status, $actor, $systemNote): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             $old = (string) $locked->status;
 
             if ($old === $status) {
-                return [$locked->fresh(), $old, null, false, false];
+                return [$locked->fresh(), $old, null, false];
             }
 
             $slaBefore = $this->slaAuditSnapshot($locked);
             $transition = $this->buildStatusTransitionUpdate($locked, $status);
             $locked->update($transition['attributes']);
             $resolutionBreachDetected = $transition['resolution_breach_detected'];
+
+            if ($resolutionBreachDetected) {
+                $this->enqueueResolutionBreachAlert($locked);
+            }
 
             $this->recordSupportAuditEvent($locked, $actor, 'support.ticket.status_transitioned', [
                 'from_status' => $old,
@@ -544,16 +548,12 @@ class SupportTicketService
                 ]);
             }
 
-            return [$locked->fresh(), $old, $transitionMessage?->id, true, $resolutionBreachDetected];
+            return [$locked->fresh(), $old, $transitionMessage?->id, true];
             })
         );
 
         if (! $changed) {
             return $fresh;
-        }
-
-        if ($resolutionBreachDetected) {
-            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
         }
 
         $this->safeNotify(fn () => $this->notifier->statusChanged(
@@ -626,7 +626,7 @@ class SupportTicketService
      */
     public function updateMeta(Ticket $ticket, array $data, ?User $actor = null): Ticket
     {
-        [$fresh, $resolutionBreachDetected] = DB::transaction(function () use ($ticket, $data, $actor): array {
+        [$fresh] = DB::transaction(function () use ($ticket, $data, $actor): array {
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             $wasResolutionBreached = ! empty($locked->sla_resolve_breached_at);
             $beforeMeta = [
@@ -659,7 +659,7 @@ class SupportTicketService
             }
 
             if ($update === []) {
-                return [$locked->fresh(['assignee', 'user']), false];
+                return [$locked->fresh(['assignee', 'user'])];
             }
 
             $locked->update($update);
@@ -687,13 +687,12 @@ class SupportTicketService
             }
 
             $resolutionBreachDetected = ! $wasResolutionBreached && ! empty($locked->sla_resolve_breached_at);
+            if ($resolutionBreachDetected) {
+                $this->enqueueResolutionBreachAlert($locked);
+            }
 
-            return [$locked->fresh(['assignee', 'user']), $resolutionBreachDetected];
+            return [$locked->fresh(['assignee', 'user'])];
         });
-
-        if ($resolutionBreachDetected) {
-            $this->safeNotify(fn () => $this->notifier->slaBreached($fresh, 'resolution'));
-        }
 
         return $fresh;
     }
@@ -861,6 +860,27 @@ class SupportTicketService
             'resolved_at' => $ticket->resolved_at?->toIso8601String(),
             'closed_at' => $ticket->closed_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Persist a newly detected resolution breach in the durable SLA outbox.
+     * This is called only while the ticket mutation transaction is still open,
+     * so the breach marker, audit event, and delivery intent commit atomically.
+     */
+    private function enqueueResolutionBreachAlert(Ticket $ticket): void
+    {
+        if (empty($ticket->sla_resolve_breached_at) || ! $ticket->sla_resolve_due_at) {
+            throw new \\RuntimeException('A resolution breach alert requires its canonical SLA marker and deadline.');
+        }
+
+        $breachAt = $ticket->sla_paused_at ?: now();
+        $minutesLeft = $this->sla->minutesUntilDeadline($ticket->sla_resolve_due_at, $breachAt);
+
+        app(SupportSlaAlertOutboxService::class)->enqueue($ticket, 'resolution', [
+            'event' => 'breached',
+            'minutes' => $minutesLeft,
+            'column' => 'sla_resolve_breached_at',
+        ]);
     }
 
     protected function safeNotify(callable $fn): void
