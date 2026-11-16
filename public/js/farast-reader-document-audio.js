@@ -68,6 +68,11 @@
         ? Math.min(maximumDelay * 5, Math.max(0, date - Date.now()))
         : null;
     };
+    const jitteredRetryDelay = (delay) => {
+      // Spread clients across a bounded window instead of synchronizing retries.
+      const jitter = 0.8 + Math.random() * 0.4;
+      return Math.min(maximumDelay, Math.max(0, Math.round(delay * jitter)));
+    };
     const finishWithMessage = (message) => {
       stopPolling();
       pendingStatus.textContent = message;
@@ -142,10 +147,12 @@
           finishWithMessage('وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.');
           return;
         }
-        nextDelay = retryAfterDelay(response) ?? retryDelay;
+        const serverRetryDelay = retryAfterDelay(response);
+        nextDelay = serverRetryDelay ?? jitteredRetryDelay(retryDelay);
       } catch (error) {
         if (error?.name !== 'AbortError') {
-          // Network failures are transient; keep polling with bounded backoff.
+          // Network failures are transient; jitter them too to avoid retry herds.
+          nextDelay = jitteredRetryDelay(retryDelay);
         }
       } finally {
         inFlight = false;
