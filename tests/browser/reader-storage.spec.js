@@ -208,3 +208,43 @@ test('serializes account reader-state writes so older slow requests cannot overw
  await expect.poll(()=>requests.length).toBe(2);
  expect(requests[1].progress).toEqual({section:0,page:1});
 });
+
+test('account reader-state sync failures are visible and a later successful sync clears the warning',async({page})=>{
+ let putCount=0;
+ await page.route('**/reader-state-sync-failure-fixture',async route=>{
+  if(route.request().method()==='GET'){
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({progress:null,bookmarks:[],updated_at:null})});
+   return;
+  }
+  putCount++;
+  await route.fulfill({status:putCount===1?503:200,contentType:'application/json',body:JSON.stringify({saved:putCount>1})});
+ });
+ await page.goto('/');
+ await page.setContent(`
+  <section class="farast-reader" data-reader-root data-product-id="remote-sync-failure-fixture" data-reader-state-url="/reader-state-sync-failure-fixture">
+   <nav class="farast-reader-toolbar">
+    <button id="reader-prev" type="button">قبلی</button>
+    <label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ 2</span></label>
+    <button id="reader-next" type="button">بعدی</button>
+    <output id="reader-zoom-label">۱۰۰٪</output>
+    <button id="reader-resume" type="button" hidden><span>ادامه مطالعه</span></button>
+    <button id="reader-bookmark-toggle" type="button" aria-pressed="false"></button>
+    <button id="reader-bookmarks-open" type="button" aria-expanded="false"></button>
+    <div id="reader-bookmarks-panel" hidden></div>
+   </nav>
+   <div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>
+   <div id="reader-stage">
+    <article class="farast-reader-page-item is-active" data-index="0"><div class="farast-reader-page-content">صفحه نخست</div></article>
+    <article class="farast-reader-page-item" data-index="1"><div class="farast-reader-page-content">صفحه دوم</div></article>
+   </div>
+  </section>
+ `);
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader.js')});
+ await page.locator('#reader-next').click();
+ await expect(page.locator('.farast-reader-remote-sync-warning')).toBeVisible({timeout:5000});
+ await expect(page.locator('.farast-reader-remote-sync-warning')).toContainText('همگام‌سازی');
+ await page.locator('#reader-prev').click();
+ await expect.poll(()=>putCount).toBe(2);
+ await expect(page.locator('.farast-reader-remote-sync-warning')).toBeHidden({timeout:5000});
+});
