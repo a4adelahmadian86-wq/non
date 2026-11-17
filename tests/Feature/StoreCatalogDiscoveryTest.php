@@ -75,6 +75,7 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertOk()
             ->assertSee('فایل آموزشی آزمایشی')
             ->assertDontSee('دوره آموزشی آزمایشی')
+            ->assertSee('store-cover-placeholder', false)
             ->assertSee('فایل دیجیتال (1)', false);
 
         $this->get('/store?type=course')
