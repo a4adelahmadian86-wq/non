@@ -43,14 +43,14 @@ class BlogPagesTest extends TestCase
             ->assertSee('summary_large_image', false)
             ->assertSee('twitter:image:alt', false)
             ->assertSee('og:image:alt', false)
-            ->assertSee('images/farast-blog-hero.svg', false)
+            ->assertSee('images/farast-service-edit.svg', false)
             ->assertSee('?v=20261117social1', false);
     }
 
     public function test_each_article_uses_an_existing_local_hero_artwork_asset(): void
     {
         $articleArtwork = [
-            'workflow-writing' => 'farast-blog-hero.svg',
+            'workflow-writing' => 'farast-service-edit.svg',
             'document-digitization' => 'farast-service-ocr.svg',
             'voice-to-text' => 'farast-service-voice.svg',
             'clean-workspace' => 'farast-service-edit.svg',
