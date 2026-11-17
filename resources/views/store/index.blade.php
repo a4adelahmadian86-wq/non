@@ -11,7 +11,7 @@
 <section class="store-page" dir="rtl">
   <div class="store-container">
 
-    <div class="store-hero store-hero--market store-hero--focused">
+    <div class="store-hero store-hero--market store-hero--focused{{ $storeHeroProduct && $storeHeroImage ? ' store-hero--with-artwork' : '' }}">
       <div class="store-hero-content">
         <div class="store-hero-kicker">فروشگاه فراست</div>
         <h1>فایل‌ها و دوره‌های دیجیتال</h1>
