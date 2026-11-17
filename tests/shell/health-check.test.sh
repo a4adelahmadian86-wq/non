@@ -21,6 +21,7 @@ while (($#)); do
 done
 [[ "${FAKE_CURL_ERROR:-0}" != "1" ]] || exit 7
 path="${url#https://health.example}"
+path="${path#http://127.0.0.1:8001}"
 status=200
 body="asset"
 case "$path" in
@@ -42,6 +43,9 @@ run_health_check() {
 
 run_health_check
 echo "PASS: healthy application and complete PDF.js runtime"
+
+PATH="$TMP_DIR/bin:$PATH" FARAST_BASE_URL="http://127.0.0.1:8001" bash "$ROOT_DIR/scripts/ops/health-check.sh"
+echo "PASS: localhost HTTP is allowed for development only"
 
 if FAKE_FAIL_PATH="/vendor/pdfjs/legacy/build/pdf.worker.mjs" run_health_check >/dev/null 2>&1; then
   echo "FAIL: missing PDF.js worker was accepted" >&2
