@@ -58,6 +58,8 @@ class BlogPagesTest extends TestCase
             'digital-products' => 'farast-store-hero.svg',
         ];
 
+        $this->assertCount(count($articleArtwork), array_unique($articleArtwork), 'Each editorial topic should have distinct artwork.');
+
         foreach ($articleArtwork as $slug => $filename) {
             $path = public_path('images/'.$filename);
 
