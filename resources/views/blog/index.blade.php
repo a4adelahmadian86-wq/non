@@ -2,11 +2,27 @@
 
 @php
     $title = 'مجله فراست | ایده‌ها، راهنماها و مهارت‌های دیجیتال';
+    $blogSocialImage = $featured['image'] ?? asset('images/farast-blog-hero.svg');
+    $blogSocialDescription = 'راهنماهای کاربردی درباره نوشتن، هوش مصنوعی، OCR، مدیریت اسناد و بهره‌وری دیجیتال در مجله فراست.';
 @endphp
 
 @push('head')
-<meta name="description" content="در مجله فراست، راهنماهای کاربردی درباره نوشتن، هوش مصنوعی، OCR، مدیریت اسناد و بهره‌وری دیجیتال بخوانید.">
+<meta name="description" content="{{ $blogSocialDescription }}">
+<meta name="robots" content="index,follow">
 <link rel="canonical" href="{{ route('blog') }}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="فراست">
+<meta property="og:title" content="{{ $title }}">
+<meta property="og:description" content="{{ $blogSocialDescription }}">
+<meta property="og:url" content="{{ route('blog') }}">
+<meta property="og:image" content="{{ $blogSocialImage }}">
+<meta property="og:image:alt" content="{{ $featured['alt'] ?? 'تصویر اختصاصی تحریریه مجله فراست' }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ $title }}">
+<meta name="twitter:description" content="{{ $blogSocialDescription }}">
+<meta name="twitter:image" content="{{ $blogSocialImage }}">
+<meta name="twitter:image:alt" content="{{ $featured['alt'] ?? 'تصویر اختصاصی تحریریه مجله فراست' }}">
 @endpush
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261117social1" defer></script>
