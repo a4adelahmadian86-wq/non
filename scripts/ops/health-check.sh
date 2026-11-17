@@ -5,8 +5,9 @@ set -Eeuo pipefail
 
 case "$FARAST_BASE_URL" in
   https://*) ;;
+  http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*|http://\[::1\]|http://\[::1\]:*) ;;
   *)
-    echo "FARAST_BASE_URL must use HTTPS." >&2
+    echo "FARAST_BASE_URL must use HTTPS, except for localhost/127.0.0.1/::1 development URLs." >&2
     exit 2
     ;;
 esac
