@@ -46,7 +46,11 @@
 <meta property="og:title" content="فراست | فروشگاه محصولات دیجیتال و خدمات هوشمند اسناد">
 <meta property="og:description" content="محصول دیجیتال انتخاب کنید یا کار با فایل و سند را با ابزارهای فراست آغاز کنید.">
 <meta property="og:url" content="{{ url('/') }}">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{{ asset('images/farast-home-workflow.webp') }}">
+<meta property="og:image:alt" content="گردش کار فراست برای ورود فایل، ویرایش سند و دریافت خروجی آماده">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ asset('images/farast-home-workflow.webp') }}">
+<meta name="twitter:image:alt" content="گردش کار فراست برای ورود فایل، ویرایش سند و دریافت خروجی آماده">
 <meta name="twitter:title" content="فراست | محصولات دیجیتال و خدمات هوشمند">
 <meta name="twitter:description" content="فروشگاه محصولات دیجیتال در کنار ابزارهای تایپ، OCR، گفتار به متن و ویرایش اسناد.">
 <script type="application/ld+json">
