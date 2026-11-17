@@ -119,7 +119,7 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 - پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
 - `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.
 - `php artisan queue:failed` و `php artisan migrate:status` را بررسی کنید.
-- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up` و پاسخ JSON `/ready` را کنترل می‌کند.
+- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up`، پاسخ JSON `/ready` و دریافت HTTP 200 برای چهار دارایی ضروری موتور PDF.js (ماژول، Worker، CMap و فونت) را کنترل می‌کند. در نتیجه، سبز بودن liveness/readiness بدون دارایی‌های لازم خوانشگر دیگر به‌اشتباه سلامت کامل انتشار تلقی نمی‌شود.
 - موفقیت `/ready` به‌تنهایی سلامت Redis، Storage خارجی، سرویس صوت یا ارائه‌دهندگان AI را تضمین نمی‌کند.
 
 ## Backup و Restore
