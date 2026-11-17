@@ -36,7 +36,8 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertSee('farast-footer-compact', false)
             ->assertSee(route('trust'), false)
             ->assertDontSee('store-feature-row', false)
-            ->assertDontSee('store-hero-visual', false)
+            ->assertSee('farast-store-hero.svg')
+            ->assertSee('store-hero-visual--brand', false)
             ->assertDontSee('store-hero--with-artwork', false)
             ->assertDontSee('store-shelf-track', false)
             ->assertDontSee('farast-footer-cta', false);
