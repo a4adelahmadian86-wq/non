@@ -39,6 +39,7 @@ class BlogPagesTest extends TestCase
             ->assertSee('summary_large_image', false)
             ->assertSee('twitter:image:alt', false)
             ->assertSee('og:image:alt', false)
+            ->assertSee('images/farast-blog-hero.svg', false)
             ->assertSee('?v=20261117social1', false);
     }
 
