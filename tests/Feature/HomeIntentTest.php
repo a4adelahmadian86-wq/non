@@ -27,7 +27,7 @@ class HomeIntentTest extends TestCase
     {
         $response = $this->get('/');
 
-        $heroArtwork = public_path('images/farast-home-workflow.webp');
+        $heroArtwork = public_path('images/farast-home-hero.svg');
         $this->assertFileExists($heroArtwork);
         $this->assertGreaterThan(0, filesize($heroArtwork));
 
@@ -68,7 +68,7 @@ class HomeIntentTest extends TestCase
             ->assertSee('name="description"', false)
             ->assertSee('home-hero-visual', false)
             ->assertSee('home-hero-art', false)
-            ->assertSee('farast-home-workflow.webp', false)
+            ->assertSee('farast-home-hero.svg', false)
             ->assertSee('farast-public-topline', false)
             ->assertSee('farast-footer-compact', false)
             ->assertSee('مشاهده اطلاعات و وضعیت نمادها')
