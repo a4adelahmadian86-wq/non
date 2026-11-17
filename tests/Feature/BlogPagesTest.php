@@ -62,7 +62,9 @@ class BlogPagesTest extends TestCase
 
             $this->get(route('blog.show', ['slug' => $slug]))
                 ->assertOk()
-                ->assertSee('/images/'.$filename, false);
+                ->assertSee('/images/'.$filename, false)
+                ->assertSee('width="', false)
+                ->assertSee('height="', false);
         }
     }
 
