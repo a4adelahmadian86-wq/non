@@ -515,7 +515,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $notifier = Mockery::mock(SupportNotificationService::class);
         $notifier->shouldReceive('ticketCreated')
             ->once()
-            ->andThrow(new \\RuntimeException('private notification payload must not enter the log'));
+            ->andThrow(new \RuntimeException('private notification payload must not enter the log'));
 
         Log::spy();
 
@@ -533,7 +533,7 @@ class SupportTicketAtomicWorkflowTest extends TestCase
             ->with('farast.support.notification_delivery_failed', Mockery::on(
                 fn (array $context): bool => $context['event'] === 'ticket_created'
                     && (int) $context['ticket_id'] === (int) $ticket->id
-                    && $context['exception_class'] === \\RuntimeException::class
+                    && $context['exception_class'] === \RuntimeException::class
                     && array_key_exists('request_id', $context)
                     && array_key_exists('correlation_id', $context)
                     && ! array_key_exists('message', $context)
