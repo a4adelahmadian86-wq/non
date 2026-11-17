@@ -84,10 +84,10 @@ class BlogController extends Controller
                 'date' => '۱۴۰۵/۰۷/۲۸',
                 'read_time' => 4,
                 'author' => 'تیم محصول فراست',
-                'image' => asset('images/farast-service-edit.svg'),
+                'image' => asset('images/farast-service-export.svg'),
                 'image_width' => 900,
                 'image_height' => 506,
-                'alt' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
+                'alt' => 'نمایش سند و نسخه‌های آماده دریافت پس از تکمیل و ویرایش',
                 'featured' => false,
                 'tags' => ['مدیریت فایل', 'فضای کار', 'بهره‌وری'],
                 'sections' => [
