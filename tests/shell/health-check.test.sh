@@ -20,7 +20,8 @@ while (($#)); do
   esac
 done
 [[ "${FAKE_CURL_ERROR:-0}" != "1" ]] || exit 7
-path="${url#https://health.example}"\npath="${path#http://127.0.0.1:8001}"
+path="${url#https://health.example}"
+path="${path#http://127.0.0.1:8001}"
 status=200
 body="asset"
 case "$path" in
