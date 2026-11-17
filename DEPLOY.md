@@ -31,6 +31,21 @@
 # Stop immediately on any failure; a failed build must not reach the live release.
 set -euo pipefail
 
+# Build the exact self-hosted PDF.js runtime in the inactive release.
+# This is mandatory: the reader checks these files before enabling its full PDF engine.
+# Run this on the build runner if the production host does not provide Node.js/npm,
+# then deploy the complete public/vendor/pdfjs directory with the same release.
+node --version
+npm --version
+bash -n scripts/prepare-reader-assets.sh
+bash scripts/prepare-reader-assets.sh
+test "$(cat public/vendor/pdfjs/VERSION)" = "6.5.438"
+test -s public/vendor/pdfjs/legacy/build/pdf.mjs
+test -s public/vendor/pdfjs/legacy/build/pdf.worker.mjs
+test -s public/vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap
+test -s public/vendor/pdfjs/standard_fonts/FoxitSans.pfb
+(cd public/vendor/pdfjs && sha256sum -c SHA256SUMS)
+
 # Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
