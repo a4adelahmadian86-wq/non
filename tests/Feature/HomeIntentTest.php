@@ -101,6 +101,10 @@ class HomeIntentTest extends TestCase
             ->assertSee('farast-service-voice.svg', false)
             ->assertSee('farast-service-edit.svg', false)
             ->assertSee('farast-service-export.svg', false)
+            ->assertSee('alt="نمایش سند تصویری و متن استخراج‌شده در فرایند OCR"', false)
+            ->assertSee('alt="میکروفون و موج صدا برای تبدیل گفتار به متن"', false)
+            ->assertSee('alt="نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال"', false)
+            ->assertSee('alt="نمایش سند و نسخه‌های آماده دریافت پس از تکمیل و ویرایش"', false)
             ->assertSee('loading="lazy" decoding="async"', false);
 
         foreach ([
