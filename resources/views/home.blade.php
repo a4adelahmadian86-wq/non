@@ -164,7 +164,7 @@
                 <article class="home-product-card">
                     <a class="home-product-cover" href="{{ route('store.product', $product->slug) }}">
                         @if($homeProductImage)
-                            <img src="{{ asset($homeProductImage) }}" alt="{{ $product->title }}" loading="lazy">
+                            <img src="{{ asset($homeProductImage) }}" alt="{{ $product->title }}" loading="lazy" decoding="async">
                         @else
                             <span class="home-product-placeholder" aria-hidden="true"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
                         @endif
