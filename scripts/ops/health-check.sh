@@ -39,10 +39,23 @@ check_status "/up"
 echo "Liveness: OK"
 
 check_status "/ready"
-if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"ready"' "$response_file"; then
+if ! grep -Eq '"status'[[:space:]]*:[[:space:]]*"ready"' "$response_file"; then
   echo "Readiness endpoint returned HTTP 200 without the expected ready state." >&2
   exit 1
 fi
 
 echo "Readiness: OK"
+
+# Verify the exact same-origin PDF.js runtime files that the reader's
+# server-side readiness gate requires. A healthy Laravel process alone does
+# not prove that the release contains the browser assets needed to open PDFs.
+for asset in \
+  "/vendor/pdfjs/legacy/build/pdf.mjs" \
+  "/vendor/pdfjs/legacy/build/pdf.worker.mjs" \
+  "/vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap" \
+  "/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf"; do
+  check_status "$asset"
+  echo "Reader runtime asset: OK ($asset)"
+done
+
 echo "FARAST post-deploy health checks passed."
