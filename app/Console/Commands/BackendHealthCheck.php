@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Jobs\RunStorageBackupJob;
 use App\Models\StorageVolume;
+use App\Services\InternalMessengerSchemaHealthCheck;
 use App\Services\SupportSubmissionSchemaHealthCheck;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class BackendHealthCheck extends Command
             'cache' => fn (): bool => $this->checkCacheStorage(),
             'sessions' => fn (): bool => $this->checkSessionStorage(),
             'support_submission_schema' => fn (): bool => app(SupportSubmissionSchemaHealthCheck::class)->assertReady(),
+            'internal_messenger_schema' => fn (): bool => app(InternalMessengerSchemaHealthCheck::class)->assertReady(),
             'production_config' => fn (): bool => $this->checkProductionConfig(),
             'backup_configuration' => fn (): bool => $this->checkBackupConfiguration(),
         ];
