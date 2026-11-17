@@ -1109,7 +1109,6 @@ class SupportTicketService
                 'correlation_id' => request()->header('X-Correlation-Id'),
             ]);
 
-            report($exception);
         }
     }
 }
