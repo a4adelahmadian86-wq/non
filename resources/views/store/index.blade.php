@@ -1,5 +1,13 @@
 @extends('layouts.app')
 @section('content')
+@php
+  $storeHeroProduct = $products->getCollection()->first(fn ($product) =>
+    filled($product->cover_path) || $product->images->where('is_active', true)->isNotEmpty()
+  );
+  $storeHeroImage = $storeHeroProduct
+    ? ($storeHeroProduct->cover_path ?: $storeHeroProduct->images->where('is_active', true)->first()?->path)
+    : null;
+@endphp
 <section class="store-page" dir="rtl">
   <div class="store-container">
 
@@ -26,6 +34,18 @@
           @endauth
         </div>
       </div>
+      @if($storeHeroProduct && $storeHeroImage)
+        <a class="store-hero-visual" href="{{ route('store.product', $storeHeroProduct->slug) }}" aria-label="مشاهده محصول {{ $storeHeroProduct->title }}">
+          <img src="{{ asset($storeHeroImage) }}" alt="تصویر محصول {{ $storeHeroProduct->title }}" width="960" height="640" fetchpriority="high" decoding="async">
+          <span class="store-hero-visual-caption">
+            <i class="fa-solid fa-book-open" aria-hidden="true"></i>
+            <span>
+              <strong>{{ $storeHeroProduct->title }}</strong>
+              <small>مشاهده جزئیات و پیش‌نمایش محصول</small>
+            </span>
+          </span>
+        </a>
+      @endif
     </div>
 
     @if(session('status'))
