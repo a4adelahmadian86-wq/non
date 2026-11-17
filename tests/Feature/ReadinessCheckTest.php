@@ -40,6 +40,17 @@ class ReadinessCheckTest extends TestCase
         $this->assertStringNotContainsString('submission', $response->getContent());
     }
 
+    public function test_readiness_rejects_an_incomplete_internal_messenger_schema(): void
+    {
+        Schema::table('conversation_participants', function ($table): void {
+            $table->dropUnique('conversation_participants_conversation_id_user_id_unique');
+        });
+
+        $this->getJson(route('health.ready'))
+            ->assertStatus(503)
+            ->assertExactJson(['status' => 'not_ready']);
+    }
+
     public function test_readiness_failure_is_generic_and_does_not_leak_database_errors(): void
     {
         DB::shouldReceive('connection')

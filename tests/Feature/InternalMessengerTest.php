@@ -295,4 +295,15 @@ class InternalMessengerTest extends TestCase
         $this->actingAs($customer)->get(route('messenger.index'))->assertForbidden();
         $this->actingAs($unassignedEmployee)->get(route('messenger.index'))->assertForbidden();
     }
+    public function test_employee_can_open_internal_messenger_inbox(): void
+    {
+        $employee = $this->makeEmployee($this->makeOrganization());
+
+        $this->actingAs($employee)
+            ->get(route('messenger.index'))
+            ->assertOk()
+            ->assertSee('مرکز پیام‌رسانی');
+    }
+
+
 }

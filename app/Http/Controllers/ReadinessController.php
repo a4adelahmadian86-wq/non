@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\InternalMessengerSchemaHealthCheck;
 use App\Services\SupportSubmissionSchemaHealthCheck;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ class ReadinessController extends Controller
         try {
             DB::connection()->select('SELECT 1');
             app(SupportSubmissionSchemaHealthCheck::class)->assertReady();
+            app(InternalMessengerSchemaHealthCheck::class)->assertReady();
         } catch (Throwable) {
             return response()->json(['status' => 'not_ready'], 503)
                 ->header('Cache-Control', 'no-store, max-age=0');
