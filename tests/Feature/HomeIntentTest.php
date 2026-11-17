@@ -82,7 +82,8 @@ class HomeIntentTest extends TestCase
             ->assertSee('photo-1456324504439-367cee3b3c32', false)
             ->assertSee('photo-1590602847861-f357a9332bbc', false)
             ->assertSee('photo-1498050108023-c5249f4df085', false)
-            ->assertSee('photo-1516979187457-637abb4f9353', false);
+            ->assertSee('photo-1516979187457-637abb4f9353', false)
+            ->assertSee('loading="lazy" decoding="async"', false);
     }
 
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void
