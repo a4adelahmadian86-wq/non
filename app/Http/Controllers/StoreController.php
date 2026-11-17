@@ -665,7 +665,7 @@ class StoreController extends Controller
         $readerPdfEngineReady = is_file(public_path('vendor/pdfjs/legacy/build/pdf.mjs'))
             && is_file(public_path('vendor/pdfjs/legacy/build/pdf.worker.mjs'))
             && is_file(public_path('vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap'))
-            && is_file(public_path('vendor/pdfjs/standard_fonts/FoxitSans.pfb'));
+            && is_file(public_path('vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf'));
 
         return response()
             ->view('store.reader', compact(
