@@ -28,7 +28,7 @@
                 <div class="blog-hero-meta"><span><i class="fa-solid fa-feather-pointed"></i> محتوای منتخب تحریریه</span><span><i class="fa-regular fa-clock"></i> خواندنی‌های کوتاه و کاربردی</span></div>
             </div>
             <div class="blog-hero-art">
-                <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=85" alt="فضای کاری روشن و مدرن" fetchpriority="high">
+                <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=85" alt="فضای کاری روشن و مدرن" fetchpriority="high" decoding="async">
                 <div class="blog-hero-art-shade"></div>
                 <div class="blog-hero-note"><span class="blog-note-icon"><i class="fa-solid fa-lightbulb"></i></span><span><strong>یک ایده تازه</strong><small>برای بهتر کار کردن</small></span></div>
             </div>
@@ -45,7 +45,7 @@
         @if(!$q && !$category && $featured)
             <section class="blog-featured" aria-labelledby="blog-featured-title">
                 <a class="blog-featured-image" href="{{ route('blog.show', $featured['slug']) }}">
-                    <img src="{{ $featured['image'] }}" alt="{{ $featured['alt'] }}" loading="lazy">
+                    <img src="{{ $featured['image'] }}" alt="{{ $featured['alt'] }}" fetchpriority="high" decoding="async">
                     <span>پیشنهاد تحریریه</span>
                 </a>
                 <div class="blog-featured-copy">
@@ -70,7 +70,7 @@
             @forelse($articles as $article)
                 <article class="blog-card" data-blog-card="{{ $article['slug'] }}">
                     <a class="blog-card-image" href="{{ route('blog.show', $article['slug']) }}">
-                        <img src="{{ $article['image'] }}" alt="{{ $article['alt'] }}" loading="lazy">
+                        <img src="{{ $article['image'] }}" alt="{{ $article['alt'] }}" loading="lazy" decoding="async">
                         <span>{{ $article['category'] }}</span>
                     </a>
                     <div class="blog-card-content">
