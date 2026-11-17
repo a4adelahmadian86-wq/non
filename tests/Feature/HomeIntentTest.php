@@ -93,11 +93,21 @@ class HomeIntentTest extends TestCase
 
         $response->assertOk()
             ->assertSee('home-service-card__image', false)
-            ->assertSee('photo-1456324504439-367cee3b3c32', false)
-            ->assertSee('photo-1590602847861-f357a9332bbc', false)
-            ->assertSee('photo-1498050108023-c5249f4df085', false)
-            ->assertSee('photo-1516979187457-637abb4f9353', false)
+            ->assertSee('farast-service-ocr.svg', false)
+            ->assertSee('farast-service-voice.svg', false)
+            ->assertSee('farast-service-edit.svg', false)
+            ->assertSee('farast-service-export.svg', false)
             ->assertSee('loading="lazy" decoding="async"', false);
+
+        foreach ([
+            'farast-service-ocr.svg',
+            'farast-service-voice.svg',
+            'farast-service-edit.svg',
+            'farast-service-export.svg',
+        ] as $serviceArtwork) {
+            $this->assertFileExists(public_path('images/'.$serviceArtwork));
+            $this->assertGreaterThan(0, filesize(public_path('images/'.$serviceArtwork)));
+        }
     }
 
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void
