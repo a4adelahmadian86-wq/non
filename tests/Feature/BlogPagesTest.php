@@ -53,7 +53,7 @@ class BlogPagesTest extends TestCase
             'workflow-writing' => 'farast-service-edit.svg',
             'document-digitization' => 'farast-service-ocr.svg',
             'voice-to-text' => 'farast-service-voice.svg',
-            'clean-workspace' => 'farast-service-edit.svg',
+            'clean-workspace' => 'farast-service-export.svg',
             'ai-assisted-editing' => 'farast-home-hero.svg',
             'digital-products' => 'farast-store-hero.svg',
         ];
@@ -76,7 +76,7 @@ class BlogPagesTest extends TestCase
     {
         $articleAltText = [
             'document-digitization' => 'سند تصویری و متن استخراج‌شده با فناوری OCR',
-            'clean-workspace' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
+            'clean-workspace' => 'نمایش سند و نسخه‌های آماده دریافت پس از تکمیل و ویرایش',
             'digital-products' => 'مجموعه جلدهای رنگی فایل‌ها و منابع دیجیتال',
             'workflow-writing' => 'دفتر یادداشت باز، ابزار نوشتن و نشانه بصری یک ایده در فضای تحریریه',
         ];
