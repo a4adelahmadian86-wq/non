@@ -73,6 +73,18 @@ class HomeIntentTest extends TestCase
             ->assertDontSee('</script>ipt>', false);
     }
 
+    public function test_homepage_service_cards_have_real_image_assets(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertOk()
+            ->assertSee('home-service-card__image', false)
+            ->assertSee('photo-1456324504439-367cee3b3c32', false)
+            ->assertSee('photo-1590602847861-f357a9332bbc', false)
+            ->assertSee('photo-1498050108023-c5249f4df085', false)
+            ->assertSee('photo-1516979187457-637abb4f9353', false);
+    }
+
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void
     {
         $interview = app(ProjectInterviewService::class);
