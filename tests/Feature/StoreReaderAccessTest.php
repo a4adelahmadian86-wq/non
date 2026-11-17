@@ -153,6 +153,24 @@ class StoreReaderAccessTest extends TestCase
         ])->assertUnauthorized();
     }
 
+    public function test_reader_enables_pdf_engine_when_verified_runtime_assets_are_present(): void
+    {
+        foreach ([
+            'vendor/pdfjs/legacy/build/pdf.mjs',
+            'vendor/pdfjs/legacy/build/pdf.worker.mjs',
+            'vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap',
+            'vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf',
+        ] as $asset) {
+            $this->assertFileExists(public_path($asset), 'Missing required PDF.js runtime asset: '.$asset);
+        }
+
+        [$product] = $this->makePreviewFixture();
+
+        $this->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-pdf-engine="ready"', false);
+    }
+
     public function test_guest_can_read_public_samples_with_ip_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();

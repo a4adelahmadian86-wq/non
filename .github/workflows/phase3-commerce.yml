@@ -17,6 +17,7 @@ on:
       - 'composer.json'
       - 'composer.lock'
       - 'scripts/verify-test-environment.php'
+      - 'scripts/prepare-reader-assets.sh'
       - '.github/workflows/phase3-commerce.yml'
   workflow_dispatch:
 
@@ -26,6 +27,11 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare verified self-hosted PDF.js runtime for reader tests
+        run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
