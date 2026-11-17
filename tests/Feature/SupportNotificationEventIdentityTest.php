@@ -255,4 +255,34 @@ class SupportNotificationEventIdentityTest extends TestCase
         $this->assertDatabaseCount('farast_notifications', 0);
     }
 
+
+    public function test_in_app_delivery_failure_is_propagated_to_the_support_delivery_boundary(): void
+    {
+        $user = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $user->id,
+            'subject' => 'Notification failure propagation',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifications = \Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('push')
+            ->once()
+            ->withArgs(fn (...$arguments): bool => (int) $arguments[0] === (int) $user->id
+                && $arguments[1] === 'ticket_reply'
+                && $arguments[5] === true)
+            ->andThrow(new \RuntimeException('notification store unavailable'));
+
+        $service = new SupportNotificationService(
+            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            $notifications,
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $service->staffReplied($ticket, 'پاسخ آزمایشی', false, 987654);
+    }
+
 }

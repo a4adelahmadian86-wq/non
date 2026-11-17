@@ -339,7 +339,7 @@ class SupportNotificationService
         return $this->staffUsers($ticket);
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null, bool $throwOnFailure = false): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null, bool $throwOnFailure = true): void
     {
         try {
             $url = $staff
@@ -360,7 +360,12 @@ class SupportNotificationService
                 'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).($eventIdentity ? ':identity:'.$eventIdentity : '').':user:'.$userId,
             );
         } catch (\Throwable $e) {
-            Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
+            Log::warning('farast.support.notification_failed', [
+                'ticket_id' => (int) $ticket->id,
+                'user_id' => $userId,
+                'type' => $type,
+                'exception_class' => get_class($e),
+            ]);
             if ($throwOnFailure) {
                 throw $e;
             }
