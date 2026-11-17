@@ -205,4 +205,25 @@ class FarastObservabilityTest extends TestCase
             ->assertHeader('X-Request-Id', 'exception-request-123')
             ->assertHeader('X-Correlation-Id', 'exception-correlation-456');
     }
+
+    public function test_html_500_page_displays_the_generated_request_id_and_trace_headers(): void
+    {
+        Route::get('/_test/observability-html-failure', function () {
+            throw new \\RuntimeException('expected html test exception');
+        });
+
+        $response = $this->get('/_test/observability-html-failure');
+
+        $response->assertStatus(500)
+            ->assertSee('در حال حاضر امکان نمایش این صفحه وجود ندارد')
+            ->assertSee('شناسه پیگیری:')
+            ->assertHeader('X-Request-Id')
+            ->assertHeader('X-Correlation-Id');
+
+        $requestId = $response->headers->get('X-Request-Id');
+        $this->assertIsString($requestId);
+        $this->assertNotSame('', $requestId);
+        $response->assertSeeText($requestId);
+    }
+
 }
