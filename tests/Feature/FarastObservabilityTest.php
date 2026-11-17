@@ -209,7 +209,7 @@ class FarastObservabilityTest extends TestCase
     public function test_html_500_page_displays_the_generated_request_id_and_trace_headers(): void
     {
         Route::get('/_test/observability-html-failure', function () {
-            throw new \\RuntimeException('expected html test exception');
+            throw new \RuntimeException('expected html test exception');
         });
 
         $response = $this->get('/_test/observability-html-failure');
