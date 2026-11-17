@@ -113,8 +113,8 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 ## سلامت و بررسی پس از انتشار
 
 - `GET /up`: Liveness لاراول.
-- `GET /ready`: Readiness دیتابیس اصلی با `SELECT 1`؛ پاسخ 503 یعنی سرویس نباید ترافیک بگیرد.
-- `php artisan farast:health-check` را اجرا کنید؛ این فرمان اتصال DB، Private Storage، جدول‌های Queue/Cache/Session، تنظیمات Production و وجود کلید/صف/مقصد بکاپ را بررسی می‌کند.
+- `GET /ready`: Readiness دیتابیس اصلی با `SELECT 1` و Schema ثبت تکرارنشدنی تیکت/پیام (ستون‌ها و ایندکس‌های یکتا)؛ در صورت ناقص بودن Migration پاسخ 503 می‌دهد و هیچ Migrationی را اجرا نمی‌کند.
+- `php artisan farast:health-check` را اجرا کنید؛ این فرمان اتصال DB، Private Storage، جدول‌های Queue/Cache/Session، Schema ثبت تکرارنشدنی تیکت/پیام، تنظیمات Production و وجود کلید/صف/مقصد بکاپ را بررسی می‌کند. بررسی Schema با endpoint `/ready` از یک سرویس مشترک استفاده می‌کند.
 - `php artisan storage:check-volumes --limit=100` را اجرا کنید تا اتصال واقعی Volumeها نیز آزموده شود؛ `farast:health-check` به‌تنهایی دسترسی شبکه‌ای به مقصد خارجی را اثبات نمی‌کند.
 - پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
 - `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.

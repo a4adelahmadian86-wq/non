@@ -31,10 +31,9 @@ class BackendHealthCheckTest extends TestCase
         ]);
         Storage::fake('private');
 
-        Schema::shouldReceive('hasColumn')
-            ->once()
-            ->with('tickets', 'submission_scope')
-            ->andReturn(false);
+        Schema::table('tickets', function ($table): void {
+            $table->dropUnique('tickets_submission_scope_key_unique');
+        });
 
         $this->artisan('farast:health-check')
             ->expectsOutputToContain('support_submission_schema: failed')

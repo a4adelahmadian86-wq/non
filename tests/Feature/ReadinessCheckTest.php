@@ -24,6 +24,22 @@ class ReadinessCheckTest extends TestCase
         $this->assertStringContainsString('max-age=0', $cacheControl);
     }
 
+    public function test_readiness_rejects_an_incomplete_support_submission_schema(): void
+    {
+        Schema::table('tickets', function ($table): void {
+            $table->dropUnique('tickets_submission_scope_key_unique');
+        });
+
+        $response = $this->getJson(route('health.ready'))
+            ->assertStatus(503)
+            ->assertExactJson(['status' => 'not_ready']);
+
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringContainsString('max-age=0', $cacheControl);
+        $this->assertStringNotContainsString('submission', $response->getContent());
+    }
+
     public function test_readiness_failure_is_generic_and_does_not_leak_database_errors(): void
     {
         DB::shouldReceive('connection')
