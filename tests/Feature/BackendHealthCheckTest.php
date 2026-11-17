@@ -19,6 +19,7 @@ class BackendHealthCheckTest extends TestCase
             ->expectsOutputToContain('database: ready')
             ->expectsOutputToContain('private_storage: ready')
             ->expectsOutputToContain('support_submission_schema: ready')
+            ->expectsOutputToContain('internal_messenger_schema: ready')
             ->assertExitCode(0);
     }
 
@@ -40,6 +41,24 @@ class BackendHealthCheckTest extends TestCase
             ->assertExitCode(1);
     }
 
+    public function test_backend_health_check_fails_when_internal_messenger_schema_is_missing(): void
+    {
+        config([
+            'queue.default' => 'sync',
+            'cache.default' => 'array',
+            'session.driver' => 'array',
+        ]);
+        Storage::fake('private');
+
+        Schema::table('conversation_participants', function ($table): void {
+            $table->dropUnique('conversation_participants_conversation_id_user_id_unique');
+        });
+
+        $this->artisan('farast:health-check')
+            ->expectsOutputToContain('internal_messenger_schema: failed')
+            ->assertExitCode(1);
+    }
+
     public function test_production_health_check_requires_a_backup_encryption_key(): void
     {
         $this->app['env'] = 'production';
@@ -52,7 +71,7 @@ class BackendHealthCheckTest extends TestCase
         Storage::fake('private');
 
         $this->artisan('farast:health-check')
-            ->expectsOutputToContain('Backend checks: 7 passed, 1 failed.')
+            ->expectsOutputToContain('Backend checks: 8 passed, 1 failed.')
             ->assertExitCode(1);
     }
 
