@@ -20,6 +20,7 @@
 <meta name="twitter:description" content="{{ $shareDescription }}">
 @if($socialImagePath)
 <meta name="twitter:image" content="{{ asset($socialImagePath) }}">
+<meta name="twitter:image:alt" content="{{ $product->title }}">
 @endif
 @php
     $ratingCount = array_sum($ratingBreakdown);
