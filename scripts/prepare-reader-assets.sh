@@ -36,7 +36,7 @@ for required in \
   "$PACKAGE_DIR/legacy/web/pdf_viewer.css" \
   "$PACKAGE_DIR/web/pdf_viewer.css" \
   "$PACKAGE_DIR/cmaps/Adobe-GB1-UCS2.bcmap" \
-  "$PACKAGE_DIR/standard_fonts/FoxitSans.pfb" \
+  "$PACKAGE_DIR/standard_fonts/LiberationSans-Regular.ttf" \
   "$PACKAGE_DIR/LICENSE"; do
   if [ ! -s "$required" ]; then
     echo "Pinned PDF.js distribution is missing required runtime asset: $required" >&2
@@ -69,7 +69,7 @@ for required in \
   "$STAGING_DIR/legacy/web/pdf_viewer.css" \
   "$STAGING_DIR/web/pdf_viewer.css" \
   "$STAGING_DIR/cmaps/Adobe-GB1-UCS2.bcmap" \
-  "$STAGING_DIR/standard_fonts/FoxitSans.pfb" \
+  "$STAGING_DIR/standard_fonts/LiberationSans-Regular.ttf" \
   "$STAGING_DIR/LICENSE"; do
   if [ ! -s "$required" ]; then
     echo "Staged PDF.js runtime is incomplete: $required" >&2
