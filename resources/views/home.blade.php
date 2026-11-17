@@ -206,7 +206,7 @@
         <div class="home-service-grid">
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="https://images.unsplash.com/photo-1456324504439-367cee3b3c32?auto=format&fit=crop&w=900&q=82" alt="اسناد و یادداشت‌های کاغذی برای تبدیل به متن" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-ocr.svg') }}" alt="اسناد و یادداشت‌های کاغذی برای تبدیل به متن" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>OCR و استخراج متن</span>
                 </div>
                 <h3>تبدیل فایل به متن</h3>
@@ -215,7 +215,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=900&q=82" alt="فضای ضبط صدا و تجهیزات تولید گفتار" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-voice.svg') }}" alt="فضای ضبط صدا و تجهیزات تولید گفتار" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i>گفتار به متن</span>
                 </div>
                 <h3>تایپ با گفتار</h3>
@@ -224,7 +224,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=900&q=82" alt="محیط کار دیجیتال با رایانه برای ویرایش سند" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-edit.svg') }}" alt="محیط کار دیجیتال با رایانه برای ویرایش سند" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-pen" aria-hidden="true"></i>ویرایش و قالب‌بندی</span>
                 </div>
                 <h3>ویرایش حرفه‌ای سند</h3>
@@ -233,7 +233,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=900&q=82" alt="کتاب‌ها و منابع مکتوب آماده مطالعه و استفاده" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-export.svg') }}" alt="کتاب‌ها و منابع مکتوب آماده مطالعه و استفاده" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-export" aria-hidden="true"></i>خروجی و تحویل</span>
                 </div>
                 <h3>خروجی Word و PDF</h3>
