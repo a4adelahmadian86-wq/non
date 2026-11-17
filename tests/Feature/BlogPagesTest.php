@@ -15,7 +15,7 @@ class BlogPagesTest extends TestCase
             ->assertSee('از صفحه سفید تا متن نهایی')
             ->assertSee('تازه‌های مجله');
 
-        $this->assertSame(1, substr_count($response->getContent(), '/js/blog.js?v=20261107b'));
+        $this->assertSame(1, substr_count($response->getContent(), '/js/blog.js?v=20261117social1'));
         $response->assertSee('fetchpriority="high" decoding="async"', false)
             ->assertSee('loading="lazy" decoding="async"', false);
     }
