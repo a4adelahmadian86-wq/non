@@ -17,8 +17,10 @@ return new class extends Migration
                 $table->string('status', 20)->default('offered');
                 $table->unsignedSmallInteger('score')->default(0);
                 $table->json('reason_codes');
-                $table->timestamp('offered_at');
-                $table->timestamp('expires_at');
+                // DATETIME avoids legacy MySQL TIMESTAMP implicit-default rules
+                // when more than one NOT NULL timestamp column is declared.
+                $table->dateTime('offered_at');
+                $table->dateTime('expires_at');
                 $table->timestamp('redeemed_at')->nullable();
                 $table->foreignId('notification_id')->nullable()->constrained('farast_notifications')->nullOnDelete();
                 $table->timestamps();
