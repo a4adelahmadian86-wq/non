@@ -9,7 +9,7 @@
 <link rel="canonical" href="{{ route('blog') }}">
 @endpush
 @push('scripts')
-<script src="{{ asset('js/blog.js') }}?v=20261107b" defer></script>
+<script src="{{ asset('js/blog.js') }}?v=20261117social1" defer></script>
 @endpush
 
 @section('content')
