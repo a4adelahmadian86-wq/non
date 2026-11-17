@@ -48,7 +48,7 @@ check_status "/up"
 echo "Liveness: OK"
 
 check_status "/ready"
-if ! grep -Eq '"status'[[:space:]]*:[[:space:]]*"ready"' "$response_file"; then
+if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"ready"' "$response_file"; then
   echo "Readiness endpoint returned HTTP 200 without the expected ready state." >&2
   exit 1
 fi
