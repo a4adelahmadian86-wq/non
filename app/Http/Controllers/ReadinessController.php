@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\SupportSubmissionSchemaHealthCheck;
 
+use App\Services\SupportSubmissionSchemaHealthCheck;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Throwable;
