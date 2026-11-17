@@ -45,7 +45,7 @@ class BlogController extends Controller
                 'image' => asset('images/farast-service-ocr.svg'),
                 'image_width' => 900,
                 'image_height' => 506,
-                'alt' => 'کتاب و یادداشت‌های کاغذی روی میز',
+                'alt' => 'سند تصویری و متن استخراج‌شده با فناوری OCR',
                 'featured' => false,
                 'tags' => ['OCR', 'PDF', 'دیجیتال‌سازی'],
                 'sections' => [
@@ -87,7 +87,7 @@ class BlogController extends Controller
                 'image' => asset('images/farast-service-edit.svg'),
                 'image_width' => 900,
                 'image_height' => 506,
-                'alt' => 'فضای کاری دیجیتال با لپ‌تاپ',
+                'alt' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
                 'featured' => false,
                 'tags' => ['مدیریت فایل', 'فضای کار', 'بهره‌وری'],
                 'sections' => [
@@ -129,7 +129,7 @@ class BlogController extends Controller
                 'image' => asset('images/farast-store-hero.svg'),
                 'image_width' => 960,
                 'image_height' => 620,
-                'alt' => 'کتاب‌ها و منابع مطالعه',
+                'alt' => 'مجموعه جلدهای رنگی فایل‌ها و منابع دیجیتال',
                 'featured' => false,
                 'tags' => ['فایل دیجیتال', 'محصول', 'تجربه کاربری'],
                 'sections' => [
