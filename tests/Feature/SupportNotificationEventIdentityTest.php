@@ -267,32 +267,32 @@ class SupportNotificationEventIdentityTest extends TestCase
             'department' => 'support',
         ]);
 
-        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications = \Mockery::mock(NotificationService::class);
         $notifications->shouldReceive('push')
             ->once()
             ->withArgs(fn (...$arguments): bool => (int) $arguments[0] === (int) $user->id
                 && $arguments[1] === 'ticket_reply'
                 && $arguments[5] === false)
-            ->andThrow(new \\RuntimeException('private notification payload must not enter the log'));
-        $email = \\Mockery::mock(EmailService::class);
+            ->andThrow(new \RuntimeException('private notification payload must not enter the log'));
+        $email = \Mockery::mock(EmailService::class);
         $email->shouldReceive('sendTicketReply')->once();
-        \\Illuminate\\Support\\Facades\\Log::spy();
+        \Illuminate\Support\Facades\Log::spy();
 
         $service = new SupportNotificationService(
             $email,
-            \\Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
             $notifications,
         );
 
         $service->staffReplied($ticket, 'پاسخ آزمایشی', false, 987654);
 
-        \\Illuminate\\Support\\Facades\\Log::shouldHaveReceived('warning')
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
             ->once()
-            ->with('farast.support.notification_failed', \\Mockery::on(
+            ->with('farast.support.notification_failed', \Mockery::on(
                 fn (array $context): bool => (int) $context['ticket_id'] === (int) $ticket->id
                     && (int) $context['user_id'] === (int) $user->id
                     && $context['type'] === 'ticket_reply'
-                    && $context['exception_class'] === \\RuntimeException::class
+                    && $context['exception_class'] === \RuntimeException::class
                     && ! array_key_exists('error', $context)
             ));
     }
