@@ -5,6 +5,19 @@
   if (!root) return;
 
   const activeArticle = () => root.querySelector('.farast-reader-page-item.is-active');
+  const pendingPageRequests = new Map();
+  const isCurrentPageRequest = (article, request) => root.isConnected
+    && article.isConnected
+    && pendingPageRequests.get(article) === request
+    && !request.controller.signal.aborted;
+  const abortInactivePageRequests = (active) => {
+    pendingPageRequests.forEach((request, article) => {
+      if (article !== active) request.controller.abort();
+    });
+  };
+  const abortAllPageRequests = () => {
+    pendingPageRequests.forEach(request => request.controller.abort());
+  };
   const loadPage = async (article) => {
     if (!article) return;
     const pageUrl = article.dataset.readerPageUrl;
@@ -20,7 +33,11 @@
       return;
     }
 
-    if (article.dataset.readerLoading === '1') return;
+    const pendingRequest = pendingPageRequests.get(article);
+    if (pendingRequest && !pendingRequest.controller.signal.aborted) return;
+    const controller = new AbortController();
+    const request = { controller };
+    pendingPageRequests.set(article, request);
     article.dataset.readerLoading = '1';
     if (loading) {
       loading.hidden = false;
@@ -33,8 +50,11 @@
         credentials: 'same-origin',
         cache: 'no-store',
         headers: { Accept: 'application/json' },
+        signal: controller.signal,
       });
+      if (!isCurrentPageRequest(article, request)) return;
       const payload = await response.json().catch(() => ({}));
+      if (!isCurrentPageRequest(article, request)) return;
       if (!response.ok) throw new Error(payload.message || 'دریافت صفحه ممکن نشد.');
 
       layer.replaceChildren();
@@ -291,19 +311,41 @@
         detail: { page: Number(payload.page_number || article.dataset.readerPage || 1), article, payload }
       }));
     } catch (error) {
+      if (!isCurrentPageRequest(article, request) || error?.name === 'AbortError') return;
       if (loading) {
         loading.hidden = false;
-        loading.textContent = error.message || 'بارگذاری صفحه ناموفق بود.';
+        const message = document.createElement('span');
+        message.textContent = error.message || 'بارگذاری صفحه ناموفق بود.';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'farast-pdf-retry';
+        retry.textContent = 'تلاش دوباره';
+        retry.addEventListener('click', () => loadPage(article));
+        loading.replaceChildren(message, retry);
       }
     } finally {
-      delete article.dataset.readerLoading;
+      if (pendingPageRequests.get(article) === request) {
+        pendingPageRequests.delete(article);
+        delete article.dataset.readerLoading;
+      }
     }
   };
 
   root.addEventListener('farast:reader-section-change', (event) => {
     const index = Number(event.detail?.index ?? event.detail?.section ?? 0);
     const article = root.querySelector('.farast-reader-page-item[data-index="' + index + '"]');
+    abortInactivePageRequests(article);
     loadPage(article);
+  });
+
+  const onDocumentVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') abortAllPageRequests();
+    else loadPage(activeArticle());
+  };
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange);
+  window.addEventListener('pagehide', abortAllPageRequests);
+  window.addEventListener('pageshow', () => {
+    if (document.visibilityState !== 'hidden') loadPage(activeArticle());
   });
 
   loadPage(activeArticle());
