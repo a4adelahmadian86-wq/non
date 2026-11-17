@@ -11,6 +11,12 @@
 <meta property="og:title" content="{{ $article['title'] }}">
 <meta property="og:description" content="{{ $article['excerpt'] }}">
 <meta property="og:image" content="{{ $article['image'] }}">
+<meta property="og:image:alt" content="{{ $article['alt'] }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ $article['title'] }}">
+<meta name="twitter:description" content="{{ $article['excerpt'] }}">
+<meta name="twitter:image" content="{{ $article['image'] }}">
+<meta name="twitter:image:alt" content="{{ $article['alt'] }}">
 @endpush
 
 @section('content')
@@ -67,5 +73,5 @@
 <link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109community4">
 @endpush
 @push('scripts')
-<script src="{{ asset('js/blog.js') }}?v=20261107a" defer></script>
+<script src="{{ asset('js/blog.js') }}?v=20261117social1" defer></script>
 @endpush
