@@ -210,7 +210,7 @@
         <div class="home-service-grid">
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="{{ asset('images/farast-service-ocr.svg') }}" alt="اسناد و یادداشت‌های کاغذی برای تبدیل به متن" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-ocr.svg') }}" alt="نمایش سند تصویری و متن استخراج‌شده در فرایند OCR" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>OCR و استخراج متن</span>
                 </div>
                 <h3>تبدیل فایل به متن</h3>
@@ -219,7 +219,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="{{ asset('images/farast-service-voice.svg') }}" alt="فضای ضبط صدا و تجهیزات تولید گفتار" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-voice.svg') }}" alt="میکروفون و موج صدا برای تبدیل گفتار به متن" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i>گفتار به متن</span>
                 </div>
                 <h3>تایپ با گفتار</h3>
@@ -228,7 +228,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="{{ asset('images/farast-service-edit.svg') }}" alt="محیط کار دیجیتال با رایانه برای ویرایش سند" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-edit.svg') }}" alt="نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-pen" aria-hidden="true"></i>ویرایش و قالب‌بندی</span>
                 </div>
                 <h3>ویرایش حرفه‌ای سند</h3>
@@ -237,7 +237,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="{{ asset('images/farast-service-export.svg') }}" alt="سند آماده خروجی و نشان‌های قالب Word و PDF" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-export.svg') }}" alt="نمایش سند و نسخه‌های آماده دریافت پس از تکمیل و ویرایش" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-export" aria-hidden="true"></i>خروجی و تحویل</span>
                 </div>
                 <h3>خروجی Word و PDF</h3>
