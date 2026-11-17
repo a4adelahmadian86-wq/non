@@ -4,7 +4,8 @@
     $shareDescription = $product->seo_description
         ?: $product->short_description
         ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 155);
-    $socialImagePath = $product->cover_path ?: $product->images->first()?->path;
+    $activeProductImagePaths = $product->images->where('is_active', true)->pluck('path')->filter()->values();
+    $socialImagePath = $product->cover_path ?: $activeProductImagePaths->first();
 @endphp
 <meta name="description" content="{{ $shareDescription }}">
 <meta property="og:title" content="{{ $product->seo_title ?: $product->title }}">
@@ -29,7 +30,7 @@
         '@type' => 'Product',
         'name' => $product->title,
         'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 300),
-        'image' => collect([$product->cover_path])->filter()->merge($product->images->pluck('path'))->filter()->unique()->map(fn ($imagePath) => asset($imagePath))->values()->all(),
+        'image' => collect([$product->cover_path])->filter()->merge($activeProductImagePaths)->unique()->map(fn ($imagePath) => asset($imagePath))->values()->all(),
         'sku' => $product->sku,
         'url' => request()->url(),
         'offers' => [
