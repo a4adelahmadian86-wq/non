@@ -23,7 +23,7 @@ class BlogController extends Controller
                 'image' => asset('images/farast-blog-hero.svg'),
                 'image_width' => 960,
                 'image_height' => 620,
-                'alt' => 'میز کار و ابزار نوشتن',
+                'alt' => 'دفتر یادداشت باز، ابزار نوشتن و نشانه بصری یک ایده در فضای تحریریه',
                 'featured' => true,
                 'tags' => ['نوشتن', 'مدیریت محتوا', 'بهره‌وری'],
                 'sections' => [
