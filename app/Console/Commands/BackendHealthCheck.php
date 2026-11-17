@@ -25,7 +25,7 @@ class BackendHealthCheck extends Command
             'queue' => fn (): bool => $this->checkQueueStorage(),
             'cache' => fn (): bool => $this->checkCacheStorage(),
             'sessions' => fn (): bool => $this->checkSessionStorage(),
-            'support_submission_schema' => fn (): bool => $this->checkSupportSubmissionSchema(),
+            'support_submission_schema' => fn (): bool => app(\\App\\Services\\SupportSubmissionSchemaHealthCheck::class)->assertReady(),
             'production_config' => fn (): bool => $this->checkProductionConfig(),
             'backup_configuration' => fn (): bool => $this->checkBackupConfiguration(),
         ];
@@ -117,38 +117,6 @@ class BackendHealthCheck extends Command
 
         if (! Schema::connection(config('session.connection'))->hasTable(config('session.table', 'sessions'))) {
             throw new \RuntimeException('Database session table is missing.');
-        }
-
-        return true;
-    }
-
-    /**
-     * Idempotent support submissions depend on these columns and unique indexes.
-     * Check both tables so a partially applied migration cannot pass preflight.
-     */
-    private function checkSupportSubmissionSchema(): bool
-    {
-        $requirements = [
-            'tickets' => [
-                'columns' => ['submission_scope', 'submission_key', 'submission_fingerprint'],
-                'index' => 'tickets_submission_scope_key_unique',
-            ],
-            'ticket_messages' => [
-                'columns' => ['submission_scope', 'submission_key', 'submission_fingerprint'],
-                'index' => 'ticket_messages_submission_unique',
-            ],
-        ];
-
-        foreach ($requirements as $table => $requirement) {
-            foreach ($requirement['columns'] as $column) {
-                if (! Schema::hasColumn($table, $column)) {
-                    throw new \RuntimeException("Support idempotency schema is incomplete: {$table}.{$column} is missing.");
-                }
-            }
-
-            if (! Schema::hasIndex($table, $requirement['index'])) {
-                throw new \RuntimeException("Support idempotency schema is incomplete: {$requirement['index']} is missing.");
-            }
         }
 
         return true;
