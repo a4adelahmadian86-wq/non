@@ -11,6 +11,7 @@ use App\Services\WorkflowEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Mockery;
 use Tests\TestCase;
@@ -505,6 +506,38 @@ class SupportTicketAtomicWorkflowTest extends TestCase
         $this->assertDatabaseCount('tickets', 1);
         $this->assertDatabaseCount('ticket_messages', 1);
         $this->assertSame($filesAfterFirst, count(Storage::disk('private')->allFiles()));
+    }
+
+
+    public function test_notification_failure_is_logged_without_rolling_back_the_ticket(): void
+    {
+        $customer = User::factory()->create();
+        $notifier = Mockery::mock(SupportNotificationService::class);
+        $notifier->shouldReceive('ticketCreated')
+            ->once()
+            ->andThrow(new \RuntimeException('private notification payload must not enter the log'));
+
+        Log::spy();
+
+        $service = new SupportTicketService($notifier, new SupportSlaService());
+        $ticket = $service->createTicket($customer, [
+            'subject' => 'Notification delivery failure',
+            'body' => 'ثبت تیکت باید مستقل از شکست اعلان باقی بماند',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with('farast.support.notification_delivery_failed', Mockery::on(
+                fn (array $context): bool => $context['event'] === 'ticket_created'
+                    && (int) $context['ticket_id'] === (int) $ticket->id
+                    && $context['exception_class'] === \RuntimeException::class
+                    && array_key_exists('request_id', $context)
+                    && array_key_exists('correlation_id', $context)
+                    && ! array_key_exists('message', $context)
+            ));
     }
 
 }
