@@ -6,7 +6,7 @@
     @elseif($product->featured)<span class="store-badge">ویژه</span>@endif
     @php($cardImage = $product->cover_path ?: $product->images->where('is_active', true)->first()?->path)
     @if($cardImage)
-      <img src="{{ asset($cardImage) }}" alt="{{ $product->title }}" loading="lazy" decoding="async">
+      <img src="{{ asset($cardImage) }}" alt="{{ $product->title }}" width="640" height="360" loading="lazy" decoding="async">
     @else
       <span class="store-cover-placeholder"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
     @endif
