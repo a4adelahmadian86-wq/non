@@ -27,6 +27,10 @@ class HomeIntentTest extends TestCase
     {
         $response = $this->get('/');
 
+        $heroArtwork = public_path('images/farast-home-workflow.webp');
+        $this->assertFileExists($heroArtwork);
+        $this->assertGreaterThan(0, filesize($heroArtwork));
+
         $response->assertOk()
             ->assertSee('از فایل خام تا سند آماده')
             ->assertSee('برای کاری که همین امروز باید انجام دهید')
