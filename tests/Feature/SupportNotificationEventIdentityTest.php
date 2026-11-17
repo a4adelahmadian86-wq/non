@@ -256,12 +256,12 @@ class SupportNotificationEventIdentityTest extends TestCase
     }
 
 
-    public function test_in_app_delivery_failure_is_propagated_to_the_support_delivery_boundary(): void
+    public function test_in_app_delivery_failure_is_logged_without_aborting_other_channels(): void
     {
         $user = User::factory()->create();
         $ticket = Ticket::create([
             'user_id' => $user->id,
-            'subject' => 'Notification failure propagation',
+            'subject' => 'Notification failure observability',
             'status' => 'answered',
             'priority' => 'normal',
             'department' => 'support',
@@ -272,17 +272,28 @@ class SupportNotificationEventIdentityTest extends TestCase
             ->once()
             ->withArgs(fn (...$arguments): bool => (int) $arguments[0] === (int) $user->id
                 && $arguments[1] === 'ticket_reply'
-                && $arguments[5] === true)
-            ->andThrow(new \RuntimeException('notification store unavailable'));
+                && $arguments[5] === false)
+            ->andThrow(new \RuntimeException('private notification payload must not enter the log'));
+        $email = \Mockery::mock(EmailService::class);
+        $email->shouldReceive('sendTicketReply')->once();
+        \Illuminate\Support\Facades\Log::spy();
 
         $service = new SupportNotificationService(
-            \Mockery::mock(EmailService::class)->shouldIgnoreMissing(),
+            $email,
             \Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
             $notifications,
         );
 
-        $this->expectException(\RuntimeException::class);
         $service->staffReplied($ticket, 'پاسخ آزمایشی', false, 987654);
-    }
 
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('farast.support.notification_failed', \Mockery::on(
+                fn (array $context): bool => (int) $context['ticket_id'] === (int) $ticket->id
+                    && (int) $context['user_id'] === (int) $user->id
+                    && $context['type'] === 'ticket_reply'
+                    && $context['exception_class'] === \RuntimeException::class
+                    && ! array_key_exists('error', $context)
+            ));
+    }
 }

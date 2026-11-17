@@ -339,7 +339,7 @@ class SupportNotificationService
         return $this->staffUsers($ticket);
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null, bool $throwOnFailure = true): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null, ?string $eventIdentity = null, bool $throwOnFailure = false): void
     {
         try {
             $url = $staff
