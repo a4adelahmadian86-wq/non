@@ -8,6 +8,7 @@
     ? ($storeHeroProduct->cover_path ?: $storeHeroProduct->images->where('is_active', true)->first()?->path)
     : null;
   $storePageTitle = 'فروشگاه فراست | فایل‌ها و دوره‌های دیجیتال';
+  $title = $storePageTitle;
   $storeSocialImage = $storeHeroImage ? asset($storeHeroImage) : asset('images/farast-store-hero.svg');
 @endphp
 @push('head')
