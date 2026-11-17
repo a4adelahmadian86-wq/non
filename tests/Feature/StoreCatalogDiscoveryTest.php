@@ -37,6 +37,7 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertSee(route('trust'), false)
             ->assertDontSee('store-feature-row', false)
             ->assertDontSee('store-hero-visual', false)
+            ->assertDontSee('store-hero--with-artwork', false)
             ->assertDontSee('store-shelf-track', false)
             ->assertDontSee('farast-footer-cta', false);
     }
@@ -63,6 +64,7 @@ class StoreCatalogDiscoveryTest extends TestCase
 
         $this->get('/store')
             ->assertOk()
+            ->assertSee('store-hero--with-artwork', false)
             ->assertSee('store-hero-visual', false)
             ->assertSee('storage/store/covers/catalog-hero.webp', false)
             ->assertSee('کتابچه نمونه فراست')
