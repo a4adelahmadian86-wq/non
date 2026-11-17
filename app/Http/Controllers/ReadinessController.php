@@ -16,6 +16,7 @@ class ReadinessController extends Controller
     {
         try {
             DB::connection()->select('SELECT 1');
+            app(SupportSubmissionSchemaHealthCheck::class)->assertReady();
         } catch (Throwable) {
             return response()->json(['status' => 'not_ready'], 503)
                 ->header('Cache-Control', 'no-store, max-age=0');
