@@ -90,16 +90,23 @@
         @if($mainImagePath)
           <div class="store-product-media" aria-label="تصاویر اختصاصی محصول">
             <button type="button" class="store-detail-cover store-gallery-open" data-gallery-src="{{ asset($mainImagePath) }}" data-gallery-alt="{{ $mainImageAlt }}" aria-label="بزرگ‌نمایی تصویر اصلی محصول">
-              <img src="{{ asset($mainImagePath) }}" alt="{{ $mainImageAlt }}" fetchpriority="high">
+              <img src="{{ asset($mainImagePath) }}" alt="{{ $mainImageAlt }}" fetchpriority="high" decoding="async">
               <span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی تصویر</span>
             </button>
             @if($additionalGalleryImages->isNotEmpty())
               <div class="store-product-gallery" aria-label="سایر تصاویر اختصاصی محصول">
                 @foreach($additionalGalleryImages as $image)
-                  <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration + 1 }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
+                  <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration + 1 }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy" decoding="async"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
                 @endforeach
               </div>
             @endif
+          </div>
+        @else
+          <div class="store-detail-cover" role="img" aria-label="تصویر اختصاصی برای {{ $product->title }} ثبت نشده است">
+            <span class="store-cover-placeholder" aria-hidden="true">
+              <i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i>
+              <b>FARAST</b>
+            </span>
           </div>
         @endif
 
