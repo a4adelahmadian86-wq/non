@@ -237,7 +237,7 @@
             </article>
             <article class="home-service-card">
                 <div class="home-service-card__image">
-                    <img src="{{ asset('images/farast-service-export.svg') }}" alt="کتاب‌ها و منابع مکتوب آماده مطالعه و استفاده" width="900" height="506" loading="lazy" decoding="async">
+                    <img src="{{ asset('images/farast-service-export.svg') }}" alt="سند آماده خروجی و نشان‌های قالب Word و PDF" width="900" height="506" loading="lazy" decoding="async">
                     <span class="home-service-card__image-label"><i class="fa-solid fa-file-export" aria-hidden="true"></i>خروجی و تحویل</span>
                 </div>
                 <h3>خروجی Word و PDF</h3>
