@@ -119,7 +119,7 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 - پس از Deploy، HTTP، ورود، مسیرهای اصلی، DB، صف‌های pending/failed، Scheduler، Storage و لاگ‌های 5xx بررسی شوند.
 - `php artisan schedule:list` را برای اطمینان از بارگذاری زمان‌بندی‌ها اجرا کنید.
 - `php artisan queue:failed` و `php artisan migrate:status` را بررسی کنید.
-- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up` و پاسخ JSON `/ready` را کنترل می‌کند.
+- آزمون بیرونی پس از Deploy: `FARAST_BASE_URL=https://your-domain.example bash scripts/ops/health-check.sh`؛ این اسکریپت HTTPS، `/up`، پاسخ JSON `/ready` و فایل‌های runtime نسخه‌بندی‌شده PDF.js را کنترل می‌کند. برای محیط توسعه فقط loopbackهای `localhost`، `127.0.0.1` و `::1` می‌توانند HTTP باشند.\n- در Windows CMD، انتساب متغیر به‌شکل Bash (`FARAST_BASE_URL=... command`) معتبر نیست. برای محیط محلی، از `scripts\\ops\\health-check-local.cmd` استفاده کنید؛ برای اجرای دستی در CMD: `set "FARAST_BASE_URL=http://127.0.0.1:8001" && bash scripts/ops/health-check.sh` (نیازمند Git Bash).
 - موفقیت `/ready` به‌تنهایی سلامت Redis، Storage خارجی، سرویس صوت یا ارائه‌دهندگان AI را تضمین نمی‌کند.
 
 ## Backup و Restore
