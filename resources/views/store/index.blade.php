@@ -7,7 +7,26 @@
   $storeHeroImage = $storeHeroProduct
     ? ($storeHeroProduct->cover_path ?: $storeHeroProduct->images->where('is_active', true)->first()?->path)
     : null;
+  $storePageTitle = 'فروشگاه فراست | فایل‌ها و دوره‌های دیجیتال';
+  $storeSocialImage = $storeHeroImage ? asset($storeHeroImage) : asset('images/farast-store-hero.svg');
 @endphp
+@push('head')
+<meta name="description" content="فایل‌ها، منابع و دوره‌های دیجیتال فراست را بررسی کنید؛ جزئیات و پیش‌نمایش محصولات را ببینید و آگاهانه انتخاب کنید.">
+<link rel="canonical" href="{{ route('store') }}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="فراست">
+<meta property="og:title" content="{{ $storePageTitle }}">
+<meta property="og:description" content="فایل‌ها، منابع و دوره‌های دیجیتال را بررسی کنید و پیش‌نمایش محصولات را ببینید.">
+<meta property="og:url" content="{{ route('store') }}">
+<meta property="og:image" content="{{ $storeSocialImage }}">
+<meta property="og:image:alt" content="ویترین محصولات دیجیتال و آموزشی فراست">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ $storePageTitle }}">
+<meta name="twitter:description" content="فایل‌ها، منابع و دوره‌های دیجیتال فراست را بررسی و انتخاب کنید.">
+<meta name="twitter:image" content="{{ $storeSocialImage }}">
+<meta name="twitter:image:alt" content="ویترین محصولات دیجیتال و آموزشی فراست">
+@endpush
 <section class="store-page" dir="rtl">
   <div class="store-container">
 
