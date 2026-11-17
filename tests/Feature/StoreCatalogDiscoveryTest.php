@@ -41,6 +41,34 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertDontSee('farast-footer-cta', false);
     }
 
+    public function test_catalog_hero_uses_a_real_published_product_cover_when_available(): void
+    {
+        $category = StoreCategory::create([
+            'name' => 'منابع تصویری',
+            'slug' => 'visual-resources',
+            'is_active' => true,
+        ]);
+
+        StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'کتابچه نمونه فراست',
+            'slug' => 'catalog-hero-cover-fixture',
+            'sku' => 'CATALOG-HERO-001',
+            'type' => 'digital_file',
+            'price_rials' => 0,
+            'cover_path' => 'storage/store/covers/catalog-hero.webp',
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+
+        $this->get('/store')
+            ->assertOk()
+            ->assertSee('store-hero-visual', false)
+            ->assertSee('storage/store/covers/catalog-hero.webp', false)
+            ->assertSee('کتابچه نمونه فراست')
+            ->assertSee('مشاهده جزئیات و پیش‌نمایش محصول');
+    }
+
     public function test_catalog_filters_courses_and_digital_products_without_losing_category_counts(): void
     {
         $category = StoreCategory::create([
