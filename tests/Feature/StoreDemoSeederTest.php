@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductPreview;
-use Database\\Seeders\\StoreDemoSeeder;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Storage;
-use Tests\\TestCase;
+use App\Models\StoreProduct;
+use App\Models\StoreProductPreview;
+use Database\Seeders\StoreDemoSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
 class StoreDemoSeederTest extends TestCase
 {
@@ -61,9 +61,8 @@ class StoreDemoSeederTest extends TestCase
             ->assertSee('data-reader-root', false)
             ->assertSee(route('store.preview', $preview), false);
 
-        $this->get(route('store.preview', $preview))
-            ->assertOk()
-            ->assertHeader('Content-Type', 'image/svg+xml')
-            ->assertSee('نمونه پولی');
+        $previewResponse = $this->get(route('store.preview', $preview));
+        $previewResponse->assertOk()->assertHeader('Content-Type', 'image/svg+xml');
+        $this->assertStringContainsString('نمونه پولی', $previewResponse->streamedContent());
     }
 }
