@@ -12,6 +12,16 @@
   storageWarning.style.cssText='flex-basis:100%;padding:8px 12px;border:1px solid rgba(234,88,12,.28);border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.75rem;line-height:1.7';
   const storageToolbar=root.querySelector('.farast-reader-toolbar');
   (storageToolbar||root).prepend(storageWarning);
+  const remoteSyncWarning=document.createElement('div');
+  remoteSyncWarning.className='farast-reader-remote-sync-warning';
+  remoteSyncWarning.hidden=true;
+  remoteSyncWarning.setAttribute('role','status');
+  remoteSyncWarning.setAttribute('aria-live','polite');
+  remoteSyncWarning.style.cssText=storageWarning.style.cssText;
+  remoteSyncWarning.textContent='همگام‌سازی پیشرفت مطالعه با حساب کاربری ناموفق بود؛ اطلاعات این دستگاه حفظ شده‌اند و اتصال را بررسی کنید.';
+  (storageToolbar||root).prepend(remoteSyncWarning);
+  window.addEventListener('farast:reader-remote-sync-error',()=>{remoteSyncWarning.hidden=false;});
+  window.addEventListener('farast:reader-remote-sync-success',()=>{remoteSyncWarning.hidden=true;});
   let storageWriteFailed=false,storagePersistenceUnavailable=false;
   window.addEventListener('farast:storage-persistence-status',event=>{
     if(event.detail?.persisted===true){storagePersistenceUnavailable=false;if(!storageWriteFailed)storageWarning.hidden=true;return;}
@@ -232,7 +242,12 @@
         credentials:'same-origin',
         headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrf,'X-Requested-With':'XMLHttpRequest'},
         body
-      })).catch(()=>{});
+      })).then(response=>{
+        if(!response.ok)throw new Error('Reader state sync failed with HTTP '+response.status);
+        window.dispatchEvent(new Event('farast:reader-remote-sync-success'));
+      }).catch(error=>{
+        window.dispatchEvent(new CustomEvent('farast:reader-remote-sync-error',{detail:{name:error?.name||'SyncError'}}));
+      });
     },650);
   };
   const loadRemoteReaderState=async()=>{
