@@ -417,6 +417,10 @@
     const viewport=page.getViewport({scale,rotation});
     const ratio=Math.min(window.devicePixelRatio||1,2);
     const context=canvas.getContext('2d',{alpha:false});
+    if(!context){
+      if(activateNativePdfFallback())return;
+      throw new Error('PDF_CANVAS_CONTEXT_UNAVAILABLE');
+    }
     canvas.width=Math.floor(viewport.width*ratio);
     canvas.height=Math.floor(viewport.height*ratio);
     canvas.style.width=viewport.width+'px';
@@ -540,6 +544,10 @@
     wrapper.dataset.renderedWidth=String(Math.round(viewport.width));
     wrapper.dataset.renderedHeight=String(Math.round(viewport.height));
     const context=canvas.getContext('2d',{alpha:false});
+    if(!context){
+      if(activateNativePdfFallback())return;
+      throw new Error('PDF_CANVAS_CONTEXT_UNAVAILABLE');
+    }
     context.setTransform(ratio,0,0,ratio,0,0);
     const renderOptions={canvasContext:context,viewport};
     if(pdfOptionalContentConfig)renderOptions.optionalContentConfigPromise=Promise.resolve(pdfOptionalContentConfig);
@@ -806,6 +814,11 @@
         const base=page.getViewport({scale:1});
         const viewport=page.getViewport({scale:Math.min(40/base.width,54/base.height)});
         const ctx=canvas.getContext('2d',{alpha:false});
+        if(!ctx){
+          button.dataset.thumbRendered='0';
+          button.setAttribute('aria-label','پیش‌نمایش صفحه '+faNumber(pageNumber)+' در دسترس نیست');
+          return;
+        }
         canvas.width=Math.max(1,Math.floor(viewport.width));
         canvas.height=Math.max(1,Math.floor(viewport.height));
         const task=page.render({canvasContext:ctx,viewport});
@@ -957,6 +970,8 @@
     const surface=activeArticle()?.querySelector('.farast-pdf-document');
     const nextUrl=surface?.dataset.pdfUrl;
     if(!surface||!nextUrl){showPdfError(new Error('PDF preview URL unavailable'));return;}
+    if(root.classList.contains('is-native-pdf-fallback')&&activePdfUrl===nextUrl)return;
+    if(activePdfUrl!==nextUrl)root.classList.remove('is-native-pdf-fallback');
 
     let loadGeneration=pdfLoadGeneration;
     if(activePdfUrl!==nextUrl){
@@ -1111,13 +1126,13 @@
     input.focus();
   };
 
-  const showNativePdfFallback=url=>{
+  const showNativePdfFallback=(url,message='نمایشگر پیشرفته PDF روی این سرور نصب نیست؛ نمایشگر داخلی مرورگر فعال شد. برای جست‌وجو، نشانک و حاشیه‌نویسی کامل، موتور PDF محلی باید نصب شود.')=>{
     const surface=activeArticle()?.querySelector('.farast-pdf-document');
     if(!surface||!url)return false;
     root.classList.add('is-native-pdf-fallback');
     const notice=document.createElement('p');
     notice.className='farast-pdf-native-notice';
-    notice.textContent='نمایشگر پیشرفته PDF روی این سرور نصب نیست؛ نمایشگر داخلی مرورگر فعال شد. برای جست‌وجو، نشانک و حاشیه‌نویسی کامل، موتور PDF محلی باید نصب شود.';
+    notice.textContent=message;
     const frame=document.createElement('iframe');
     frame.className='farast-pdf-native-frame';
     frame.src=url;
@@ -1134,6 +1149,24 @@
     return true;
   };
 
+  const activateNativePdfFallback=()=>{
+    const url=activePdfUrl;
+    const surface=activeArticle()?.querySelector('.farast-pdf-document');
+    if(!url||!surface)return false;
+    continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
+    continuousNavigationTarget=null;continuousMode=false;continuousRenderGeneration++;
+    scrollModeButton?.setAttribute('aria-pressed','false');
+    pdfSurface?.classList.remove('is-continuous');
+    releaseAllContinuousPages();
+    if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
+    const previousDocument=pdfDoc;
+    pdfLoadGeneration++;
+    pdfDoc=null;pdfOptionalContentConfig=null;pdfCanvas=null;pdfLoading=null;continuousHost=null;
+    pdfLinkService=null;pdfLinkEventBus=null;pdfLinkDocument=null;
+    if(previousDocument)Promise.resolve().then(()=>previousDocument.destroy()).catch(()=>{});
+    return showNativePdfFallback(url,'مرورگر نتوانست بوم گرافیکی لازم برای رندر PDF را بسازد؛ نمایشگر داخلی مرورگر فعال شد. برای امکانات پیشرفتهٔ جست‌وجو و حاشیه‌نویسی، از مرورگری با پشتیبانی کامل Canvas استفاده کنید.');
+  };
+
   const showPdfError=error=>{
     const name=String(error?.name||'');
     let message='بارگذاری سند انجام نشد. اتصال را بررسی کنید یا فایل PDF دیگری را امتحان کنید.';
@@ -1142,7 +1175,20 @@
     else if(name==='MissingPDFException')message='فایل PDF دیگر در دسترس نیست یا نشانی آن معتبر نیست.';
     else if(name==='PasswordException')message='رمز عبور فایل PDF پذیرفته نشد یا دسترسی به سند ممکن نیست.';
     else if(name==='UnexpectedResponseException')message='سرور پاسخ قابل‌استفاده‌ای برای فایل PDF ارسال نکرد.';
+    else if(error?.message==='PDF_CANVAS_CONTEXT_UNAVAILABLE')message='مرورگر نتوانست بوم گرافیکی PDF را بسازد و نمایشگر داخلی نیز در دسترس نیست. مرورگر دیگری را امتحان کنید.';
     else if(name==='AbortException'||name==='RenderingCancelledException')message='بارگذاری یا نمایش صفحه لغو شد؛ می‌توانید دوباره تلاش کنید.';
+    if(!pdfLoading){
+      const surface=activeArticle()?.querySelector('.farast-pdf-document');
+      if(surface){
+        pdfLoading=surface.querySelector('.farast-pdf-loading');
+        if(!pdfLoading){
+          pdfLoading=document.createElement('div');
+          pdfLoading.className='farast-pdf-loading';
+          pdfLoading.setAttribute('role','status');
+          surface.prepend(pdfLoading);
+        }
+      }
+    }
     if(pdfLoading){
       pdfLoading.hidden=false;
       pdfLoading.style.display='grid';
@@ -1178,6 +1224,7 @@
       scrollModeButton?.setAttribute('aria-pressed','false');
     }
     const pdfActive=isPdf();
+    if(!pdfActive)root.classList.remove('is-native-pdf-fallback');
     if(!pdfActive&&(pdfDoc||pdfLoadingTask||activePdfUrl||pdfLoadPromise)){
       pdfLoadGeneration++;
       pdfRenderSequence++;
