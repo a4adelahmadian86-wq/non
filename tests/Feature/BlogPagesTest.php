@@ -43,6 +43,29 @@ class BlogPagesTest extends TestCase
             ->assertSee('?v=20261117social1', false);
     }
 
+    public function test_each_article_uses_an_existing_local_hero_artwork_asset(): void
+    {
+        $articleArtwork = [
+            'workflow-writing' => 'farast-blog-hero.svg',
+            'document-digitization' => 'farast-service-ocr.svg',
+            'voice-to-text' => 'farast-service-voice.svg',
+            'clean-workspace' => 'farast-service-edit.svg',
+            'ai-assisted-editing' => 'farast-home-hero.svg',
+            'digital-products' => 'farast-store-hero.svg',
+        ];
+
+        foreach ($articleArtwork as $slug => $filename) {
+            $path = public_path('images/'.$filename);
+
+            $this->assertFileExists($path);
+            $this->assertGreaterThan(0, filesize($path));
+
+            $this->get(route('blog.show', ['slug' => $slug]))
+                ->assertOk()
+                ->assertSee('/images/'.$filename, false);
+        }
+    }
+
     public function test_unknown_blog_article_returns_not_found(): void
     {
         $this->get('/blog/not-a-real-article')->assertNotFound();
