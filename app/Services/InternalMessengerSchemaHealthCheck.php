@@ -17,18 +17,18 @@ class InternalMessengerSchemaHealthCheck
     {
         $requirements = [
             'conversations' => [
-                'columns' => ['type', 'title', 'created_by', 'direct_key', 'last_message_preview', 'last_message_at', 'is_locked'],
+                'columns' => ['type', 'title', 'created_by', 'direct_key', 'last_message_preview', 'last_message_at', 'is_locked', 'created_at', 'updated_at'],
                 'indexes' => ['conversations_direct_key_unique'],
             ],
             'conversation_participants' => [
-                'columns' => ['conversation_id', 'user_id', 'role', 'last_read_message_id', 'archived_at', 'joined_at', 'last_active_at', 'typing_until'],
+                'columns' => ['conversation_id', 'user_id', 'role', 'last_read_message_id', 'read_at', 'muted_at', 'archived_at', 'joined_at', 'last_active_at', 'typing_until', 'created_at', 'updated_at'],
                 'indexes' => [
                     'conversation_participants_conversation_id_user_id_unique',
                     'conversation_participants_user_id_archived_at_read_at_index',
                 ],
             ],
             'conversation_messages' => [
-                'columns' => ['conversation_id', 'user_id', 'reply_to_id', 'body', 'attachments', 'edited_at', 'deleted_at'],
+                'columns' => ['conversation_id', 'user_id', 'reply_to_id', 'body', 'attachments', 'edited_at', 'deleted_at', 'created_at', 'updated_at'],
                 'indexes' => ['conversation_messages_conversation_id_id_index'],
             ],
         ];
