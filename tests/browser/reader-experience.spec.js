@@ -2909,3 +2909,23 @@ test('deduplicates concurrent requests for the same protected document page', as
   await expect.poll(() => page.locator('[data-reader-root] article').getAttribute('data-reader-loaded')).toBe('1');
   await expect(page.locator('.reader-document-paragraph')).toHaveText('درخواست یکتای صفحه');
 });
+
+
+test('falls back to the native PDF viewer if canvas becomes unavailable after the first render', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  await mountPdfReader(page, 1);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await page.evaluate(() => {
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (...args) {
+      if (this.classList.contains('farast-pdf-canvas')) return null;
+      return originalGetContext.apply(this, args);
+    };
+  });
+  await root.locator('#reader-zoom-in').click();
+  await expect(root.locator('.farast-pdf-native-frame')).toBeVisible();
+  await expect(root.locator('.farast-pdf-native-notice')).toContainText('بوم گرافیکی');
+  expect(pageErrors).toEqual([]);
+});
