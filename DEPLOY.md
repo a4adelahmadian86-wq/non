@@ -43,7 +43,7 @@ test "$(cat public/vendor/pdfjs/VERSION)" = "6.5.438"
 test -s public/vendor/pdfjs/legacy/build/pdf.mjs
 test -s public/vendor/pdfjs/legacy/build/pdf.worker.mjs
 test -s public/vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap
-test -s public/vendor/pdfjs/standard_fonts/FoxitSans.pfb
+test -s public/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf
 (cd public/vendor/pdfjs && sha256sum -c SHA256SUMS)
 
 # Build dependencies in a new, inactive release directory; do not mutate the live vendor tree.
