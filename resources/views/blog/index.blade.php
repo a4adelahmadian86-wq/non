@@ -28,7 +28,7 @@
                 <div class="blog-hero-meta"><span><i class="fa-solid fa-feather-pointed"></i> محتوای منتخب تحریریه</span><span><i class="fa-regular fa-clock"></i> خواندنی‌های کوتاه و کاربردی</span></div>
             </div>
             <div class="blog-hero-art">
-                <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=85" alt="فضای کاری روشن و مدرن" fetchpriority="high" decoding="async">
+                <img src="{{ asset('images/farast-blog-hero.svg') }}" alt="تصویر اختصاصی تحریریه فراست؛ دفتر باز، یادداشت‌ها و ابزار نوشتن" fetchpriority="high" decoding="async">
                 <div class="blog-hero-art-shade"></div>
                 <div class="blog-hero-note"><span class="blog-note-icon"><i class="fa-solid fa-lightbulb"></i></span><span><strong>یک ایده تازه</strong><small>برای بهتر کار کردن</small></span></div>
             </div>
