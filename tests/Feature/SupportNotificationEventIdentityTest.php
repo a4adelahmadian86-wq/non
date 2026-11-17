@@ -255,4 +255,46 @@ class SupportNotificationEventIdentityTest extends TestCase
         $this->assertDatabaseCount('farast_notifications', 0);
     }
 
+
+    public function test_in_app_delivery_failure_is_logged_without_aborting_other_channels(): void
+    {
+        $user = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $user->id,
+            'subject' => 'Notification failure observability',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('push')
+            ->once()
+            ->withArgs(fn (...$arguments): bool => (int) $arguments[0] === (int) $user->id
+                && $arguments[1] === 'ticket_reply'
+                && $arguments[5] === false)
+            ->andThrow(new \\RuntimeException('private notification payload must not enter the log'));
+        $email = \\Mockery::mock(EmailService::class);
+        $email->shouldReceive('sendTicketReply')->once();
+        \\Illuminate\\Support\\Facades\\Log::spy();
+
+        $service = new SupportNotificationService(
+            $email,
+            \\Mockery::mock(SmsService::class)->shouldIgnoreMissing(),
+            $notifications,
+        );
+
+        $service->staffReplied($ticket, 'پاسخ آزمایشی', false, 987654);
+
+        \\Illuminate\\Support\\Facades\\Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('farast.support.notification_failed', \\Mockery::on(
+                fn (array $context): bool => (int) $context['ticket_id'] === (int) $ticket->id
+                    && (int) $context['user_id'] === (int) $user->id
+                    && $context['type'] === 'ticket_reply'
+                    && $context['exception_class'] === \\RuntimeException::class
+                    && ! array_key_exists('error', $context)
+            ));
+    }
+
 }
