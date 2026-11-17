@@ -36,7 +36,7 @@
                     <button type="button" data-blog-copy><i class="fa-regular fa-copy"></i><span>کپی لینک</span></button>
                 </div>
             </div>
-            <figure class="blog-article-cover"><img src="{{ $article['image'] }}" alt="{{ $article['alt'] }}" fetchpriority="high" decoding="async"></figure>
+            <figure class="blog-article-cover"><img src="{{ $article['image'] }}" alt="{{ $article['alt'] }}" width="{{ $article['image_width'] }}" height="{{ $article['image_height'] }}" fetchpriority="high" decoding="async"></figure>
         </header>
 
         <div class="blog-reading-layout">
@@ -61,7 +61,7 @@
 
         @if($related->isNotEmpty())
             <section class="blog-related"><div class="blog-section-heading"><div><span class="blog-eyebrow">ادامه مسیر</span><h2>شاید این‌ها هم به کارتان بیاید</h2></div><a href="{{ route('blog') }}">همه مقاله‌ها <i class="fa-solid fa-arrow-left"></i></a></div>
-                <div class="blog-grid">@foreach($related as $item)<article class="blog-card"><a class="blog-card-image" href="{{ route('blog.show', $item['slug']) }}"><img src="{{ $item['image'] }}" alt="{{ $item['alt'] }}" loading="lazy" decoding="async"><span>{{ $item['category'] }}</span></a><div class="blog-card-content"><div class="blog-card-meta"><span>{{ $item['date'] }}</span><span>{{ $item['read_time'] }} دقیقه</span></div><h3><a href="{{ route('blog.show', $item['slug']) }}">{{ $item['title'] }}</a></h3><p>{{ $item['excerpt'] }}</p><div class="blog-card-footer"><span>{{ $item['author'] }}</span><a href="{{ route('blog.show', $item['slug']) }}"><i class="fa-solid fa-arrow-left"></i></a></div></div></article>@endforeach</div>
+                <div class="blog-grid">@foreach($related as $item)<article class="blog-card"><a class="blog-card-image" href="{{ route('blog.show', $item['slug']) }}"><img src="{{ $item['image'] }}" alt="{{ $item['alt'] }}" width="{{ $item['image_width'] }}" height="{{ $item['image_height'] }}" loading="lazy" decoding="async"><span>{{ $item['category'] }}</span></a><div class="blog-card-content"><div class="blog-card-meta"><span>{{ $item['date'] }}</span><span>{{ $item['read_time'] }} دقیقه</span></div><h3><a href="{{ route('blog.show', $item['slug']) }}">{{ $item['title'] }}</a></h3><p>{{ $item['excerpt'] }}</p><div class="blog-card-footer"><span>{{ $item['author'] }}</span><a href="{{ route('blog.show', $item['slug']) }}"><i class="fa-solid fa-arrow-left"></i></a></div></div></article>@endforeach</div>
             </section>
         @endif
     </div>
