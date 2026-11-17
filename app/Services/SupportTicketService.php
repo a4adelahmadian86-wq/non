@@ -1105,8 +1105,8 @@ class SupportTicketService
                 'event' => $event,
                 'ticket_id' => $ticketId,
                 'exception_class' => get_class($exception),
-                'request_id' => request()->attributes->get('request_id'),
-                'correlation_id' => request()->header('X-Correlation-Id'),
+                'request_id' => request()->attributes->get('farast.request_id'),
+                'correlation_id' => request()->attributes->get('farast.correlation_id'),
             ]);
 
         }
