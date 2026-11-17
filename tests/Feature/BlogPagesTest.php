@@ -16,6 +16,8 @@ class BlogPagesTest extends TestCase
             ->assertSee('تازه‌های مجله');
 
         $this->assertSame(1, substr_count($response->getContent(), '/js/blog.js?v=20261107b'));
+        $response->assertSee('fetchpriority="high" decoding="async"', false)
+            ->assertSee('loading="lazy" decoding="async"', false);
     }
 
     public function test_blog_search_filters_the_article_collection(): void
