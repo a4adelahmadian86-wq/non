@@ -15,7 +15,11 @@ class BlogPagesTest extends TestCase
             ->assertSee('از صفحه سفید تا متن نهایی')
             ->assertSee('تازه‌های مجله');
 
-        $response->assertSee('farast-blog-hero.svg');
+        $response->assertSee('farast-blog-hero.svg')
+            ->assertSee('og:image', false)
+            ->assertSee('twitter:image', false)
+            ->assertSee('summary_large_image', false)
+            ->assertSee('canonical', false);
         $this->assertSame(1, substr_count($response->getContent(), '/js/blog.js?v=20261117social1'));
         $response->assertSee('fetchpriority="high" decoding="async"', false)
             ->assertSee('loading="lazy" decoding="async"', false);
