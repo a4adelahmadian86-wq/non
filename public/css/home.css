@@ -364,7 +364,7 @@
 
 /* Original FARAST workflow artwork — responsive, optimized and independent of third-party image hosts. */
 .home-hero-visual{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;min-width:0;min-height:0;padding:5px}
-.home-hero-art{display:block;width:100%;max-width:520px;height:auto;aspect-ratio:420/337;object-fit:cover;border:1px solid rgba(191,211,239,.82);border-radius:25px;background:#08295f;box-shadow:0 24px 54px rgba(13,42,91,.18)}
+.home-hero-art{display:block;width:100%;max-width:520px;height:auto;aspect-ratio:4/3;object-fit:cover;border:1px solid rgba(191,211,239,.82);border-radius:25px;background:#08295f;box-shadow:0 24px 54px rgba(13,42,91,.18)}
 .home-hero-visual figcaption{max-width:100%;color:#647894;font-size:.72rem;font-weight:750;line-height:1.8;text-align:center}
 @media(max-width:700px){.home-hero-visual{min-height:0;margin:5px 0 0;padding:0}.home-hero-art{width:100%;max-width:480px;border-radius:18px}.home-hero-visual figcaption{font-size:.65rem}}
 @media(prefers-reduced-motion:reduce){.home-hero-art{scroll-behavior:auto}}
