@@ -45,6 +45,14 @@
             </span>
           </span>
         </a>
+      @else
+        <div class="store-hero-visual store-hero-visual--brand" aria-label="تصویر اختصاصی فروشگاه دیجیتال فراست">
+          <img src="{{ asset('images/farast-store-hero.svg') }}" alt="مجموعه‌ای از جلدهای مفهومی محصولات دیجیتال و آموزشی فراست" width="960" height="620" fetchpriority="high" decoding="async">
+          <span class="store-hero-visual-caption">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+            <span><strong>کتابخانهٔ دیجیتال فراست</strong><small>منابع، آموزش و فایل‌های کاربردی</small></span>
+          </span>
+        </div>
       @endif
     </div>
 
