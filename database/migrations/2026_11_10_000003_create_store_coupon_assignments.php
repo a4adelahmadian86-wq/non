@@ -18,7 +18,8 @@ return new class extends Migration
                 $table->unsignedSmallInteger('score')->default(0);
                 $table->json('reason_codes');
                 $table->timestamp('offered_at');
-                // DATETIME avoids MySQL's legacy implicit zero-date default for a second NOT NULL TIMESTAMP.\n                $table->dateTime('expires_at');
+                // DATETIME avoids MySQL's legacy implicit zero-date default for a second NOT NULL TIMESTAMP.
+                $table->dateTime('expires_at');
                 $table->timestamp('redeemed_at')->nullable();
                 $table->foreignId('notification_id')->nullable()->constrained('farast_notifications')->nullOnDelete();
                 $table->timestamps();
