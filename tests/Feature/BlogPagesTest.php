@@ -78,6 +78,7 @@ class BlogPagesTest extends TestCase
             'document-digitization' => 'سند تصویری و متن استخراج‌شده با فناوری OCR',
             'clean-workspace' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
             'digital-products' => 'مجموعه جلدهای رنگی فایل‌ها و منابع دیجیتال',
+            'workflow-writing' => 'دفتر یادداشت باز، ابزار نوشتن و نشانه بصری یک ایده در فضای تحریریه',
         ];
 
         foreach ($articleAltText as $slug => $alt) {
