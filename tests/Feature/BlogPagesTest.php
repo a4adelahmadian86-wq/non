@@ -68,6 +68,21 @@ class BlogPagesTest extends TestCase
         }
     }
 
+    public function test_article_image_alt_text_describes_the_actual_artwork(): void
+    {
+        $articleAltText = [
+            'document-digitization' => 'سند تصویری و متن استخراج‌شده با فناوری OCR',
+            'clean-workspace' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
+            'digital-products' => 'مجموعه جلدهای رنگی فایل‌ها و منابع دیجیتال',
+        ];
+
+        foreach ($articleAltText as $slug => $alt) {
+            $this->get(route('blog.show', ['slug' => $slug]))
+                ->assertOk()
+                ->assertSee('alt="'.$alt.'"', false);
+        }
+    }
+
     public function test_unknown_blog_article_returns_not_found(): void
     {
         $this->get('/blog/not-a-real-article')->assertNotFound();
