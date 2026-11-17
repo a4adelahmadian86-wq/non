@@ -23,7 +23,7 @@ class BlogController extends Controller
                 'image' => asset('images/farast-service-edit.svg'),
                 'image_width' => 900,
                 'image_height' => 506,
-                'alt' => 'نمایی از محیط ویرایش و قالب‌بندی یک سند دیجیتال',
+                'alt' => 'دفتر یادداشت باز، ابزار نوشتن و نشانه بصری یک ایده در فضای تحریریه',
                 'featured' => true,
                 'tags' => ['نوشتن', 'مدیریت محتوا', 'بهره‌وری'],
                 'sections' => [
