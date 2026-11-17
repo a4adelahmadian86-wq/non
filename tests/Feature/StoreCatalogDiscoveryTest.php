@@ -72,6 +72,9 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertSee('store-hero--with-artwork', false)
             ->assertSee('store-hero-visual', false)
             ->assertSee('storage/store/covers/catalog-hero.webp', false)
+            ->assertSee('og:image', false)
+            ->assertSee('storage/store/covers/catalog-hero.webp', false)
+            ->assertSee('twitter:image', false)
             ->assertSee('کتابچه نمونه فراست')
             ->assertSee('مشاهده جزئیات و پیش‌نمایش محصول');
     }
