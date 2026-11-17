@@ -360,7 +360,12 @@ class SupportNotificationService
                 'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).($eventIdentity ? ':identity:'.$eventIdentity : '').':user:'.$userId,
             );
         } catch (\Throwable $e) {
-            Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
+            Log::warning('farast.support.notification_failed', [
+                'ticket_id' => (int) $ticket->id,
+                'user_id' => $userId,
+                'type' => $type,
+                'exception_class' => get_class($e),
+            ]);
             if ($throwOnFailure) {
                 throw $e;
             }

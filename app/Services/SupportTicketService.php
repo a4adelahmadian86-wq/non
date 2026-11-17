@@ -248,10 +248,10 @@ class SupportTicketService
             return $ticket;
         }
 
-        $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
+        $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket), 'ticket_created', (int) $ticket->id);
 
         if ($ticket->assignee) {
-            $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee));
+            $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee), 'ticket_created_assignment', (int) $ticket->id);
         }
 
         return $ticket;
@@ -575,12 +575,12 @@ class SupportTicketService
 
         if ($notify && ! $isInternal) {
             if ($isStaff) {
-                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id));
+                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false, (int) $message->id), 'staff_replied', (int) $fresh->id);
                 if (($options['status'] ?? null) === 'closed') {
-                    $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed', 'message:'.$message->id));
+                    $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed', 'message:'.$message->id), 'staff_reply_closed_ticket', (int) $fresh->id);
                 }
             } else {
-                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body, (int) $message->id));
+                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body, (int) $message->id), 'customer_replied', (int) $fresh->id);
             }
         }
 
@@ -727,7 +727,7 @@ class SupportTicketService
             $old,
             $status,
             $transitionMessageId ? 'message:'.$transitionMessageId : 'transition:'.($fresh->updated_at?->format('U.u') ?? 'unknown')
-        ));
+        ), 'status_changed', (int) $fresh->id);
 
         return $fresh;
     }
@@ -786,10 +786,10 @@ class SupportTicketService
             : 'assignment:'.($fresh->updated_at?->format('U.u') ?? 'unknown');
 
         if ($previousAgent && (int) $previousAgent->id !== (int) ($agent?->id ?? 0)) {
-            $this->safeNotify(fn () => $this->notifier->assignmentRemoved($fresh, $previousAgent, $eventIdentity));
+            $this->safeNotify(fn () => $this->notifier->assignmentRemoved($fresh, $previousAgent, $eventIdentity), 'assignment_removed', (int) $fresh->id);
         }
 
-        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $eventIdentity));
+        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent, $eventIdentity), 'assignment_changed', (int) $fresh->id);
 
         return $fresh;
     }
@@ -1096,12 +1096,18 @@ class SupportTicketService
         ]);
     }
 
-    protected function safeNotify(callable $fn): void
+    protected function safeNotify(callable $fn, string $event, int $ticketId): void
     {
         try {
             $fn();
-        } catch (\Throwable $e) {
-            Log::warning('farast.support.notify_error', ['error' => $e->getMessage()]);
+        } catch (\Throwable $exception) {
+            Log::error('farast.support.notification_delivery_failed', [
+                'event' => $event,
+                'ticket_id' => $ticketId,
+                'exception_class' => get_class($exception),
+                'request_id' => request()->attributes->get('farast.request_id'),
+                'correlation_id' => request()->attributes->get('farast.correlation_id'),
+            ]);
         }
     }
 }
