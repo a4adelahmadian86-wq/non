@@ -6,6 +6,7 @@
 
 - PHP 8.2+ با افزونه‌های موردنیاز Composer و ZipArchive
 - Composer
+- Node.js 22 و npm روی Build Runner برای ساخت دارایی‌های PDF.js (روی سرور Production لازم نیست، اگر پوشهٔ ساخته‌شده همراه Release منتشر شود)
 - MySQL یا PostgreSQL؛ SQLite فقط برای تست و محیط‌های سبک
 - وب‌سرور با document root دقیقاً روی پوشه `public/`
 - دسترسی نوشتن محدود برای `storage/` و `bootstrap/cache/`
