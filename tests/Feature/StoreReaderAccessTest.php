@@ -180,6 +180,24 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('data-reader-pdf-engine="ready"', false);
     }
 
+    public function test_reader_disables_pdf_engine_when_a_runtime_asset_checksum_is_invalid(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $assetPath = public_path('vendor/pdfjs/legacy/build/pdf.mjs');
+        $this->assertFileExists($assetPath);
+        $original = file_get_contents($assetPath);
+        $this->assertIsString($original);
+
+        try {
+            file_put_contents($assetPath, $original."\\n// corrupted reader asset fixture");
+            $this->get(route('store.reader', $product->slug))
+                ->assertOk()
+                ->assertSee('data-reader-pdf-engine="unavailable"', false);
+        } finally {
+            file_put_contents($assetPath, $original);
+        }
+    }
+
     public function test_guest_can_read_public_samples_with_ip_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
