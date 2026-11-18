@@ -30,6 +30,8 @@ case "$path" in
     if [[ "${FAKE_NOT_READY:-0}" == "1" ]]; then body='{"status":"not_ready"}'; else body='{"status":"ready"}'; fi
     ;;
   /vendor/pdfjs/VERSION) body="${FAKE_PDFJS_VERSION:-6.5.438}" ;;
+  /vendor/pdfjs/NPM_INTEGRITY) body="sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==" ;;
+  /vendor/pdfjs/SHA256SUMS) body="a".repeat(64)  ./legacy/build/pdf.mjs\n ;;;
 esac
 if [[ "${FAKE_FAIL_PATH:-}" == "$path" ]]; then status=404; body="missing"; fi
 printf '%s' "$body" > "$output"
