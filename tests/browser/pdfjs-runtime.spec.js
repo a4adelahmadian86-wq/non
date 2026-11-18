@@ -27,6 +27,14 @@ test('PDF.js engine, viewer and worker are served from the application origin at
       credentials: 'same-origin',
       cache: 'no-store',
     });
+    const webViewerCssResponse = await fetch('/vendor/pdfjs/web/pdf_viewer.css', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const sha256ManifestResponse = await fetch('/vendor/pdfjs/SHA256SUMS', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
     const packageIntegrityResponse = await fetch('/vendor/pdfjs/NPM_INTEGRITY', {
       credentials: 'same-origin',
       cache: 'no-store',
@@ -44,6 +52,10 @@ test('PDF.js engine, viewer and worker are served from the application origin at
       viewerCssBodySize: (await viewerCssResponse.arrayBuffer()).byteLength,
       runtimeVersionStatus: runtimeVersionResponse.status,
       runtimeVersion: (await runtimeVersionResponse.text()).trim(),
+      webViewerCssStatus: webViewerCssResponse.status,
+      webViewerCssBodySize: (await webViewerCssResponse.arrayBuffer()).byteLength,
+      sha256ManifestStatus: sha256ManifestResponse.status,
+      sha256Manifest: (await sha256ManifestResponse.text()).trim(),
       packageIntegrityStatus: packageIntegrityResponse.status,
       packageIntegrity: (await packageIntegrityResponse.text()).trim(),
     };
@@ -56,6 +68,8 @@ test('PDF.js engine, viewer and worker are served from the application origin at
     hasEventBus: true,
     workerStatus: 200,
     viewerCssStatus: 200,
+    webViewerCssStatus: 200,
+    sha256ManifestStatus: 200,
     runtimeVersionStatus: 200,
     runtimeVersion: '6.5.438',
     packageIntegrityStatus: 200,
@@ -63,6 +77,10 @@ test('PDF.js engine, viewer and worker are served from the application origin at
   });
   expect(runtime.workerBodySize).toBeGreaterThan(1000);
   expect(runtime.viewerCssBodySize).toBeGreaterThan(1000);
+  expect(runtime.webViewerCssBodySize).toBeGreaterThan(1000);
+  expect(runtime.sha256Manifest).toMatch(/^([a-f0-9]{64}  \.\/legacy\/build\/pdf\.mjs|[a-f0-9]{64}  \.\/legacy\/build\/pdf\.worker\.mjs)/m);
+  expect(runtime.sha256Manifest).toContain('./legacy/web/pdf_viewer.css');
+  expect(runtime.sha256Manifest).toContain('./web/pdf_viewer.css');
   expect(runtimeRequests.length).toBeGreaterThanOrEqual(3);
 
   const applicationOrigin = new URL(page.url()).origin;
