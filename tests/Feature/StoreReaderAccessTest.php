@@ -162,6 +162,8 @@ class StoreReaderAccessTest extends TestCase
             'vendor/pdfjs/legacy/web/pdf_viewer.css',
             'vendor/pdfjs/web/pdf_viewer.css',
             'vendor/pdfjs/VERSION',
+            'vendor/pdfjs/NPM_INTEGRITY',
+            'vendor/pdfjs/SHA256SUMS',
             'vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap',
             'vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf',
         ] as $asset) {
@@ -169,6 +171,7 @@ class StoreReaderAccessTest extends TestCase
         }
 
         $this->assertSame('6.5.438', trim((string) file_get_contents(public_path('vendor/pdfjs/VERSION'))));
+        $this->assertSame('sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==', trim((string) file_get_contents(public_path('vendor/pdfjs/NPM_INTEGRITY'))));
 
         [$product] = $this->makePreviewFixture();
 
