@@ -43,13 +43,11 @@ git clone --depth 1 https://github.com/a4adelahmadian86-wq/non.git "%TARGET_ROOT
 if errorlevel 1 exit /b 1
 
 echo.
-echo [2/7] Preserving local environment file, if present...
-if exist "%SOURCE_ROOT%\.env" (
-  copy /y "%SOURCE_ROOT%\.env" "%TARGET_ROOT%\.env" >nul
-  if errorlevel 1 exit /b 1
-) else (
-  echo No source .env found. Composer will create it from .env.example.
-)
+echo [2/7] Creating an isolated local environment...
+copy /y "%TARGET_ROOT%\\.env.example" "%TARGET_ROOT%\\.env" >nul
+if errorlevel 1 exit /b 1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p='.env'; (Get-Content $p) -replace '^APP_ENV=.*$', 'APP_ENV=local' -replace '^APP_DEBUG=.*$', 'APP_DEBUG=true' -replace '^APP_URL=.*$', 'APP_URL=http://127.0.0.1:8002' -replace '^DB_CONNECTION=.*$', 'DB_CONNECTION=sqlite' -replace '^DB_DATABASE=.*$', 'DB_DATABASE=database/database.sqlite' -replace '^CACHE_STORE=.*$', 'CACHE_STORE=file' -replace '^SESSION_DRIVER=.*$', 'SESSION_DRIVER=file' -replace '^QUEUE_CONNECTION=.*$', 'QUEUE_CONNECTION=sync' -replace '^FILESYSTEM_DISK=.*$', 'FILESYSTEM_DISK=local' -replace '^MAIL_MAILER=.*$', 'MAIL_MAILER=log' | Set-Content -Encoding ascii $p"
+if errorlevel 1 exit /b 1
 
 pushd "%TARGET_ROOT%"
 if errorlevel 1 exit /b 1
