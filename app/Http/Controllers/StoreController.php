@@ -690,7 +690,12 @@ class StoreController extends Controller
             && count($pdfJsManifest) > 0;
         foreach ($pdfJsRequiredAssets as $asset) {
             $assetPath = $pdfJsRoot.'/'.$asset;
-            if (!is_file($assetPath) || !isset($pdfJsManifest[$asset]) || !hash_equals($pdfJsManifest[$asset], hash_file('sha256', $assetPath))) {
+            if (!is_file($assetPath) || !isset($pdfJsManifest[$asset])) {
+                $readerPdfEngineReady = false;
+                break;
+            }
+            $assetHash = hash_file('sha256', $assetPath);
+            if (!is_string($assetHash) || !hash_equals($pdfJsManifest[$asset], $assetHash)) {
                 $readerPdfEngineReady = false;
                 break;
             }
