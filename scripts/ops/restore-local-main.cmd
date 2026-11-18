@@ -36,6 +36,26 @@ if errorlevel 1 (
   echo ERROR: Git Bash is required. Install Git for Windows with bash.exe on PATH.
   exit /b 2
 )
+where node >nul 2>nul
+if errorlevel 1 (
+  echo ERROR: Node.js is required to prepare the PDF.js runtime.
+  exit /b 2
+)
+where npm >nul 2>nul
+if errorlevel 1 (
+  echo ERROR: npm is required to prepare the PDF.js runtime.
+  exit /b 2
+)
+where curl >nul 2>nul
+if errorlevel 1 (
+  echo ERROR: curl is required for the local health checks.
+  exit /b 2
+)
+php -r "if (!extension_loaded('pdo_sqlite')) exit(1);"
+if errorlevel 1 (
+  echo ERROR: PHP PDO SQLite extension is required for the isolated refresh database.
+  exit /b 2
+)
 
 echo.
 echo [1/7] Cloning clean main into a new folder...
@@ -44,7 +64,9 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo [2/7] Creating an isolated local environment...
-copy /y "%TARGET_ROOT%\\.env.example" "%TARGET_ROOT%\\.env" >nul
+if not exist "%TARGET_ROOT%\database" mkdir "%TARGET_ROOT%\database"
+if not exist "%TARGET_ROOT%\database\database.sqlite" type nul > "%TARGET_ROOT%\database\database.sqlite"
+copy /y "%TARGET_ROOT%\.env.example" "%TARGET_ROOT%\.env" >nul
 if errorlevel 1 exit /b 1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$p='.env'; (Get-Content $p) -replace '^APP_ENV=.*$', 'APP_ENV=local' -replace '^APP_DEBUG=.*$', 'APP_DEBUG=true' -replace '^APP_URL=.*$', 'APP_URL=http://127.0.0.1:8002' -replace '^DB_CONNECTION=.*$', 'DB_CONNECTION=sqlite' -replace '^DB_DATABASE=.*$', 'DB_DATABASE=database/database.sqlite' -replace '^CACHE_STORE=.*$', 'CACHE_STORE=file' -replace '^SESSION_DRIVER=.*$', 'SESSION_DRIVER=file' -replace '^QUEUE_CONNECTION=.*$', 'QUEUE_CONNECTION=sync' -replace '^FILESYSTEM_DISK=.*$', 'FILESYSTEM_DISK=local' -replace '^MAIL_MAILER=.*$', 'MAIL_MAILER=log' | Set-Content -Encoding ascii $p"
 if errorlevel 1 exit /b 1
