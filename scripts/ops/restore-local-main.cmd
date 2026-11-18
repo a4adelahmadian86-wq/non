@@ -87,8 +87,10 @@ php artisan optimize:clear
 if errorlevel 1 (popd & exit /b 1)
 
 echo.
-echo [7/7] Running local health checks...
-set "FARAST_BASE_URL=http://127.0.0.1:8001"
+echo [7/7] Starting refreshed application on port 8002...
+start "FARAST refreshed main" cmd /k "cd /d %TARGET_ROOT% && php artisan serve --host=127.0.0.1 --port=8002"
+timeout /t 5 /nobreak >nul
+set "FARAST_BASE_URL=http://127.0.0.1:8002"
 bash scripts/ops/health-check.sh
 set "HEALTH_EXIT=%errorlevel%"
 popd
