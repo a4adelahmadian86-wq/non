@@ -64,6 +64,14 @@ if ! grep -Fxq "6.5.438" "$response_file"; then
   exit 1
 fi
 
+check_public_asset "/vendor/pdfjs/NPM_INTEGRITY"
+if ! grep -Fxq "sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==" "$response_file"; then
+  echo "Unexpected or missing PDF.js npm integrity manifest." >&2
+  exit 1
+fi
+
+check_public_asset "/vendor/pdfjs/SHA256SUMS"
+
 for asset in \
   "/vendor/pdfjs/legacy/build/pdf.mjs" \
   "/vendor/pdfjs/legacy/build/pdf.worker.mjs" \
