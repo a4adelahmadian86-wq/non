@@ -68,6 +68,8 @@ for asset in \
   "/vendor/pdfjs/legacy/build/pdf.mjs" \
   "/vendor/pdfjs/legacy/build/pdf.worker.mjs" \
   "/vendor/pdfjs/legacy/web/pdf_viewer.mjs" \
+  "/vendor/pdfjs/legacy/web/pdf_viewer.css" \
+  "/vendor/pdfjs/web/pdf_viewer.css" \
   "/vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap" \
   "/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf"; do
   check_public_asset "$asset"
