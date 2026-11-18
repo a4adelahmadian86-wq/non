@@ -233,6 +233,29 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false, with
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
+test('retries a failed initial PDF request without reusing the rejected loading task', async ({ page }) => {
+  let attempts = 0;
+  const fixture = makePdfFixture(1, false);
+  await mountPdfReader(page, 1, false, false, async page => {
+    await page.route('**/reader-fixture.pdf', async route => {
+      attempts++;
+      if (attempts === 1) {
+        await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporary reader fixture failure' });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/pdf', body: fixture });
+    });
+  });
+
+  const root = page.locator('[data-reader-root]');
+  const retry = root.locator('.farast-pdf-retry');
+  await expect(retry).toBeVisible({ timeout: 45000 });
+  await retry.click();
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await expect.poll(() => root.locator('.farast-pdf-canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+  expect(attempts).toBe(2);
+});
+
 test('discards a PDF load that completes after navigation leaves its document', async ({ page }) => {
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));

@@ -256,27 +256,37 @@ jobs:
       - run: python services/document-audio/smoke_test.py
 
   voice-model-smoke:
-    if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Report voice-model smoke-test applicability
+        if: github.ref != 'refs/heads/feat/self-hosted-sherpa-streaming'
+        run: echo "Not applicable: voice-model smoke runs only on feat/self-hosted-sherpa-streaming."
       - uses: actions/checkout@v4
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
       - uses: actions/setup-node@v4
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
         with:
           node-version: '22'
       - uses: actions/setup-python@v5
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
         with:
           python-version: '3.11'
       - run: npm install --prefix voice-stream --no-audit --no-fund
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
       - run: pip install --no-cache-dir -r voice-stream/sherpa-sidecar/requirements.txt
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
       - run: python voice-stream/sherpa-sidecar/download_model.py
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
         env:
           SHERPA_MODEL_DIR: ${{ runner.temp }}/farast-sherpa-models
       - run: python voice-stream/sherpa-sidecar/smoke_test.py
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
         env:
           SHERPA_MODEL_DIR: ${{ runner.temp }}/farast-sherpa-models
           SHERPA_NUM_THREADS: '2'
       - name: Start the real Sherpa sidecar and test the gateway protocol
+        if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
         shell: bash
         run: |
           set -euo pipefail

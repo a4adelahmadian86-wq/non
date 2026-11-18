@@ -662,10 +662,44 @@ class StoreController extends Controller
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
-        $readerPdfEngineReady = is_file(public_path('vendor/pdfjs/legacy/build/pdf.mjs'))
-            && is_file(public_path('vendor/pdfjs/legacy/build/pdf.worker.mjs'))
-            && is_file(public_path('vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap'))
-            && is_file(public_path('vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf'));
+        $pdfJsRoot = public_path('vendor/pdfjs');
+        $pdfJsIntegrity = 'sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==';
+        $pdfJsRequiredAssets = [
+            'legacy/build/pdf.mjs',
+            'legacy/build/pdf.worker.mjs',
+            'legacy/web/pdf_viewer.mjs',
+            'legacy/web/pdf_viewer.css',
+            'web/pdf_viewer.css',
+            'cmaps/Adobe-GB1-UCS2.bcmap',
+            'standard_fonts/LiberationSans-Regular.ttf',
+        ];
+        $pdfJsManifest = [];
+        $pdfJsManifestPath = $pdfJsRoot.'/SHA256SUMS';
+        if (is_file($pdfJsManifestPath)) {
+            foreach (file($pdfJsManifestPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $manifestLine) {
+                if (preg_match('/^([a-f0-9]{64})  \.\\/(.+)$/', $manifestLine, $matches)) {
+                    $pdfJsManifest[$matches[2]] = $matches[1];
+                }
+            }
+        }
+        $readerPdfEngineReady = is_file($pdfJsRoot.'/VERSION')
+            && trim((string) file_get_contents($pdfJsRoot.'/VERSION')) === '6.5.438'
+            && is_file($pdfJsRoot.'/NPM_INTEGRITY')
+            && hash_equals($pdfJsIntegrity, trim((string) file_get_contents($pdfJsRoot.'/NPM_INTEGRITY')))
+            && is_file($pdfJsManifestPath)
+            && count($pdfJsManifest) > 0;
+        foreach ($pdfJsRequiredAssets as $asset) {
+            $assetPath = $pdfJsRoot.'/'.$asset;
+            if (!is_file($assetPath) || !isset($pdfJsManifest[$asset])) {
+                $readerPdfEngineReady = false;
+                break;
+            }
+            $assetHash = hash_file('sha256', $assetPath);
+            if (!is_string($assetHash) || !hash_equals($pdfJsManifest[$asset], $assetHash)) {
+                $readerPdfEngineReady = false;
+                break;
+            }
+        }
 
         return response()
             ->view('store.reader', compact(

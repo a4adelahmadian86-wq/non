@@ -1025,6 +1025,7 @@
       continuousHost=surface.querySelector('.farast-pdf-continuous-pages');
     }
 
+    let attemptedLoadingTask=null;
     try{
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
@@ -1037,6 +1038,7 @@
           pdfLoadingUrl=nextUrl;
           loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
         }
+        attemptedLoadingTask=loadingTask;
         const loadedDocument=await loadingTask.promise;
         if(loadGeneration!==pdfLoadGeneration||activePdfUrl!==nextUrl||!isPdf()){
           if(pdfDoc!==loadedDocument){try{await loadedDocument.destroy();}catch(_){}}
@@ -1072,6 +1074,10 @@
       if(loadGeneration!==pdfLoadGeneration||pdfDoc!==loadedDocument)return;
       await loadPdfLayers();
     }catch(error){
+      if(attemptedLoadingTask&&pdfLoadingTask===attemptedLoadingTask&&error?.name!=='PasswordException'){
+        pdfLoadingTask=null;pdfLoadingUrl=null;
+        try{attemptedLoadingTask.destroy().catch(()=>{});}catch(_){}
+      }
       if(loadGeneration!==pdfLoadGeneration||activePdfUrl!==nextUrl)return;
       if((error?.message==='PDF_ENGINE_MISSING'||error?.farastPdfEngineUnavailable)&&showNativePdfFallback(nextUrl))return;
       showPdfError(error);
@@ -1126,7 +1132,10 @@
       closed=true;
       if(dialog.open)dialog.close();
       dialog.remove();
-      if(cancelled)loadingTask.destroy().catch(()=>{});
+      if(cancelled){
+        if(pdfLoadingTask===loadingTask){pdfLoadingTask=null;pdfLoadingUrl=null;}
+        loadingTask.destroy().catch(()=>{});
+      }
     };
     cancel.addEventListener('click',()=>close(true));
     dialog.addEventListener('cancel',event=>{event.preventDefault();close(true);});

@@ -30,8 +30,21 @@ case "$path" in
     if [[ "${FAKE_NOT_READY:-0}" == "1" ]]; then body='{"status":"not_ready"}'; else body='{"status":"ready"}'; fi
     ;;
   /vendor/pdfjs/VERSION) body="${FAKE_PDFJS_VERSION:-6.5.438}" ;;
+  /vendor/pdfjs/NPM_INTEGRITY) body="sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==" ;;
+  /vendor/pdfjs/SHA256SUMS)
+    hash="d59386e0ae435e292fbe0ebcdb954b75ed5fb3922091277cb19f798fc5d50718"
+    body="$hash  ./legacy/build/pdf.mjs
+$hash  ./legacy/build/pdf.worker.mjs
+$hash  ./legacy/web/pdf_viewer.mjs
+$hash  ./legacy/web/pdf_viewer.css
+$hash  ./web/pdf_viewer.css
+$hash  ./cmaps/Adobe-GB1-UCS2.bcmap
+$hash  ./standard_fonts/LiberationSans-Regular.ttf"
+    ;;
+
 esac
 if [[ "${FAKE_FAIL_PATH:-}" == "$path" ]]; then status=404; body="missing"; fi
+if [[ "${FAKE_CORRUPT_PATH:-}" == "$path" ]]; then body="corrupted asset"; fi
 printf '%s' "$body" > "$output"
 printf '%s' "$status"
 CURL
@@ -58,6 +71,12 @@ if FAKE_PDFJS_VERSION="0.0.0" run_health_check >/dev/null 2>&1; then
   exit 1
 fi
 echo "PASS: wrong PDF.js version is rejected"
+
+if FAKE_CORRUPT_PATH="/vendor/pdfjs/legacy/build/pdf.worker.mjs" run_health_check >/dev/null 2>&1; then
+  echo "FAIL: corrupted PDF.js asset checksum was accepted" >&2
+  exit 1
+fi
+echo "PASS: corrupted PDF.js asset checksum is rejected"
 
 if FAKE_NOT_READY=1 run_health_check >/dev/null 2>&1; then
   echo "FAIL: database readiness failure was accepted" >&2
