@@ -88,7 +88,7 @@ if errorlevel 1 (popd & exit /b 1)
 
 echo.
 echo [7/7] Starting refreshed application on port 8002...
-start "FARAST refreshed main" cmd /k "cd /d %TARGET_ROOT% && php artisan serve --host=127.0.0.1 --port=8002"
+start "FARAST refreshed main" cmd /k "cd /d ""%TARGET_ROOT%"" && php artisan serve --host=127.0.0.1 --port=8002"
 timeout /t 5 /nobreak >nul
 set "FARAST_BASE_URL=http://127.0.0.1:8002"
 bash scripts/ops/health-check.sh
