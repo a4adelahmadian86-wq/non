@@ -81,6 +81,27 @@ test('PDF.js engine, viewer and worker are served from the application origin at
   expect(runtime.sha256Manifest).toMatch(/^([a-f0-9]{64}  \.\/legacy\/build\/pdf\.mjs|[a-f0-9]{64}  \.\/legacy\/build\/pdf\.worker\.mjs)/m);
   expect(runtime.sha256Manifest).toContain('./legacy/web/pdf_viewer.css');
   expect(runtime.sha256Manifest).toContain('./web/pdf_viewer.css');
+
+  const manifestEntries = new Map(runtime.sha256Manifest.split('\\n').map(line => {
+    const match = line.match(/^([a-f0-9]{64})\\s+\\.\\/(.+)$/);
+    return match ? [match[2], match[1]] : null;
+  }).filter(Boolean));
+  for (const assetPath of [
+    'legacy/build/pdf.mjs',
+    'legacy/build/pdf.worker.mjs',
+    'legacy/web/pdf_viewer.mjs',
+    'legacy/web/pdf_viewer.css',
+    'web/pdf_viewer.css',
+  ]) {
+    const response = await page.request.get('/vendor/pdfjs/' + assetPath);
+    expect(response.status(), assetPath).toBe(200);
+    const bytes = await response.body();
+    const digest = await page.evaluate(async bytes => {
+      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }, [...bytes]);
+    expect(digest, assetPath).toBe(manifestEntries.get(assetPath));
+  }
   expect(runtimeRequests.length).toBeGreaterThanOrEqual(3);
 
   const applicationOrigin = new URL(page.url()).origin;
