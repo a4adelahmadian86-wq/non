@@ -168,6 +168,8 @@ class StoreReaderAccessTest extends TestCase
             $this->assertFileExists(public_path($asset), 'Missing required PDF.js runtime asset: '.$asset);
         }
 
+        $this->assertSame('6.5.438', trim((string) file_get_contents(public_path('vendor/pdfjs/VERSION'))));
+
         [$product] = $this->makePreviewFixture();
 
         $this->get(route('store.reader', $product->slug))
