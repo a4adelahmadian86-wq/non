@@ -97,7 +97,7 @@ test('PDF.js engine, viewer and worker are served from the application origin at
     expect(response.status(), assetPath).toBe(200);
     const bytes = await response.body();
     const digest = await page.evaluate(async bytes => {
-      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      const hash = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
       return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
     }, [...bytes]);
     expect(digest, assetPath).toBe(manifestEntries.get(assetPath));
