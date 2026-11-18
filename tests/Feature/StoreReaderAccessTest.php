@@ -192,7 +192,7 @@ class StoreReaderAccessTest extends TestCase
             file_put_contents($assetPath, $original."\\n// corrupted reader asset fixture");
             $this->get(route('store.reader', $product->slug))
                 ->assertOk()
-                ->assertSee('data-reader-pdf-engine="unavailable"', false);
+                ->assertSee('data-reader-pdf-engine="missing"', false);
         } finally {
             file_put_contents($assetPath, $original);
         }
