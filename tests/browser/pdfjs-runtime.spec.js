@@ -82,8 +82,8 @@ test('PDF.js engine, viewer and worker are served from the application origin at
   expect(runtime.sha256Manifest).toContain('./legacy/web/pdf_viewer.css');
   expect(runtime.sha256Manifest).toContain('./web/pdf_viewer.css');
 
-  const manifestEntries = new Map(runtime.sha256Manifest.split('\\n').map(line => {
-    const match = line.match(/^([a-f0-9]{64})\\s+\\.\\/(.+)$/);
+  const manifestEntries = new Map(runtime.sha256Manifest.split('\n').map(line => {
+    const match = line.match(/^([a-f0-9]{64})\s+\.\/(.+)$/);
     return match ? [match[2], match[1]] : null;
   }).filter(Boolean));
   for (const assetPath of [
