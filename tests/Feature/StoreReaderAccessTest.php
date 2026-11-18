@@ -158,6 +158,10 @@ class StoreReaderAccessTest extends TestCase
         foreach ([
             'vendor/pdfjs/legacy/build/pdf.mjs',
             'vendor/pdfjs/legacy/build/pdf.worker.mjs',
+            'vendor/pdfjs/legacy/web/pdf_viewer.mjs',
+            'vendor/pdfjs/legacy/web/pdf_viewer.css',
+            'vendor/pdfjs/web/pdf_viewer.css',
+            'vendor/pdfjs/VERSION',
             'vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap',
             'vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf',
         ] as $asset) {
