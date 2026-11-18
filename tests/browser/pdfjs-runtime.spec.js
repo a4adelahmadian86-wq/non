@@ -19,6 +19,18 @@ test('PDF.js engine, viewer and worker are served from the application origin at
       credentials: 'same-origin',
       cache: 'no-store',
     });
+    const viewerCssResponse = await fetch('/vendor/pdfjs/legacy/web/pdf_viewer.css', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const runtimeVersionResponse = await fetch('/vendor/pdfjs/VERSION', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const packageIntegrityResponse = await fetch('/vendor/pdfjs/NPM_INTEGRITY', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
 
     return {
       version: engine.version,
@@ -28,6 +40,12 @@ test('PDF.js engine, viewer and worker are served from the application origin at
       workerStatus: workerResponse.status,
       workerBytes: Number(workerResponse.headers.get('content-length') || 0),
       workerBodySize: (await workerResponse.arrayBuffer()).byteLength,
+      viewerCssStatus: viewerCssResponse.status,
+      viewerCssBodySize: (await viewerCssResponse.arrayBuffer()).byteLength,
+      runtimeVersionStatus: runtimeVersionResponse.status,
+      runtimeVersion: (await runtimeVersionResponse.text()).trim(),
+      packageIntegrityStatus: packageIntegrityResponse.status,
+      packageIntegrity: (await packageIntegrityResponse.text()).trim(),
     };
   });
 
@@ -37,8 +55,14 @@ test('PDF.js engine, viewer and worker are served from the application origin at
     hasLinkService: true,
     hasEventBus: true,
     workerStatus: 200,
+    viewerCssStatus: 200,
+    runtimeVersionStatus: 200,
+    runtimeVersion: '6.5.438',
+    packageIntegrityStatus: 200,
+    packageIntegrity: 'sha512-vg8Pw1x+AFKy4AMDvhuWl5cOYV8d698UoEANoFFhc79hqXDnZQqnOXoxw3HG907WHOg1JYOvLhP756boddFxpA==',
   });
   expect(runtime.workerBodySize).toBeGreaterThan(1000);
+  expect(runtime.viewerCssBodySize).toBeGreaterThan(1000);
   expect(runtimeRequests.length).toBeGreaterThanOrEqual(3);
 
   const applicationOrigin = new URL(page.url()).origin;
