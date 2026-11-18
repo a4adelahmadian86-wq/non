@@ -261,7 +261,7 @@ jobs:
     steps:
       - name: Report voice-model smoke-test applicability
         if: github.ref != 'refs/heads/feat/self-hosted-sherpa-streaming'
-        run: echo "Not applicable: voice-model smoke runs only on feat/self-hosted-sherpa-streaming."
+        run: 'echo "Not applicable - voice-model smoke runs only on feat/self-hosted-sherpa-streaming."'
       - uses: actions/checkout@v4
         if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
       - uses: actions/setup-node@v4
