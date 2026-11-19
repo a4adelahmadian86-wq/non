@@ -13,6 +13,19 @@ class PricingPolicyTest extends TestCase
 
     public function test_calculate_uses_versioned_engine_and_preserves_legacy_response_contract(): void
     {
+        FarastPricingPolicy::create([
+            'code' => 'typing.manual.versioned.test',
+            'capability_code' => 'typing.manual',
+            'unit' => 'page',
+            'base_price_rials' => 1,
+            'subscription_allowance' => 0,
+            'additional_price_rials' => 1,
+            'payg_multiplier_percent' => 100,
+            'discount_percent' => 0,
+            'fee_rials' => 0,
+            'active' => true,
+        ]);
+
         $version = FarastPricingPolicyVersion::create([
             'policy_code' => 'typing.manual.versioned.test',
             'version' => 1,
