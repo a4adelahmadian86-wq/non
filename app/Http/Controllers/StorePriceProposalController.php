@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StorePriceProposal;
 use App\Models\StoreProduct;
+use App\Models\User;
 use App\Services\StorePriceProposalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
