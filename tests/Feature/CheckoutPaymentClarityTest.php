@@ -239,6 +239,8 @@ class CheckoutPaymentClarityTest extends TestCase
                 'price_rials' => 160000,
                 'discount_rials' => 0,
                 'payable_price_rials' => 160000,
+                'pricing_policy_version_id' => 123,
+                'tax_rials' => 0,
                 'free_page_value_rials' => 10000,
             ]);
         });
@@ -272,6 +274,7 @@ class CheckoutPaymentClarityTest extends TestCase
         $this->assertGreaterThan(0, $orderId);
         $order = Order::findOrFail($orderId);
         $this->assertSame($project->id, (int) data_get($order->pricing_snapshot, 'project_id'));
+        $this->assertSame(123, (int) data_get($order->pricing_snapshot, 'pricing_policy_version_id'));
         $this->assertSame($orderId, (int) session('typing_preflight_deposit_order'));
     }
 
