@@ -7,9 +7,9 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 - `App\\Services\\PricingEngine` resolves effective, versioned `FarastPricingPolicyVersion` records and computes a quote containing the policy version, currency, included/billable quantity, subtotal, discount, fee, tax, total, and checksum.
 - `CommerceAuthorizationService` uses `PricingEngine` for authorization, reservation, and charge snapshots. It derives included quantity from the actor's live entitlement and outstanding reservations; this is a runtime quota decision, not merely a policy default.
 - `ProfessionalCommerceService` persists quote snapshots and idempotency context. It is an orchestration/quote-persistence layer and must not be replaced by a second calculator.
-- `PricingService` still calculates through legacy `FarastPricingPolicy` / `PricingRule` paths in `calculate()`, `projectQuote()`, `quote()`, and `estimateByPages()`. Its private `ruleValue()` consults `PricingEngine::resolve()` first, but silently falls back to the legacy tables when no effective version exists.
+- `PricingService::calculate()` now delegates to `PricingEngine` whenever an effective version exists and maps the quote back to its legacy response shape; it retains a temporary legacy fallback only for policy codes without an effective version. `projectQuote()`, `quote()`, and `estimateByPages()` still use `ruleValue()` and its legacy fallback.
 - `TypingPreflightController::estimate()` and `accept()` both call `PricingService::estimateByPages()`. They independently apply free-page and deposit rules and persist an estimate snapshot into session/order data. This is a live customer-facing compatibility boundary.
-- `tests/Unit/PricingPolicyTest.php` characterizes the legacy allowance/additional-usage/discount/fee calculation. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds, but does not establish parity between typing estimates and the versioned engine.
+- `tests/Unit/PricingPolicyTest.php` now covers both versioned-engine delegation with legacy response compatibility and the remaining legacy fallback. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds; typing preflight parity is still outstanding.
 
 ## Consolidation constraints
 
@@ -30,6 +30,14 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 - Migrate consumers incrementally, then remove fallback only after repository-wide call-site and data-coverage checks pass.
 - Run focused Laravel tests, full Laravel suite, Phase 3 commerce workflow, and relevant browser tests on the exact PR head before merge.
 
-## Current decision
+## Work completed on this branch
 
-No runtime pricing behavior or schema is changed by this audit. A direct replacement of `PricingService` before policy coverage and consumer inventory are proven would risk changing customer quotes, deposits, and existing commercial flows.
+- `PricingService::calculate()` uses the versioned engine first and exposes the immutable policy version ID in its compatibility response.
+- Unit coverage checks the engine-backed calculation and the legacy fallback separately.
+- No schema, pricing values, customer orders, or historical snapshots were changed.
+
+## Remaining work
+
+- Finish the runtime caller inventory and active-version coverage check for every legacy key.
+- Consolidate `projectQuote()`, `quote()`, and `estimateByPages()` only after parity tests cover typing free-page and deposit behavior.
+- Run focused and full test suites on the final PR head before merge.
