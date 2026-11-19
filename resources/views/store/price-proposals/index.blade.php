@@ -19,6 +19,7 @@
         <thead>
           <tr>
             <th>محصول</th>
+            <th>قیمت فعلی هنگام پیشنهاد</th>
             <th>قیمت پایه پیشنهادی</th>
             <th>قیمت کمپین پیشنهادی</th>
             <th>حداقل حاشیه سود</th>
@@ -33,7 +34,8 @@
                 <strong>{{ $proposal->product?->title ?? 'محصول حذف‌شده' }}</strong>
                 <small>{{ $proposal->created_at?->format('Y/m/d H:i') }}</small>
               </td>
-              <td>{{ number_format((int) $proposal->base_price_rials) }} ریال</td>
+              <td>{{ number_format((int) data_get($proposal->snapshot_before, 'price_rials', $proposal->base_price_rials)) }} ریال</td>
+              <td><strong>{{ number_format((int) $proposal->base_price_rials) }} ریال</strong></td>
               <td>
                 @if($proposal->campaign_price_rials !== null)
                   <strong>{{ number_format((int) $proposal->campaign_price_rials) }} ریال</strong>
@@ -52,7 +54,7 @@
                   <div style="display:flex;gap:8px;flex-wrap:wrap">
                     <form method="POST" action="{{ route('store.price-proposals.accept', $proposal) }}">
                       @csrf
-                      <button class="store-primary-btn" type="submit">{{ $proposal->campaign_price_rials !== null ? 'پذیرش و اعمال قیمت کمپین' : 'تأیید قیمت پایه' }}</button>
+                      <button class="store-primary-btn" type="submit">{{ $proposal->campaign_price_rials !== null ? 'پذیرش و اعمال قیمت کمپین' : ((int) $proposal->base_price_rials > (int) data_get($proposal->snapshot_before, 'price_rials', 0) ? 'پذیرش و اعمال قیمت پایه' : 'تأیید قیمت پایه') }}</button>
                     </form>
                     <form method="POST" action="{{ route('store.price-proposals.reject', $proposal) }}">
                       @csrf
@@ -66,7 +68,7 @@
               </td>
             </tr>
           @empty
-            <tr><td colspan="6">در حال حاضر پیشنهادی برای تأیید ندارید.</td></tr>
+            <tr><td colspan="7">در حال حاضر پیشنهادی برای تأیید ندارید.</td></tr>
           @endforelse
         </tbody>
       </table>
