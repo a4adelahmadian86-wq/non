@@ -129,12 +129,38 @@ class StorePriceProposalService
             // Always lock product before proposal, matching propose() and avoiding
             // a product/proposal lock-order deadlock under concurrent decisions.
             $proposalReference = StorePriceProposal::query()->findOrFail($proposal->id);
-            $product = StoreProduct::query()->lockForUpdate()->findOrFail($proposalReference->product_id);
-            $lockedProposal = StorePriceProposal::query()->lockForUpdate()->findOrFail($proposal->id);
-
-            if ((int) $lockedProposal->uploader_id !== (int) $actor->id) {
+            if ((int) $proposalReference->uploader_id !== (int) $actor->id) {
                 throw new AuthorizationException('store_price_proposal_not_owned_by_uploader');
             }
+
+            if ($proposalReference->product_id === null) {
+                $lockedProposal = StorePriceProposal::query()->lockForUpdate()->findOrFail($proposal->id);
+                if ($lockedProposal->status !== 'pending') {
+                    throw new RuntimeException('store_price_proposal_already_decided');
+                }
+
+                $lockedProposal->status = 'stale';
+                $lockedProposal->decided_by = $actor->id;
+                $lockedProposal->decided_at = now();
+                $lockedProposal->decision_note = 'product_deleted';
+                $lockedProposal->snapshot_after = ['reason' => 'product_deleted'];
+                $lockedProposal->save();
+
+                $this->audit->record(
+                    'store.product.price_proposal_stale',
+                    $actor->id,
+                    null,
+                    'store_product',
+                    (int) data_get($lockedProposal->snapshot_before, 'product_id', 0),
+                    ['proposal_id' => $lockedProposal->id, 'reason' => 'product_deleted'],
+                    'application',
+                );
+
+                return false;
+            }
+
+            $product = StoreProduct::query()->lockForUpdate()->findOrFail($proposalReference->product_id);
+            $lockedProposal = StorePriceProposal::query()->lockForUpdate()->findOrFail($proposal->id);
             if ($lockedProposal->status !== 'pending') {
                 throw new RuntimeException('store_price_proposal_already_decided');
             }
@@ -311,6 +337,10 @@ class StorePriceProposalService
         $suggestedBase = max($currentPrice, $minimumSafeBase ?? $currentPrice);
 
         return [
+            'product_id' => (int) $product->id,
+            'product_title' => (string) $product->title,
+            'product_slug' => (string) $product->slug,
+            'product_type' => (string) $product->type,
             'price_rials' => $currentPrice,
             'suggested_base_price_rials' => $suggestedBase,
             'minimum_safe_base_price_rials' => $minimumSafeBase,
