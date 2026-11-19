@@ -53,6 +53,12 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(221000, $result['final_price_rials']);
         $this->assertSame($version->id, $result['pricing_policy_version_id']);
         $this->assertSame('IRR', $result['currency']);
+
+        $payg = app(PricingService::class)->calculate('typing.manual.versioned.test', 4, false);
+        $this->assertSame(0, $payg['included_units']);
+        $this->assertSame(4, $payg['billable_units']);
+        $this->assertSame(480000, $payg['additional_usage_rials']);
+        $this->assertSame(437000, $payg['final_price_rials']);
     }
 
     public function test_policy_calculation_supports_allowance_additional_usage_discount_and_fee(): void
