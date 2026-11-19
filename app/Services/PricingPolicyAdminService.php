@@ -77,7 +77,9 @@ class PricingPolicyAdminService
 
             $previousVersions = FarastPricingPolicyVersion::where('policy_code',$version->policy_code)
                 ->where('region_code',$version->region_code)->where('id','!=',$version->id)
-                ->whereNull('effective_until')->lockForUpdate()->get();
+                ->where(fn ($query) => $query->whereNull('effective_from')->orWhere('effective_from', '<=', $retiredAt))
+                ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>', $retiredAt))
+                ->lockForUpdate()->get();
             foreach ($previousVersions as $previous) {
                 $previous->effective_until = $retiredAt;
                 $previous->checksum = $this->checksumForVersion($previous);
