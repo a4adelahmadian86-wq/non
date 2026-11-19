@@ -272,7 +272,7 @@ class PricingPolicyTest extends TestCase
         try {
             $admin->createVersionFromPricingRule('page_base', 66666, 'conflicting edit');
             $this->fail('An admin edit must not silently shadow a scheduled future policy.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('future_pricing_policy_version_exists', $exception->getMessage());
         }
 
