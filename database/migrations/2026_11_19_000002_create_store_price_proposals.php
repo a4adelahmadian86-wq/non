@@ -14,7 +14,7 @@ return new class extends Migration
 
         Schema::create('store_price_proposals', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('product_id')->constrained('store_products')->restrictOnDelete();
+            $table->foreignId('product_id')->nullable()->constrained('store_products')->nullOnDelete();
             $table->foreignId('uploader_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('proposed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->unsignedBigInteger('base_price_rials');
