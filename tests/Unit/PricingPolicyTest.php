@@ -145,6 +145,44 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(30863, $payg['price_rials']);
     }
 
+    public function test_document_quote_uses_versioned_base_and_language_multiplier(): void
+    {
+        foreach ([
+            ['page_base', 10000],
+            ['english_multiplier', 150],
+        ] as [$key, $value]) {
+            PricingRule::create([
+                'key' => $key,
+                'value' => $value + 1,
+                'label' => 'legacy '.$key,
+                'active' => true,
+            ]);
+
+            FarastPricingPolicyVersion::create([
+                'policy_code' => $key,
+                'version' => 1,
+                'capability_code' => 'typing.manual',
+                'unit' => $key === 'page_base' ? 'page' : 'percentage',
+                'currency' => 'IRR',
+                'unit_price' => $value,
+                'additional_unit_price' => null,
+                'fee_amount' => 0,
+                'discount_basis_points' => 0,
+                'tax_basis_points' => 0,
+                'payg_multiplier_basis_points' => 10000,
+                'included_quantity' => 0,
+                'effective_from' => now()->subMinute(),
+                'checksum' => hash('sha256', $key.'|1'),
+            ]);
+        }
+
+        $quote = app(PricingService::class)->quote('alpha beta gamma', 1);
+
+        $this->assertSame(15000, $quote['price_rials']);
+        $this->assertSame(15000, $quote['free_page_value_rials']);
+        $this->assertSame(1.5, $quote['breakdown']['language_factor']);
+    }
+
     public function test_versioned_pricing_seeder_is_idempotent_and_copies_existing_values(): void
     {
         PricingRule::create([
