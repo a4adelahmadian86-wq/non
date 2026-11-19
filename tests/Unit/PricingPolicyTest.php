@@ -65,6 +65,12 @@ class PricingPolicyTest extends TestCase
     public function test_typing_price_reads_versioned_policy_before_legacy_rule_values(): void
     {
         PricingRule::create([
+            'key' => 'page_base',
+            'value' => 77777,
+            'label' => 'legacy estimate test value',
+            'active' => true,
+        ]);
+        PricingRule::create([
             'key' => 'typing_manual_page',
             'value' => 999999,
             'label' => 'legacy test value',
@@ -77,6 +83,22 @@ class PricingPolicyTest extends TestCase
             'active' => true,
         ]);
 
+        FarastPricingPolicyVersion::create([
+            'policy_code' => 'page_base',
+            'version' => 1,
+            'capability_code' => 'typing.manual',
+            'unit' => 'page',
+            'currency' => 'IRR',
+            'unit_price' => 11111,
+            'additional_unit_price' => null,
+            'fee_amount' => 0,
+            'discount_basis_points' => 0,
+            'tax_basis_points' => 0,
+            'payg_multiplier_basis_points' => 10000,
+            'included_quantity' => 0,
+            'effective_from' => now()->subMinute(),
+            'checksum' => hash('sha256', 'page_base|1'),
+        ]);
         FarastPricingPolicyVersion::create([
             'policy_code' => 'typing_manual_page',
             'version' => 1,
@@ -112,6 +134,7 @@ class PricingPolicyTest extends TestCase
 
         $pricing = app(PricingService::class);
         $this->assertSame(12345, $pricing->initialTypingPrices()['manual']);
+        $this->assertSame(22222, $pricing->estimateByPages(2)['price_rials']);
 
         $subscription = $pricing->projectQuote('manual', '', 2, '', false);
         $this->assertSame(12345, $subscription['unit_price_rials']);
