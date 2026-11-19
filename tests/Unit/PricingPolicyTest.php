@@ -262,7 +262,7 @@ class PricingPolicyTest extends TestCase
     {
         $engine = app(PricingEngine::class);
 
-        $this->assertSame(6000, $engine->percentageAmount(100001, 500, 1000, true));
+        $this->assertSame(6000, $engine->percentageAmount(100001, 500, 1000, 'up'));
         $this->assertSame(5000, $engine->percentageAmount(100000, 500, 1000, true));
         $this->assertSame(0, $engine->percentageAmount(0, 500, 1000, true));
     }
