@@ -7,9 +7,9 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 - `App\\Services\\PricingEngine` resolves effective, versioned `FarastPricingPolicyVersion` records and computes a quote containing the policy version, currency, included/billable quantity, subtotal, discount, fee, tax, total, and checksum.
 - `CommerceAuthorizationService` uses `PricingEngine` for authorization, reservation, and charge snapshots. It derives included quantity from the actor's live entitlement and outstanding reservations; this is a runtime quota decision, not merely a policy default.
 - `ProfessionalCommerceService` persists quote snapshots and idempotency context. It is an orchestration/quote-persistence layer and must not be replaced by a second calculator.
-- `PricingService::calculate()` delegates to `PricingEngine` whenever an effective version exists and maps the quote back to its legacy response shape; it retains a temporary legacy fallback only for policy codes without an effective version. `projectQuote()`, `quote()`, `initialTypingPrices()`, and `estimateByPages()` resolve their configured values through the versioned engine first, with compatibility fallback still present.
+- `PricingService::calculate()` delegates to `PricingEngine` whenever an effective version exists and maps the quote back to its legacy response shape; it retains a temporary legacy fallback only for policy codes without an effective version. `projectQuote()`, `quote()`, and `estimateByPages()` route versioned-policy arithmetic through `PricingEngine`, including PAYG, voice-minute, language/density, and formula line adjustments; their legacy arithmetic remains only when the required policy version is absent. `initialTypingPrices()` resolves effective versioned values first.
 - `TypingPreflightController::estimate()` and `accept()` both call `PricingService::estimateByPages()`. They independently apply free-page and deposit rules and persist an estimate snapshot into session/order data. This is a live customer-facing compatibility boundary.
-- `tests/Unit/PricingPolicyTest.php` now covers both versioned-engine delegation with legacy response compatibility and the remaining legacy fallback. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds; typing preflight parity is still outstanding.
+- `tests/Unit/PricingPolicyTest.php` covers versioned engine delegation, typing estimates, language and formula charges, voice-minute/PAYG quotes, immutable admin price versioning, seeder idempotency, and legacy fallback. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds; typing preflight free-page/deposit parity remains outstanding.
 
 ## Consolidation constraints
 
@@ -38,6 +38,7 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 
 ## Remaining work
 
-- Finish the runtime caller inventory and active-version coverage check for every legacy key.
-- Consolidate `projectQuote()`, `quote()`, and `estimateByPages()` only after parity tests cover typing free-page and deposit behavior.
+- Complete the runtime caller inventory and active-version coverage check for every legacy key.
+- Add end-to-end typing preflight parity coverage for free-page allowance, deposit percentage/rounding, and subscription quota exhaustion.
+- Migrate coupon, gift-credit, and store campaign adjustments through trusted engine quote inputs without changing redemption locking, margin, budget, consent, or idempotency behavior.
 - Run focused and full test suites on the final PR head before merge.
