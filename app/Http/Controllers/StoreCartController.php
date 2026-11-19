@@ -138,9 +138,15 @@ class StoreCartController extends Controller
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
             $discount = (int) $payload['discount_rials'];
-            $taxable = max(0, $subtotal - $discount);
-            $tax = ($taxable > 0 && $taxEnabled) ? app(PricingEngine::class)->percentageAmount($taxable, (int) round($taxRate * 100), 1, 'nearest') : 0;
-            $total = $taxable + $tax;
+            $totals = app(PricingEngine::class)->totals(
+                $subtotal,
+                $discount,
+                0,
+                $taxEnabled ? (int) round($taxRate * 100) : 0
+            );
+            $taxable = $totals['taxable'];
+            $tax = $totals['tax'];
+            $total = $totals['total'];
 
             $order = Order::create([
                 'user_id' => $request->user()->id,
