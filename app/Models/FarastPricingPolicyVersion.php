@@ -13,7 +13,8 @@ class FarastPricingPolicyVersion extends Model
     {
         static::updating(function (self $model) {
             $dirty=array_keys($model->getDirty());
-            if (array_diff($dirty,['effective_from','effective_until','updated_at'])) throw new \LogicException('pricing_policy_version_is_immutable');
+            if (array_diff($dirty,['effective_from','effective_until','checksum','updated_at'])) throw new \LogicException('pricing_policy_version_is_immutable');
+            if (in_array('checksum', $dirty, true) && !array_intersect($dirty, ['effective_from', 'effective_until'])) throw new \LogicException('pricing_policy_checksum_requires_effective_date_change');
         });
         static::deleting(function () { throw new \LogicException('pricing_policy_version_is_immutable'); });
     }

@@ -17,7 +17,7 @@ class StoreCouponMarginPolicy
     {
         $price = max(0, $sellingPriceRials ?? (int) $product->price_rials);
         $configuredFloor = max(0, (int) $product->marketing_min_margin_rials);
-        $defaultFloor = (int) ceil($price * self::DEFAULT_MINIMUM_MARGIN_PERCENT / 100);
+        $defaultFloor = app(PricingEngine::class)->percentageAmount($price, self::DEFAULT_MINIMUM_MARGIN_PERCENT * 100, 1, 'up');
 
         return max($configuredFloor, $defaultFloor);
     }
@@ -34,6 +34,6 @@ class StoreCouponMarginPolicy
         $price = max(0, $sellingPriceRials ?? (int) $product->price_rials);
         $available = $price - (int) $product->cost_price_rials - $this->minimumMargin($product, $price);
 
-        return max(0, $available) * max(1, $quantity);
+        return app(PricingEngine::class)->lineAmount(max(0, $available), max(1, $quantity));
     }
 }

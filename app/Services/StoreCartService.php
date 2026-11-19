@@ -166,7 +166,7 @@ class StoreCartService
             }
             $unit = (int) $item->product->price_rials;
             $qty = (int) $item->quantity;
-            $line = $unit * $qty;
+            $line = app(PricingEngine::class)->lineAmount($unit, $qty);
             $subtotal += $line;
             $count += $qty;
             $items[] = [
@@ -232,7 +232,7 @@ class StoreCartService
 
                         if ($validAssignment) {
                             $discount = $coupon->type === 'percent'
-                                ? (int) floor($eligibleLineTotal * (int) $coupon->value / 100)
+                                ? app(PricingEngine::class)->percentageAmount($eligibleLineTotal, (int) $coupon->value * 100, 1, 'down')
                                 : min($eligibleLineTotal, (int) $coupon->value);
                             $couponAssignmentId = (int) $assignment->id;
                             $couponProductId = (int) $assignment->product_id;
@@ -241,7 +241,7 @@ class StoreCartService
                         }
                     } else {
                         $discount = $coupon->type === 'percent'
-                            ? (int) floor($subtotal * (int) $coupon->value / 100)
+                            ? app(PricingEngine::class)->percentageAmount($subtotal, (int) $coupon->value * 100, 1, 'down')
                             : min($subtotal, (int) $coupon->value);
                     }
                 } else {
@@ -254,7 +254,7 @@ class StoreCartService
             }
         }
 
-        $taxable = max(0, $subtotal - $discount);
+        $taxable = app(PricingEngine::class)->totals($subtotal, $discount)['taxable'];
 
         return [
             'items' => $items,

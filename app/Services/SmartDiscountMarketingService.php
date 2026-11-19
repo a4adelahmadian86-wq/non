@@ -97,7 +97,7 @@ class SmartDiscountMarketingService
         $cost = (int) $product->cost_price_rials;
         $availableDiscount = app(StoreCouponMarginPolicy::class)->maximumDiscount($product, $price, 1);
         $effectiveDiscountPercent = $this->effectiveDiscountPercent($productId, $maxDiscountPercent);
-        $discount = min((int) floor($price * $effectiveDiscountPercent / 100), $availableDiscount);
+        $discount = min(app(PricingEngine::class)->percentageAmount($price, (int) round($effectiveDiscountPercent * 100), 1, 'down'), $availableDiscount);
 
         if ($price <= 0 || $cost < 0 || $availableDiscount <= 0 || $discount <= 0) {
             return null;
@@ -143,7 +143,7 @@ class SmartDiscountMarketingService
             $currentAvailable = app(StoreCouponMarginPolicy::class)->maximumDiscount($lockedProduct, (int) $lockedProduct->price_rials, 1);
             $currentDiscountPercent = $this->effectiveDiscountPercent($productId, $maxDiscountPercent);
             $currentDiscount = min(
-                (int) floor((int) $lockedProduct->price_rials * $currentDiscountPercent / 100),
+                app(PricingEngine::class)->percentageAmount((int) $lockedProduct->price_rials, (int) round($currentDiscountPercent * 100), 1, 'down'),
                 $currentAvailable
             );
             if ($currentDiscount <= 0 || $currentDiscount !== $discount) {

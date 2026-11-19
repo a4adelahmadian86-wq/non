@@ -11,6 +11,7 @@ use App\Models\StoreProduct;
 use App\Services\StoreCartService;
 use App\Services\StoreCourseEnrollmentService;
 use App\Services\MarketingSignalService;
+use App\Services\PricingEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
@@ -137,9 +138,16 @@ class StoreCartController extends Controller
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
             $discount = (int) $payload['discount_rials'];
-            $taxable = max(0, $subtotal - $discount);
-            $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
-            $total = $taxable + $tax;
+            $totals = app(PricingEngine::class)->totals(
+                $subtotal,
+                $discount,
+                0,
+                $taxEnabled ? (int) round($taxRate * 100) : 0
+            );
+            $discount = $totals['discount'];
+            $taxable = $totals['taxable'];
+            $tax = $totals['tax'];
+            $total = $totals['total'];
 
             $order = Order::create([
                 'user_id' => $request->user()->id,
@@ -197,7 +205,7 @@ class StoreCartController extends Controller
 
                 $unit = (int) $product->price_rials;
                 $quantity = (int) $item->quantity;
-                $line = $unit * $quantity;
+                $line = app(PricingEngine::class)->lineAmount($unit, $quantity);
                 $isLast = $index === $cartItems->count() - 1;
 
                 if ($targetProductId > 0) {
@@ -207,14 +215,14 @@ class StoreCartController extends Controller
                 } else {
                     $lineDiscount = $isLast
                         ? $remainingDiscount
-                        : min($line, $remainingSubtotal > 0 ? (int) floor($remainingDiscount * $line / $remainingSubtotal) : 0);
+                        : min($line, $remainingSubtotal > 0 ? app(PricingEngine::class)->allocateProRata($remainingDiscount, $line, $remainingSubtotal) : 0);
                 }
                 $remainingDiscount -= $lineDiscount;
 
-                $lineTaxable = max(0, $line - $lineDiscount);
+                $lineTaxable = app(PricingEngine::class)->totals($line, $lineDiscount)['taxable'];
                 $lineTax = $isLast
                     ? $remainingTax
-                    : min($remainingTax, $remainingTaxable > 0 ? (int) floor($remainingTax * $lineTaxable / $remainingTaxable) : 0);
+                    : min($remainingTax, $remainingTaxable > 0 ? app(PricingEngine::class)->allocateProRata($remainingTax, $lineTaxable, $remainingTaxable) : 0);
                 $remainingTax -= $lineTax;
                 $remainingSubtotal -= $line;
                 $remainingTaxable -= $lineTaxable;

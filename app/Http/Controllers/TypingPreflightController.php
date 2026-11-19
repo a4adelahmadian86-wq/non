@@ -8,6 +8,7 @@ use App\Services\CapabilityService;
 use App\Services\DeclineMessageService;
 use App\Services\FreeQuotaService;
 use App\Services\PricingService;
+use App\Services\PricingEngine;
 use App\Services\UploadPreflightService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,14 +31,14 @@ class TypingPreflightController extends Controller
 
         [$path, $mime, $name] = $this->resolveSource($request);
         $pages = $preflight->estimatePages($path, $mime);
-        $quote = $pricing->estimateByPages($pages);
         $freePages = $caps['unlimited'] ? 0 : $free->availablePages($user, (int) ($caps['weekly_free_pages'] ?? 1));
         $freeApplied = $caps['unlimited'] ? 0 : min(1, $freePages, $pages);
+        $quote = $pricing->estimateByPages($pages, $freeApplied);
         $subtotal = $caps['unlimited'] ? 0 : (int) $quote['price_rials'];
-        $discount = $caps['unlimited'] ? $subtotal : min($subtotal, $freeApplied * (int) $quote['free_page_value_rials']);
-        $payable = max(0, $subtotal - $discount);
+        $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
+        $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
-        $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
+        $deposit = app(PricingEngine::class)->percentageAmount($payable, $depositPercent * 100, 1000, 'up');
         $hash = $preflight->fileHash($path);
 
         $accepted = $request->session()->get('typing_preflight_accepted');
@@ -58,6 +59,8 @@ class TypingPreflightController extends Controller
             'pages' => $pages,
             'estimate_rials' => $subtotal,
             'discount_rials' => $discount,
+            'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
+            'estimated_tax_rials' => (int) ($quote['tax_rials'] ?? 0),
             'payable_estimate_rials' => $payable,
             'free_pages_available' => $freePages,
             'free_page_applied' => $freeApplied,
@@ -100,42 +103,57 @@ class TypingPreflightController extends Controller
         abort_unless(hash_equals((string) ($quoted['hash'] ?? ''), $preflight->fileHash($path)), 409, 'فایل پس از برآورد تغییر کرده است.');
 
         $pages = $preflight->estimatePages($path, $mime);
-        $quote = $pricing->estimateByPages($pages);
         $freePages = $caps['unlimited'] ? 0 : $free->availablePages($user, (int) ($caps['weekly_free_pages'] ?? 1));
         $freeApplied = $caps['unlimited'] ? 0 : min(1, $freePages, $pages);
+        $quote = $pricing->estimateByPages($pages, $freeApplied);
         $subtotal = $caps['unlimited'] ? 0 : (int) $quote['price_rials'];
-        $discount = $caps['unlimited'] ? $subtotal : min($subtotal, $freeApplied * (int) $quote['free_page_value_rials']);
-        $payable = max(0, $subtotal - $discount);
+        $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
+        $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
-        $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
+        $deposit = app(PricingEngine::class)->percentageAmount($payable, $depositPercent * 100, 1000, 'up');
         $hash = $preflight->fileHash($path);
 
-        if ($depositPercent > 0 && $deposit > 0) {
-            $existing = Order::where('user_id', $user->id)
-                ->whereNull('document_id')
-                ->whereIn('status', ['deposit_pending', 'deposit_paid'])
-                ->latest()
-                ->get()
-                ->first(fn (Order $order) => ($order->pricing_snapshot['source_hash'] ?? null) === $hash);
+        $existing = Order::where('user_id', $user->id)
+            ->whereNull('document_id')
+            ->whereIn('status', ['deposit_pending', 'deposit_paid'])
+            ->latest()
+            ->get()
+            ->first(fn (Order $order) => ($order->pricing_snapshot['source_hash'] ?? null) === $hash);
 
-            if ($existing && $existing->status === 'deposit_paid') {
-                if ($project) {
-                    $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
-                }
-                $request->session()->put('typing_preflight_deposit_order', $existing->id);
-                $request->session()->put('typing_preflight_accepted', [
-                    'path' => $path,
-                    'hash' => $hash,
-                    'pages' => $pages,
-                    'accepted_at' => now()->toIso8601String(),
-                    'deposit_order_id' => $existing->id,
-                    'project_id' => $project?->id,
-                ]);
-
-                return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
+        if ($existing && $existing->status === 'deposit_paid') {
+            if ($project) {
+                $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
             }
+            $request->session()->put('typing_preflight_deposit_order', $existing->id);
+            $request->session()->put('typing_preflight_accepted', [
+                'path' => $path,
+                'hash' => $hash,
+                'pages' => $pages,
+                'accepted_at' => now()->toIso8601String(),
+                'pricing_policy_version_id' => data_get($existing->pricing_snapshot ?? [], 'pricing_policy_version_id'),
+                'deposit_order_id' => $existing->id,
+                'project_id' => $project?->id,
+            ]);
 
-            $order = $existing ?: Order::create([
+            return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
+        }
+
+        if ($existing && $existing->status === 'deposit_pending') {
+            if ($project && (int) data_get($existing->pricing_snapshot, 'project_id', 0) !== (int) $project->id) {
+                $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
+            }
+            $request->session()->put('typing_preflight_deposit_order', $existing->id);
+
+            return response()->json([
+                'ok' => true,
+                'action' => 'deposit',
+                'order_id' => $existing->id,
+                'checkout_url' => route('checkout', $existing),
+            ]);
+        }
+
+        if ($depositPercent > 0 && $deposit > 0) {
+            $order = Order::create([
                 'user_id' => $user->id,
                 'document_id' => null,
                 'subtotal_rials' => $deposit,
@@ -154,6 +172,8 @@ class TypingPreflightController extends Controller
                     'estimated_subtotal_rials' => $subtotal,
                     'estimated_discount_rials' => $discount,
                     'estimated_payable_rials' => $payable,
+                    'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
+                    'estimated_tax_rials' => (int) ($quote['tax_rials'] ?? 0),
                     'free_page_preview' => $freeApplied,
                     'deposit_percent' => $depositPercent,
                     'deposit_credit_rials' => $deposit,
@@ -182,6 +202,7 @@ class TypingPreflightController extends Controller
             'hash' => $hash,
             'pages' => $pages,
             'accepted_at' => now()->toIso8601String(),
+            'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
             'project_id' => $project?->id,
         ]);
 

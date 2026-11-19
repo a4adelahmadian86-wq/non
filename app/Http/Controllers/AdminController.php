@@ -19,6 +19,8 @@ use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
 use App\Services\MailConfigService;
+use App\Services\PricingEngine;
+use App\Services\PricingPolicyAdminService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -27,7 +29,7 @@ use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
-    public function index(Request $request, CapabilityService $capabilities, AdminConsoleService $console)
+    public function index(Request $request, CapabilityService $capabilities, AdminConsoleService $console, PricingEngine $pricingEngine)
     {
         $actor = $request->user();
         abort_unless($actor, 403);
@@ -305,8 +307,19 @@ class AdminController extends Controller
             ? VoiceProviderAccount::query()->get()->keyBy('provider')
             : collect();
 
+        $pricingRules = $globalScope ? PricingRule::orderBy('id')->get() : collect();
+        foreach ($pricingRules as $pricingRule) {
+            $version = $pricingEngine->resolve($pricingRule->key);
+            if (!$version) {
+                continue;
+            }
+            $pricingRule->value = $pricingRule->key === 'typing_payg_multiplier'
+                ? max(100, (int) round($version->payg_multiplier_basis_points / 100))
+                : max(0, (int) $version->unit_price);
+        }
+
         return view('admin.index', [
-            'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
+            'rules' => $pricingRules,
             'users' => $users,
             'userTotalForFilter' => $filteredUserTotal,
             'announcements' => $canManageAnnouncements ? Announcement::latest()->limit(20)->get() : collect(),
@@ -963,21 +976,28 @@ class AdminController extends Controller
         return back()->with('status', 'تنظیمات و دسترسی سرویس‌های صوتی ذخیره شد. کلیدها به‌صورت رمزنگاری‌شده نگهداری می‌شوند.');
     }
 
-    public function updatePricing(Request $r)
+    public function updatePricing(Request $r, PricingPolicyAdminService $pricingPolicies)
     {
         $d = $r->validate([
-            'key' => 'required|string|max:120',
+            'key' => 'required|string|max:120|in:page_base,typing_manual_page,typing_voice_page,typing_printed_page,typing_handwritten_page,typing_mixed_page,typing_voice_minute,typing_payg_multiplier,english_multiplier,arabic_multiplier,mixed_multiplier,dense_page_multiplier,formula_unit',
             'value' => 'required|integer|min:0',
             'label' => 'required|string|max:160',
         ]);
 
-        PricingRule::updateOrCreate(['key' => $d['key']], [
-            'value' => $d['value'],
-            'label' => $d['label'],
-            'active' => true,
-        ]);
+        $rule = PricingRule::where('key', $d['key'])->firstOrFail();
 
-        return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
+        DB::transaction(function () use ($pricingPolicies, $rule, $d) {
+            $pricingPolicies->createVersionFromPricingRule($rule->key, (int) $d['value'], $d['label']);
+
+            // Keep the legacy mirror temporarily for callers not yet migrated.
+            $rule->update([
+                'value' => $d['value'],
+                'label' => $d['label'],
+                'active' => true,
+            ]);
+        });
+
+        return back()->with('status', 'نسخه جدید قیمت‌گذاری ثبت و فعال شد.');
     }
 
     public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
