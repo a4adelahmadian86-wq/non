@@ -11,6 +11,7 @@ use App\Models\StoreProduct;
 use App\Services\StoreCartService;
 use App\Services\StoreCourseEnrollmentService;
 use App\Services\MarketingSignalService;
+use App\Services\PricingEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
