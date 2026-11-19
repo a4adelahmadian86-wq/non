@@ -5,6 +5,7 @@ use App\Models\FarastPricingPolicy;
 use App\Models\FarastPricingPolicyVersion;
 use App\Models\PricingRule;
 use App\Services\PricingService;
+use App\Services\PricingPolicyAdminService;
 use Database\Seeders\VersionedPricingPolicySeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -198,6 +199,24 @@ class PricingPolicyTest extends TestCase
         $this->assertCount(1, $versions);
         $this->assertSame(35000, (int) $versions->first()->unit_price);
         $this->assertSame('pricing_rules', $versions->first()->metadata['source']);
+    }
+
+    public function test_admin_price_edit_creates_a_new_immutable_version(): void
+    {
+        $previous = app(\\App\\Services\\PricingEngine::class)->resolve('page_base');
+        $newVersion = app(PricingPolicyAdminService::class)->createVersionFromPricingRule(
+            'page_base',
+            45678,
+            'قیمت جدید هر صفحه'
+        );
+
+        $this->assertSame(45678, (int) $newVersion->unit_price);
+        $this->assertSame('admin_pricing_rule', $newVersion->metadata['source']);
+        $this->assertSame(($previous?->version ?? 0) + 1, (int) $newVersion->version);
+
+        if ($previous) {
+            $this->assertSame(35000, (int) $previous->fresh()->unit_price);
+        }
     }
 
     public function test_policy_calculation_supports_allowance_additional_usage_discount_and_fee(): void
