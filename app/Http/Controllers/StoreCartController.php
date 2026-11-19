@@ -138,7 +138,7 @@ class StoreCartController extends Controller
             $subtotal = (int) $payload['subtotal_rials'];
             $discount = (int) $payload['discount_rials'];
             $taxable = max(0, $subtotal - $discount);
-            $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
+            $tax = ($taxable > 0 && $taxEnabled) ? app(\\App\\Services\\PricingEngine::class)->percentageAmount($taxable, (int) round($taxRate * 100), 1, 'nearest') : 0;
             $total = $taxable + $tax;
 
             $order = Order::create([
@@ -197,7 +197,7 @@ class StoreCartController extends Controller
 
                 $unit = (int) $product->price_rials;
                 $quantity = (int) $item->quantity;
-                $line = $unit * $quantity;
+                $line = app(\\App\\Services\\PricingEngine::class)->lineAmount($unit, $quantity);
                 $isLast = $index === $cartItems->count() - 1;
 
                 if ($targetProductId > 0) {
