@@ -1,7 +1,7 @@
 <?php
 
-use App\\Http\\Controllers\\StorePriceProposalController;
-use Illuminate\\Support\\Facades\\Route;
+use App\Http\Controllers\StorePriceProposalController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {
     Route::get('/store/price-proposals', [StorePriceProposalController::class, 'index'])
