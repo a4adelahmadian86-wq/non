@@ -41,7 +41,7 @@ class StorePriceProposalService
             'cost_price_rials' => $costPrice,
             'minimum_margin_rials' => $minimumMargin,
             'maximum_discount_rials' => $maximumDiscount,
-            'can_propose' => $basePrice > 0 && $uploaderId !== null,
+            'can_propose' => $currentPrice > 0 && $uploaderId !== null,
         ];
     }
 
@@ -55,7 +55,7 @@ class StorePriceProposalService
             if (! $uploaderId) {
                 throw new RuntimeException('store_product_uploader_not_identified');
             }
-            if ($preview['base_price_rials'] <= 0) {
+            if ($preview['current_price_rials'] <= 0) {
                 throw new RuntimeException('store_product_requires_positive_base_price');
             }
 
