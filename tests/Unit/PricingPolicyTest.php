@@ -202,6 +202,39 @@ class PricingPolicyTest extends TestCase
         $this->assertSame('pricing_rules', $versions->first()->metadata['source']);
     }
 
+    public function test_voice_project_quote_uses_versioned_page_and_minute_rates(): void
+    {
+        foreach ([
+            ['typing_voice_page', 'typing.voice', 'page', 5000],
+            ['typing_voice_minute', 'typing.voice', 'minute', 2000],
+            ['typing_payg_multiplier', 'typing.payg', 'percentage', 0],
+        ] as [$code, $capability, $unit, $price]) {
+            FarastPricingPolicyVersion::create([
+                'policy_code' => $code,
+                'version' => ((int) FarastPricingPolicyVersion::where('policy_code', $code)->max('version')) + 1,
+                'capability_code' => $capability,
+                'unit' => $unit,
+                'currency' => 'IRR',
+                'unit_price' => $price,
+                'additional_unit_price' => null,
+                'fee_amount' => 0,
+                'discount_basis_points' => 0,
+                'tax_basis_points' => 0,
+                'payg_multiplier_basis_points' => $code === 'typing_payg_multiplier' ? 15000 : 10000,
+                'included_quantity' => 0,
+                'effective_from' => now()->subMinute(),
+                'checksum' => hash('sha256', $code.'|voice-test'),
+            ]);
+        }
+
+        $quote = app(PricingService::class)->projectQuote('voice', '', 2, '', true, 3);
+
+        $this->assertSame(5000, $quote['unit_price_rials']);
+        $this->assertSame(6000, $quote['audio_cost_rials']);
+        $this->assertSame(24000, $quote['price_rials']);
+        $this->assertSame(150, $quote['breakdown']['multiplier']);
+    }
+
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
     {
         $previous = app(PricingEngine::class)->resolve('page_base');
