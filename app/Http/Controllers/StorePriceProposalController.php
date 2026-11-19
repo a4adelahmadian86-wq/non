@@ -47,6 +47,7 @@ class StorePriceProposalController extends Controller
             $message = match ($exception->getMessage()) {
                 'store_product_uploader_not_identified' => 'بارگذار این محصول مشخص نیست؛ ابتدا مالکیت بارگذاری را ثبت کنید.',
                 'store_product_requires_positive_base_price' => 'برای این محصول ابتدا قیمت پایه معتبر ثبت کنید.',
+                'store_product_has_no_safe_base_price' => 'با بهای تمام‌شده و حاشیه سود فعلی، قیمت امنی در محدوده مجاز قابل پیشنهاد نیست.',
                 default => 'ایجاد پیشنهاد قیمت انجام نشد.',
             };
 
