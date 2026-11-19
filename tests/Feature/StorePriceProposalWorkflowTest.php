@@ -310,6 +310,35 @@ class StorePriceProposalWorkflowTest extends TestCase
         app(StorePriceProposalService::class)->decide($proposal, $other, 'accept');
     }
 
+    public function test_deleted_product_keeps_proposal_history_and_expires_pending_decision(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $uploader = $this->user('Uploader');
+        $product = $this->product();
+
+        app(AuditEventService::class)->record(
+            'store.product.created',
+            $uploader->id,
+            null,
+            'store_product',
+            $product->id,
+            ['type' => $product->type],
+        );
+
+        $proposal = app(StorePriceProposalService::class)->propose($product, $pricingTeam);
+        $productId = $product->id;
+        $product->delete();
+
+        $this->assertNull($proposal->fresh()->product_id);
+        $this->assertFalse(app(StorePriceProposalService::class)->decide($proposal, $uploader, 'accept'));
+        $this->assertSame('stale', $proposal->fresh()->status);
+        $this->assertDatabaseHas('farast_audit_events', [
+            'event_type' => 'store.product.price_proposal_stale',
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $productId,
+        ]);
+    }
+
     public function test_product_price_proposal_snapshot_cannot_be_rewritten_after_creation(): void
     {
         $pricingTeam = $this->user('Pricing Team');
