@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('store_price_proposals')) {
+            return;
+        }
+
         Schema::create('store_price_proposals', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained('store_products')->restrictOnDelete();
