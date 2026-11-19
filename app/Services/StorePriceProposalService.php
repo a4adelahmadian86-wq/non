@@ -126,15 +126,18 @@ class StorePriceProposalService
         }
 
         return DB::transaction(function () use ($proposal, $actor, $decision, $note) {
+            // Always lock product before proposal, matching propose() and avoiding
+            // a product/proposal lock-order deadlock under concurrent decisions.
+            $proposalReference = StorePriceProposal::query()->findOrFail($proposal->id);
+            $product = StoreProduct::query()->lockForUpdate()->findOrFail($proposalReference->product_id);
             $lockedProposal = StorePriceProposal::query()->lockForUpdate()->findOrFail($proposal->id);
+
             if ((int) $lockedProposal->uploader_id !== (int) $actor->id) {
                 throw new AuthorizationException('store_price_proposal_not_owned_by_uploader');
             }
             if ($lockedProposal->status !== 'pending') {
                 throw new RuntimeException('store_price_proposal_already_decided');
             }
-
-            $product = StoreProduct::query()->lockForUpdate()->findOrFail($lockedProposal->product_id);
             $currentSnapshot = $this->snapshot($product, (int) $lockedProposal->uploader_id);
             if (! hash_equals($lockedProposal->source_hash, $this->hashSnapshot($currentSnapshot))) {
                 $lockedProposal->status = 'stale';
