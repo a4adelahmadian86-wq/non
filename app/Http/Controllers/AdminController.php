@@ -979,7 +979,7 @@ class AdminController extends Controller
     public function updatePricing(Request $r, PricingPolicyAdminService $pricingPolicies)
     {
         $d = $r->validate([
-            'key' => 'required|string|max:120',
+            'key' => 'required|string|max:120|in:page_base,typing_manual_page,typing_voice_page,typing_printed_page,typing_handwritten_page,typing_mixed_page,typing_voice_minute,typing_payg_multiplier,english_multiplier,arabic_multiplier,mixed_multiplier,dense_page_multiplier,formula_unit',
             'value' => 'required|integer|min:0',
             'label' => 'required|string|max:160',
         ]);
