@@ -22,6 +22,35 @@ class StoreCouponMarginPolicy
         return max($configuredFloor, $defaultFloor);
     }
 
+    /**
+     * Lowest selling price that still satisfies the configured floor and the
+     * default percentage margin. A missing cost price means no safe base-price
+     * recommendation can be derived.
+     */
+    public function minimumSafeSellingPrice(StoreProduct $product): ?int
+    {
+        if ($product->cost_price_rials === null) {
+            return null;
+        }
+
+        $cost = max(0, (int) $product->cost_price_rials);
+        $configuredFloor = max(0, (int) $product->marketing_min_margin_rials);
+        $low = max(1, $cost);
+        $high = max($low + 1, $cost + $configuredFloor + 1, ($cost * 2) + 1);
+
+        while ($low < $high) {
+            $candidate = intdiv($low + $high, 2);
+            $margin = $candidate - $cost;
+            if ($margin >= $this->minimumMargin($product, $candidate)) {
+                $high = $candidate;
+            } else {
+                $low = $candidate + 1;
+            }
+        }
+
+        return $low;
+    }
+
     public function maximumDiscount(
         StoreProduct $product,
         ?int $sellingPriceRials = null,
