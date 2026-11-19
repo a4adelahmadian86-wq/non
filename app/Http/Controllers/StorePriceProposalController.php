@@ -53,17 +53,29 @@ class StorePriceProposalController extends Controller
 
     public function accept(Request $request, StorePriceProposal $proposal, StorePriceProposalService $service): RedirectResponse
     {
-        $accepted = $service->decide($proposal, $request->user(), 'accept');
+        try {
+            $accepted = $service->decide($proposal, $request->user(), 'accept');
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['pricing' => 'این پیشنهاد قبلاً تعیین تکلیف شده یا دیگر قابل پذیرش نیست.']);
+        }
 
-        return $accepted
-            ? back()->with('status', 'پیشنهاد قیمت پذیرفته و قیمت کمپین اعمال شد.')
-            : back()->withErrors(['pricing' => 'قیمت یا حاشیه سود محصول پس از ارسال پیشنهاد تغییر کرده است؛ پیشنهاد قبلی منقضی شد و باید پیشنهاد تازه‌ای ثبت شود.']);
+        if (! $accepted) {
+            return back()->withErrors(['pricing' => 'قیمت یا حاشیه سود محصول پس از ارسال پیشنهاد تغییر کرده است؛ پیشنهاد قبلی منقضی شد و باید پیشنهاد تازه‌ای ثبت شود.']);
+        }
+
+        return back()->with('status', $proposal->campaign_price_rials !== null
+            ? 'پیشنهاد پذیرفته شد و قیمت کمپین اعمال شد.'
+            : 'قیمت پایه پیشنهادی تأیید شد؛ قیمت محصول تغییر نکرد.');
     }
 
     public function reject(Request $request, StorePriceProposal $proposal, StorePriceProposalService $service): RedirectResponse
     {
         $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
-        $accepted = $service->decide($proposal, $request->user(), 'reject', $data['note'] ?? null);
+        try {
+            $accepted = $service->decide($proposal, $request->user(), 'reject', $data['note'] ?? null);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['pricing' => 'این پیشنهاد قبلاً تعیین تکلیف شده یا دیگر قابل رد نیست.']);
+        }
 
         return $accepted
             ? back()->with('status', 'پیشنهاد قیمت رد شد؛ قیمت محصول تغییر نکرد.')
