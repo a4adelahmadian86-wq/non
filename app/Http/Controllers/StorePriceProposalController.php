@@ -63,9 +63,14 @@ class StorePriceProposalController extends Controller
             return back()->withErrors(['pricing' => 'قیمت یا حاشیه سود محصول پس از ارسال پیشنهاد تغییر کرده است؛ پیشنهاد قبلی منقضی شد و باید پیشنهاد تازه‌ای ثبت شود.']);
         }
 
-        return back()->with('status', $proposal->campaign_price_rials !== null
+        $previousPrice = (int) data_get($proposal->snapshot_before, 'price_rials', $proposal->base_price_rials);
+        $message = $proposal->campaign_price_rials !== null
             ? 'پیشنهاد پذیرفته شد و قیمت کمپین اعمال شد.'
-            : 'قیمت پایه پیشنهادی تأیید شد؛ قیمت محصول تغییر نکرد.');
+            : ((int) $proposal->base_price_rials > $previousPrice
+                ? 'پیشنهاد پذیرفته شد و قیمت پایه امن اعمال شد.'
+                : 'قیمت پایه فعلی تأیید شد؛ مبلغ محصول تغییر نکرد.');
+
+        return back()->with('status', $message);
     }
 
     public function reject(Request $request, StorePriceProposal $proposal, StorePriceProposalService $service): RedirectResponse
