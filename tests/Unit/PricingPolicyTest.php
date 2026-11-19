@@ -144,6 +144,25 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(30863, $payg['price_rials']);
     }
 
+    public function test_versioned_pricing_seeder_is_idempotent_and_copies_existing_values(): void
+    {
+        PricingRule::create([
+            'key' => 'page_base',
+            'value' => 35000,
+            'label' => 'configured page base',
+            'active' => true,
+        ]);
+
+        $seeder = app(VersionedPricingPolicySeeder::class);
+        $seeder->run();
+        $seeder->run();
+
+        $versions = FarastPricingPolicyVersion::where('policy_code', 'page_base')->get();
+        $this->assertCount(1, $versions);
+        $this->assertSame(35000, (int) $versions->first()->unit_price);
+        $this->assertSame('pricing_rules', $versions->first()->metadata['source']);
+    }
+
     public function test_policy_calculation_supports_allowance_additional_usage_discount_and_fee(): void
     {
         FarastPricingPolicy::create([
