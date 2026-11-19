@@ -144,6 +144,7 @@ class StoreCartController extends Controller
                 0,
                 $taxEnabled ? (int) round($taxRate * 100) : 0
             );
+            $discount = $totals['discount'];
             $taxable = $totals['taxable'];
             $tax = $totals['tax'];
             $total = $totals['total'];
