@@ -8,6 +8,7 @@ use App\Services\CapabilityService;
 use App\Services\DeclineMessageService;
 use App\Services\FreeQuotaService;
 use App\Services\PricingService;
+use App\Services\PricingEngine;
 use App\Services\UploadPreflightService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -37,7 +38,7 @@ class TypingPreflightController extends Controller
         $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
         $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
-        $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
+        $deposit = app(PricingEngine::class)->percentageAmount($payable, $depositPercent * 100, 1000, true);
         $hash = $preflight->fileHash($path);
 
         $accepted = $request->session()->get('typing_preflight_accepted');
