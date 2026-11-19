@@ -269,6 +269,7 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(111, $engine->allocateProRata(333, 1, 3));
         $this->assertSame(222, $engine->allocateProRata(333, 2, 3));
         $this->assertSame(333, $engine->allocateProRata(333, 0, 0, true));
+        $this->assertSame(['subtotal' => 100000, 'discount' => 10000, 'fee' => 5000, 'taxable' => 95000, 'tax' => 9500, 'total' => 104500], $engine->totals(100000, 10000, 5000, 1000));
     }
 
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
