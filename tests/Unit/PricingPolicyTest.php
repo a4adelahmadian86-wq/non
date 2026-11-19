@@ -6,6 +6,7 @@ use App\Models\FarastPricingPolicyVersion;
 use App\Models\PricingRule;
 use App\Services\PricingService;
 use App\Services\PricingPolicyAdminService;
+use App\Services\PricingEngine;
 use Database\Seeders\VersionedPricingPolicySeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -203,7 +204,7 @@ class PricingPolicyTest extends TestCase
 
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
     {
-        $previous = app(\\App\\Services\\PricingEngine::class)->resolve('page_base');
+        $previous = app(PricingEngine::class)->resolve('page_base');
         $newVersion = app(PricingPolicyAdminService::class)->createVersionFromPricingRule(
             'page_base',
             45678,
