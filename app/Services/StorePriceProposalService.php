@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\FarastAuditEvent;
-use App\\Models\\StorePriceProposal;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductIngestion;
-use App\\Models\\User;
-use Illuminate\\Auth\\Access\\AuthorizationException;
-use Illuminate\\Contracts\\Pagination\\LengthAwarePaginator;
-use Illuminate\\Support\\Facades\\DB;
+use App\Models\FarastAuditEvent;
+use App\Models\StorePriceProposal;
+use App\Models\StoreProduct;
+use App\Models\StoreProductIngestion;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class StorePriceProposalService
