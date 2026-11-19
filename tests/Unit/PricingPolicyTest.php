@@ -258,6 +258,27 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(87654, (int) PricingRule::where('key', 'page_base')->value('value'));
     }
 
+    public function test_admin_price_edit_does_not_shadow_a_scheduled_future_policy(): void
+    {
+        $admin = app(PricingPolicyAdminService::class);
+        $admin->createVersion([
+            'policy_code' => 'page_base',
+            'unit' => 'page',
+            'unit_price' => 55555,
+            'effective_from' => now()->addDay(),
+        ]);
+        $before = FarastPricingPolicyVersion::where('policy_code', 'page_base')->count();
+
+        try {
+            $admin->createVersionFromPricingRule('page_base', 66666, 'conflicting edit');
+            $this->fail('An admin edit must not silently shadow a scheduled future policy.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('future_pricing_policy_version_exists', $exception->getMessage());
+        }
+
+        $this->assertSame($before, FarastPricingPolicyVersion::where('policy_code', 'page_base')->count());
+    }
+
     public function test_percentage_amount_uses_central_integer_rounding(): void
     {
         $engine = app(PricingEngine::class);
