@@ -238,6 +238,7 @@ class PricingPolicyTest extends TestCase
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
     {
         $previous = app(PricingEngine::class)->resolve('page_base');
+        $previousPrice = $previous ? (int) $previous->unit_price : null;
         $newVersion = app(PricingPolicyAdminService::class)->createVersionFromPricingRule(
             'page_base',
             45678,
@@ -249,7 +250,7 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(($previous?->version ?? 0) + 1, (int) $newVersion->version);
 
         if ($previous) {
-            $this->assertSame(35000, (int) $previous->fresh()->unit_price);
+            $this->assertSame($previousPrice, (int) $previous->fresh()->unit_price);
         }
     }
 
