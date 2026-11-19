@@ -13,7 +13,7 @@ class PricingPolicyTest extends TestCase
     public function test_calculate_uses_versioned_engine_and_preserves_legacy_response_contract(): void
     {
         $version = FarastPricingPolicyVersion::create([
-            'policy_code' => 'typing_manual_page',
+            'policy_code' => 'typing.manual.versioned.test',
             'version' => 1,
             'capability_code' => 'typing.manual',
             'unit' => 'page',
@@ -26,10 +26,10 @@ class PricingPolicyTest extends TestCase
             'payg_multiplier_basis_points' => 10000,
             'included_quantity' => 2,
             'effective_from' => now()->subMinute(),
-            'checksum' => hash('sha256', 'typing_manual_page|1'),
+            'checksum' => hash('sha256', 'typing.manual.versioned.test|1'),
         ]);
 
-        $result = app(PricingService::class)->calculate('typing_manual_page', 4, true);
+        $result = app(PricingService::class)->calculate('typing.manual.versioned.test', 4, true);
 
         $this->assertSame(2, $result['included_units']);
         $this->assertSame(2, $result['billable_units']);
