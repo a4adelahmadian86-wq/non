@@ -28,7 +28,7 @@ class PricingEngine
      * currency rounding increment (for example, deposit amounts rounded up
      * to the next 1,000 rials).
      */
-    public function percentageAmount(int $baseAmount, int $basisPoints, int $roundingIncrement = 1, bool $roundUp = false): int
+    public function percentageAmount(int $baseAmount, int $basisPoints, int $roundingIncrement = 1, string $rounding = 'nearest'): int
     {
         $baseAmount = max(0, $baseAmount);
         $basisPoints = max(0, min(10000, $basisPoints));
@@ -39,9 +39,11 @@ class PricingEngine
 
         $numerator = $baseAmount * $basisPoints;
         $denominator = 10000 * $roundingIncrement;
-        $units = $roundUp
-            ? intdiv($numerator + $denominator - 1, $denominator)
-            : (int) round($numerator / $denominator);
+        $units = match ($rounding) {
+            'up' => intdiv($numerator + $denominator - 1, $denominator),
+            'down' => intdiv($numerator, $denominator),
+            default => (int) round($numerator / $denominator),
+        };
 
         return $units * $roundingIncrement;
     }
