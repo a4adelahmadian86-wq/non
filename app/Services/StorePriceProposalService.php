@@ -383,8 +383,8 @@ class StorePriceProposalService
     private function queueUploaderNotification(int $uploaderId, StorePriceProposal $proposal, StoreProduct $product): void
     {
         $campaign = $proposal->campaign_price_rials === null
-            ? 'برای این محصول به دلیل نبود حاشیه سود امن، قیمت کمپین پیشنهاد نشده است.'
-            : 'قیمت کمپین پیشنهادی با رعایت حداقل حاشیه سود آماده بررسی است.';
+            ? 'قیمت پایه پیشنهادی: '.number_format((int) $proposal->base_price_rials).' ریال؛ قیمت کمپین امنی پیشنهاد نشده است.'
+            : 'قیمت پایه: '.number_format((int) $proposal->base_price_rials).' ریال؛ کف قیمت کمپین: '.number_format((int) $proposal->campaign_price_rials).' ریال.';
 
         $this->notifications->push(
             $uploaderId,
