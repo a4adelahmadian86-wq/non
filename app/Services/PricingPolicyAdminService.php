@@ -65,6 +65,16 @@ class PricingPolicyAdminService
     {
         return DB::transaction(function()use($version){
             $retiredAt = now();
+            $futureScheduled = FarastPricingPolicyVersion::where('policy_code', $version->policy_code)
+                ->where('region_code', $version->region_code)
+                ->where('id', '!=', $version->id)
+                ->where('effective_from', '>', $retiredAt)
+                ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>', $retiredAt))
+                ->exists();
+            if ($futureScheduled) {
+                throw new RuntimeException('future_pricing_policy_version_exists');
+            }
+
             $previousVersions = FarastPricingPolicyVersion::where('policy_code',$version->policy_code)
                 ->where('region_code',$version->region_code)->where('id','!=',$version->id)
                 ->whereNull('effective_until')->lockForUpdate()->get();
