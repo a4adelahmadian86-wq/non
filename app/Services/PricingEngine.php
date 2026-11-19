@@ -23,6 +23,21 @@ class PricingEngine
         return $query->first();
     }
 
+    public function allocateProRata(int $amount, int $part, int $whole, bool $last = false): int
+    {
+        $amount = max(0, $amount);
+        $part = max(0, $part);
+        $whole = max(0, $whole);
+        if ($last) {
+            return $amount;
+        }
+        if ($amount === 0 || $part === 0 || $whole === 0) {
+            return 0;
+        }
+
+        return min($amount, (int) floor($amount * min($part, $whole) / $whole));
+    }
+
     public function lineAmount(int $unitPrice, int $quantity): int
     {
         return max(0, $unitPrice) * max(0, $quantity);
