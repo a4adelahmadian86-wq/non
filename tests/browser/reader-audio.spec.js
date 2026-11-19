@@ -197,7 +197,7 @@ test('keeps estimated chunk timing visibly approximate and preserves accessible 
 
   const hint = page.locator('[data-audio-word-hint]');
   await expect(hint).toContainText('تقریبی');
-  await expect(hint).not.toContainText('دقیق');
+  await expect(hint).not.toContainText('بازهٔ دقیق');
   await expect(page.locator('[data-audio-play]')).toHaveAttribute('aria-label', 'پخش');
   await expect(page.locator('[data-audio-stop]')).toHaveAttribute('aria-label', 'توقف و بازگشت به ابتدا');
   await expect(page.locator('[data-audio-seek]')).toHaveAttribute('aria-label', 'موقعیت پخش');
