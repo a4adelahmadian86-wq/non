@@ -65,6 +65,8 @@ class StorePriceProposalService
                 ->first();
 
             if ($pending && hash_equals($pending->source_hash, $sourceHash)) {
+                $this->queueUploaderNotification($uploaderId, $pending, $lockedProduct);
+
                 return $pending;
             }
 
@@ -106,24 +108,7 @@ class StorePriceProposalService
                 'application',
             );
 
-            DB::afterCommit(function () use ($uploaderId, $proposal, $lockedProduct): void {
-                $campaign = $proposal->campaign_price_rials === null
-                    ? 'برای این محصول به دلیل نبود حاشیه سود امن، قیمت کمپین پیشنهاد نشده است.'
-                    : 'قیمت کمپین پیشنهادی با رعایت حداقل حاشیه سود آماده بررسی است.';
-                $this->notifications->push(
-                    $uploaderId,
-                    'store_price_proposal_created',
-                    'پیشنهاد قیمت محصول برای بررسی',
-                    $lockedProduct->title.' — '.$campaign,
-                    [
-                        'url' => route('store.price-proposals.index'),
-                        'proposal_id' => $proposal->id,
-                        'product_id' => $lockedProduct->id,
-                    ],
-                    false,
-                    'store-price-proposal:'.$proposal->id,
-                );
-            });
+            $this->queueUploaderNotification($uploaderId, $proposal, $lockedProduct);
 
             return $proposal;
         });
@@ -336,4 +321,27 @@ class StorePriceProposalService
             $product->published_at = null;
         }
     }
+    private function queueUploaderNotification(int $uploaderId, StorePriceProposal $proposal, StoreProduct $product): void
+    {
+        DB::afterCommit(function () use ($uploaderId, $proposal, $product): void {
+            $campaign = $proposal->campaign_price_rials === null
+                ? 'برای این محصول به دلیل نبود حاشیه سود امن، قیمت کمپین پیشنهاد نشده است.'
+                : 'قیمت کمپین پیشنهادی با رعایت حداقل حاشیه سود آماده بررسی است.';
+
+            $this->notifications->push(
+                $uploaderId,
+                'store_price_proposal_created',
+                'پیشنهاد قیمت محصول برای بررسی',
+                $product->title.' — '.$campaign,
+                [
+                    'url' => route('store.price-proposals.index'),
+                    'proposal_id' => $proposal->id,
+                    'product_id' => $product->id,
+                ],
+                false,
+                'store-price-proposal:'.$proposal->id,
+            );
+        });
+    }
+
 }
