@@ -328,7 +328,7 @@ class StorePriceProposalService
     {
         $metadata = (array) ($product->metadata ?? []);
         $supervisor = (array) ($metadata['ai_supervisor'] ?? []);
-        if (! $supervisor) {
+        if (! $supervisor || ! ($supervisor['enabled'] ?? false)) {
             return;
         }
 
