@@ -258,6 +258,15 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(87654, (int) PricingRule::where('key', 'page_base')->value('value'));
     }
 
+    public function test_percentage_amount_uses_central_integer_rounding(): void
+    {
+        $engine = app(PricingEngine::class);
+
+        $this->assertSame(6000, $engine->percentageAmount(100001, 500, 1000, true));
+        $this->assertSame(5000, $engine->percentageAmount(100000, 500, 1000, true));
+        $this->assertSame(0, $engine->percentageAmount(0, 500, 1000, true));
+    }
+
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
     {
         $previous = app(PricingEngine::class)->resolve('page_base');
