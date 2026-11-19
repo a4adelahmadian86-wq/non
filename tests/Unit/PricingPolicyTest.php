@@ -157,7 +157,7 @@ class PricingPolicyTest extends TestCase
 
             FarastPricingPolicyVersion::create([
                 'policy_code' => $key,
-                'version' => 1,
+                'version' => ((int) FarastPricingPolicyVersion::where('policy_code', $key)->max('version')) + 1,
                 'capability_code' => 'typing.manual',
                 'unit' => $key === 'page_base' ? 'page' : 'percentage',
                 'currency' => 'IRR',
