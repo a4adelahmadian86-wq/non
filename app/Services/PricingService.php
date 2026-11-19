@@ -149,6 +149,8 @@ class PricingService
             : $stats['formula_units'] * $formulaUnit;
 
         $basePolicy = app(PricingEngine::class)->resolve('page_base');
+        $policyVersionId = null;
+        $taxRials = 0;
         if ($basePolicy) {
             $engineQuote = app(PricingEngine::class)->quote('page_base', $pages, [
                 'price_multiplier_basis_points' => (int) round($factor * 10000),
@@ -157,12 +159,14 @@ class PricingService
             ]);
             $pageUnit = (int) $engineQuote['unit_price'];
             $price = (int) $engineQuote['total'];
+            $policyVersionId = $engineQuote['pricing_policy_version_id'];
+            $taxRials = (int) $engineQuote['tax'];
         } else {
             $pageUnit = (int)round($base * $factor);
             $price = (int)round($pages * $pageUnit + $formulaCost);
         }
         return [
-            'pages'=>$pages,'chargeable_pages'=>max(0,$pages-1),'word_count'=>$stats['word_count'],'price_rials'=>$price,'free_page_value_rials'=>$pageUnit,
+            'pages'=>$pages,'chargeable_pages'=>max(0,$pages-1),'word_count'=>$stats['word_count'],'price_rials'=>$price,'free_page_value_rials'=>$pageUnit,'pricing_policy_version_id'=>$policyVersionId,'tax_rials'=>$taxRials,
             'breakdown'=>['base_page'=>$base,'page_unit'=>$pageUnit,'language_factor'=>round($factor,2),'formula_units'=>$stats['formula_units'],'formula_unit_price'=>$formulaUnit,'formula_cost'=>$formulaCost,'words_per_page'=>round($stats['words_per_page'],1),'english_words'=>$stats['english_words'],'arabic_words'=>$stats['arabic_words'],'persian_words'=>$stats['persian_words'],'number_tokens'=>$stats['number_tokens']]
         ];
     }
@@ -173,6 +177,8 @@ class PricingService
         $pages = max(1, $pages);
         $includedPages = max(0, min($pages, $includedPages));
         $pagePolicy = app(PricingEngine::class)->resolve('page_base');
+        $policyVersionId = null;
+        $taxRials = 0;
         if ($pagePolicy) {
             $engine = app(PricingEngine::class);
             $grossQuote = $engine->quote('page_base', $pages);
@@ -182,6 +188,8 @@ class PricingService
             $pageUnit = (int) $grossQuote['unit_price'];
             $price = (int) $grossQuote['total'];
             $payable = (int) $payableQuote['total'];
+            $policyVersionId = $grossQuote['pricing_policy_version_id'];
+            $taxRials = (int) $grossQuote['tax'];
             $discount = max(0, $price - $payable);
         } else {
             $pageUnit = max(0, $this->ruleValue('page_base', 0));
@@ -197,6 +205,8 @@ class PricingService
             'payable_price_rials' => $payable,
             'included_pages' => $includedPages,
             'free_page_value_rials' => $pageUnit,
+            'pricing_policy_version_id' => $policyVersionId,
+            'tax_rials' => $taxRials,
             'is_estimate' => true,
             'breakdown' => [
                 'base_page' => $pageUnit,
