@@ -150,6 +150,7 @@ class PricingPolicyTest extends TestCase
         foreach ([
             ['page_base', 10000],
             ['english_multiplier', 150],
+            ['formula_unit', 5000],
         ] as [$key, $value]) {
             PricingRule::updateOrCreate(['key' => $key], [
                 'value' => $value + 1,
@@ -180,6 +181,10 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(15000, $quote['price_rials']);
         $this->assertSame(15000, $quote['free_page_value_rials']);
         $this->assertSame(1.5, $quote['breakdown']['language_factor']);
+
+        $formulaQuote = app(PricingService::class)->quote('x = y', 1);
+        $this->assertSame(20000, $formulaQuote['price_rials']);
+        $this->assertSame(5000, $formulaQuote['breakdown']['formula_cost']);
     }
 
     public function test_versioned_pricing_seeder_is_idempotent_and_copies_existing_values(): void
