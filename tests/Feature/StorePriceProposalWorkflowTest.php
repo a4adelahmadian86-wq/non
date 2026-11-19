@@ -101,6 +101,10 @@ class StorePriceProposalWorkflowTest extends TestCase
             ->first();
         $this->assertNotNull($notification);
         $this->assertSame(route('store.price-proposals.index'), $notification->url());
+        $this->actingAs($uploader)
+            ->get(route('store.price-proposals.index'))
+            ->assertOk()
+            ->assertSee('محصول آزمایشی پیشنهاد قیمت');
         $this->assertDatabaseHas('farast_audit_events', [
             'event_type' => 'store.product.price_proposal_created',
             'aggregate_type' => 'store_product',
