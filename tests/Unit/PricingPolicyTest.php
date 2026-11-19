@@ -5,6 +5,7 @@ use App\Models\FarastPricingPolicy;
 use App\Models\FarastPricingPolicyVersion;
 use App\Models\PricingRule;
 use App\Services\PricingService;
+use Database\Seeders\VersionedPricingPolicySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
