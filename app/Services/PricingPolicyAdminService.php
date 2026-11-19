@@ -99,7 +99,7 @@ class PricingPolicyAdminService
         }
 
         $value = max(0, $value);
-        return $this->createVersion([
+        $version = $this->createVersion([
             'policy_code' => $key,
             'capability_code' => $definitions[$key]['capability'],
             'unit' => $definitions[$key]['unit'],
@@ -112,6 +112,8 @@ class PricingPolicyAdminService
                 'source_label' => $label,
             ],
         ]);
+
+        return $this->activate($version);
     }
 
 }
