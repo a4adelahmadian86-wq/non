@@ -121,21 +121,23 @@ class PricingPolicyAdminService
         }
 
         $value = max(0, $value);
-        $version = $this->createVersion([
-            'policy_code' => $key,
-            'capability_code' => $definitions[$key]['capability'],
-            'unit' => $definitions[$key]['unit'],
-            'currency' => 'IRR',
-            'unit_price' => $key === 'typing_payg_multiplier' ? 0 : $value,
-            'payg_multiplier_basis_points' => $key === 'typing_payg_multiplier' ? max(10000, $value * 100) : 10000,
-            'metadata' => [
-                'source' => 'admin_pricing_rule',
-                'source_key' => $key,
-                'source_label' => $label,
-            ],
-        ]);
+        return DB::transaction(function () use ($key, $value, $label, $definitions) {
+            $version = $this->createVersion([
+                'policy_code' => $key,
+                'capability_code' => $definitions[$key]['capability'],
+                'unit' => $definitions[$key]['unit'],
+                'currency' => 'IRR',
+                'unit_price' => $key === 'typing_payg_multiplier' ? 0 : $value,
+                'payg_multiplier_basis_points' => $key === 'typing_payg_multiplier' ? max(10000, $value * 100) : 10000,
+                'metadata' => [
+                    'source' => 'admin_pricing_rule',
+                    'source_key' => $key,
+                    'source_label' => $label,
+                ],
+            ]);
 
-        return $this->activate($version);
+            return $this->activate($version);
+        });
     }
 
     private function checksumForVersion(FarastPricingPolicyVersion $version): string
