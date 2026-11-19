@@ -254,7 +254,7 @@ class StoreCartService
             }
         }
 
-        $taxable = max(0, $subtotal - $discount);
+        $taxable = app(PricingEngine::class)->totals($subtotal, $discount)['taxable'];
 
         return [
             'items' => $items,
