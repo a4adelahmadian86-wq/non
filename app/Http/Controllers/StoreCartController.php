@@ -218,7 +218,7 @@ class StoreCartController extends Controller
                 }
                 $remainingDiscount -= $lineDiscount;
 
-                $lineTaxable = max(0, $line - $lineDiscount);
+                $lineTaxable = app(PricingEngine::class)->totals($line, $lineDiscount)['taxable'];
                 $lineTax = $isLast
                     ? $remainingTax
                     : min($remainingTax, $remainingTaxable > 0 ? app(PricingEngine::class)->allocateProRata($remainingTax, $lineTaxable, $remainingTaxable) : 0);
