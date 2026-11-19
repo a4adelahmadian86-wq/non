@@ -61,6 +61,65 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(437000, $payg['final_price_rials']);
     }
 
+    public function test_typing_price_reads_versioned_policy_before_legacy_rule_values(): void
+    {
+        PricingRule::create([
+            'key' => 'typing_manual_page',
+            'value' => 999999,
+            'label' => 'legacy test value',
+            'active' => true,
+        ]);
+        PricingRule::create([
+            'key' => 'typing_payg_multiplier',
+            'value' => 200,
+            'label' => 'legacy test multiplier',
+            'active' => true,
+        ]);
+
+        FarastPricingPolicyVersion::create([
+            'policy_code' => 'typing_manual_page',
+            'version' => 1,
+            'capability_code' => 'typing.manual',
+            'unit' => 'page',
+            'currency' => 'IRR',
+            'unit_price' => 12345,
+            'additional_unit_price' => null,
+            'fee_amount' => 0,
+            'discount_basis_points' => 0,
+            'tax_basis_points' => 0,
+            'payg_multiplier_basis_points' => 10000,
+            'included_quantity' => 0,
+            'effective_from' => now()->subMinute(),
+            'checksum' => hash('sha256', 'typing_manual_page|1'),
+        ]);
+        FarastPricingPolicyVersion::create([
+            'policy_code' => 'typing_payg_multiplier',
+            'version' => 1,
+            'capability_code' => 'typing.payg',
+            'unit' => 'percentage',
+            'currency' => 'IRR',
+            'unit_price' => 0,
+            'additional_unit_price' => null,
+            'fee_amount' => 0,
+            'discount_basis_points' => 0,
+            'tax_basis_points' => 0,
+            'payg_multiplier_basis_points' => 12500,
+            'included_quantity' => 0,
+            'effective_from' => now()->subMinute(),
+            'checksum' => hash('sha256', 'typing_payg_multiplier|1'),
+        ]);
+
+        $pricing = app(PricingService::class);
+        $this->assertSame(12345, $pricing->initialTypingPrices()['manual']);
+
+        $subscription = $pricing->projectQuote('manual', '', 2, '', false);
+        $this->assertSame(12345, $subscription['unit_price_rials']);
+        $this->assertSame(24690, $subscription['price_rials']);
+
+        $payg = $pricing->projectQuote('manual', '', 2, '', true);
+        $this->assertSame(30863, $payg['price_rials']);
+    }
+
     public function test_policy_calculation_supports_allowance_additional_usage_discount_and_fee(): void
     {
         FarastPricingPolicy::create([
