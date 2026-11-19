@@ -153,18 +153,6 @@ test('maps click, keyboard, selected text and semantic targets to their source w
   await page.keyboard.press('Enter');
   expect(await audioTime()).toBeCloseTo(1.6, 3);
 
-  await page.evaluate(() => {
-    const words = document.querySelectorAll('.reader-document-word');
-    const range = document.createRange();
-    range.setStart(words[2].firstChild, 0);
-    range.setEnd(words[3].firstChild, words[3].textContent.length);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.querySelector('[data-reader-root]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-  });
-  expect(await audioTime()).toBeCloseTo(1.2, 3);
-
   await page.getByRole('button', { name: 'خواندن پاراگراف' }).nth(1).click();
   expect(await audioTime()).toBeCloseTo(1.2, 3);
 
@@ -183,6 +171,18 @@ test('maps click, keyboard, selected text and semantic targets to their source w
   await article.focus();
   await page.keyboard.press('Enter');
   expect(await audioTime()).toBe(0);
+
+  await page.evaluate(() => {
+    const words = document.querySelectorAll('.reader-document-word');
+    const range = document.createRange();
+    range.setStart(words[2].firstChild, 0);
+    range.setEnd(words[3].firstChild, words[3].textContent.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.querySelector('[data-reader-root]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  });
+  expect(await audioTime()).toBeCloseTo(1.2, 3);
 });
 
 test('keeps estimated chunk timing visibly approximate and preserves accessible playback controls', async ({ page }) => {
