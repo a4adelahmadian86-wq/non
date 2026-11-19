@@ -1,21 +1,21 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\FarastAuditEvent;
-use App\\Models\\FarastNotification;
-use App\\Models\\StoreCategory;
-use App\\Models\\StorePriceProposal;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductIngestion;
-use App\\Models\\User;
-use App\\Services\\AuditEventService;
-use App\\Services\\StorePriceProposalService;
-use Illuminate\\Auth\\Access\\AuthorizationException;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Str;
+use App\Models\FarastAuditEvent;
+use App\Models\FarastNotification;
+use App\Models\StoreCategory;
+use App\Models\StorePriceProposal;
+use App\Models\StoreProduct;
+use App\Models\StoreProductIngestion;
+use App\Models\User;
+use App\Services\AuditEventService;
+use App\Services\StorePriceProposalService;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class StorePriceProposalWorkflowTest extends TestCase
 {
@@ -227,7 +227,7 @@ class StorePriceProposalWorkflowTest extends TestCase
         $this->confirmUploader($product, $uploader);
         $proposal = app(StorePriceProposalService::class)->propose($product, $pricingTeam);
 
-        $this->expectException(\\LogicException::class);
+        $this->expectException(\LogicException::class);
         $proposal->update(['base_price_rials' => 1]);
     }
 }
