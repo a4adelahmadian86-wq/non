@@ -59,6 +59,8 @@ class TypingPreflightController extends Controller
             'pages' => $pages,
             'estimate_rials' => $subtotal,
             'discount_rials' => $discount,
+            'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
+            'estimated_tax_rials' => (int) ($quote['tax_rials'] ?? 0),
             'payable_estimate_rials' => $payable,
             'free_pages_available' => $freePages,
             'free_page_applied' => $freeApplied,
@@ -129,6 +131,7 @@ class TypingPreflightController extends Controller
                     'hash' => $hash,
                     'pages' => $pages,
                     'accepted_at' => now()->toIso8601String(),
+                    'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
                     'deposit_order_id' => $existing->id,
                     'project_id' => $project?->id,
                 ]);
@@ -155,6 +158,8 @@ class TypingPreflightController extends Controller
                     'estimated_subtotal_rials' => $subtotal,
                     'estimated_discount_rials' => $discount,
                     'estimated_payable_rials' => $payable,
+                    'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
+                    'estimated_tax_rials' => (int) ($quote['tax_rials'] ?? 0),
                     'free_page_preview' => $freeApplied,
                     'deposit_percent' => $depositPercent,
                     'deposit_credit_rials' => $deposit,
@@ -183,6 +188,7 @@ class TypingPreflightController extends Controller
             'hash' => $hash,
             'pages' => $pages,
             'accepted_at' => now()->toIso8601String(),
+            'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
             'project_id' => $project?->id,
         ]);
 
