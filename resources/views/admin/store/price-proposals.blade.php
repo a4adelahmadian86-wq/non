@@ -55,7 +55,7 @@
                   <small>پیشنهاد کمپین امن در دسترس نیست</small>
                 @endif
               </td>
-              <td>{{ !empty($preview['uploader_id']) ? 'کاربر #'.(int) $preview['uploader_id'] : 'نامشخص' }}</td>
+              <td>{{ $preview['uploader_name'] ?? (!empty($preview['uploader_id']) ? 'کاربر #'.(int) $preview['uploader_id'] : 'نامشخص') }}</td>
               <td>
                 @if(!empty($preview['can_propose']))
                   <form method="POST" action="{{ route('admin.store.price-proposals.create', $product) }}">
