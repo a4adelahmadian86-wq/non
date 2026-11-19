@@ -7,6 +7,7 @@ use App\Models\PricingRule;
 use App\Services\PricingService;
 use App\Services\PricingPolicyAdminService;
 use App\Services\PricingEngine;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\VersionedPricingPolicySeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -238,6 +239,19 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(6000, $quote['audio_cost_rials']);
         $this->assertSame(24000, $quote['price_rials']);
         $this->assertSame(150, $quote['breakdown']['multiplier']);
+    }
+
+    public function test_database_seeder_preserves_existing_admin_price_values(): void
+    {
+        PricingRule::updateOrCreate(['key' => 'page_base'], [
+            'value' => 87654,
+            'label' => 'configured live price',
+            'active' => true,
+        ]);
+
+        app(DatabaseSeeder::class)->run();
+
+        $this->assertSame(87654, (int) PricingRule::where('key', 'page_base')->value('value'));
     }
 
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
