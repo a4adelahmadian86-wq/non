@@ -63,7 +63,7 @@
                     <button class="store-primary-btn" type="submit">ارسال برای تأیید بارگذار</button>
                   </form>
                 @else
-                  <small>ابتدا قیمت پایه و مالک بارگذاری مشخص شود</small>
+                  <small>قیمت امن در محدوده مجاز قابل محاسبه نیست یا مالک بارگذاری نامشخص است</small>
                 @endif
               </td>
             </tr>
