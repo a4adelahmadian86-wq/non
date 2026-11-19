@@ -19,5 +19,6 @@ class DatabaseSeeder extends Seeder
             ['page_base',35000,'قیمت پایه هر صفحه'],['english_multiplier',120,'ضریب متن انگلیسی'],['arabic_multiplier',110,'ضریب متن عربی'],
             ['mixed_multiplier',105,'ضریب متن ترکیبی'],['dense_page_multiplier',110,'ضریب صفحه پرتراکم'],['formula_unit',5000,'هزینه هر الگوی فرمولی']
         ] as $r)PricingRule::updateOrCreate(['key'=>$r[0]],['value'=>$r[1],'label'=>$r[2],'active'=>true]);
+        $this->call(VersionedPricingPolicySeeder::class);
     }
 }
