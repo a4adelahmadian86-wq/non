@@ -6,8 +6,11 @@ use App\Models\Order;
 use App\Models\SiteSetting;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\FreeQuotaService;
+use App\Services\PricingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CheckoutPaymentClarityTest extends TestCase
@@ -207,7 +210,7 @@ class CheckoutPaymentClarityTest extends TestCase
 
     public function test_pending_deposit_is_reused_even_if_a_new_policy_quote_becomes_free(): void
     {
-        \Illuminate\\Support\\Facades\\Storage::fake('private');
+        Storage::fake('private');
 
         $user = User::create([
             'name' => 'Pending Deposit QA',
@@ -216,7 +219,7 @@ class CheckoutPaymentClarityTest extends TestCase
         ]);
         $path = 'typing/'.$user->id.'/pending-deposit-source.pdf';
         $bytes = '%PDF-1.4 '.str_repeat('/Type /Page ', 8);
-        \Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+        Storage::disk('private')->put($path, $bytes);
         $hash = hash('sha256', $bytes);
 
         $order = Order::create([
@@ -236,7 +239,7 @@ class CheckoutPaymentClarityTest extends TestCase
             ],
         ]);
 
-        $this->mock(\App\\Services\\PricingService::class, function ($mock) {
+        $this->mock(PricingService::class, function ($mock) {
             $mock->shouldReceive('estimateByPages')->once()->with(8, 0)->andReturn([
                 'price_rials' => 0,
                 'discount_rials' => 0,
@@ -246,7 +249,7 @@ class CheckoutPaymentClarityTest extends TestCase
                 'free_page_value_rials' => 0,
             ]);
         });
-        $this->mock(\App\\Services\\FreeQuotaService::class, function ($mock) {
+        $this->mock(FreeQuotaService::class, function ($mock) {
             $mock->shouldReceive('availablePages')->once()->andReturn(0);
         });
 
