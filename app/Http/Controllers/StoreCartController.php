@@ -208,14 +208,14 @@ class StoreCartController extends Controller
                 } else {
                     $lineDiscount = $isLast
                         ? $remainingDiscount
-                        : min($line, $remainingSubtotal > 0 ? (int) floor($remainingDiscount * $line / $remainingSubtotal) : 0);
+                        : min($line, $remainingSubtotal > 0 ? app(PricingEngine::class)->allocateProRata($remainingDiscount, $line, $remainingSubtotal) : 0);
                 }
                 $remainingDiscount -= $lineDiscount;
 
                 $lineTaxable = max(0, $line - $lineDiscount);
                 $lineTax = $isLast
                     ? $remainingTax
-                    : min($remainingTax, $remainingTaxable > 0 ? (int) floor($remainingTax * $lineTaxable / $remainingTaxable) : 0);
+                    : min($remainingTax, $remainingTaxable > 0 ? app(PricingEngine::class)->allocateProRata($remainingTax, $lineTaxable, $remainingTaxable) : 0);
                 $remainingTax -= $lineTax;
                 $remainingSubtotal -= $line;
                 $remainingTaxable -= $lineTaxable;
