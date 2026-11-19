@@ -108,6 +108,47 @@ class StorePriceProposalWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_proposal_creation_is_idempotent_and_supersedes_changed_price_snapshots(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $uploader = $this->user('Uploader');
+        $product = $this->product();
+        $this->confirmUploader($product, $uploader);
+        $service = app(StorePriceProposalService::class);
+
+        $first = $service->propose($product, $pricingTeam);
+        $same = $service->propose($product, $pricingTeam);
+
+        $this->assertSame($first->id, $same->id);
+        $this->assertDatabaseCount('store_price_proposals', 1);
+        $this->assertDatabaseCount('farast_notifications', 1);
+
+        $product->update(['price_rials' => 110000]);
+        $next = $service->propose($product, $pricingTeam);
+
+        $this->assertNotSame($first->id, $next->id);
+        $this->assertSame('superseded', $first->fresh()->status);
+        $this->assertSame(110000, (int) $next->base_price_rials);
+        $this->assertDatabaseCount('store_price_proposals', 2);
+        $this->assertDatabaseCount('farast_notifications', 2);
+    }
+
+    public function test_accepting_base_only_proposal_does_not_create_a_fake_campaign_reference(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $uploader = $this->user('Uploader');
+        $product = $this->product(null);
+        $this->confirmUploader($product, $uploader);
+        $proposal = app(StorePriceProposalService::class)->propose($product, $pricingTeam);
+
+        $this->assertNull($proposal->campaign_price_rials);
+        $this->assertTrue(app(StorePriceProposalService::class)->decide($proposal, $uploader, 'accept'));
+
+        $this->assertSame(100000, (int) $product->fresh()->price_rials);
+        $this->assertNull($product->fresh()->compare_at_price_rials);
+        $this->assertSame('accepted', $proposal->fresh()->status);
+    }
+
     public function test_uploader_acceptance_applies_campaign_price_and_invalidates_review_gate(): void
     {
         $pricingTeam = $this->user('Pricing Team');
