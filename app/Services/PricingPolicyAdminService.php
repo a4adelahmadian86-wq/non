@@ -29,14 +29,14 @@ class PricingPolicyAdminService
             'effective_until'=>$data['effective_until']??null,
             'metadata'=>$data['metadata']??[],
         ];
-        $payload['checksum']=hash('sha256',json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION));
+        $payload['checksum']=$this->checksumForAttributes($payload);
         return FarastPricingPolicyVersion::create($payload);
     }
 
     public function schedule(FarastPricingPolicyVersion $version,\DateTimeInterface $from,?\DateTimeInterface $until=null): FarastPricingPolicyVersion
     {
         if($until&&$until<=$from)throw new RuntimeException('invalid_pricing_window');
-        $version->effective_from=$from;$version->effective_until=$until;$version->save();
+        $version->effective_from=$from;$version->effective_until=$until;$version->checksum=$this->checksumForVersion($version);$version->save();
         return $version->fresh();
     }
 
@@ -44,6 +44,7 @@ class PricingPolicyAdminService
     {
         $at=$at?:now();
         $version->effective_until=$at;
+        $version->checksum=$this->checksumForVersion($version);
         $version->save();
         return $version->fresh();
     }
@@ -63,10 +64,19 @@ class PricingPolicyAdminService
     public function activate(FarastPricingPolicyVersion $version): FarastPricingPolicyVersion
     {
         return DB::transaction(function()use($version){
-            FarastPricingPolicyVersion::where('policy_code',$version->policy_code)
+            $retiredAt = now();
+            $previousVersions = FarastPricingPolicyVersion::where('policy_code',$version->policy_code)
                 ->where('region_code',$version->region_code)->where('id','!=',$version->id)
-                ->whereNull('effective_until')->update(['effective_until'=>now()]);
-            if(!$version->effective_from||$version->effective_from->isFuture())$version->effective_from=now();
+                ->whereNull('effective_until')->lockForUpdate()->get();
+            foreach ($previousVersions as $previous) {
+                $previous->effective_until = $retiredAt;
+                $previous->checksum = $this->checksumForVersion($previous);
+                $previous->save();
+            }
+            if(!$version->effective_from||$version->effective_from->isFuture()) {
+                $version->effective_from = $retiredAt;
+                $version->checksum = $this->checksumForVersion($version);
+            }
             $version->save();
             return $version->fresh();
         });
@@ -114,6 +124,40 @@ class PricingPolicyAdminService
         ]);
 
         return $this->activate($version);
+    }
+
+    private function checksumForVersion(FarastPricingPolicyVersion $version): string
+    {
+        return $this->checksumForAttributes($version->only([
+            'policy_code','version','capability_code','unit','currency','unit_price','additional_unit_price','fee_amount',
+            'discount_basis_points','tax_basis_points','payg_multiplier_basis_points','included_quantity','region_code',
+            'effective_from','effective_until','metadata',
+        ]));
+    }
+
+    private function checksumForAttributes(array $attributes): string
+    {
+        $fields = [
+            'policy_code','version','capability_code','unit','currency','unit_price','additional_unit_price','fee_amount',
+            'discount_basis_points','tax_basis_points','payg_multiplier_basis_points','included_quantity','region_code',
+            'effective_from','effective_until','metadata',
+        ];
+        $payload = [];
+        foreach ($fields as $field) {
+            $value = $attributes[$field] ?? null;
+            if (in_array($field, ['effective_from', 'effective_until'], true) && $value !== null) {
+                $value = $value instanceof \DateTimeInterface
+                    ? $value->format(DATE_ATOM)
+                    : \Illuminate\Support\Carbon::parse($value)->toIso8601String();
+            } elseif ($field === 'included_quantity' && $value !== null) {
+                $value = (float) $value;
+            } elseif ($field === 'metadata' && is_string($value)) {
+                $value = json_decode($value, true) ?? [];
+            }
+            $payload[$field] = $value;
+        }
+
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
     }
 
 }
