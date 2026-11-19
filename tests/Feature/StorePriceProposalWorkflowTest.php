@@ -269,6 +269,34 @@ class StorePriceProposalWorkflowTest extends TestCase
         $this->assertSame(0, $preview['maximum_discount_rials']);
     }
 
+    public function test_proposal_creation_fails_closed_when_uploader_identity_is_missing(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $product = $this->product();
+
+        try {
+            app(StorePriceProposalService::class)->propose($product, $pricingTeam);
+            $this->fail('A proposal must not be sent to an guessed uploader.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('store_product_uploader_not_identified', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('store_price_proposals', 0);
+    }
+
+    public function test_campaign_price_is_not_suggested_when_cost_leaves_no_safe_discount(): void
+    {
+        $uploader = $this->user('Uploader');
+        $product = $this->product(98000);
+        $this->confirmUploader($product, $uploader);
+
+        $preview = app(StorePriceProposalService::class)->preview($product);
+
+        $this->assertSame(103158, $preview['base_price_rials']);
+        $this->assertNull($preview['campaign_price_rials']);
+        $this->assertSame(0, $preview['maximum_discount_rials']);
+    }
+
     public function test_only_the_resolved_uploader_can_decide_a_proposal(): void
     {
         $pricingTeam = $this->user('Pricing Team');
