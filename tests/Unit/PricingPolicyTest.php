@@ -268,8 +268,10 @@ class PricingPolicyTest extends TestCase
         $this->assertSame('admin_pricing_rule', $newVersion->metadata['source']);
         $this->assertSame(($previous?->version ?? 0) + 1, (int) $newVersion->version);
 
+        $this->assertSame($newVersion->id, app(PricingEngine::class)->resolve('page_base')->id);
         if ($previous) {
             $this->assertSame($previousPrice, (int) $previous->fresh()->unit_price);
+            $this->assertNotNull($previous->fresh()->effective_until);
         }
     }
 
