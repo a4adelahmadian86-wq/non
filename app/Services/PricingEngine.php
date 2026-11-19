@@ -38,12 +38,16 @@ class PricingEngine
 
         $unitPrice = max(0, (int) $policy->unit_price);
         $additional = $policy->additional_unit_price === null ? $unitPrice : max(0, (int) $policy->additional_unit_price);
+        $priceMultiplier = max(0, min(1000000, (int) ($context['price_multiplier_basis_points'] ?? 10000)));
+        $effectiveUnitPrice = (int) round($additional * $priceMultiplier / 10000);
         $included = max(0.0, (float)($context['included_quantity'] ?? 0));
         $includedConsumed = min($quantity, $included);
         $billable = max(0.0, $quantity - $includedConsumed);
-        $rawSubtotal = (int) round($billable * $additional);
-        $multiplier = max(10000, (int) $policy->payg_multiplier_basis_points);
-        $subtotal = (int) round($rawSubtotal * $multiplier / 10000);
+        $preMultiplierCharge = max(0, (int) ($context['pre_multiplier_additional_charge_amount'] ?? 0));
+        $postMultiplierCharge = max(0, (int) ($context['additional_charge_amount'] ?? 0));
+        $rawSubtotal = (int) round($billable * $effectiveUnitPrice) + $preMultiplierCharge;
+        $multiplier = max(10000, (int) ($context['payg_multiplier_basis_points'] ?? $policy->payg_multiplier_basis_points));
+        $subtotal = (int) round($rawSubtotal * $multiplier / 10000) + $postMultiplierCharge;
 
         $discountBp = max(0, min(10000, (int) $policy->discount_basis_points));
         $trusted = is_array($context['trusted_adjustments'] ?? null) ? $context['trusted_adjustments'] : [];
@@ -69,7 +73,11 @@ class PricingEngine
             'quantity'=>$quantity,
             'included_quantity'=>$includedConsumed,
             'billable_quantity'=>$billable,
-            'unit_price'=>$additional,
+            'unit_price'=>$effectiveUnitPrice,
+            'base_unit_price'=>$additional,
+            'price_multiplier_basis_points'=>$priceMultiplier,
+            'payg_multiplier_basis_points'=>$multiplier,
+            'additional_charge_amount'=>$postMultiplierCharge,
             'subtotal'=>$subtotal,
             'discount'=>$discount,
             'fee'=>$fee,
