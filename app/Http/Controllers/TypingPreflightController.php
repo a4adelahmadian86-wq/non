@@ -131,7 +131,7 @@ class TypingPreflightController extends Controller
                     'hash' => $hash,
                     'pages' => $pages,
                     'accepted_at' => now()->toIso8601String(),
-                    'pricing_policy_version_id' => $quote['pricing_policy_version_id'] ?? null,
+                    'pricing_policy_version_id' => data_get($existing->pricing_snapshot ?? [], 'pricing_policy_version_id'),
                     'deposit_order_id' => $existing->id,
                     'project_id' => $project?->id,
                 ]);
