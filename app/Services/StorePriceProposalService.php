@@ -23,15 +23,19 @@ class StorePriceProposalService
 
     public function preview(StoreProduct $product): array
     {
-        $basePrice = max(0, (int) $product->price_rials);
+        $currentPrice = max(0, (int) $product->price_rials);
         $costPrice = $product->cost_price_rials === null ? null : max(0, (int) $product->cost_price_rials);
         $uploaderId = $this->uploaderId($product);
+        $minimumSafeBase = $this->marginPolicy->minimumSafeSellingPrice($product);
+        $basePrice = max($currentPrice, $minimumSafeBase ?? $currentPrice);
         $minimumMargin = $this->marginPolicy->minimumMargin($product, $basePrice);
         $maximumDiscount = $costPrice === null ? 0 : $this->marginPolicy->maximumDiscount($product, $basePrice, 1);
         $campaignPrice = $maximumDiscount > 0 ? max(0, $basePrice - $maximumDiscount) : null;
 
         return [
             'uploader_id' => $uploaderId,
+            'current_price_rials' => $currentPrice,
+            'minimum_safe_base_price_rials' => $minimumSafeBase,
             'base_price_rials' => $basePrice,
             'campaign_price_rials' => $campaignPrice !== null && $campaignPrice < $basePrice ? $campaignPrice : null,
             'cost_price_rials' => $costPrice,
@@ -153,44 +157,55 @@ class StorePriceProposalService
                 return false;
             }
 
-            if ($decision === 'accept' && $lockedProposal->campaign_price_rials !== null) {
+            $preview = $this->preview($product);
+            if (
+                (int) $lockedProposal->base_price_rials !== (int) $preview['base_price_rials']
+                || $lockedProposal->campaign_price_rials !== $preview['campaign_price_rials']
+                || (int) $lockedProposal->minimum_margin_rials !== (int) $preview['minimum_margin_rials']
+            ) {
+                $lockedProposal->status = 'stale';
+                $lockedProposal->decided_by = $actor->id;
+                $lockedProposal->decided_at = now();
+                $lockedProposal->decision_note = 'suggested_price_or_margin_floor_changed';
+                $lockedProposal->snapshot_after = $currentSnapshot;
+                $lockedProposal->save();
+
+                $this->audit->record(
+                    'store.product.price_proposal_stale',
+                    $actor->id,
+                    null,
+                    'store_product',
+                    $product->id,
+                    ['proposal_id' => $lockedProposal->id, 'reason' => 'suggested_price_changed'],
+                    'application',
+                );
+
+                return false;
+            }
+
+            if ($decision === 'accept') {
+                $currentPrice = (int) $product->price_rials;
                 $basePrice = (int) $lockedProposal->base_price_rials;
-                $campaignPrice = (int) $lockedProposal->campaign_price_rials;
-                $minimumMargin = $this->marginPolicy->minimumMargin($product, $basePrice);
-                $maximumDiscount = $this->marginPolicy->maximumDiscount($product, $basePrice, 1);
-                $costPrice = (int) $product->cost_price_rials;
+                $campaignPrice = $lockedProposal->campaign_price_rials === null
+                    ? null
+                    : (int) $lockedProposal->campaign_price_rials;
+                $priceChanged = false;
 
-                if (
-                    $campaignPrice >= $basePrice
-                    || $campaignPrice < ($costPrice + $minimumMargin)
-                    || ($basePrice - $campaignPrice) > $maximumDiscount
-                ) {
-                    $lockedProposal->status = 'stale';
-                    $lockedProposal->decided_by = $actor->id;
-                    $lockedProposal->decided_at = now();
-                    $lockedProposal->decision_note = 'campaign_price_no_longer_satisfies_margin_floor';
-                    $lockedProposal->snapshot_after = $currentSnapshot;
-                    $lockedProposal->save();
-
-                    $this->audit->record(
-                        'store.product.price_proposal_stale',
-                        $actor->id,
-                        null,
-                        'store_product',
-                        $product->id,
-                        ['proposal_id' => $lockedProposal->id, 'reason' => 'margin_floor_changed'],
-                        'application',
-                    );
-
-                    return false;
+                if ($campaignPrice !== null) {
+                    // The compare-at price is the real base price accepted here.
+                    $product->compare_at_price_rials = $basePrice;
+                    $product->price_rials = $campaignPrice;
+                    $priceChanged = $campaignPrice !== $currentPrice || $basePrice !== $currentPrice;
+                } elseif ($basePrice > $currentPrice) {
+                    $product->price_rials = $basePrice;
+                    $product->compare_at_price_rials = null;
+                    $priceChanged = true;
                 }
 
-                // The reference price is the real price immediately before acceptance,
-                // never an invented compare-at price.
-                $product->compare_at_price_rials = $basePrice;
-                $product->price_rials = $campaignPrice;
-                $this->invalidateSupervisorReview($product);
-                $product->save();
+                if ($priceChanged) {
+                    $this->invalidateSupervisorReview($product);
+                    $product->save();
+                }
             }
 
             $lockedProposal->status = $decision === 'accept' ? 'accepted' : 'rejected';
@@ -288,14 +303,18 @@ class StorePriceProposalService
 
     private function snapshot(StoreProduct $product, int $uploaderId): array
     {
-        $basePrice = max(0, (int) $product->price_rials);
+        $currentPrice = max(0, (int) $product->price_rials);
+        $minimumSafeBase = $this->marginPolicy->minimumSafeSellingPrice($product);
+        $suggestedBase = max($currentPrice, $minimumSafeBase ?? $currentPrice);
 
         return [
-            'price_rials' => $basePrice,
+            'price_rials' => $currentPrice,
+            'suggested_base_price_rials' => $suggestedBase,
+            'minimum_safe_base_price_rials' => $minimumSafeBase,
             'compare_at_price_rials' => $product->compare_at_price_rials === null ? null : (int) $product->compare_at_price_rials,
             'cost_price_rials' => $product->cost_price_rials === null ? null : (int) $product->cost_price_rials,
             'marketing_min_margin_rials' => max(0, (int) $product->marketing_min_margin_rials),
-            'minimum_margin_rials' => $this->marginPolicy->minimumMargin($product, $basePrice),
+            'minimum_margin_rials' => $this->marginPolicy->minimumMargin($product, $suggestedBase),
             'uploader_id' => $uploaderId,
         ];
     }
