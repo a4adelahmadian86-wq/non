@@ -23,6 +23,27 @@ class PricingEngine
         return $query->first();
     }
 
+    public function totals(int $subtotal, int $discount = 0, int $fee = 0, int $taxBasisPoints = 0): array
+    {
+        $subtotal = max(0, $subtotal);
+        $discount = min($subtotal, max(0, $discount));
+        $fee = max(0, $fee);
+        $taxBasisPoints = max(0, min(10000, $taxBasisPoints));
+        $taxable = max(0, $subtotal - $discount + $fee);
+        $tax = $taxable > 0
+            ? $this->percentageAmount($taxable, $taxBasisPoints, 1, 'nearest')
+            : 0;
+
+        return [
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'fee' => $fee,
+            'taxable' => $taxable,
+            'tax' => $tax,
+            'total' => $taxable + $tax,
+        ];
+    }
+
     public function allocateProRata(int $amount, int $part, int $whole, bool $last = false): int
     {
         $amount = max(0, $amount);
@@ -103,9 +124,10 @@ class PricingEngine
 
         $fee = $billable <= 0 ? 0 : max(0, (int) $policy->fee_amount + (int)($trusted['fee_amount'] ?? 0));
         $taxBp = max(0, min(10000, (int) $policy->tax_basis_points));
-        $taxable = max(0, $subtotal - $discount + $fee);
-        $tax = $billable <= 0 ? 0 : (int) round($taxable * $taxBp / 10000);
-        $total = max(0, $taxable + $tax);
+        $totals = $this->totals($subtotal, $discount, $fee, $billable <= 0 ? 0 : $taxBp);
+        $taxable = $totals['taxable'];
+        $tax = $totals['tax'];
+        $total = $totals['total'];
 
         return [
             'available'=>true,
