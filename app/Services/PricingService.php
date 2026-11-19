@@ -16,6 +16,45 @@ class PricingService
             'source_file' => match ($sourceType) { 'handwritten' => 'typing_handwritten_page', 'mixed' => 'typing_mixed_page', default => 'typing_printed_page' },
             default => 'typing_manual_page',
         };
+        $engine = app(PricingEngine::class);
+        $version = $engine->resolve($key);
+        if ($version) {
+            $audio = 0;
+            if ($workflow === 'voice' && $audioMinutes !== null) {
+                $audioPolicy = $engine->resolve('typing_voice_minute');
+                if ($audioPolicy) {
+                    $audio = (int) $engine->quote('typing_voice_minute', max(0, $audioMinutes))['subtotal'];
+                } else {
+                    $audio = max(0, $audioMinutes) * max(0, $this->ruleValue('typing_voice_minute', 0));
+                }
+            }
+
+            $paygMultiplier = 100;
+            $paygBasisPoints = 10000;
+            if ($payg) {
+                $multiplierPolicy = $engine->resolve('typing_payg_multiplier');
+                $paygBasisPoints = $multiplierPolicy
+                    ? max(10000, (int) $multiplierPolicy->payg_multiplier_basis_points)
+                    : max(100, $this->ruleValue('typing_payg_multiplier', 100)) * 100;
+                $paygMultiplier = (int) round($paygBasisPoints / 100);
+            }
+
+            $quote = $engine->quote($key, $pages, [
+                'payg_multiplier_basis_points' => $paygBasisPoints,
+                'pre_multiplier_additional_charge_amount' => $audio,
+            ]);
+            $unit = (int) $quote['unit_price'];
+            return [
+                'pages'=>$pages,'unit_price_rials'=>$unit,'free_page_value_rials'=>$unit,'price_rials'=>(int) $quote['total'],'currency'=>$quote['currency'],
+                'workflow'=>$workflow,'source_type'=>$sourceType ?: null,'payg'=>$payg,
+                'audio_minutes'=>$audioMinutes,'audio_cost_rials'=>$audio,
+                'breakdown'=>['unit'=>$unit,'pages'=>$pages,'audio_cost'=>$audio,'multiplier'=>$paygMultiplier],
+                'pricing_policy_version_id'=>$quote['pricing_policy_version_id'],
+                'tax_rials'=>(int) $quote['tax'],
+            ];
+        }
+
+        // Temporary legacy arithmetic for price keys not yet migrated.
         $unit = max(0, $this->ruleValue($key, 0));
         $audio = 0;
         if ($workflow === 'voice' && $audioMinutes !== null) {
@@ -103,10 +142,25 @@ class PricingService
         elseif ($stats['arabic_ratio'] >= 0.70) $factor = max($factor, $this->ruleValue('arabic_multiplier', 100) / 100);
         elseif ($stats['mixed_ratio'] >= 0.35) $factor = max($factor, $this->ruleValue('mixed_multiplier', 100) / 100);
         if ($stats['words_per_page'] > 650) $factor = max($factor, $this->ruleValue('dense_page_multiplier', 100) / 100);
-        $pageUnit = (int)round($base * $factor);
+        $formulaPolicy = app(PricingEngine::class)->resolve('formula_unit');
         $formulaUnit = $this->ruleValue('formula_unit', 0);
-        $formulaCost = $stats['formula_units'] * $formulaUnit;
-        $price = (int)round($pages * $pageUnit + $formulaCost);
+        $formulaCost = $formulaPolicy
+            ? (int) app(PricingEngine::class)->quote('formula_unit', $stats['formula_units'])['subtotal']
+            : $stats['formula_units'] * $formulaUnit;
+
+        $basePolicy = app(PricingEngine::class)->resolve('page_base');
+        if ($basePolicy) {
+            $engineQuote = app(PricingEngine::class)->quote('page_base', $pages, [
+                'price_multiplier_basis_points' => (int) round($factor * 10000),
+                'payg_multiplier_basis_points' => 10000,
+                'additional_charge_amount' => $formulaCost,
+            ]);
+            $pageUnit = (int) $engineQuote['unit_price'];
+            $price = (int) $engineQuote['total'];
+        } else {
+            $pageUnit = (int)round($base * $factor);
+            $price = (int)round($pages * $pageUnit + $formulaCost);
+        }
         return [
             'pages'=>$pages,'chargeable_pages'=>max(0,$pages-1),'word_count'=>$stats['word_count'],'price_rials'=>$price,'free_page_value_rials'=>$pageUnit,
             'breakdown'=>['base_page'=>$base,'page_unit'=>$pageUnit,'language_factor'=>round($factor,2),'formula_units'=>$stats['formula_units'],'formula_unit_price'=>$formulaUnit,'formula_cost'=>$formulaCost,'words_per_page'=>round($stats['words_per_page'],1),'english_words'=>$stats['english_words'],'arabic_words'=>$stats['arabic_words'],'persian_words'=>$stats['persian_words'],'number_tokens'=>$stats['number_tokens']]
@@ -117,8 +171,15 @@ class PricingService
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
-        $pageUnit = max(0, $this->ruleValue('page_base', 0));
-        $price = $pages * $pageUnit;
+        $pagePolicy = app(PricingEngine::class)->resolve('page_base');
+        if ($pagePolicy) {
+            $quote = app(PricingEngine::class)->quote('page_base', $pages);
+            $pageUnit = (int) $quote['unit_price'];
+            $price = (int) $quote['total'];
+        } else {
+            $pageUnit = max(0, $this->ruleValue('page_base', 0));
+            $price = $pages * $pageUnit;
+        }
 
         return [
             'pages' => $pages,
