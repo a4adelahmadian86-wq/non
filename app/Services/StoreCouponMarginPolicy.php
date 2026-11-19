@@ -12,6 +12,7 @@ use App\Models\StoreProduct;
 class StoreCouponMarginPolicy
 {
     private const DEFAULT_MINIMUM_MARGIN_PERCENT = 5;
+    private const MAX_SUPPORTED_PRODUCT_PRICE_RIALS = 999999999999;
 
     public function minimumMargin(StoreProduct $product, ?int $sellingPriceRials = null): int
     {
@@ -35,8 +36,16 @@ class StoreCouponMarginPolicy
 
         $cost = max(0, (int) $product->cost_price_rials);
         $configuredFloor = max(0, (int) $product->marketing_min_margin_rials);
+        $maximum = self::MAX_SUPPORTED_PRODUCT_PRICE_RIALS;
+        if ($cost >= $maximum) {
+            return null;
+        }
+
         $low = max(1, $cost);
-        $high = max($low + 1, $cost + $configuredFloor + 1, ($cost * 2) + 1);
+        $high = min($maximum, max($low + 1, $cost + $configuredFloor + 1, ($cost * 2) + 1));
+        if (($high - $cost) < $this->minimumMargin($product, $high)) {
+            return null;
+        }
 
         while ($low < $high) {
             $candidate = intdiv($low + $high, 2);
