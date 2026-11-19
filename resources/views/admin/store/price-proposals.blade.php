@@ -26,7 +26,8 @@
         <thead>
           <tr>
             <th>محصول</th>
-            <th>قیمت پایه فعلی</th>
+            <th>قیمت فعلی</th>
+            <th>قیمت پایه پیشنهادی</th>
             <th>بهای تمام‌شده</th>
             <th>حداقل حاشیه سود</th>
             <th>کف قیمت کمپین</th>
@@ -42,7 +43,8 @@
                 <strong>{{ $product->title }}</strong>
                 <small>{{ $product->type === 'course' ? 'دوره آموزشی' : 'محصول دیجیتال' }} · {{ $product->category?->name }}</small>
               </td>
-              <td>{{ number_format((int) ($preview['base_price_rials'] ?? $product->price_rials)) }} ریال</td>
+              <td>{{ number_format((int) ($preview['current_price_rials'] ?? $product->price_rials)) }} ریال</td>
+              <td><strong>{{ number_format((int) ($preview['base_price_rials'] ?? $product->price_rials)) }} ریال</strong></td>
               <td>{{ isset($preview['cost_price_rials']) ? number_format($preview['cost_price_rials']).' ریال' : 'ثبت نشده' }}</td>
               <td>{{ number_format((int) ($preview['minimum_margin_rials'] ?? 0)) }} ریال</td>
               <td>
@@ -66,7 +68,7 @@
               </td>
             </tr>
           @empty
-            <tr><td colspan="7">محصول قیمت‌گذاری‌شده‌ای برای پیشنهاد وجود ندارد.</td></tr>
+            <tr><td colspan="8">محصول قیمت‌گذاری‌شده‌ای برای پیشنهاد وجود ندارد.</td></tr>
           @endforelse
         </tbody>
       </table>
