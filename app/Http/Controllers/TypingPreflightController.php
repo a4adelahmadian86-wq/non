@@ -113,33 +113,47 @@ class TypingPreflightController extends Controller
         $deposit = app(PricingEngine::class)->percentageAmount($payable, $depositPercent * 100, 1000, 'up');
         $hash = $preflight->fileHash($path);
 
-        if ($depositPercent > 0 && $deposit > 0) {
-            $existing = Order::where('user_id', $user->id)
-                ->whereNull('document_id')
-                ->whereIn('status', ['deposit_pending', 'deposit_paid'])
-                ->latest()
-                ->get()
-                ->first(fn (Order $order) => ($order->pricing_snapshot['source_hash'] ?? null) === $hash);
+        $existing = Order::where('user_id', $user->id)
+            ->whereNull('document_id')
+            ->whereIn('status', ['deposit_pending', 'deposit_paid'])
+            ->latest()
+            ->get()
+            ->first(fn (Order $order) => ($order->pricing_snapshot['source_hash'] ?? null) === $hash);
 
-            if ($existing && $existing->status === 'deposit_paid') {
-                if ($project) {
-                    $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
-                }
-                $request->session()->put('typing_preflight_deposit_order', $existing->id);
-                $request->session()->put('typing_preflight_accepted', [
-                    'path' => $path,
-                    'hash' => $hash,
-                    'pages' => $pages,
-                    'accepted_at' => now()->toIso8601String(),
-                    'pricing_policy_version_id' => data_get($existing->pricing_snapshot ?? [], 'pricing_policy_version_id'),
-                    'deposit_order_id' => $existing->id,
-                    'project_id' => $project?->id,
-                ]);
-
-                return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
+        if ($existing && $existing->status === 'deposit_paid') {
+            if ($project) {
+                $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
             }
+            $request->session()->put('typing_preflight_deposit_order', $existing->id);
+            $request->session()->put('typing_preflight_accepted', [
+                'path' => $path,
+                'hash' => $hash,
+                'pages' => $pages,
+                'accepted_at' => now()->toIso8601String(),
+                'pricing_policy_version_id' => data_get($existing->pricing_snapshot ?? [], 'pricing_policy_version_id'),
+                'deposit_order_id' => $existing->id,
+                'project_id' => $project?->id,
+            ]);
 
-            $order = $existing ?: Order::create([
+            return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
+        }
+
+        if ($existing && $existing->status === 'deposit_pending') {
+            if ($project && (int) data_get($existing->pricing_snapshot, 'project_id', 0) !== (int) $project->id) {
+                $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
+            }
+            $request->session()->put('typing_preflight_deposit_order', $existing->id);
+
+            return response()->json([
+                'ok' => true,
+                'action' => 'deposit',
+                'order_id' => $existing->id,
+                'checkout_url' => route('checkout', $existing),
+            ]);
+        }
+
+        if ($depositPercent > 0 && $deposit > 0) {
+            $order = Order::create([
                 'user_id' => $user->id,
                 'document_id' => null,
                 'subtotal_rials' => $deposit,
