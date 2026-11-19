@@ -137,6 +137,7 @@ class PricingPolicyTest extends TestCase
         $pricing = app(PricingService::class);
         $this->assertSame(12345, $pricing->initialTypingPrices()['manual']);
         $this->assertSame(22222, $pricing->estimateByPages(2)['price_rials']);
+        $this->assertSame('page_base', FarastPricingPolicyVersion::find($pricing->estimateByPages(2)['pricing_policy_version_id'])->policy_code);
         $withFreePage = $pricing->estimateByPages(2, 1);
         $this->assertSame(22222, $withFreePage['price_rials']);
         $this->assertSame(11111, $withFreePage['discount_rials']);
@@ -148,6 +149,7 @@ class PricingPolicyTest extends TestCase
 
         $payg = $pricing->projectQuote('manual', '', 2, '', true);
         $this->assertSame(30863, $payg['price_rials']);
+        $this->assertNotNull($payg['pricing_policy_version_id']);
     }
 
     public function test_document_quote_uses_versioned_base_and_language_multiplier(): void
@@ -184,6 +186,7 @@ class PricingPolicyTest extends TestCase
         $quote = app(PricingService::class)->quote('alpha beta gamma', 1);
 
         $this->assertSame(15000, $quote['price_rials']);
+        $this->assertNotNull($quote['pricing_policy_version_id']);
         $this->assertSame(15000, $quote['free_page_value_rials']);
         $this->assertSame(1.5, $quote['breakdown']['language_factor']);
 
