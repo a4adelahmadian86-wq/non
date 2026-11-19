@@ -118,7 +118,9 @@ class StorePriceProposalService
         });
 
         $proposal->loadMissing('product');
-        $this->queueUploaderNotification((int) $proposal->uploader_id, $proposal, $proposal->product);
+        if ($proposal->product && $proposal->uploader_id) {
+            $this->queueUploaderNotification((int) $proposal->uploader_id, $proposal, $proposal->product);
+        }
 
         return $proposal;
     }
