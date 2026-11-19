@@ -6,6 +6,7 @@ use App\Models\FarastPricingPolicyVersion;
 use App\Models\PricingRule;
 use App\Services\PricingService;
 use Database\Seeders\VersionedPricingPolicySeeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -65,20 +66,17 @@ class PricingPolicyTest extends TestCase
 
     public function test_typing_price_reads_versioned_policy_before_legacy_rule_values(): void
     {
-        PricingRule::create([
-            'key' => 'page_base',
+        PricingRule::updateOrCreate(['key' => 'page_base'], [
             'value' => 77777,
             'label' => 'legacy estimate test value',
             'active' => true,
         ]);
-        PricingRule::create([
-            'key' => 'typing_manual_page',
+        PricingRule::updateOrCreate(['key' => 'typing_manual_page'], [
             'value' => 999999,
             'label' => 'legacy test value',
             'active' => true,
         ]);
-        PricingRule::create([
-            'key' => 'typing_payg_multiplier',
+        PricingRule::updateOrCreate(['key' => 'typing_payg_multiplier'], [
             'value' => 200,
             'label' => 'legacy test multiplier',
             'active' => true,
@@ -86,7 +84,7 @@ class PricingPolicyTest extends TestCase
 
         FarastPricingPolicyVersion::create([
             'policy_code' => 'page_base',
-            'version' => 1,
+            'version' => ((int) FarastPricingPolicyVersion::where('policy_code', 'page_base')->max('version')) + 1,
             'capability_code' => 'typing.manual',
             'unit' => 'page',
             'currency' => 'IRR',
@@ -102,7 +100,7 @@ class PricingPolicyTest extends TestCase
         ]);
         FarastPricingPolicyVersion::create([
             'policy_code' => 'typing_manual_page',
-            'version' => 1,
+            'version' => ((int) FarastPricingPolicyVersion::where('policy_code', 'typing_manual_page')->max('version')) + 1,
             'capability_code' => 'typing.manual',
             'unit' => 'page',
             'currency' => 'IRR',
@@ -118,7 +116,7 @@ class PricingPolicyTest extends TestCase
         ]);
         FarastPricingPolicyVersion::create([
             'policy_code' => 'typing_payg_multiplier',
-            'version' => 1,
+            'version' => ((int) FarastPricingPolicyVersion::where('policy_code', 'typing_payg_multiplier')->max('version')) + 1,
             'capability_code' => 'typing.payg',
             'unit' => 'percentage',
             'currency' => 'IRR',
@@ -151,8 +149,7 @@ class PricingPolicyTest extends TestCase
             ['page_base', 10000],
             ['english_multiplier', 150],
         ] as [$key, $value]) {
-            PricingRule::create([
-                'key' => $key,
+            PricingRule::updateOrCreate(['key' => $key], [
                 'value' => $value + 1,
                 'label' => 'legacy '.$key,
                 'active' => true,
@@ -185,8 +182,9 @@ class PricingPolicyTest extends TestCase
 
     public function test_versioned_pricing_seeder_is_idempotent_and_copies_existing_values(): void
     {
-        PricingRule::create([
-            'key' => 'page_base',
+        DB::table('farast_pricing_policy_versions')->where('policy_code', 'page_base')->delete();
+
+        PricingRule::updateOrCreate(['key' => 'page_base'], [
             'value' => 35000,
             'label' => 'configured page base',
             'active' => true,
