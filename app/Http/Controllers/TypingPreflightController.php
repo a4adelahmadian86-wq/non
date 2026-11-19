@@ -30,12 +30,12 @@ class TypingPreflightController extends Controller
 
         [$path, $mime, $name] = $this->resolveSource($request);
         $pages = $preflight->estimatePages($path, $mime);
-        $quote = $pricing->estimateByPages($pages);
         $freePages = $caps['unlimited'] ? 0 : $free->availablePages($user, (int) ($caps['weekly_free_pages'] ?? 1));
         $freeApplied = $caps['unlimited'] ? 0 : min(1, $freePages, $pages);
+        $quote = $pricing->estimateByPages($pages, $freeApplied);
         $subtotal = $caps['unlimited'] ? 0 : (int) $quote['price_rials'];
-        $discount = $caps['unlimited'] ? $subtotal : min($subtotal, $freeApplied * (int) $quote['free_page_value_rials']);
-        $payable = max(0, $subtotal - $discount);
+        $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
+        $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
         $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
         $hash = $preflight->fileHash($path);
@@ -100,12 +100,12 @@ class TypingPreflightController extends Controller
         abort_unless(hash_equals((string) ($quoted['hash'] ?? ''), $preflight->fileHash($path)), 409, 'فایل پس از برآورد تغییر کرده است.');
 
         $pages = $preflight->estimatePages($path, $mime);
-        $quote = $pricing->estimateByPages($pages);
         $freePages = $caps['unlimited'] ? 0 : $free->availablePages($user, (int) ($caps['weekly_free_pages'] ?? 1));
         $freeApplied = $caps['unlimited'] ? 0 : min(1, $freePages, $pages);
+        $quote = $pricing->estimateByPages($pages, $freeApplied);
         $subtotal = $caps['unlimited'] ? 0 : (int) $quote['price_rials'];
-        $discount = $caps['unlimited'] ? $subtotal : min($subtotal, $freeApplied * (int) $quote['free_page_value_rials']);
-        $payable = max(0, $subtotal - $discount);
+        $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
+        $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
         $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
         $hash = $preflight->fileHash($path);
