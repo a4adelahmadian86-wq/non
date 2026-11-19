@@ -43,17 +43,20 @@ class PricingPolicyTest extends TestCase
 
     public function test_policy_calculation_supports_allowance_additional_usage_discount_and_fee(): void
     {
-        FarastPricingPolicy::where('code','typing_manual_page')->update([
-            'base_price_rials'=>100000,
-            'subscription_allowance'=>2,
-            'additional_price_rials'=>120000,
-            'payg_multiplier_percent'=>100,
-            'discount_percent'=>10,
-            'fee_rials'=>5000,
-            'active'=>true,
+        FarastPricingPolicy::create([
+            'code' => 'legacy.compat.test',
+            'capability_code' => 'typing.manual',
+            'unit' => 'page',
+            'base_price_rials' => 100000,
+            'subscription_allowance' => 2,
+            'additional_price_rials' => 120000,
+            'payg_multiplier_percent' => 100,
+            'discount_percent' => 10,
+            'fee_rials' => 5000,
+            'active' => true,
         ]);
 
-        $result = app(PricingService::class)->calculate('typing_manual_page', 4, true);
+        $result = app(PricingService::class)->calculate('legacy.compat.test', 4, true);
 
         $this->assertSame(2, $result['included_units']);
         $this->assertSame(2, $result['billable_units']);
