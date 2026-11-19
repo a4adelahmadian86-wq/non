@@ -276,6 +276,7 @@ class PricingPolicyTest extends TestCase
     {
         $previous = app(PricingEngine::class)->resolve('page_base');
         $previousPrice = $previous ? (int) $previous->unit_price : null;
+        $previousChecksum = $previous?->checksum;
         $newVersion = app(PricingPolicyAdminService::class)->createVersionFromPricingRule(
             'page_base',
             45678,
@@ -290,6 +291,7 @@ class PricingPolicyTest extends TestCase
         if ($previous) {
             $this->assertSame($previousPrice, (int) $previous->fresh()->unit_price);
             $this->assertNotNull($previous->fresh()->effective_until);
+            $this->assertNotSame($previousChecksum, $previous->fresh()->checksum);
         }
     }
 
