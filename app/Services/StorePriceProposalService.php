@@ -43,7 +43,7 @@ class StorePriceProposalService
 
     public function propose(StoreProduct $product, User $actor): StorePriceProposal
     {
-        return DB::transaction(function () use ($product, $actor) {
+        $proposal = DB::transaction(function () use ($product, $actor) {
             $lockedProduct = StoreProduct::query()->lockForUpdate()->findOrFail($product->id);
             $preview = $this->preview($lockedProduct);
             $uploaderId = $preview['uploader_id'];
@@ -65,8 +65,6 @@ class StorePriceProposalService
                 ->first();
 
             if ($pending && hash_equals($pending->source_hash, $sourceHash)) {
-                $this->queueUploaderNotification($uploaderId, $pending, $lockedProduct);
-
                 return $pending;
             }
 
@@ -108,10 +106,13 @@ class StorePriceProposalService
                 'application',
             );
 
-            $this->queueUploaderNotification($uploaderId, $proposal, $lockedProduct);
-
             return $proposal;
         });
+
+        $proposal->loadMissing('product');
+        $this->queueUploaderNotification((int) $proposal->uploader_id, $proposal, $proposal->product);
+
+        return $proposal;
     }
 
     public function decide(StorePriceProposal $proposal, User $actor, string $decision, ?string $note = null): bool
@@ -323,25 +324,23 @@ class StorePriceProposalService
     }
     private function queueUploaderNotification(int $uploaderId, StorePriceProposal $proposal, StoreProduct $product): void
     {
-        DB::afterCommit(function () use ($uploaderId, $proposal, $product): void {
-            $campaign = $proposal->campaign_price_rials === null
-                ? 'برای این محصول به دلیل نبود حاشیه سود امن، قیمت کمپین پیشنهاد نشده است.'
-                : 'قیمت کمپین پیشنهادی با رعایت حداقل حاشیه سود آماده بررسی است.';
+        $campaign = $proposal->campaign_price_rials === null
+            ? 'برای این محصول به دلیل نبود حاشیه سود امن، قیمت کمپین پیشنهاد نشده است.'
+            : 'قیمت کمپین پیشنهادی با رعایت حداقل حاشیه سود آماده بررسی است.';
 
-            $this->notifications->push(
-                $uploaderId,
-                'store_price_proposal_created',
-                'پیشنهاد قیمت محصول برای بررسی',
-                $product->title.' — '.$campaign,
-                [
-                    'url' => route('store.price-proposals.index'),
-                    'proposal_id' => $proposal->id,
-                    'product_id' => $product->id,
-                ],
-                false,
-                'store-price-proposal:'.$proposal->id,
-            );
-        });
+        $this->notifications->push(
+            $uploaderId,
+            'store_price_proposal_created',
+            'پیشنهاد قیمت محصول برای بررسی',
+            $product->title.' — '.$campaign,
+            [
+                'url' => route('store.price-proposals.index'),
+                'proposal_id' => $proposal->id,
+                'product_id' => $product->id,
+            ],
+            false,
+            'store-price-proposal:'.$proposal->id,
+        );
     }
 
 }
