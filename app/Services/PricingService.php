@@ -47,7 +47,36 @@ class PricingService
 
     public function calculate(string $policyCode, int $units, bool $subscription = false): array
     {
-        $units=max(0,$units);
+        $units = max(0, $units);
+
+        // Versioned policies are the source of truth for new calculations.
+        // Keep the legacy result shape so existing callers can migrate safely.
+        $engine = app(PricingEngine::class);
+        $version = $engine->resolve($policyCode);
+        if ($version) {
+            $quote = $engine->quote($policyCode, $units, [
+                'included_quantity' => $subscription ? max(0, (float) $version->included_quantity) : 0,
+            ]);
+
+            return [
+                'policy' => $policyCode,
+                'unit' => $quote['unit'],
+                'units' => $units,
+                'base_price_rials' => max(0, (int) $version->unit_price),
+                'subscription_allowance' => (int) $quote['included_quantity'],
+                'included_units' => (int) $quote['included_quantity'],
+                'billable_units' => (int) $quote['billable_quantity'],
+                'additional_usage_rials' => (int) $quote['subtotal'],
+                'discount_rials' => (int) $quote['discount'],
+                'fee_rials' => (int) $quote['fee'],
+                'tax_rials' => (int) $quote['tax'],
+                'final_price_rials' => (int) $quote['total'],
+                'pricing_policy_version_id' => $quote['pricing_policy_version_id'],
+                'currency' => $quote['currency'],
+            ];
+        }
+
+        // Temporary compatibility path for policies not yet migrated.
         $policy=FarastPricingPolicy::where('code',$policyCode)->where('active',true)->first();
         if(!$policy){
             return ['policy'=>$policyCode,'units'=>$units,'base_price_rials'=>0,'subscription_allowance'=>0,'included_units'=>0,'billable_units'=>$units,'additional_usage_rials'=>0,'discount_rials'=>0,'fee_rials'=>0,'final_price_rials'=>0];
