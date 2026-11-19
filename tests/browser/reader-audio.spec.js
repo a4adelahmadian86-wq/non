@@ -203,19 +203,22 @@ test('keeps estimated chunk timing visibly approximate and preserves accessible 
   await expect(page.locator('[data-audio-seek]')).toHaveAttribute('aria-label', 'موقعیت پخش');
   await expect(page.locator('[data-audio-speed]')).toHaveAttribute('aria-label', 'سرعت پخش');
 
-  const audio = () => page.evaluate(() => window.__readerAudioInstances[0]);
+  const audioState = () => page.evaluate(() => {
+    const audio = window.__readerAudioInstances[0];
+    return { paused: audio.paused, playbackRate: audio.playbackRate, currentTime: audio.currentTime };
+  });
   await page.locator('[data-audio-play]').click();
-  expect((await audio()).paused).toBe(false);
+  expect((await audioState()).paused).toBe(false);
   await page.locator('[data-audio-speed]').selectOption('1.5');
-  expect((await audio()).playbackRate).toBe(1.5);
+  expect((await audioState()).playbackRate).toBe(1.5);
 
   await page.locator('[data-audio-seek]').evaluate(element => {
     element.value = '500';
     element.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  expect((await audio()).currentTime).toBe(5);
+  expect((await audioState()).currentTime).toBe(5);
 
   await page.locator('[data-audio-stop]').click();
-  expect((await audio()).paused).toBe(true);
-  expect((await audio()).currentTime).toBe(0);
+  expect((await audioState()).paused).toBe(true);
+  expect((await audioState()).currentTime).toBe(0);
 });
