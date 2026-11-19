@@ -108,7 +108,7 @@ class TypingPreflightController extends Controller
         $discount = $caps['unlimited'] ? $subtotal : (int) $quote['discount_rials'];
         $payable = $caps['unlimited'] ? 0 : (int) $quote['payable_price_rials'];
         $depositPercent = $caps['unlimited'] ? 0 : $preflight->depositPercent($pages);
-        $deposit = $depositPercent > 0 ? (int) ceil(($payable * $depositPercent / 100) / 1000) * 1000 : 0;
+        $deposit = app(PricingEngine::class)->percentageAmount($payable, $depositPercent * 100, 1000, true);
         $hash = $preflight->fileHash($path);
 
         if ($depositPercent > 0 && $deposit > 0) {
