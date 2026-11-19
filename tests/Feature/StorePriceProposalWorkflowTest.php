@@ -137,6 +137,24 @@ class StorePriceProposalWorkflowTest extends TestCase
         $this->assertDatabaseCount('farast_notifications', 2);
     }
 
+    public function test_base_price_suggestion_covers_cost_and_minimum_margin_when_current_price_is_too_low(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $uploader = $this->user('Uploader');
+        $product = $this->product(50000);
+        $product->update(['price_rials' => 40000]);
+        $this->confirmUploader($product, $uploader);
+
+        $proposal = app(StorePriceProposalService::class)->propose($product, $pricingTeam);
+
+        $this->assertSame(40000, (int) data_get($proposal->snapshot_before, 'price_rials'));
+        $this->assertSame(52632, (int) $proposal->base_price_rials);
+        $this->assertNull($proposal->campaign_price_rials);
+        $this->assertTrue(app(StorePriceProposalService::class)->decide($proposal, $uploader, 'accept'));
+        $this->assertSame(52632, (int) $product->fresh()->price_rials);
+        $this->assertNull($product->fresh()->compare_at_price_rials);
+    }
+
     public function test_accepting_base_only_proposal_does_not_create_a_fake_campaign_reference(): void
     {
         $pricingTeam = $this->user('Pricing Team');
