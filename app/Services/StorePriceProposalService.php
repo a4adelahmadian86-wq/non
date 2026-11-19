@@ -29,6 +29,7 @@ class StorePriceProposalService
         $minimumSafeBase = $this->marginPolicy->minimumSafeSellingPrice($product);
         $basePrice = max($currentPrice, $minimumSafeBase ?? $currentPrice);
         $minimumMargin = $this->marginPolicy->minimumMargin($product, $basePrice);
+        $basePriceIsSafe = $costPrice === null || ($basePrice - $costPrice) >= $minimumMargin;
         $maximumDiscount = $costPrice === null ? 0 : $this->marginPolicy->maximumDiscount($product, $basePrice, 1);
         $campaignPrice = $maximumDiscount > 0 ? max(0, $basePrice - $maximumDiscount) : null;
 
@@ -41,7 +42,7 @@ class StorePriceProposalService
             'cost_price_rials' => $costPrice,
             'minimum_margin_rials' => $minimumMargin,
             'maximum_discount_rials' => $maximumDiscount,
-            'can_propose' => $currentPrice > 0 && $uploaderId !== null,
+            'can_propose' => $currentPrice > 0 && $uploaderId !== null && $basePriceIsSafe,
         ];
     }
 
@@ -57,6 +58,9 @@ class StorePriceProposalService
             }
             if ($preview['current_price_rials'] <= 0) {
                 throw new RuntimeException('store_product_requires_positive_base_price');
+            }
+            if (! $preview['can_propose']) {
+                throw new RuntimeException('store_product_has_no_safe_base_price');
             }
 
             $snapshot = $this->snapshot($lockedProduct, $uploaderId);
