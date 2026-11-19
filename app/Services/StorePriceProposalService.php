@@ -25,18 +25,19 @@ class StorePriceProposalService
     {
         $basePrice = max(0, (int) $product->price_rials);
         $costPrice = $product->cost_price_rials === null ? null : max(0, (int) $product->cost_price_rials);
+        $uploaderId = $this->uploaderId($product);
         $minimumMargin = $this->marginPolicy->minimumMargin($product, $basePrice);
         $maximumDiscount = $costPrice === null ? 0 : $this->marginPolicy->maximumDiscount($product, $basePrice, 1);
         $campaignPrice = $maximumDiscount > 0 ? max(0, $basePrice - $maximumDiscount) : null;
 
         return [
-            'uploader_id' => $this->uploaderId($product),
+            'uploader_id' => $uploaderId,
             'base_price_rials' => $basePrice,
             'campaign_price_rials' => $campaignPrice !== null && $campaignPrice < $basePrice ? $campaignPrice : null,
             'cost_price_rials' => $costPrice,
             'minimum_margin_rials' => $minimumMargin,
             'maximum_discount_rials' => $maximumDiscount,
-            'can_propose' => $basePrice > 0 && $this->uploaderId($product) !== null,
+            'can_propose' => $basePrice > 0 && $uploaderId !== null,
         ];
     }
 
@@ -210,11 +211,12 @@ class StorePriceProposalService
             $lockedProposal->decided_by = $actor->id;
             $lockedProposal->decided_at = now();
             $lockedProposal->decision_note = $note === null ? null : mb_substr(trim($note), 0, 500);
+            $afterProduct = $product->fresh();
             $lockedProposal->snapshot_after = [
-                'price_rials' => (int) $product->fresh()->price_rials,
-                'compare_at_price_rials' => $product->fresh()->compare_at_price_rials,
-                'cost_price_rials' => $product->fresh()->cost_price_rials,
-                'marketing_min_margin_rials' => (int) $product->fresh()->marketing_min_margin_rials,
+                'price_rials' => (int) $afterProduct->price_rials,
+                'compare_at_price_rials' => $afterProduct->compare_at_price_rials,
+                'cost_price_rials' => $afterProduct->cost_price_rials,
+                'marketing_min_margin_rials' => (int) $afterProduct->marketing_min_margin_rials,
             ];
             $lockedProposal->save();
 
