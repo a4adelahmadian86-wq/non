@@ -205,6 +205,77 @@ class CheckoutPaymentClarityTest extends TestCase
             ->count());
     }
 
+    public function test_pending_deposit_is_reused_even_if_a_new_policy_quote_becomes_free(): void
+    {
+        \\Illuminate\\Support\\Facades\\Storage::fake('private');
+
+        $user = User::create([
+            'name' => 'Pending Deposit QA',
+            'mobile' => '09123456782',
+            'password' => 'secret',
+        ]);
+        $path = 'typing/'.$user->id.'/pending-deposit-source.pdf';
+        $bytes = '%PDF-1.4 '.str_repeat('/Type /Page ', 8);
+        \\Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+        $hash = hash('sha256', $bytes);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 30000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 30000,
+            'status' => 'deposit_pending',
+            'pricing_snapshot' => [
+                'kind' => 'typing_deposit',
+                'source_path' => $path,
+                'source_hash' => $hash,
+                'pricing_policy_version_id' => 123,
+                'deposit_credit_rials' => 30000,
+            ],
+        ]);
+
+        $this->mock(\\App\\Services\\PricingService::class, function ($mock) {
+            $mock->shouldReceive('estimateByPages')->once()->with(8, 0)->andReturn([
+                'price_rials' => 0,
+                'discount_rials' => 0,
+                'payable_price_rials' => 0,
+                'pricing_policy_version_id' => 999,
+                'tax_rials' => 0,
+                'free_page_value_rials' => 0,
+            ]);
+        });
+        $this->mock(\\App\\Services\\FreeQuotaService::class, function ($mock) {
+            $mock->shouldReceive('availablePages')->once()->andReturn(0);
+        });
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'pending_upload' => [
+                    'path' => $path,
+                    'mime' => 'application/pdf',
+                    'name' => 'pending-deposit-source.pdf',
+                    'source_type' => 'printed',
+                ],
+                'typing_preflight_quote' => [
+                    'path' => $path,
+                    'mime' => 'application/pdf',
+                    'name' => 'pending-deposit-source.pdf',
+                    'hash' => $hash,
+                    'pages' => 8,
+                ],
+            ])
+            ->postJson('/editor/preflight/accept', ['accept' => true]);
+
+        $response->assertOk()
+            ->assertJsonPath('action', 'deposit')
+            ->assertJsonPath('order_id', $order->id);
+        $this->assertSame($order->id, (int) session('typing_preflight_deposit_order'));
+        $this->assertSame(30000, (int) $order->fresh()->total_rials);
+        $this->assertSame(123, (int) data_get($order->fresh()->pricing_snapshot, 'pricing_policy_version_id'));
+    }
+
     public function test_preflight_acceptance_binds_the_quote_to_the_authenticated_project(): void
     {
         \Illuminate\Support\Facades\Storage::fake('private');
