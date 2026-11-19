@@ -32,6 +32,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('store_price_proposals');
+        // Proposal and decision history is auditable business data; a code rollback
+        // must not erase it. The additive table is intentionally retained.
     }
 };
