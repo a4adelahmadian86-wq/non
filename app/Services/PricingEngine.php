@@ -23,6 +23,29 @@ class PricingEngine
         return $query->first();
     }
 
+    /**
+     * Calculate a percentage amount using integer basis points and an optional
+     * currency rounding increment (for example, deposit amounts rounded up
+     * to the next 1,000 rials).
+     */
+    public function percentageAmount(int $baseAmount, int $basisPoints, int $roundingIncrement = 1, bool $roundUp = false): int
+    {
+        $baseAmount = max(0, $baseAmount);
+        $basisPoints = max(0, min(10000, $basisPoints));
+        $roundingIncrement = max(1, $roundingIncrement);
+        if ($baseAmount === 0 || $basisPoints === 0) {
+            return 0;
+        }
+
+        $numerator = $baseAmount * $basisPoints;
+        $denominator = 10000 * $roundingIncrement;
+        $units = $roundUp
+            ? intdiv($numerator + $denominator - 1, $denominator)
+            : (int) round($numerator / $denominator);
+
+        return $units * $roundingIncrement;
+    }
+
     public function quote(string $policyCode, float $quantity, array $context = []): array
     {
         if ($quantity < 0) throw new InvalidArgumentException('quantity_must_be_non_negative');
