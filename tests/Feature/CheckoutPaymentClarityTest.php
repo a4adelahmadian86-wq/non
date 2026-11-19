@@ -235,8 +235,10 @@ class CheckoutPaymentClarityTest extends TestCase
         $hash = hash('sha256', $bytes);
 
         $this->mock(\App\Services\PricingService::class, function ($mock) {
-            $mock->shouldReceive('estimateByPages')->once()->with(8)->andReturn([
+            $mock->shouldReceive('estimateByPages')->once()->with(8, 0)->andReturn([
                 'price_rials' => 160000,
+                'discount_rials' => 0,
+                'payable_price_rials' => 160000,
                 'free_page_value_rials' => 10000,
             ]);
         });
