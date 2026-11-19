@@ -167,23 +167,35 @@ class PricingService
         ];
     }
 
-    public function estimateByPages(int $pages): array
+    public function estimateByPages(int $pages, int $includedPages = 0): array
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
+        $includedPages = max(0, min($pages, $includedPages));
         $pagePolicy = app(PricingEngine::class)->resolve('page_base');
         if ($pagePolicy) {
-            $quote = app(PricingEngine::class)->quote('page_base', $pages);
-            $pageUnit = (int) $quote['unit_price'];
-            $price = (int) $quote['total'];
+            $engine = app(PricingEngine::class);
+            $grossQuote = $engine->quote('page_base', $pages);
+            $payableQuote = $includedPages > 0
+                ? $engine->quote('page_base', $pages, ['included_quantity' => $includedPages])
+                : $grossQuote;
+            $pageUnit = (int) $grossQuote['unit_price'];
+            $price = (int) $grossQuote['total'];
+            $payable = (int) $payableQuote['total'];
+            $discount = max(0, $price - $payable);
         } else {
             $pageUnit = max(0, $this->ruleValue('page_base', 0));
             $price = $pages * $pageUnit;
+            $discount = min($price, $includedPages * $pageUnit);
+            $payable = max(0, $price - $discount);
         }
 
         return [
             'pages' => $pages,
             'price_rials' => $price,
+            'discount_rials' => $discount,
+            'payable_price_rials' => $payable,
+            'included_pages' => $includedPages,
             'free_page_value_rials' => $pageUnit,
             'is_estimate' => true,
             'breakdown' => [
@@ -191,6 +203,7 @@ class PricingService
                 'page_unit' => $pageUnit,
                 'language_factor' => null,
                 'formula_cost' => null,
+                'included_pages' => $includedPages,
             ],
         ];
     }
