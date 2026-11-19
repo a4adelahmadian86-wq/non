@@ -23,6 +23,11 @@ class PricingEngine
         return $query->first();
     }
 
+    public function lineAmount(int $unitPrice, int $quantity): int
+    {
+        return max(0, $unitPrice) * max(0, $quantity);
+    }
+
     /**
      * Calculate a percentage amount using integer basis points and an optional
      * currency rounding increment (for example, deposit amounts rounded up
