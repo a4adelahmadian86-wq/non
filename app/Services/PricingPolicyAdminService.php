@@ -71,4 +71,47 @@ class PricingPolicyAdminService
             return $version->fresh();
         });
     }
+    /**
+     * Create an immutable version from an existing legacy admin price field.
+     * The key map is intentionally allow-listed: arbitrary request keys cannot
+     * create executable pricing policies.
+     */
+    public function createVersionFromPricingRule(string $key, int $value, string $label): FarastPricingPolicyVersion
+    {
+        $definitions = [
+            'page_base' => ['unit' => 'page', 'capability' => 'typing.manual'],
+            'typing_manual_page' => ['unit' => 'page', 'capability' => 'typing.manual'],
+            'typing_voice_page' => ['unit' => 'page', 'capability' => 'typing.voice'],
+            'typing_printed_page' => ['unit' => 'page', 'capability' => 'typing.source_file'],
+            'typing_handwritten_page' => ['unit' => 'page', 'capability' => 'typing.source_file'],
+            'typing_mixed_page' => ['unit' => 'page', 'capability' => 'typing.source_file'],
+            'typing_voice_minute' => ['unit' => 'minute', 'capability' => 'typing.voice'],
+            'typing_payg_multiplier' => ['unit' => 'percentage', 'capability' => 'typing.payg'],
+            'english_multiplier' => ['unit' => 'percentage', 'capability' => 'typing.manual'],
+            'arabic_multiplier' => ['unit' => 'percentage', 'capability' => 'typing.manual'],
+            'mixed_multiplier' => ['unit' => 'percentage', 'capability' => 'typing.manual'],
+            'dense_page_multiplier' => ['unit' => 'percentage', 'capability' => 'typing.manual'],
+            'formula_unit' => ['unit' => 'formula', 'capability' => 'typing.manual'],
+        ];
+
+        if (!isset($definitions[$key])) {
+            throw new RuntimeException('unsupported_legacy_pricing_rule');
+        }
+
+        $value = max(0, $value);
+        return $this->createVersion([
+            'policy_code' => $key,
+            'capability_code' => $definitions[$key]['capability'],
+            'unit' => $definitions[$key]['unit'],
+            'currency' => 'IRR',
+            'unit_price' => $key === 'typing_payg_multiplier' ? 0 : $value,
+            'payg_multiplier_basis_points' => $key === 'typing_payg_multiplier' ? max(10000, $value * 100) : 10000,
+            'metadata' => [
+                'source' => 'admin_pricing_rule',
+                'source_key' => $key,
+                'source_label' => $label,
+            ],
+        ]);
+    }
+
 }
