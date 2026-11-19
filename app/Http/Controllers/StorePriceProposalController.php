@@ -23,6 +23,17 @@ class StorePriceProposalController extends Controller
         $previews = $products->getCollection()->mapWithKeys(
             fn (StoreProduct $product) => [$product->id => $service->preview($product)]
         );
+        $uploaderNames = User::query()
+            ->whereIn('id', $previews->pluck('uploader_id')->filter()->unique()->values())
+            ->pluck('name', 'id');
+
+        $previews = $previews->map(function (array $preview) use ($uploaderNames) {
+            $preview['uploader_name'] = $preview['uploader_id']
+                ? ($uploaderNames[$preview['uploader_id']] ?? null)
+                : null;
+
+            return $preview;
+        });
 
         return view('admin.store.price-proposals', compact('products', 'previews'));
     }
