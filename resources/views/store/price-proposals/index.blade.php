@@ -8,7 +8,7 @@
         <h1>پیشنهادهای قیمت من</h1>
         <p>هیچ تغییری تا زمان پذیرش شما روی قیمت محصول اعمال نمی‌شود. با رد پیشنهاد، قیمت فعلی بدون تغییر می‌ماند.</p>
       </div>
-      <a class="store-outline-btn" href="{{ route('store.index') }}">بازگشت به فروشگاه</a>
+      <a class="store-outline-btn" href="{{ route('admin.store.index') }}">بازگشت به فروشگاه</a>
     </div>
 
     @if(session('status'))<div class="store-alert success">{{ session('status') }}</div>@endif
