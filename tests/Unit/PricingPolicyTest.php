@@ -266,6 +266,9 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(5000, $engine->percentageAmount(100000, 500, 1000, 'up'));
         $this->assertSame(0, $engine->percentageAmount(0, 500, 1000, 'up'));
         $this->assertSame(5000, $engine->percentageAmount(100001, 500, 1000, 'down'));
+        $this->assertSame(111, $engine->allocateProRata(333, 1, 3));
+        $this->assertSame(222, $engine->allocateProRata(333, 2, 3));
+        $this->assertSame(333, $engine->allocateProRata(333, 0, 0, true));
     }
 
     public function test_admin_price_edit_creates_a_new_immutable_version(): void
