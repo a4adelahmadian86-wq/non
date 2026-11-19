@@ -137,6 +137,10 @@ class PricingPolicyTest extends TestCase
         $pricing = app(PricingService::class);
         $this->assertSame(12345, $pricing->initialTypingPrices()['manual']);
         $this->assertSame(22222, $pricing->estimateByPages(2)['price_rials']);
+        $withFreePage = $pricing->estimateByPages(2, 1);
+        $this->assertSame(22222, $withFreePage['price_rials']);
+        $this->assertSame(11111, $withFreePage['discount_rials']);
+        $this->assertSame(11111, $withFreePage['payable_price_rials']);
 
         $subscription = $pricing->projectQuote('manual', '', 2, '', false);
         $this->assertSame(12345, $subscription['unit_price_rials']);
