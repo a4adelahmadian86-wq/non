@@ -2,6 +2,7 @@
 namespace Tests\Unit;
 
 use App\Models\FarastPricingPolicy;
+use App\Models\FarastPricingPolicyVersion;
 use App\Services\PricingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
