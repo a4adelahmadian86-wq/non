@@ -45,6 +45,13 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
         $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 3)->first();
         if ($existing && $storage->exists($existing->disk ?: 'private', $existing->path)) {
+            $existingMetadata = (array) ($existing->metadata_json ?? []);
+            $granularity = $this->granularityForSegments((array) ($existingMetadata['segments'] ?? []));
+            if (($existingMetadata['granularity'] ?? null) !== $granularity) {
+                $existingMetadata['granularity'] = $granularity;
+                $existing->update(['metadata_json' => $existingMetadata]);
+            }
+
             $this->setAudioState($document, [
                 'status' => 'completed',
                 'artifact_type' => 'audio_full_wav',
@@ -52,6 +59,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'sha256' => $existing->sha256,
                 'duration_ms' => (int) data_get($existing->metadata_json, 'duration_ms', 0),
                 'segment_count' => count(data_get($existing->metadata_json, 'segments', [])),
+                'granularity' => $granularity,
                 'generated_once' => true,
             ]);
             return;
@@ -112,8 +120,10 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 ];
             })->filter()->values()->all();
 
+            $granularity = $this->granularityForSegments((array) ($generated['segments'] ?? []));
+
             try {
-                [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings): array {
+                [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings, $granularity): array {
                     $lockedDocument = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
                     $oldArtifact = $lockedDocument->artifacts()
                         ->where('artifact_type', 'audio_full_wav')
@@ -137,7 +147,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                                 'segments' => $generated['segments'],
                                 'source_sha256' => $lockedDocument->source_sha256,
                                 'generated_once' => true,
-                                'granularity' => 'phoneme_aligned_sentence_word',
+                                'granularity' => $granularity,
                             ],
                         ]
                     );
@@ -210,7 +220,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'segment_count' => count($generated['segments']),
                 'voice_id' => $generated['voice_id'],
                 'engine' => 'farast-document-audio',
-                'granularity' => 'phoneme_aligned_sentence_word',
+                'granularity' => $granularity,
                 'generated_once' => true,
             ]);
         } catch (Throwable $exception) {
@@ -221,6 +231,21 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
             $this->setAudioState($document, ['status' => 'failed', 'reason' => 'audio_generation_failed']);
             throw $exception;
         }
+    }
+
+    private function granularityForSegments(array $segments): string
+    {
+        $hasExactWordTimings = $segments !== []
+            && collect($segments)->every(static fn ($segment): bool =>
+                is_array($segment)
+                && ($segment['alignment_quality'] ?? null) === 'phoneme'
+                && is_array($segment['words'] ?? null)
+                && $segment['words'] !== []
+            );
+
+        return $hasExactWordTimings
+            ? 'phoneme_aligned_sentence_word'
+            : 'estimated_word_timing';
     }
 
     private function setAudioState(StoreProductDocument $document, array $audioState): void

@@ -138,6 +138,26 @@ class GenerateProductDocumentAudioStorageTest extends TestCase
             ->firstOrFail();
         $preview->refresh();
 
+        // The fixture has no FARA provider alignment chunk, so these word intervals are estimates.
+        $this->assertSame('estimated', data_get($artifact->metadata_json, 'segments.0.alignment_quality'));
+        $this->assertNotEmpty(data_get($artifact->metadata_json, 'segments.0.words'));
+        $this->assertSame('estimated_word_timing', data_get($artifact->metadata_json, 'granularity'));
+        $this->assertSame('estimated_word_timing', data_get($document->fresh()->structure_json, 'audio.granularity'));
+        $this->assertSame('estimated', data_get($preview->audio_timing, '0.alignment_quality'));
+
+        // Re-running the job over an existing artifact must repair legacy overstated metadata.
+        $legacyMetadata = (array) $artifact->metadata_json;
+        $legacyMetadata['granularity'] = 'phoneme_aligned_sentence_word';
+        $artifact->update(['metadata_json' => $legacyMetadata]);
+        $document->update(['structure_json' => ['audio' => [
+            'status' => 'completed',
+            'granularity' => 'phoneme_aligned_sentence_word',
+        ]]]);
+        $job->handle(app(ProductDocumentAudioService::class), app(StorageManager::class));
+        $artifact->refresh();
+        $this->assertSame('estimated_word_timing', data_get($artifact->metadata_json, 'granularity'));
+        $this->assertSame('estimated_word_timing', data_get($document->fresh()->structure_json, 'audio.granularity'));
+
         $this->assertSame('storage_volume:'.$volume->id, $artifact->disk);
         $this->assertSame($artifact->path, $managed->file_key);
         $this->assertSame(false, data_get($managed->metadata, 'reference_pending'));
