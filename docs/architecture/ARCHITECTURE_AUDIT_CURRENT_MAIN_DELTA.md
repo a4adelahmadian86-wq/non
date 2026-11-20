@@ -878,3 +878,14 @@ Migration `2026_10_02_000001_create_farast_commerce_engine.php` جدول `farast
 - **PR #340:** همچنان draft و بسیار عقب/واگرا از main است. این PR علاوه بر بخش مالی، تغییرات checkout، wallet، migration اشتراک‌ها و چند حوزه دیگر را در بر دارد. ادغام مستقیم یا بستن آن به‌عنوان صرفاً تکراری ایمن نیست. به‌ویژه mapping اشتراک‌های legacy به commercial plan/entitlement باید جداگانه با داده و تست upgrade reconcile شود.
 - **PR #600:** snapshot مستنداتی آن بر مبنای main قدیمی است و با تغییرات بعدی همین فایل در main جایگزین شده است؛ برای وضعیت جاری نباید به شاخه آن استناد کرد.
 - **محدودیت عملیاتی:** هیچ migration روی دیتابیس production یا محیط محلی اجرا نشده و سلامت داده‌های نصب‌شده از CI قابل استنتاج نیست. پیش از rollout قیدهای مالی، باید backup قابل بازیابی و duplicate/orphan preflight روی clone هم‌نسخه دیتابیس واقعی انجام شود.
+
+
+## 22. تکمیل Reader و entitlement دوره پس از ممیزی 2026-11-20
+
+- **HEAD مبنا:** `2772f2cb0d875078041ea19a46ae6ce9fadf2e09`؛ ادغام PR #701.
+- **PR #699:** Seeder داده‌های نمونه فروشگاه را از دیسک خصوصی پیکربندی‌شده می‌نویسد و شکست ذخیره‌سازی را fail-fast می‌کند؛ metadata فایل از همان disk خوانده می‌شود. `StorePdfPreviewPreparer` خروجی PDF نمونه را دوباره parse می‌کند و تعداد صفحات را پیش از انتشار با حد مجاز تطبیق می‌دهد. تست‌های feature/unit و Reader Browser Regression اضافه شدند.
+- **PR #701:** اگر جدیدترین StoreLibraryItem نامعتبر باشد، خطای grant آن گزارش می‌شود و جست‌وجوی entitlementهای قدیمی‌تر ادامه می‌یابد؛ بنابراین خرید قدیمی معتبر با یک رکورد جدید نامعتبر از دید کاربر پنهان نمی‌شود. اعتبارسنجی سخت‌گیرانه سفارش، پرداخت و order item در `StoreCourseEnrollmentService` حفظ شده است.
+- **اعتبارسنجی PR #701:** FARAST CI، Phase 3 Commerce، Phase 4 Agent، MySQL integrity، Admin Product E2E، Product Supervisor، Voice Service، Document Audio Smoke و Reader Browser Regression روی HEAD دقیق PR موفق شدند؛ `voice-model-smoke` به‌صورت شرطی skipped بود.
+- **اعتبارسنجی پس از ادغام PR #699:** هر سه workflow روی merge commit `467bd095b9a373333864a8cbf5f3df4522c216b0` موفق شدند.
+- **PRهای قدیمی superseded:** #689 با #699، و #429/#411 با کد سخت‌گیرانه فعلی و PR #701 جایگزین شدند؛ این شاخه‌های قدیمی به main ادغام نشدند.
+- **محدودیت عملیاتی باقی‌مانده:** هیچ migration یا preflight روی دیتابیس واقعی کاربر اجرا نشده است. rollout قیدهای مالی همچنان به backup قابل بازیابی و preflight روی clone هم‌نسخه دیتابیس نصب‌شده نیاز دارد.
