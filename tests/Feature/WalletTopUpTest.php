@@ -23,13 +23,21 @@ class WalletTopUpTest extends TestCase
         SiteSetting::write('zarinpal_sandbox', true);
     }
 
+    private function topUpKey(User $user): string
+    {
+        $this->actingAs($user)->get('/wallet')->assertOk();
+
+        return (string) session('wallet_topup_idempotency_key');
+    }
+
     public function test_top_up_is_rejected_when_gateway_is_not_configured(): void
     {
         $user = User::factory()->create();
+        $idempotencyKey = $this->topUpKey($user);
 
         $this->actingAs($user)
             ->from('/wallet')
-            ->post('/wallet/top-up', ['amount_rials' => 100000])
+            ->post('/wallet/top-up', ['amount_rials' => 100000, 'idempotency_key' => $idempotencyKey])
             ->assertRedirect('/wallet')
             ->assertSessionHasErrors('topup');
 
@@ -41,6 +49,7 @@ class WalletTopUpTest extends TestCase
     {
         $this->enableGateway();
         $user = User::factory()->create();
+        $idempotencyKey = $this->topUpKey($user);
 
         Http::fake([
             'https://sandbox.zarinpal.com/pg/v4/payment/request.json' => Http::response([
@@ -52,8 +61,17 @@ class WalletTopUpTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->post('/wallet/top-up', ['amount_rials' => 250000])
+            ->post('/wallet/top-up', ['amount_rials' => 250000, 'idempotency_key' => $idempotencyKey])
             ->assertRedirect('https://sandbox.zarinpal.com/pg/StartPay/A000000000000000000000000000000001');
+
+        $this->actingAs($user)
+            ->post('/wallet/top-up', ['amount_rials' => 250000, 'idempotency_key' => $idempotencyKey])
+            ->assertRedirect(route('wallet'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseCount('payments', 1);
+        Http::assertSentCount(1);
 
         $order = Order::query()->where('user_id', $user->id)->firstOrFail();
         $this->assertSame('wallet_topup', $order->pricing_snapshot['kind']);
