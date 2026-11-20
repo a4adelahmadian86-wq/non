@@ -133,14 +133,14 @@ class FinancialIdempotencyAndRetentionTest extends TestCase
             $transaction->update(['description' => 'tampered']);
             $this->fail('Wallet ledger entries must not be updated.');
         } catch (\LogicException $exception) {
-            $this->assertSame('wallet_transaction_is_immutable', $exception->getMessage());
+            $this->assertSame('wallet_ledger_entries_are_append_only', $exception->getMessage());
         }
 
         try {
             $transaction->delete();
             $this->fail('Wallet ledger entries must not be deleted.');
         } catch (\LogicException $exception) {
-            $this->assertSame('wallet_transaction_is_immutable', $exception->getMessage());
+            $this->assertSame('wallet_ledger_entries_cannot_be_deleted', $exception->getMessage());
         }
 
         $this->assertDatabaseHas('wallet_transactions', [
