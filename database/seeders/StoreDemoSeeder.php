@@ -8,18 +8,17 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class StoreDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        $dir = storage_path('app/private/store/demo');
-        File::ensureDirectoryExists($dir);
+        $disk = Storage::disk('private');
+        $disk->makeDirectory('store/demo');
         $path = 'store/demo/demo-free.txt';
-        $full = storage_path('app/private/'.$path);
-        if (! is_file($full)) {
-            file_put_contents($full, "فایل آزمایشی رایگان فروشگاه فراست\nنسخه دمو برای تست خرید و کتابخانه.\n");
+        if (! $disk->exists($path) && ! $disk->put($path, "فایل آزمایشی رایگان فروشگاه فراست\nنسخه دمو برای تست خرید و کتابخانه.\n")) {
+            throw new \RuntimeException('ذخیره فایل نمونه رایگان در فضای خصوصی ناموفق بود.');
         }
 
         $category = StoreCategory::firstOrCreate(
@@ -59,8 +58,8 @@ class StoreDemoSeeder extends Seeder
                 'disk' => 'private',
                 'original_name' => 'demo-free.txt',
                 'mime' => 'text/plain',
-                'size_bytes' => filesize($full),
-                'sha256' => hash_file('sha256', $full),
+                'size_bytes' => $disk->size($path),
+                'sha256' => hash('sha256', $disk->get($path)),
                 'is_primary' => true,
                 'is_active' => true,
             ]
@@ -69,9 +68,8 @@ class StoreDemoSeeder extends Seeder
         $this->seedPreviews($product, 3, 'نمونه رایگان');
 
         $paidPath = 'store/demo/demo-paid.txt';
-        $paidFull = storage_path('app/private/'.$paidPath);
-        if (! is_file($paidFull)) {
-            file_put_contents($paidFull, "فایل آزمایشی پولی فروشگاه فراست\n");
+        if (! $disk->exists($paidPath) && ! $disk->put($paidPath, "فایل آزمایشی پولی فروشگاه فراست\n")) {
+            throw new \RuntimeException('ذخیره فایل نمونه پولی در فضای خصوصی ناموفق بود.');
         }
         $paid = StoreProduct::updateOrCreate(
             ['slug' => 'demo-paid'],
@@ -100,8 +98,8 @@ class StoreDemoSeeder extends Seeder
                 'disk' => 'private',
                 'original_name' => 'demo-paid.txt',
                 'mime' => 'text/plain',
-                'size_bytes' => filesize($paidFull),
-                'sha256' => hash_file('sha256', $paidFull),
+                'size_bytes' => $disk->size($paidPath),
+                'sha256' => hash('sha256', $disk->get($paidPath)),
                 'is_primary' => true,
                 'is_active' => true,
             ]
@@ -124,12 +122,11 @@ class StoreDemoSeeder extends Seeder
 
     private function seedPreviews(StoreProduct $product, int $pages, string $label): void
     {
-        $previewDir = storage_path('app/private/store/previews/'.$product->id);
-        File::ensureDirectoryExists($previewDir);
+        $disk = Storage::disk('private');
+        $disk->makeDirectory('store/previews/'.$product->id);
 
         for ($i = 1; $i <= $pages; $i++) {
             $rel = 'store/previews/'.$product->id.'/page-'.$i.'.svg';
-            $full = storage_path('app/private/'.$rel);
             $svg = <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
   <rect width="600" height="800" fill="#f7fafc"/>
@@ -141,7 +138,9 @@ class StoreDemoSeeder extends Seeder
   <text x="80" y="340" font-family="Tahoma,Arial" font-size="15" fill="#8a9bb0">محصول: {$product->title}</text>
 </svg>
 SVG;
-            file_put_contents($full, $svg);
+            if (! $disk->put($rel, $svg)) {
+                throw new \RuntimeException('ذخیره پیش‌نمایش نمونه در فضای خصوصی ناموفق بود.');
+            }
 
             StoreProductPreview::updateOrCreate(
                 ['product_id' => $product->id, 'path' => $rel],
