@@ -80,6 +80,18 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
 
         $this->assertSame('legacy-order-20', DB::table('orders')->where('id', 20)->value('idempotency_key'));
         $this->assertSame('legacy-payment-30', DB::table('payments')->where('id', 30)->value('idempotency_key'));
+        $this->assertTrue(collect(Schema::getIndexes('orders'))->contains(
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['user_id', 'idempotency_key']
+        ));
+
+        // Order idempotency is scoped per customer: two customers may submit
+        // the same request key without colliding with one another.
+        DB::table('users')->insert(['id' => 2]);
+        DB::table('orders')->insert([
+            'id' => 24,
+            'user_id' => 2,
+            'idempotency_key' => 'legacy-order-20',
+        ]);
         $this->assertTrue(collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
         ));
@@ -274,7 +286,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         }
 
         $this->assertFalse(collect(Schema::getIndexes('orders'))->contains(
-            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['idempotency_key']
+            fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['user_id', 'idempotency_key']
         ));
         $this->assertFalse(collect(Schema::getIndexes('payments'))->contains(
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
