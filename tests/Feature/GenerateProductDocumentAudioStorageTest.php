@@ -138,6 +138,13 @@ class GenerateProductDocumentAudioStorageTest extends TestCase
             ->firstOrFail();
         $preview->refresh();
 
+        // The fixture has no FARA provider alignment chunk, so these word intervals are estimates.
+        $this->assertSame('estimated', data_get($artifact->metadata_json, 'segments.0.alignment_quality'));
+        $this->assertNotEmpty(data_get($artifact->metadata_json, 'segments.0.words'));
+        $this->assertSame('estimated_word_timing', data_get($artifact->metadata_json, 'granularity'));
+        $this->assertSame('estimated_word_timing', data_get($document->fresh()->structure_json, 'audio.granularity'));
+        $this->assertSame('estimated', data_get($preview->audio_timing, '0.alignment_quality'));
+
         $this->assertSame('storage_volume:'.$volume->id, $artifact->disk);
         $this->assertSame($artifact->path, $managed->file_key);
         $this->assertSame(false, data_get($managed->metadata, 'reference_pending'));
