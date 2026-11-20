@@ -112,8 +112,18 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 ];
             })->filter()->values()->all();
 
+            // Exact word granularity is valid only when every segment has provider word timestamps.
+            $granularity = ! empty($generated['segments'])
+                && collect($generated['segments'])->every(static fn (array $segment): bool =>
+                    ($segment['alignment_quality'] ?? null) === 'phoneme'
+                    && is_array($segment['words'] ?? null)
+                    && $segment['words'] !== []
+                )
+                ? 'phoneme_aligned_sentence_word'
+                : 'estimated_word_timing';
+
             try {
-                [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings): array {
+                [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings, $granularity): array {
                     $lockedDocument = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
                     $oldArtifact = $lockedDocument->artifacts()
                         ->where('artifact_type', 'audio_full_wav')
@@ -137,7 +147,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                                 'segments' => $generated['segments'],
                                 'source_sha256' => $lockedDocument->source_sha256,
                                 'generated_once' => true,
-                                'granularity' => 'phoneme_aligned_sentence_word',
+                                'granularity' => $granularity,
                             ],
                         ]
                     );
@@ -210,7 +220,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'segment_count' => count($generated['segments']),
                 'voice_id' => $generated['voice_id'],
                 'engine' => 'farast-document-audio',
-                'granularity' => 'phoneme_aligned_sentence_word',
+                'granularity' => $granularity,
                 'generated_once' => true,
             ]);
         } catch (Throwable $exception) {
