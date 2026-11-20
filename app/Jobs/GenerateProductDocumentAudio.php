@@ -236,8 +236,9 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
     private function granularityForSegments(array $segments): string
     {
         $hasExactWordTimings = $segments !== []
-            && collect($segments)->every(static fn (array $segment): bool =>
-                ($segment['alignment_quality'] ?? null) === 'phoneme'
+            && collect($segments)->every(static fn ($segment): bool =>
+                is_array($segment)
+                && ($segment['alignment_quality'] ?? null) === 'phoneme'
                 && is_array($segment['words'] ?? null)
                 && $segment['words'] !== []
             );
