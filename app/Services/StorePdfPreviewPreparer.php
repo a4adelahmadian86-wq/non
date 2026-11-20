@@ -59,6 +59,30 @@ class StorePdfPreviewPreparer
                 throw new RuntimeException('PDF sample generation returned an invalid document.');
             }
 
+            // Re-open the generated artifact before publishing it. This catches
+            // truncated output and guarantees that the sample contains exactly
+            // the approved number of pages, never the complete source by accident.
+            $verificationPath = tempnam(sys_get_temp_dir(), 'farast-pdf-sample-check-');
+            if ($verificationPath === false) {
+                throw new RuntimeException('Unable to allocate temporary PDF verification storage.');
+            }
+
+            try {
+                if (file_put_contents($verificationPath, $prepared, LOCK_EX) !== strlen($prepared)) {
+                    throw new RuntimeException('Unable to stage generated PDF sample for verification.');
+                }
+
+                $verificationPdf = new Fpdi();
+                $verifiedPageCount = $verificationPdf->setSourceFile($verificationPath);
+                if ($verifiedPageCount !== $includedPages) {
+                    throw new RuntimeException('Generated PDF sample page count does not match the approved limit.');
+                }
+            } finally {
+                if (is_file($verificationPath)) {
+                    @unlink($verificationPath);
+                }
+            }
+
             return [
                 'bytes' => $prepared,
                 'source_page_count' => $pageCount,
