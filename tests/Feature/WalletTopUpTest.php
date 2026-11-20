@@ -65,6 +65,10 @@ class WalletTopUpTest extends TestCase
             ->assertRedirect('https://sandbox.zarinpal.com/pg/StartPay/A000000000000000000000000000000001');
 
         $this->actingAs($user)
+            ->post('/wallet/top-up', ['amount_rials' => 300000, 'idempotency_key' => $idempotencyKey])
+            ->assertStatus(409);
+
+        $this->actingAs($user)
             ->post('/wallet/top-up', ['amount_rials' => 250000, 'idempotency_key' => $idempotencyKey])
             ->assertRedirect(route('wallet'))
             ->assertSessionHas('status');
