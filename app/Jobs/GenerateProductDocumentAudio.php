@@ -45,6 +45,13 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
         $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 3)->first();
         if ($existing && $storage->exists($existing->disk ?: 'private', $existing->path)) {
+            $existingMetadata = (array) ($existing->metadata_json ?? []);
+            $granularity = $this->granularityForSegments((array) ($existingMetadata['segments'] ?? []));
+            if (($existingMetadata['granularity'] ?? null) !== $granularity) {
+                $existingMetadata['granularity'] = $granularity;
+                $existing->update(['metadata_json' => $existingMetadata]);
+            }
+
             $this->setAudioState($document, [
                 'status' => 'completed',
                 'artifact_type' => 'audio_full_wav',
@@ -52,6 +59,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'sha256' => $existing->sha256,
                 'duration_ms' => (int) data_get($existing->metadata_json, 'duration_ms', 0),
                 'segment_count' => count(data_get($existing->metadata_json, 'segments', [])),
+                'granularity' => $granularity,
                 'generated_once' => true,
             ]);
             return;
@@ -112,15 +120,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 ];
             })->filter()->values()->all();
 
-            // Exact word granularity is valid only when every segment has provider word timestamps.
-            $granularity = ! empty($generated['segments'])
-                && collect($generated['segments'])->every(static fn (array $segment): bool =>
-                    ($segment['alignment_quality'] ?? null) === 'phoneme'
-                    && is_array($segment['words'] ?? null)
-                    && $segment['words'] !== []
-                )
-                ? 'phoneme_aligned_sentence_word'
-                : 'estimated_word_timing';
+            $granularity = $this->granularityForSegments((array) ($generated['segments'] ?? []));
 
             try {
                 [$artifact, $oldDisk, $oldPath] = DB::transaction(function () use ($document, $managed, $storage, $generated, $bytes, $sha256, $readerTimings, $granularity): array {
@@ -231,6 +231,20 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
             $this->setAudioState($document, ['status' => 'failed', 'reason' => 'audio_generation_failed']);
             throw $exception;
         }
+    }
+
+    private function granularityForSegments(array $segments): string
+    {
+        $hasExactWordTimings = $segments !== []
+            && collect($segments)->every(static fn (array $segment): bool =>
+                ($segment['alignment_quality'] ?? null) === 'phoneme'
+                && is_array($segment['words'] ?? null)
+                && $segment['words'] !== []
+            );
+
+        return $hasExactWordTimings
+            ? 'phoneme_aligned_sentence_word'
+            : 'estimated_word_timing';
     }
 
     private function setAudioState(StoreProductDocument $document, array $audioState): void
