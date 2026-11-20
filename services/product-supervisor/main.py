@@ -12,6 +12,7 @@ from typing import Any, Literal
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.concurrency import run_in_threadpool
 
 app = FastAPI(
     title="FARAST Product Supervisor",
@@ -192,14 +193,15 @@ async def review_product_file(
         raise HTTPException(status_code=422, detail="Invalid tags_json") from None
 
     try:
-        pdf_inspection = inspect_file(data, file.filename or "upload.bin", file.content_type, primary_scan_status)
+        pdf_inspection = await run_in_threadpool(inspect_file, data, file.filename or "upload.bin", file.content_type, primary_scan_status)
         inspection = pdf_inspection
         if reader_source_file is not None:
             source_data = await reader_source_file.read(MAX_UPLOAD_BYTES + 1)
             await reader_source_file.close()
             if len(source_data) > MAX_UPLOAD_BYTES:
                 raise HTTPException(status_code=413, detail="Reader source file exceeds 25 MB")
-            source_inspection = inspect_file(
+            source_inspection = await run_in_threadpool(
+                inspect_file,
                 source_data,
                 reader_source_file.filename or "reader-source.bin",
                 reader_source_file.content_type,
@@ -424,7 +426,7 @@ async def review_product_file(
                         sample_page_numbers.append(candidate)
         if reader_source_file is not None and not sample_page_numbers:
             sample_page_numbers = sorted(available_pdf_pages)[:3]
-        generated_sample = build_pdf_sample(data, sample_page_numbers)
+        generated_sample = await run_in_threadpool(build_pdf_sample, data, sample_page_numbers)
         if generated_sample:
             sample_bytes, sample_page_numbers = generated_sample
             sample_pdf_base64 = base64.b64encode(sample_bytes).decode("ascii")
