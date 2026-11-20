@@ -862,3 +862,19 @@ PR #475 runner پنج workflow وابسته به Python/Playwright را از `ub
 Migration `2026_10_02_000001_create_farast_commerce_engine.php` جدول `farast_backup_manifests` را ایجاد می‌کند، اما در tree فعلی Model هم‌نام یا call-site مستقیم در سرویس‌ها، Jobها و Commandهای backup پیدا نشد. مسیر فعال backup از `StorageBackupRun`/`storage_backup_runs` و `StorageBackupService`/`RunStorageBackupJob` به‌همراه commandهای `RunStorageBackup`, `RestoreStorageBackup`, `VerifyStorageBackup` استفاده می‌کند.
 
 این جدول فعلاً **orphan/legacy candidate با مالکیت حل‌نشده** است. حذف آن بدون بررسی داده واقعی و نسخه‌های نصب‌شده ممنوع است؛ ایجاد قابلیت جدید روی آن نیز تا تعیین مالکیت و قرارداد migration ممنوع بماند. پیش از پاکسازی باید usage واقعی در دیتابیس‌های نصب‌شده و همه queryهای مستقیم مخزن بررسی شود.
+
+
+## 21. به‌روزرسانی ممیزی پس از ادغام‌های 2026-11-20
+
+- **HEAD مبنا:** `c12d93b594c2ccb376f4728bae5fb0fcb0c16453`؛ ادغام squash مربوط به PR #697.
+- **تغییرات ادغام‌شده در main در این بازه:**
+  - PR #693: پیشنهاد قیمت کمپین با کنترل حاشیه سود و پذیرش صریح بارگذار؛ پیشنهاد stale با تغییر ورودی‌های قیمت منقضی می‌شود.
+  - PR #695: تفکیک metadata زمان‌بندی دقیق و تخمینی صوت؛ timing تخمینی دیگر به‌عنوان phoneme-aligned گزارش نمی‌شود.
+  - PR #696: تاریخچه مصرف و بازپرداخت در فضای CRM، با جمع خالص جداگانه به‌ازای هر ارز.
+  - PR #697: قیدهای idempotency مالی، ارجاع‌های دفترکل تجاری و append-only بودن wallet ledger به‌همراه تست‌های ارتقا و یکپارچگی.
+- **اعتبارسنجی PR #697:** روی HEAD دقیق `92a50c50b69446f9fa3ad267f5878ed6b5f6ca6a`، jobهای Laravel/Playwright، MySQL integrity، Admin Product E2E، Product Supervisor، Voice Service، Document Audio Smoke و Reader Browser Regression موفق شدند. `voice-model-smoke` به‌صورت شرطی skipped بود. این شواهد مربوط به HEAD شاخه PR پیش از squash است؛ نتیجه workflowهای push روی merge commit باید جداگانه بررسی شود.
+- **قرارداد idempotency سفارش:** کلید سفارش در محدوده مشتری یکتا است `(user_id, idempotency_key))، نه به‌صورت global. کلید idempotency پرداخت همچنان global است. این تفاوت برای جلوگیری از برخورد درخواست دو مشتری مستقل ضروری است.
+- **PR #632:** شاخه قدیمی و 146-commit عقب‌مانده بسته شد؛ تغییرات مالی موردنظر با بازسازی روی main و PR #697 ادغام شدند.
+- **PR #340:** همچنان draft و بسیار عقب/واگرا از main است. این PR علاوه بر بخش مالی، تغییرات checkout، wallet، migration اشتراک‌ها و چند حوزه دیگر را در بر دارد. ادغام مستقیم یا بستن آن به‌عنوان صرفاً تکراری ایمن نیست. به‌ویژه mapping اشتراک‌های legacy به commercial plan/entitlement باید جداگانه با داده و تست upgrade reconcile شود.
+- **PR #600:** snapshot مستنداتی آن بر مبنای main قدیمی است و با تغییرات بعدی همین فایل در main جایگزین شده است؛ برای وضعیت جاری نباید به شاخه آن استناد کرد.
+- **محدودیت عملیاتی:** هیچ migration روی دیتابیس production یا محیط محلی اجرا نشده و سلامت داده‌های نصب‌شده از CI قابل استنتاج نیست. پیش از rollout قیدهای مالی، باید backup قابل بازیابی و duplicate/orphan preflight روی clone هم‌نسخه دیتابیس واقعی انجام شود.
