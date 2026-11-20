@@ -44,6 +44,13 @@ class WalletController extends Controller
             ->first();
 
         if ($existingOrder) {
+            abort_unless(
+                ($existingOrder->pricing_snapshot['kind'] ?? null) === 'wallet_topup'
+                    && (int) $existingOrder->total_rials === (int) $data['amount_rials'],
+                409,
+                'کلید تکرارپذیری قبلاً برای درخواست افزایش موجودی دیگری استفاده شده است.'
+            );
+
             $request->session()->put('wallet_topup_idempotency_key', (string) Str::uuid());
 
             return redirect()->route('wallet')->with('status', 'این درخواست افزایش موجودی قبلاً ثبت شده است؛ برای درخواست جدید صفحه را دوباره باز کنید.');
@@ -84,6 +91,13 @@ class WalletController extends Controller
         );
 
         if (! $order->wasRecentlyCreated) {
+            abort_unless(
+                ($order->pricing_snapshot['kind'] ?? null) === 'wallet_topup'
+                    && (int) $order->total_rials === $amount,
+                409,
+                'کلید تکرارپذیری قبلاً برای درخواست افزایش موجودی دیگری استفاده شده است.'
+            );
+
             $request->session()->put('wallet_topup_idempotency_key', (string) Str::uuid());
 
             return redirect()->route('wallet')->with('status', 'این درخواست افزایش موجودی قبلاً ثبت شده است.');
