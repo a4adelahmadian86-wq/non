@@ -101,8 +101,9 @@ class PricingEngine
         }
 
         $discountBasisPoints = max(0, min(10000, (int) ($adjustments['discount_basis_points'] ?? 0)));
-        $rounding = in_array(($adjustments['rounding'] ?? 'nearest'), ['nearest', 'up', 'down'], true)
-            ? $adjustments['rounding']
+        $requestedRounding = $adjustments['rounding'] ?? 'nearest';
+        $rounding = in_array($requestedRounding, ['nearest', 'up', 'down'], true)
+            ? $requestedRounding
             : 'nearest';
         $percentDiscount = $this->percentageAmount($subtotal, $discountBasisPoints, 1, $rounding);
         $fixedDiscount = max(0, (int) ($adjustments['fixed_discount_amount'] ?? 0));
