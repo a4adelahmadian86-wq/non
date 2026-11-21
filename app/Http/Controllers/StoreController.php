@@ -624,7 +624,7 @@ class StoreController extends Controller
             $disk = filled($preview->disk ?? null) ? $preview->disk : 'private';
             try {
                 $available = $storage->exists($disk, (string) $preview->path);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $storageCheckFailureCount++;
                 report($exception);
                 return false;
