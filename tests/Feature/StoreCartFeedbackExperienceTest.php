@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -214,6 +216,57 @@ class StoreCartFeedbackExperienceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('coupon_code', null)
             ->assertJsonPath('discount_rials', 0);
+    }
+
+
+    public function test_fixed_smart_campaign_discount_uses_central_trusted_adjustment_math(): void
+    {
+        $user = User::factory()->create();
+        $category = StoreCategory::create([
+            'name' => 'دسته کمپین ثابت',
+            'slug' => 'fixed-campaign-discount-test',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول کمپین ثابت',
+            'slug' => 'fixed-campaign-discount-product',
+            'sku' => 'FIXED-CAMPAIGN-001',
+            'type' => 'digital_file',
+            'price_rials' => 50000,
+            'cost_price_rials' => 20000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $coupon = StoreCoupon::create([
+            'code' => 'FIXEDCAMPAIGN10',
+            'type' => 'fixed',
+            'value' => 10000,
+            'max_uses' => 1,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'status' => 'offered',
+            'score' => 6,
+            'reason_codes' => ['cart_intent'],
+            'offered_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson(route('cart.add', $product))
+            ->assertOk();
+
+        $this->postJson(route('cart.coupon'), ['code' => $coupon->code])
+            ->assertOk()
+            ->assertJsonPath('coupon_code', 'FIXEDCAMPAIGN10')
+            ->assertJsonPath('coupon_product_id', $product->id)
+            ->assertJsonPath('discount_rials', 10000)
+            ->assertJsonPath('total_rials', 40000);
     }
 
 }
