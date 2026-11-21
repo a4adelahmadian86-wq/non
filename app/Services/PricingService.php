@@ -4,9 +4,33 @@ namespace App\Services;
 
 use App\Models\PricingRule;
 use App\Models\FarastPricingPolicy;
+use Illuminate\Support\Facades\Log;
 
 class PricingService
 {
+    /**
+     * Legacy pricing keys whose runtime consumers have a versioned-policy
+     * equivalent. Keep this catalog in sync with VersionedPricingPolicySeeder.
+     */
+    public static function versionedPolicyCodes(): array
+    {
+        return [
+            'page_base',
+            'typing_manual_page',
+            'typing_voice_page',
+            'typing_printed_page',
+            'typing_handwritten_page',
+            'typing_mixed_page',
+            'typing_voice_minute',
+            'typing_payg_multiplier',
+            'english_multiplier',
+            'arabic_multiplier',
+            'mixed_multiplier',
+            'dense_page_multiplier',
+            'formula_unit',
+        ];
+    }
+
     public function projectQuote(string $workflow, string $sourceType, int $pages, string $text = '', bool $payg = false, ?int $audioMinutes = null): array
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
@@ -117,6 +141,9 @@ class PricingService
 
         // Temporary compatibility path for policies not yet migrated.
         $policy=FarastPricingPolicy::where('code',$policyCode)->where('active',true)->first();
+        if ($policy) {
+            $this->logLegacyFallback($policyCode, 'farast_pricing_policies');
+        }
         if(!$policy){
             return ['policy'=>$policyCode,'units'=>$units,'base_price_rials'=>0,'subscription_allowance'=>0,'included_units'=>0,'billable_units'=>$units,'additional_usage_rials'=>0,'discount_rials'=>0,'fee_rials'=>0,'final_price_rials'=>0];
         }
@@ -230,10 +257,25 @@ class PricingService
         }
         $policy = FarastPricingPolicy::where('code', $key)->where('active', true)->first();
         if ($policy) {
+            $this->logLegacyFallback($key, 'farast_pricing_policies');
             if ($key === 'typing_payg_multiplier') return max(100, (int)($policy->payg_multiplier_percent ?: $policy->base_price_rials));
             return max(0, (int)$policy->base_price_rials);
         }
-        return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
+        $rule = PricingRule::where('key', $key)->where('active', true)->first();
+        if ($rule) {
+            $this->logLegacyFallback($key, 'pricing_rules');
+            return (int) $rule->value;
+        }
+
+        return $fallback;
+    }
+
+    private function logLegacyFallback(string $policyCode, string $source): void
+    {
+        Log::notice('pricing.legacy_fallback_used', [
+            'policy_code' => $policyCode,
+            'source' => $source,
+        ]);
     }
 
     private function stats(string $text): array
