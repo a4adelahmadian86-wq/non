@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FarastEntitlement;
+use App\Models\FarastCoupon;
 use App\Models\FarastPricingPolicyVersion;
 use App\Models\User;
 use App\Models\Wallet;
@@ -241,4 +242,58 @@ class CommercePhase3Test extends TestCase
         $this->assertSame(10000,(int)$charge->fresh()->total);
         $this->assertSame('refunded',$charge->fresh()->status);
     }
+
+    public function test_fixed_coupon_adjustment_is_applied_before_wallet_hold_and_ledger_redemption(): void
+    {
+        $this->policy('coupon.wallet', 10000, 0);
+        $user = User::factory()->create();
+        $wallet = Wallet::create([
+            'user_id' => $user->id,
+            'balance_rials' => 8000,
+        ]);
+        FarastCoupon::create([
+            'code' => 'WALLET-FIXED-2500',
+            'discount_type' => 'fixed',
+            'discount_value' => 2500,
+            'usage_limit' => 1,
+            'per_actor_limit' => 1,
+            'active' => true,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $commerce = app(CommerceAuthorizationService::class);
+        $reservation = $commerce->reserve($user, 'coupon.wallet', 1, [], [
+            'policy_code' => 'coupon.wallet',
+            'unit' => 'request',
+            'coupon_code' => 'WALLET-FIXED-2500',
+            'idempotency_key' => 'wallet-fixed-coupon-2500',
+        ]);
+
+        $this->assertDatabaseHas('farast_wallet_reservations', [
+            'idempotency_key' => 'wallet-fixed-coupon-2500',
+            'amount' => 7500,
+            'status' => 'reserved',
+        ]);
+
+        $commerce->commit($reservation, ['metadata' => ['fixed_coupon_test' => true]]);
+
+        $charge = DB::table('farast_charges')
+            ->where('idempotency_key', 'wallet-fixed-coupon-2500')
+            ->first();
+        $this->assertNotNull($charge);
+        $this->assertSame(10000, (int) $charge->subtotal);
+        $this->assertSame(3000, (int) $charge->discount);
+        $this->assertSame(500, (int) $charge->fee);
+        $this->assertSame(7500, (int) $charge->total);
+        $this->assertSame(500, (int) $wallet->fresh()->balance_rials);
+
+        $this->assertDatabaseHas('farast_coupon_redemptions', [
+            'coupon_code' => 'WALLET-FIXED-2500',
+            'actor_id' => $user->id,
+            'discount_amount' => 2500,
+            'idempotency_key' => 'charge-wallet-fixed-coupon-2500',
+        ]);
+    }
+
 }
