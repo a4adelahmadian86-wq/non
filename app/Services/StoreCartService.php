@@ -234,6 +234,7 @@ class StoreCartService
                             $discount = app(PricingEngine::class)->trustedDiscountAmount($eligibleLineTotal, [
                                 'discount_basis_points' => $coupon->type === 'percent' ? (int) $coupon->value * 100 : 0,
                                 'fixed_discount_amount' => $coupon->type === 'fixed' ? (int) $coupon->value : 0,
+                                'rounding' => 'down',
                             ]);
                             $couponAssignmentId = (int) $assignment->id;
                             $couponProductId = (int) $assignment->product_id;
@@ -244,6 +245,7 @@ class StoreCartService
                         $discount = app(PricingEngine::class)->trustedDiscountAmount($subtotal, [
                             'discount_basis_points' => $coupon->type === 'percent' ? (int) $coupon->value * 100 : 0,
                             'fixed_discount_amount' => $coupon->type === 'fixed' ? (int) $coupon->value : 0,
+                            'rounding' => 'down',
                         ]);
                     }
                 } else {
