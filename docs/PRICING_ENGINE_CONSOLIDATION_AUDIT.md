@@ -43,8 +43,8 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 ## Remaining work
 
 - Runtime caller inventory, the 13-key active-version coverage check, and observable legacy-fallback telemetry are added in this PR; final CI verification is pending.
-- The upload-to-deposit-to-editor HTTP journey is covered by PR #738; its final CI run is pending.
+- The upload-to-deposit-to-editor HTTP journey was added in PR #738 and merged after all CI checks passed.
 - Subscription quota exhaustion coverage is included in this PR.
 - Trusted fixed/percentage adjustments now flow through PricingEngine for store campaign coupons and versioned commerce quotes; the coupon ledger records the coupon-only discount while wallet holds use the final engine total.
-- Complete the uploader/team-set product and course price proposal/acceptance workflow; preserve publisher price authority and do not invent prices.
+- Course resource-uploader and team-assigned product/course publisher acceptance regressions are added in PR #741; its CI verification is pending. Preserve publisher price authority and do not invent prices.
 - Run focused and full test suites on the final PR heads before merge.
