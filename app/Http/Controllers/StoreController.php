@@ -615,13 +615,21 @@ class StoreController extends Controller
         // Reader-document pages are generated from persisted extraction records and
         // intentionally do not require the original PDF to be exposed to the browser.
         $missingPreviewCount = 0;
-        $previews = $previews->filter(function ($preview) use ($storage, &$missingPreviewCount) {
+        $storageCheckFailureCount = 0;
+        $previews = $previews->filter(function ($preview) use ($storage, &$missingPreviewCount, &$storageCheckFailureCount) {
             if (($preview->kind ?? '') === 'reader_document') {
                 return true;
             }
 
             $disk = filled($preview->disk ?? null) ? $preview->disk : 'private';
-            $available = $storage->exists($disk, (string) $preview->path);
+            try {
+                $available = $storage->exists($disk, (string) $preview->path);
+            } catch (\\Throwable $exception) {
+                $storageCheckFailureCount++;
+                report($exception);
+                return false;
+            }
+
             if (! $available) {
                 $missingPreviewCount++;
             }
@@ -630,13 +638,15 @@ class StoreController extends Controller
         })->values();
 
         if ($previews->isEmpty()) {
-            $unavailableReason = $missingPreviewCount > 0
-                ? 'sample_file_missing'
-                : ($samplePreviews->isEmpty()
+            $unavailableReason = $storageCheckFailureCount > 0
+                ? 'storage_unavailable'
+                : ($missingPreviewCount > 0
+                    ? 'sample_file_missing'
+                    : ($samplePreviews->isEmpty()
                     ? 'sample_not_configured'
                     : ($hasReaderEntitlement && $product->type === 'digital_file'
                         ? 'document_not_ready'
-                        : 'no_readable_content'));
+                        : 'no_readable_content')));
 
             return response()
                 ->view('store.reader-unavailable', compact('product', 'unavailableReason'), 503)
