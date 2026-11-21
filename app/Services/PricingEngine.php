@@ -89,6 +89,24 @@ class PricingEngine
         return $units * $roundingIncrement;
     }
 
+    /**
+     * Apply server-derived discount adjustments to an arbitrary subtotal.
+     * Callers must never pass client-supplied adjustment values directly.
+     */
+    public function trustedDiscountAmount(int $subtotal, array $adjustments = []): int
+    {
+        $subtotal = max(0, $subtotal);
+        if ($subtotal === 0) {
+            return 0;
+        }
+
+        $discountBasisPoints = max(0, min(10000, (int) ($adjustments['discount_basis_points'] ?? 0)));
+        $percentDiscount = $this->percentageAmount($subtotal, $discountBasisPoints, 1, 'nearest');
+        $fixedDiscount = max(0, (int) ($adjustments['fixed_discount_amount'] ?? 0));
+
+        return min($subtotal, $percentDiscount + $fixedDiscount);
+    }
+
     public function quote(string $policyCode, float $quantity, array $context = []): array
     {
         if ($quantity < 0) throw new InvalidArgumentException('quantity_must_be_non_negative');
@@ -118,9 +136,10 @@ class PricingEngine
         $discountBp = max(0, min(10000, (int) $policy->discount_basis_points));
         $trusted = is_array($context['trusted_adjustments'] ?? null) ? $context['trusted_adjustments'] : [];
         $extraDiscountBp = max(0, min(10000, (int)($trusted['discount_basis_points'] ?? 0)));
-        $percentDiscount = (int) round($subtotal * ($discountBp + min(10000 - $discountBp, $extraDiscountBp)) / 10000);
-        $fixedDiscount = max(0, min($subtotal, (int)($trusted['fixed_discount_amount'] ?? 0)));
-        $discount = min($subtotal, $percentDiscount + $fixedDiscount);
+        $discount = $this->trustedDiscountAmount($subtotal, [
+            'discount_basis_points' => $discountBp + min(10000 - $discountBp, $extraDiscountBp),
+            'fixed_discount_amount' => $trusted['fixed_discount_amount'] ?? 0,
+        ]);
 
         $fee = $billable <= 0 ? 0 : max(0, (int) $policy->fee_amount + (int)($trusted['fee_amount'] ?? 0));
         $taxBp = max(0, min(10000, (int) $policy->tax_basis_points));
