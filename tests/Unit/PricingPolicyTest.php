@@ -10,6 +10,8 @@ use App\Services\PricingEngine;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\VersionedPricingPolicySeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -334,6 +336,13 @@ class PricingPolicyTest extends TestCase
             'active' => true,
         ]);
 
+        Log::shouldReceive('notice')
+            ->once()
+            ->with('pricing.legacy_fallback_used', Mockery::on(fn (array $context): bool =>
+                ($context['policy_code'] ?? null) === 'legacy.compat.test'
+                && ($context['source'] ?? null) === 'farast_pricing_policies'
+            ));
+
         $result = app(PricingService::class)->calculate('legacy.compat.test', 4, true);
 
         $this->assertSame(2, $result['included_units']);
@@ -342,4 +351,80 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(5000, $result['fee_rials']);
         $this->assertSame(221000, $result['final_price_rials']);
     }
+
+    public function test_trusted_fixed_and_percentage_adjustments_share_engine_caps(): void
+    {
+        $engine = app(PricingEngine::class);
+
+        $this->assertSame(700, $engine->trustedDiscountAmount(1000, [
+            'discount_basis_points' => 2000,
+            'fixed_discount_amount' => 500,
+        ]));
+        $this->assertSame(100, $engine->trustedDiscountAmount(100, [
+            'fixed_discount_amount' => 150,
+        ]));
+        $this->assertSame(0, $engine->trustedDiscountAmount(100, [
+            'discount_basis_points' => -100,
+            'fixed_discount_amount' => -50,
+        ]));
+
+        $this->assertSame(10, $engine->trustedDiscountAmount(105, [
+            'discount_basis_points' => 1000,
+            'rounding' => 'down',
+        ]));
+        $this->assertSame(11, $engine->trustedDiscountAmount(105, [
+            'discount_basis_points' => 1000,
+        ]));
+    }
+
+
+    public function test_all_active_legacy_pricing_rules_have_effective_versioned_policy_coverage(): void
+    {
+        app(DatabaseSeeder::class)->run();
+
+        $codes = PricingService::versionedPolicyCodes();
+        $rules = PricingRule::query()
+            ->whereIn('key', $codes)
+            ->where('active', true)
+            ->get()
+            ->keyBy('key');
+
+        $this->assertCount(count($codes), $rules);
+
+        foreach ($codes as $code) {
+            $rule = $rules->get($code);
+            $this->assertNotNull($rule, "Missing active legacy pricing rule: {$code}");
+
+            $version = app(PricingEngine::class)->resolve($code);
+            $this->assertNotNull($version, "Missing effective versioned pricing policy: {$code}");
+
+            if ($code === 'typing_payg_multiplier') {
+                $this->assertSame(max(10000, (int) $rule->value * 100), (int) $version->payg_multiplier_basis_points);
+            } else {
+                $this->assertSame((int) $rule->value, (int) $version->unit_price, "Legacy price mismatch for {$code}");
+            }
+        }
+    }
+
+
+    public function test_missing_policy_without_legacy_value_fails_closed_without_inventing_a_price(): void
+    {
+        Log::shouldReceive('notice')->never();
+
+        $result = app(PricingService::class)->calculate('missing.policy.test', 3, true);
+
+        $this->assertSame([
+            'policy' => 'missing.policy.test',
+            'units' => 3,
+            'base_price_rials' => 0,
+            'subscription_allowance' => 0,
+            'included_units' => 0,
+            'billable_units' => 3,
+            'additional_usage_rials' => 0,
+            'discount_rials' => 0,
+            'fee_rials' => 0,
+            'final_price_rials' => 0,
+        ], $result);
+    }
+
 }

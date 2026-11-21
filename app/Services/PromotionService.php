@@ -23,7 +23,7 @@ class PromotionService
             if($coupon->usage_limit!==null&&FarastCouponRedemption::where('coupon_code',$code)->count()>=$coupon->usage_limit)return [];
             if($coupon->per_actor_limit!==null&&FarastCouponRedemption::where('coupon_code',$code)->where('actor_id',$actor->id)->count()>=$coupon->per_actor_limit)return [];
             [$discountBp,$fixed]= $this->value($coupon->discount_type,(int)$coupon->discount_value,$subtotal,$coupon->max_discount);
-            $meta=['coupon_code'=>$code];
+            $meta=['coupon_code'=>$code,'discount_amount'=>app(PricingEngine::class)->trustedDiscountAmount($subtotal,['discount_basis_points'=>$discountBp,'fixed_discount_amount'=>$fixed])];
         }elseif($promotionCode!==''){
             $promotion=FarastPromotion::where('code',$promotionCode)->where('active',true)->first();
             if(!$promotion)return [];
@@ -33,14 +33,14 @@ class PromotionService
             if($promotion->capability_code&&$promotion->capability_code!==$capability)return [];
             if($promotion->usage_limit!==null&&FarastCouponRedemption::where('coupon_code',$promotionCode)->count()>=$promotion->usage_limit)return [];
             [$discountBp,$fixed]=$this->value($promotion->discount_type,(int)$promotion->discount_value,$subtotal,$promotion->max_discount);
-            $meta=['promotion_code'=>$promotionCode];
+            $meta=['promotion_code'=>$promotionCode,'discount_amount'=>app(PricingEngine::class)->trustedDiscountAmount($subtotal,['discount_basis_points'=>$discountBp,'fixed_discount_amount'=>$fixed])];
         }
         return ['discount_basis_points'=>$discountBp,'fixed_discount_amount'=>$fixed,'metadata'=>$meta];
     }
 
     private function value(string $type,int $value,int $subtotal,?int $max):array
     {
-        if($type==='fixed')return [0,max(0,min($subtotal,$max===null?$value:min($value,$max)))];
+        if($type==='fixed')return [0,max(0,$max===null?$value:min($value,$max))];
         return [max(0,min(10000,$value)),0];
     }
 }

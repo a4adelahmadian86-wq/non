@@ -231,18 +231,22 @@ class StoreCartService
                                 ->whereHas('storeItems', fn ($orderItems) => $orderItems->where('product_id', $assignment->product_id))->exists();
 
                         if ($validAssignment) {
-                            $discount = $coupon->type === 'percent'
-                                ? app(PricingEngine::class)->percentageAmount($eligibleLineTotal, (int) $coupon->value * 100, 1, 'down')
-                                : min($eligibleLineTotal, (int) $coupon->value);
+                            $discount = app(PricingEngine::class)->trustedDiscountAmount($eligibleLineTotal, [
+                                'discount_basis_points' => $coupon->type === 'percent' ? (int) $coupon->value * 100 : 0,
+                                'fixed_discount_amount' => $coupon->type === 'fixed' ? (int) $coupon->value : 0,
+                                'rounding' => 'down',
+                            ]);
                             $couponAssignmentId = (int) $assignment->id;
                             $couponProductId = (int) $assignment->product_id;
                         } else {
                             $couponCode = null;
                         }
                     } else {
-                        $discount = $coupon->type === 'percent'
-                            ? app(PricingEngine::class)->percentageAmount($subtotal, (int) $coupon->value * 100, 1, 'down')
-                            : min($subtotal, (int) $coupon->value);
+                        $discount = app(PricingEngine::class)->trustedDiscountAmount($subtotal, [
+                            'discount_basis_points' => $coupon->type === 'percent' ? (int) $coupon->value * 100 : 0,
+                            'fixed_discount_amount' => $coupon->type === 'fixed' ? (int) $coupon->value : 0,
+                            'rounding' => 'down',
+                        ]);
                     }
                 } else {
                     $couponCode = null;
