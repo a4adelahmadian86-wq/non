@@ -1,0 +1,122 @@
+name: FARAST task
+description: Create one canonical, traceable work item for the multi-chat agent team.
+title: "[FARAST-TASK] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one issue per distinct task. Search existing issues before creating a duplicate. This issue becomes the shared source of truth for all ChatGPT conversations.
+  - type: input
+    id: task_id
+    attributes:
+      label: Project task ID (if already defined)
+      description: Existing TASK-ID only. Leave blank if none has been formally assigned.
+      placeholder: TASK-XX
+    validations:
+      required: false
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and problem
+      description: State the required outcome, current context, and why the work is needed.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and constraints
+      description: Include in-scope, out-of-scope, existing capabilities that must be preserved, and constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related work
+      description: Link related Issues, PRs, documents, services, and prerequisite tasks. Use UNKNOWN where not yet verified.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable conditions required for acceptance.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Source material and evidence
+      description: Link authoritative project documents, files, test results, and decisions. Separate facts from assumptions.
+    validations:
+      required: false
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: input
+    id: work_order_id
+    attributes:
+      label: Work Order ID and stage
+      description: Example WO-EXP-02-003 / EXP-02 / P-02. Link the applicable stage prompt.
+      placeholder: WO-EXP-02-003
+    validations:
+      required: true
+  - type: input
+    id: accountable_role
+    attributes:
+      label: Accountable specialist role
+      description: Exactly one accountable role; reviewer must be independent.
+      placeholder: FAR-REPO
+    validations:
+      required: true
+  - type: textarea
+    id: ordered_steps
+    attributes:
+      label: Ordered execution steps
+      description: Exact numbered actions, target files/systems, tools or commands. Avoid vague instructions.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Exact deliverables and output schema
+      description: Required artifact paths, formats, columns/sections, and evidence links.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation procedure
+      description: Exact test commands or manual steps and expected results.
+    validations:
+      required: true
+  - type: textarea
+    id: capability_scope
+    attributes:
+      label: Capability IDs and protected scope
+      description: List affected capability IDs, adjacent capabilities that must remain intact, allowed write paths, and prohibited paths.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Dependencies, stop conditions and rollback
+      description: Prerequisites, conflict files, parallelization key, stop conditions, human-only approvals, and exact rollback/recovery.
+    validations:
+      required: true
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Handoff contract
+      description: Next role/stage, required payload, remaining work and independent reviewer.
+    validations:
+      required: true
