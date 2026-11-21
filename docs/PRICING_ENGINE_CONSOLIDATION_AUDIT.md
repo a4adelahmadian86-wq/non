@@ -22,14 +22,14 @@ Audit origin: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 6. Keep free-page allowance, deposit percentage/rounding, and typing-specific complexity estimation as explicit domain inputs/rules. They must not become hidden duplicate price arithmetic outside the engine.
 7. Keep coupon/promotion adjustments trusted and server-derived. Preserve existing consent, margin, budget, redemption locking, and idempotency safeguards.
 
-## Required implementation sequence
+## Implementation sequence and cutover gates
 
-- Inventory every runtime caller of `PricingService` and document its expected response contract.
-- Map each legacy key (`page_base`, typing page/minute keys, language/formula multipliers, PAYG multiplier) to a versioned policy code and verify active-version coverage. Do not invent prices or backfill from assumptions.
-- Add parity/characterization tests for current customer-visible outputs, including zero/missing policy behavior, free-page application, deposit rounding, subscription quota exhaustion, PAYG, and historical snapshots.
-- Add a compatibility adapter that delegates arithmetic to `PricingEngine` while preserving response shapes. Keep legacy fallback observable and temporary; do not remove tables or historical records during this phase.
-- Migrate consumers incrementally, then remove fallback only after repository-wide call-site and data-coverage checks pass.
-- Run focused Laravel tests, full Laravel suite, Phase 3 commerce workflow, and relevant browser tests on the exact PR head before merge.
+- Completed in PR #739: inventory runtime callers of `PricingService` and document their expected response contracts.
+- Completed in PR #739: map the 13 active legacy pricing keys to versioned policy codes and verify active-version coverage. Values are preserved from configured sources; no prices are invented or backfilled from assumptions.
+- Added regression coverage in PR #739 for customer-visible outputs, zero/missing policy behavior, free-page application, deposit rounding, subscription quota exhaustion, PAYG, and historical snapshots.
+- Added the compatibility adapter and observable legacy-fallback telemetry in PR #739. Keep the fallback temporary; do not remove tables or historical records during this phase.
+- Migrate consumers incrementally; the audited consumers and active-version coverage checks are in place. Removal of the fallback remains a separate controlled cutover after operational confirmation.
+- Focused Laravel tests, full Laravel suite, Phase 3 commerce workflow, and relevant browser tests passed on the PR heads for the merged changes. The latest post-merge `main` CI run is tracked separately below.
 
 ## Implementation merged to main
 
@@ -44,7 +44,7 @@ Audit origin: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 
 - Runtime caller inventory, the 13-key active-version coverage check, and observable legacy-fallback telemetry were merged in PR #739.
 - The upload-to-deposit-to-editor HTTP journey was merged in PR #738 after its checks passed.
-- Subscription quota exhaustion coverage is included in this PR.
+- Subscription quota exhaustion coverage was merged in PR #739.
 - Trusted fixed/percentage adjustments flow through PricingEngine for store campaign coupons and versioned commerce quotes; the coupon ledger records the coupon-only discount while wallet holds use the final engine total. This was merged in PR #739.
 - Course resource-uploader and team-assigned product/course publisher acceptance regressions were merged in PR #741. Publisher price authority remains enforced; no prices are invented.
 - The PR-head CI suites passed for PRs #739 and #741. Post-merge CI on the latest `main` commit is still running; confirm it completes successfully before treating this consolidation milestone as fully verified.
