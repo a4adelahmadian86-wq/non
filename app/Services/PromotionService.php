@@ -40,7 +40,7 @@ class PromotionService
 
     private function value(string $type,int $value,int $subtotal,?int $max):array
     {
-        if($type==='fixed')return [0,max(0,min($subtotal,$max===null?$value:min($value,$max)))];
+        if($type==='fixed')return [0,max(0,$max===null?$value:min($value,$max))];
         return [max(0,min(10000,$value)),0];
     }
 }
