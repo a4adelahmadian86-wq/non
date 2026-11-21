@@ -78,8 +78,8 @@ class TypingPreflightDepositJourneyTest extends TestCase
             'gateway' => 'wallet',
             'status' => 'paid',
         ]);
-        $this->assertSessionHas('typing_preflight_accepted.path', $path);
-        $this->assertSessionHas('typing_preflight_deposit_order', $order->id);
+        $payment->assertSessionHas('typing_preflight_accepted.path', $path)
+            ->assertSessionHas('typing_preflight_deposit_order', $order->id);
 
         $this->get(route('editor'))->assertOk();
     }
