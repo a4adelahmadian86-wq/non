@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\FreeCredit;
-use App\\Models\\User;
-use App\\Services\\FreeQuotaService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Tests\\TestCase;
+use App\Models\FreeCredit;
+use App\Models\User;
+use App\Services\FreeQuotaService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class FreeQuotaServiceTest extends TestCase
 {
