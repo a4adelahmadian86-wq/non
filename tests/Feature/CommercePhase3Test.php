@@ -241,4 +241,60 @@ class CommercePhase3Test extends TestCase
         $this->assertSame(10000,(int)$charge->fresh()->total);
         $this->assertSame('refunded',$charge->fresh()->status);
     }
+
+    public function test_subscription_quota_counts_pending_reservations_and_committed_usage(): void
+    {
+        $this->policy('quota.exhaustion', 10000, 0);
+        $user = User::factory()->create();
+        $entitlement = FarastEntitlement::create([
+            'user_id' => $user->id,
+            'capability_code' => 'quota.exhaustion',
+            'mode' => 'subscription',
+            'status' => 'active',
+            'quantity' => 1,
+            'used_quantity' => 0,
+            'unit' => 'request',
+            'priority' => 100,
+            'starts_at' => now()->subMinute(),
+        ]);
+        $commerce = app(CommerceAuthorizationService::class);
+        $context = [
+            'policy_code' => 'quota.exhaustion',
+            'unit' => 'request',
+            'allow_payg' => false,
+        ];
+
+        $reservation = $commerce->reserve($user, 'quota.exhaustion', 1, [], $context + [
+            'idempotency_key' => 'quota-exhaustion-first',
+        ]);
+
+        try {
+            $commerce->reserve($user, 'quota.exhaustion', 1, [], $context + [
+                'idempotency_key' => 'quota-exhaustion-pending-replay',
+            ]);
+            $this->fail('A pending subscription reservation must consume the available quota.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('quota_exhausted', $exception->getMessage());
+        }
+
+        $commerce->commit($reservation, ['metadata' => ['quota_test' => true]]);
+        $this->assertSame(1, (int) $entitlement->fresh()->used_quantity);
+
+        try {
+            $commerce->reserve($user, 'quota.exhaustion', 1, [], $context + [
+                'idempotency_key' => 'quota-exhaustion-after-commit',
+            ]);
+            $this->fail('Committed subscription usage must keep the quota exhausted.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('quota_exhausted', $exception->getMessage());
+        }
+
+        $this->assertSame(1, DB::table('farast_usage_reservations')
+            ->where('idempotency_key', 'quota-exhaustion-first')
+            ->count());
+        $this->assertSame(1, DB::table('farast_usage_events')
+            ->where('idempotency_key', 'quota-exhaustion-first')
+            ->count());
+    }
+
 }
