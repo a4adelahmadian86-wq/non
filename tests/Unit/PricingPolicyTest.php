@@ -358,6 +358,14 @@ class PricingPolicyTest extends TestCase
             'discount_basis_points' => -100,
             'fixed_discount_amount' => -50,
         ]));
+
+        $this->assertSame(10, $engine->trustedDiscountAmount(105, [
+            'discount_basis_points' => 1000,
+            'rounding' => 'down',
+        ]));
+        $this->assertSame(11, $engine->trustedDiscountAmount(105, [
+            'discount_basis_points' => 1000,
+        ]));
     }
 
 }
