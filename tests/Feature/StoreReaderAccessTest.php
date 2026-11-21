@@ -1159,4 +1159,27 @@ class StoreReaderAccessTest extends TestCase
         $this->assertSame('2345', $response->streamedContent());
     }
 
+    public function test_reader_explains_when_registered_sample_file_is_missing(): void
+    {
+        [$product, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->delete($preview->path);
+
+        $this->get(route('store.reader', $product->slug))
+            ->assertStatus(503)
+            ->assertSee('محتوای این خوانشگر هنوز آماده نیست')
+            ->assertSee('فایل نمونه‌ای که باید نمایش داده شود در فضای ذخیره‌سازی پیدا نشد')
+            ->assertSee('READER_CONTENT_UNAVAILABLE');
+    }
+
+    public function test_reader_explains_when_product_has_no_sample_preview_configured(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $product->previews()->delete();
+
+        $this->get(route('store.reader', $product->slug))
+            ->assertStatus(503)
+            ->assertSee('هیچ پیش‌نمایش عمومی ثبت نشده است')
+            ->assertSee('محصول فایل نمونه قابل نمایش ندارد');
+    }
+
 }
