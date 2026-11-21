@@ -81,7 +81,7 @@
         <figure class="home-hero-visual">
             <img
                 class="home-hero-art"
-                src="{{ asset('images/farast-home-hero.svg') }}"
+                src="{{ asset('images/farast-home-workflow.webp') }}"
                 alt="گردش کار فراست: ورود فایل، ویرایش سند و دریافت خروجی آماده"
                 width="960"
                 height="720"
