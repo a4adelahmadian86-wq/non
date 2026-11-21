@@ -610,7 +610,38 @@ class StoreController extends Controller
             }
         }
 
-        abort_if($previews->isEmpty(), 404, 'پیش‌نمایش یا نسخه آماده خوانش برای این محصول موجود نیست.');
+        // Never send a reader page to a generic error screen just because a sample
+        // preview row exists in the database while its private file is absent.
+        // Reader-document pages are generated from persisted extraction records and
+        // intentionally do not require the original PDF to be exposed to the browser.
+        $missingPreviewCount = 0;
+        $previews = $previews->filter(function ($preview) use ($storage, &$missingPreviewCount) {
+            if (($preview->kind ?? '') === 'reader_document') {
+                return true;
+            }
+
+            $disk = filled($preview->disk ?? null) ? $preview->disk : 'private';
+            $available = $storage->exists($disk, (string) $preview->path);
+            if (! $available) {
+                $missingPreviewCount++;
+            }
+
+            return $available;
+        })->values();
+
+        if ($previews->isEmpty()) {
+            $unavailableReason = $missingPreviewCount > 0
+                ? 'sample_file_missing'
+                : ($samplePreviews->isEmpty()
+                    ? 'sample_not_configured'
+                    : ($hasReaderEntitlement && $product->type === 'digital_file'
+                        ? 'document_not_ready'
+                        : 'no_readable_content'));
+
+            return response()
+                ->view('store.reader-unavailable', compact('product', 'unavailableReason'), 503)
+                ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+        }
 
         $readerDiscussions = collect();
         $discussionSection = null;
