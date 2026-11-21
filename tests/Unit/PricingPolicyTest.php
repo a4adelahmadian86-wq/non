@@ -342,4 +342,22 @@ class PricingPolicyTest extends TestCase
         $this->assertSame(5000, $result['fee_rials']);
         $this->assertSame(221000, $result['final_price_rials']);
     }
+
+    public function test_trusted_fixed_and_percentage_adjustments_share_engine_caps(): void
+    {
+        $engine = app(PricingEngine::class);
+
+        $this->assertSame(700, $engine->trustedDiscountAmount(1000, [
+            'discount_basis_points' => 2000,
+            'fixed_discount_amount' => 500,
+        ]));
+        $this->assertSame(100, $engine->trustedDiscountAmount(100, [
+            'fixed_discount_amount' => 150,
+        ]));
+        $this->assertSame(0, $engine->trustedDiscountAmount(100, [
+            'discount_basis_points' => -100,
+            'fixed_discount_amount' => -50,
+        ]));
+    }
+
 }
