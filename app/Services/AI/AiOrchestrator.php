@@ -2,7 +2,6 @@
 
 namespace App\Services\AI;
 
-use App\Models\AiInteraction;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -21,7 +20,6 @@ class AiOrchestrator
     public function run(User $user, string $operationName, string $text, array $context = []): array
     {
         $operation = $this->operations->resolve($operationName);
-        $this->quota->assertAllowed($user, 'can_ai');
         $mode = $this->privacy->resolve($context['processing_mode'] ?? null, $operation['processing_modes']);
         $payload = $this->contextEngine->build($operation, $text, $context);
 
@@ -31,8 +29,7 @@ class AiOrchestrator
 
         $requestId = (string) Str::uuid();
         $providerName = 'unresolved';
-        $interaction = AiInteraction::create([
-            'user_id' => $user->id,
+        $interaction = $this->quota->reserveInteraction($user, [
             'document_id' => $context['document_id'] ?? null,
             'provider' => $providerName,
             'model' => 'pending',
