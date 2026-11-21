@@ -10,45 +10,101 @@ use App\Models\WalletTransaction;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WalletController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $topUpIdempotencyKey = $request->session()->get('wallet_topup_idempotency_key');
+        if (! is_string($topUpIdempotencyKey) || ! Str::isUuid($topUpIdempotencyKey)) {
+            $topUpIdempotencyKey = (string) Str::uuid();
+            $request->session()->put('wallet_topup_idempotency_key', $topUpIdempotencyKey);
+        }
+
         $wallet = auth()->user()->wallet()->firstOrCreate([], ['balance_rials' => 0]);
         $transactions = $wallet->transactions()->latest()->limit(30)->get();
         $gatewayEnabled = app(ZarinpalService::class)->enabled();
 
-        return view('wallet', compact('wallet', 'transactions', 'gatewayEnabled'));
+        return view('wallet', compact('wallet', 'transactions', 'gatewayEnabled', 'topUpIdempotencyKey'));
     }
 
     public function topUp(Request $request, ZarinpalService $zarinpal)
     {
         $data = $request->validate([
             'amount_rials' => ['required', 'integer', 'min:10000', 'max:1000000000'],
+            'idempotency_key' => ['required', 'uuid'],
         ]);
+
+        $user = $request->user();
+        $idempotencyKey = 'wallet-topup-'.$user->id.'-'.$data['idempotency_key'];
+        $existingOrder = Order::query()
+            ->where('user_id', $user->id)
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+
+        if ($existingOrder) {
+            abort_unless(
+                ($existingOrder->pricing_snapshot['kind'] ?? null) === 'wallet_topup'
+                    && (int) $existingOrder->total_rials === (int) $data['amount_rials'],
+                409,
+                'کلید تکرارپذیری قبلاً برای درخواست افزایش موجودی دیگری استفاده شده است.'
+            );
+
+            $request->session()->put('wallet_topup_idempotency_key', (string) Str::uuid());
+
+            return redirect()->route('wallet')->with('status', 'این درخواست افزایش موجودی قبلاً ثبت شده است؛ برای درخواست جدید صفحه را دوباره باز کنید.');
+        }
+
+        $sessionKey = (string) $request->session()->get('wallet_topup_idempotency_key', '');
+        abort_unless(
+            $sessionKey !== '' && hash_equals($sessionKey, $data['idempotency_key']),
+            419,
+            'فرم افزایش موجودی منقضی شده است؛ صفحه را دوباره بارگذاری کنید.'
+        );
 
         if (! $zarinpal->enabled()) {
             return back()->withErrors(['topup' => 'درگاه زرین‌پال فعال یا پیکربندی نشده است.']);
         }
 
         $amount = (int) $data['amount_rials'];
-        $order = Order::create([
-            'user_id' => $request->user()->id,
-            'document_id' => null,
-            'subtotal_rials' => $amount,
-            'discount_rials' => 0,
-            'tax_rials' => 0,
-            'total_rials' => $amount,
-            'status' => 'pending',
-            'pricing_snapshot' => [
-                'kind' => 'wallet_topup',
-                'amount_rials' => $amount,
-                'currency' => 'IRR',
+        $order = Order::firstOrCreate(
+            [
+                'user_id' => $user->id,
+                'idempotency_key' => $idempotencyKey,
             ],
-            'free_pages_applied' => 0,
-            'terms_accepted_at' => now(),
-        ]);
+            [
+                'document_id' => null,
+                'subtotal_rials' => $amount,
+                'discount_rials' => 0,
+                'tax_rials' => 0,
+                'total_rials' => $amount,
+                'status' => 'pending',
+                'pricing_snapshot' => [
+                    'kind' => 'wallet_topup',
+                    'amount_rials' => $amount,
+                    'currency' => 'IRR',
+                ],
+                'free_pages_applied' => 0,
+                'terms_accepted_at' => now(),
+            ]
+        );
+
+        if (! $order->wasRecentlyCreated) {
+            abort_unless(
+                ($order->pricing_snapshot['kind'] ?? null) === 'wallet_topup'
+                    && (int) $order->total_rials === $amount,
+                409,
+                'کلید تکرارپذیری قبلاً برای درخواست افزایش موجودی دیگری استفاده شده است.'
+            );
+
+            $request->session()->put('wallet_topup_idempotency_key', (string) Str::uuid());
+
+            return redirect()->route('wallet')->with('status', 'این درخواست افزایش موجودی قبلاً ثبت شده است.');
+        }
+
+        // Rotate before contacting the gateway so a replay cannot open another payment attempt.
+        $request->session()->put('wallet_topup_idempotency_key', (string) Str::uuid());
 
         try {
             $gateway = $zarinpal->request(
@@ -59,7 +115,7 @@ class WalletController extends Controller
                 $request->user()->email ?? null
             );
 
-            Payment::create([
+            Payment::firstOrCreate(['idempotency_key' => 'wallet-topup-payment-'.$order->id], [
                 'order_id' => $order->id,
                 'gateway' => 'zarinpal',
                 'authority' => $gateway['authority'],
