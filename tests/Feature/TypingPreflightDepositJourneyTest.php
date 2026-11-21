@@ -53,6 +53,7 @@ class TypingPreflightDepositJourneyTest extends TestCase
         $estimate->assertOk()
             ->assertJsonPath('pages', 8)
             ->assertJsonPath('deposit_percent', 5)
+            ->assertJsonPath('free_page_applied', 1)
             ->assertJsonPath('mode', 'deposit');
 
         $accept = $this->postJson(route('editor.preflight.accept'), [
