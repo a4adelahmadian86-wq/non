@@ -256,6 +256,94 @@ class StorePriceProposalWorkflowTest extends TestCase
         $this->assertSame($uploader->id, (int) $proposal->uploader_id);
     }
 
+    public function test_course_resource_uploader_can_accept_the_proposal_through_the_uploader_route(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $uploader = $this->user('Course Resource Uploader');
+        $product = $this->product(50000, 0, 'course');
+
+        app(AuditEventService::class)->record(
+            'store.course.resource_uploaded',
+            $uploader->id,
+            null,
+            'store_product',
+            $product->id,
+            ['lesson_id' => 12],
+        );
+
+        $service = app(StorePriceProposalService::class);
+        $proposal = $service->propose($product, $pricingTeam);
+
+        $this->assertSame($uploader->id, (int) $proposal->uploader_id);
+        $this->assertSame('pending', $proposal->status);
+        $this->assertSame(100000, (int) $product->fresh()->price_rials);
+
+        $this->actingAs($uploader)
+            ->get(route('store.price-proposals.index'))
+            ->assertOk()
+            ->assertSee($product->title);
+
+        $this->actingAs($uploader)
+            ->post(route('store.price-proposals.accept', $proposal))
+            ->assertRedirect();
+
+        $updated = $product->fresh();
+        $this->assertSame(55000, (int) $updated->price_rials);
+        $this->assertSame(100000, (int) $updated->compare_at_price_rials);
+        $this->assertSame('accepted', $proposal->fresh()->status);
+        $this->assertDatabaseHas('farast_audit_events', [
+            'event_type' => 'store.product.price_proposal_accepted',
+            'aggregate_type' => 'store_product',
+            'aggregate_id' => $product->id,
+        ]);
+    }
+
+    public function test_team_assigned_course_publisher_is_the_fallback_proposal_decision_maker(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $teamPublisher = $this->user('Team Publisher');
+        $product = $this->product(50000, 0, 'course');
+        $product->update(['seller_id' => $teamPublisher->id]);
+
+        $service = app(StorePriceProposalService::class);
+        $preview = $service->preview($product);
+        $this->assertSame($teamPublisher->id, $preview['uploader_id']);
+
+        $proposal = $service->propose($product, $pricingTeam);
+        $this->assertSame($teamPublisher->id, (int) $proposal->uploader_id);
+
+        $this->actingAs($teamPublisher)
+            ->post(route('store.price-proposals.accept', $proposal))
+            ->assertRedirect();
+
+        $this->assertSame(55000, (int) $product->fresh()->price_rials);
+        $this->assertSame(100000, (int) $product->fresh()->compare_at_price_rials);
+        $this->assertSame('accepted', $proposal->fresh()->status);
+    }
+
+    public function test_team_assigned_product_publisher_is_the_fallback_proposal_decision_maker(): void
+    {
+        $pricingTeam = $this->user('Pricing Team');
+        $teamPublisher = $this->user('Team Product Publisher');
+        $product = $this->product();
+        $product->update(['seller_id' => $teamPublisher->id]);
+
+        $service = app(StorePriceProposalService::class);
+        $preview = $service->preview($product);
+        $this->assertSame($teamPublisher->id, $preview['uploader_id']);
+
+        $proposal = $service->propose($product, $pricingTeam);
+        $this->assertSame($teamPublisher->id, (int) $proposal->uploader_id);
+
+        $this->actingAs($teamPublisher)
+            ->post(route('store.price-proposals.accept', $proposal))
+            ->assertRedirect();
+
+        $this->assertSame(55000, (int) $product->fresh()->price_rials);
+        $this->assertSame(100000, (int) $product->fresh()->compare_at_price_rials);
+        $this->assertSame('accepted', $proposal->fresh()->status);
+    }
+
     public function test_campaign_price_is_not_suggested_without_cost_or_margin_room(): void
     {
         $pricingTeam = $this->user('Pricing Team');
