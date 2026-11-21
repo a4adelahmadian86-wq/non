@@ -5,6 +5,7 @@
 <div class="wallet-grid"><section class="checkout-card"><div class="card-title"><span><i class="fa-solid fa-plus"></i></span><div><h2>افزایش موجودی</h2><small>اتصال درگاه بانکی از تنظیمات مالی مدیر انجام می‌شود.</small></div></div>@if($errors->has('topup'))<div class="finance-alert">{{ $errors->first('topup') }}</div>@endif
 @if($gatewayEnabled)
 <form method="POST" action="{{ route('wallet.topup') }}" class="wallet-topup-form">@csrf
+<input type="hidden" name="idempotency_key" value="{{ $topUpIdempotencyKey }}">
 <label for="amount_rials">مبلغ افزایش موجودی (ریال)</label>
 <input id="amount_rials" name="amount_rials" type="number" min="10000" max="1000000000" step="1000" value="{{ old('amount_rials', 100000) }}" required>
 <small>حداقل ۱۰٬۰۰۰ و حداکثر ۱٬۰۰۰٬۰۰۰٬۰۰۰ ریال؛ موجودی فقط پس از تأیید قطعی درگاه افزایش می‌یابد.</small>
