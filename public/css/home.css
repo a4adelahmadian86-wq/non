@@ -364,7 +364,9 @@
 
 /* Original FARAST workflow artwork — responsive, optimized and independent of third-party image hosts. */
 .home-hero-visual{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;min-width:0;min-height:0;padding:5px}
-.home-hero-art{display:block;width:100%;max-width:520px;height:auto;aspect-ratio:4/3;object-fit:cover;border:1px solid rgba(191,211,239,.82);border-radius:25px;background:#08295f;box-shadow:0 24px 54px rgba(13,42,91,.18)}
+.home-hero-picture{display:block;width:100%;max-width:520px;overflow:hidden;border:1px solid rgba(191,211,239,.82);border-radius:25px;background:#fff;box-shadow:0 24px 54px rgba(13,42,91,.14)}
+.home-hero-art{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;background:#fff}
+.home-hero-picture img{filter:none;opacity:1}
 .home-hero-visual figcaption{max-width:100%;color:#647894;font-size:.72rem;font-weight:750;line-height:1.8;text-align:center}
 @media(max-width:700px){.home-hero-visual{min-height:0;margin:5px 0 0;padding:0}.home-hero-art{width:100%;max-width:480px;border-radius:18px}.home-hero-visual figcaption{font-size:.65rem}}
 @media(prefers-reduced-motion:reduce){.home-hero-art{scroll-behavior:auto}}
@@ -375,8 +377,8 @@
 .home-service-card__image{position:relative;height:148px;margin:0 0 15px;overflow:hidden;background:#eaf0f8;}
 .home-service-card__image img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .35s ease;}
 .home-service-card:hover .home-service-card__image img{transform:scale(1.045);}
-.home-service-card__image:after{position:absolute;inset:35% 0 0;content:"";background:linear-gradient(180deg,transparent,rgba(8,25,51,.62));pointer-events:none;}
-.home-service-card__image-label{position:absolute;z-index:1;right:12px;bottom:11px;display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(9,28,57,.66);color:#fff;font-size:.68rem;font-weight:800;backdrop-filter:blur(8px);}
+.home-service-card__image:after{position:absolute;inset:auto 0 0;height:54px;content:"";background:linear-gradient(180deg,transparent,rgba(8,25,51,.24));pointer-events:none;}
+.home-service-card__image-label{position:absolute;z-index:1;right:12px;bottom:11px;display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(9,28,57,.52);color:#fff;font-size:.68rem;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,.25);backdrop-filter:blur(5px);}
 .home-service-card h3,.home-service-card p,.home-service-card__action{margin-right:17px;margin-left:17px;}
 .home-service-card h3{margin-top:0;}
 .home-service-card__action{margin-top:13px;}
