@@ -79,15 +79,18 @@
             </div>
         </div>
         <figure class="home-hero-visual">
-            <img
-                class="home-hero-art"
-                src="{{ asset('images/farast-home-workflow.webp') }}"
-                alt="گردش کار فراست: ورود فایل، ویرایش سند و دریافت خروجی آماده"
-                width="960"
-                height="720"
-                fetchpriority="high"
-                decoding="async"
-            >
+            <picture class="home-hero-picture">
+                <source srcset="{{ asset('images/farast-home-workflow.webp') }}" type="image/webp">
+                <img
+                    class="home-hero-art"
+                    src="{{ asset('images/farast-home-hero.svg') }}"
+                    alt="گردش کار فراست: ورود فایل، ویرایش سند و دریافت خروجی آماده"
+                    width="960"
+                    height="720"
+                    fetchpriority="high"
+                    decoding="async"
+                >
+            </picture>
             <figcaption>از ورود فایل تا ویرایش و دریافت خروجی، در یک مسیر منسجم</figcaption>
         </figure>
     </section>
