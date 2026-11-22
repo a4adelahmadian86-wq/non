@@ -79,5 +79,11 @@ The image tool reported the Free quota is exhausted until the reset window the u
 8. Open a PR to main with a detailed inventory of assets and changed views. Merge only after required checks succeed.
 9. Report precisely what was committed, what was merged, what tests ran, and what still needs the user's local sync. Never claim the local site has been visually validated.
 
-## Current state
-This checkpoint branch is a continuation record only. No newly generated photo has yet been committed to the website repository. The merged PR #743 remains the only applied website change from the recent image-clarity work.
+## Current state (updated after checkpoint merge)
+- PR #744 merged successfully on 2026-11-22.
+- Checkpoint documentation is now on main. Merge commit: 0fcf544b3c1e5154e76cbece0840adf8bd46613f.
+- Re-fetch main before the next code change; expected current HEAD at this update: 0fcf544b3c1e5154e76cbece0840adf8bd46613f.
+- The optimized WebP and its original PNG have been packaged as farast-generated-visual-assets.zip for handoff, but are NOT committed to the repository and are NOT referenced by the website.
+- The generated composite with the invented logo/text remains excluded.
+- No new production website code or asset references were changed in PR #744. PR #743 is the only recent production visual-code change currently merged.
+- The local site has not been deployed or visually tested from this session.
