@@ -1,6 +1,6 @@
 # Pricing Engine Consolidation Audit
 
-Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
+Audit origin: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19). Implementation and follow-up status below reflect the merged work through 2026-11-21.
 
 ## Verified current structure
 
@@ -10,7 +10,7 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 - `PricingService::calculate()` delegates to `PricingEngine` whenever an effective version exists and maps the quote back to its legacy response shape; it retains a temporary legacy fallback only for policy codes without an effective version. `projectQuote()`, `quote()`, and `estimateByPages()` route versioned-policy arithmetic through `PricingEngine`, including PAYG, voice-minute, language/density, formula line adjustments, and free-page allowances; their legacy arithmetic remains only when the required policy version is absent. `initialTypingPrices()` resolves effective versioned values first. Typing preflight delegates free-page discount and deposit percentage/rounding arithmetic to the engine while retaining page-count deposit tier selection as a domain rule.
 - Store cart line totals, percentage coupons, smart-discount percentage amounts, margin floors, checkout tax, and pro-rata order line allocations use `PricingEngine` arithmetic helpers. `StoreCouponRedemptionService` remains the transactional eligibility/budget/consent/idempotency guard and never recalculates paid order totals.
 - `TypingPreflightController::estimate()` and `accept()` both call `PricingService::estimateByPages()`. They obtain free-page allowance discounts and deposit amount rounding from `PricingEngine`, while retaining page-count deposit tier selection as a domain rule; they persist an estimate snapshot into session/order data. This is a live customer-facing compatibility boundary.
-- `tests/Unit/PricingPolicyTest.php` covers versioned engine delegation, typing estimates, language and formula charges, voice-minute/PAYG quotes, immutable admin price versioning, seeder idempotency, and legacy fallback. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds; typing preflight now exercises the shared free-page allowance and deposit-rounding paths; a full upload-to-deposit-to-editor browser journey remains to be verified.
+- `tests/Unit/PricingPolicyTest.php` covers versioned engine delegation, typing estimates, language and formula charges, voice-minute/PAYG quotes, immutable admin price versioning, seeder idempotency, and legacy fallback. `tests/Feature/CommercePhase3Test.php` covers the versioned engine, entitlement reservations, idempotency, wallet charging, and refunds; typing preflight now exercises the shared free-page allowance and deposit-rounding paths; the full upload-to-deposit-to-editor browser journey is covered by PR #738.
 
 ## Consolidation constraints
 
@@ -22,16 +22,16 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 6. Keep free-page allowance, deposit percentage/rounding, and typing-specific complexity estimation as explicit domain inputs/rules. They must not become hidden duplicate price arithmetic outside the engine.
 7. Keep coupon/promotion adjustments trusted and server-derived. Preserve existing consent, margin, budget, redemption locking, and idempotency safeguards.
 
-## Required implementation sequence
+## Implementation sequence and cutover gates
 
-- Inventory every runtime caller of `PricingService` and document its expected response contract.
-- Map each legacy key (`page_base`, typing page/minute keys, language/formula multipliers, PAYG multiplier) to a versioned policy code and verify active-version coverage. Do not invent prices or backfill from assumptions.
-- Add parity/characterization tests for current customer-visible outputs, including zero/missing policy behavior, free-page application, deposit rounding, subscription quota exhaustion, PAYG, and historical snapshots.
-- Add a compatibility adapter that delegates arithmetic to `PricingEngine` while preserving response shapes. Keep legacy fallback observable and temporary; do not remove tables or historical records during this phase.
-- Migrate consumers incrementally, then remove fallback only after repository-wide call-site and data-coverage checks pass.
-- Run focused Laravel tests, full Laravel suite, Phase 3 commerce workflow, and relevant browser tests on the exact PR head before merge.
+- Completed in PR #739: inventory runtime callers of `PricingService` and document their expected response contracts.
+- Completed in PR #739: map the 13 active legacy pricing keys to versioned policy codes and verify active-version coverage. Values are preserved from configured sources; no prices are invented or backfilled from assumptions.
+- Added regression coverage in PR #739 for customer-visible outputs, zero/missing policy behavior, free-page application, deposit rounding, subscription quota exhaustion, PAYG, and historical snapshots.
+- Added the compatibility adapter and observable legacy-fallback telemetry in PR #739. Keep the fallback temporary; do not remove tables or historical records during this phase.
+- Migrate consumers incrementally; the audited consumers and active-version coverage checks are in place. Removal of the fallback remains a separate controlled cutover after operational confirmation.
+- Focused Laravel tests, full Laravel suite, Phase 3 commerce workflow, and relevant browser tests passed on the PR heads for the merged changes. The latest post-merge `main` CI run is tracked separately below.
 
-## Work completed on this branch
+## Implementation merged to main
 
 - `PricingService::calculate()` uses the versioned engine first and exposes the immutable policy version ID in its compatibility response.
 - Active typing/document `pricing_rules` values are copied as-is into missing immutable policy versions by a migration and fresh-install seeder; existing versions are never overwritten.
@@ -40,11 +40,12 @@ Baseline: `main` at `4120a55f8f64bc5e53db2cf46ec5d5fde1e179f4` (2026-11-19).
 - Regression tests cover engine precedence, compatibility fallback, quote adjustments, immutable admin versioning, seeder idempotency, and arithmetic rounding/allocation.
 - No customer orders, payments, wallet balances, or historical snapshots were changed.
 
-## Remaining work
+## Post-consolidation follow-up
 
-- Runtime caller inventory, the 13-key active-version coverage check, and observable legacy-fallback telemetry are added in this PR; final CI verification is pending.
-- The upload-to-deposit-to-editor HTTP journey was added in PR #738 and merged after all CI checks passed.
-- Subscription quota exhaustion coverage is included in this PR.
-- Trusted fixed/percentage adjustments now flow through PricingEngine for store campaign coupons and versioned commerce quotes; the coupon ledger records the coupon-only discount while wallet holds use the final engine total.
-- Course resource-uploader and team-assigned product/course publisher acceptance regressions are added in PR #741; its CI verification is pending. Preserve publisher price authority and do not invent prices.
-- Run focused and full test suites on the final PR heads before merge.
+- Runtime caller inventory, the 13-key active-version coverage check, and observable legacy-fallback telemetry were merged in PR #739.
+- The upload-to-deposit-to-editor HTTP journey was merged in PR #738 after its checks passed.
+- Subscription quota exhaustion coverage was merged in PR #739.
+- Trusted fixed/percentage adjustments flow through PricingEngine for store campaign coupons and versioned commerce quotes; the coupon ledger records the coupon-only discount while wallet holds use the final engine total. This was merged in PR #739.
+- Course resource-uploader and team-assigned product/course publisher acceptance regressions were merged in PR #741. Publisher price authority remains enforced; no prices are invented.
+- The PR-head CI suites passed for PRs #739 and #741. Post-merge CI on the latest `main` commit is still running; confirm it completes successfully before treating this consolidation milestone as fully verified.
+- Keep legacy fallback observable until every active policy is covered and a controlled cutover is explicitly approved. Do not remove legacy tables or rewrite historical prices/snapshots as part of this follow-up.
