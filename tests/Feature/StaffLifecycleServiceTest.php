@@ -16,16 +16,23 @@ class StaffLifecycleServiceTest extends TestCase
     {
         $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $subject = User::factory()->create(['role' => 'user']);
+        $departmentId = DB::table('departments')->insertGetId([
+            'name' => 'عملیات', 'key' => 'operations-primary', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         $service = app(StaffLifecycleService::class);
 
-        $first = $service->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس');
-        $second = $service->setPrimaryResponsibility($actor, $subject, 'organization_manager', 'مدیر سازمان');
+        $first = $service->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس', 'own', null, null, $departmentId);
+        $second = $service->setPrimaryResponsibility($actor, $subject, 'organization_manager', 'مدیر سازمان', 'own', null, null, $departmentId);
+        $secondary = $service->addSecondaryResponsibility($actor, $subject, 'employee', 'هماهنگ‌کننده', 'own', null, null, $departmentId);
 
         $this->assertDatabaseHas('role_assignments', ['id' => $first->id, 'is_primary' => false]);
         $this->assertNotNull(DB::table('role_assignments')->where('id', $first->id)->value('ended_at'));
         $this->assertDatabaseHas('role_assignments', ['id' => $second->id, 'is_primary' => true, 'ended_at' => null]);
         $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
         $this->assertSame('organization_manager', $subject->fresh()->role);
+        $this->assertSame($departmentId, (int) DB::table('role_assignments')->where('id', $second->id)->value('department_id'));
+        $this->assertSame($departmentId, (int) DB::table('role_assignments')->where('id', $secondary->id)->value('department_id'));
     }
 
     public function test_department_membership_is_independent_and_dismissal_restores_customer_role_without_deleting_history(): void
