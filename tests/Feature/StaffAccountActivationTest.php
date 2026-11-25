@@ -41,6 +41,28 @@ class StaffAccountActivationTest extends TestCase
         $this->assertDatabaseCount('users', 1);
     }
 
+    public function test_unverified_preprovisioned_account_cannot_skip_mobile_verification_even_if_it_has_a_password(): void
+    {
+        $user = User::factory()->create([
+            'mobile' => '09120004569',
+            'password' => 'TemporaryProvisionedPassword123',
+            'role' => User::ROLE_EMPLOYEE,
+            'is_verified' => false,
+        ]);
+        $session = app('session')->driver();
+        $session->flush();
+        $sms = \Mockery::mock(SmsService::class);
+        $sms->shouldReceive('sendOtp')->once();
+        app()->instance(SmsService::class, $sms);
+
+        $request = Request::create('/login/phone', 'POST', ['mobile' => $user->mobile]);
+        $request->setLaravelSession($session);
+        $response = (new AuthController())->phoneContinue($request);
+
+        $this->assertSame('activate', $response->getData(true)['mode']);
+        $this->assertSame(route('register'), $response->getData(true)['next']);
+    }
+
     public function test_staff_activation_sets_password_without_replacing_role_or_creating_a_duplicate_user(): void
     {
         $user = User::factory()->create([
