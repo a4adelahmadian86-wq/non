@@ -1,97 +1,167 @@
 <?php
 
-namespace App\Services;
+namespace App\\Services;
 
-use Illuminate\Support\Facades\Http;
+use Illuminate\\Http\\Client\\ConnectionException;
+use Illuminate\\Support\\Facades\\Http;
 use RuntimeException;
 
 class ProductSupervisorClient
 {
+    /**
+     * Render remains the primary endpoint. A separately hosted domestic node can
+     * be configured as fallback so this pipeline is not tied to international routing.
+     */
     public function configured(): bool
     {
-        return filled(config('services.product_supervisor.url'))
-            && filled(config('services.product_supervisor.token'));
+        return $this->endpoints() !== [];
     }
 
     public function review(array $snapshot): array
     {
-        if (! $this->configured()) {
+        $endpoints = $this->endpoints();
+        if ($endpoints === []) {
             throw new RuntimeException('product_supervisor_not_configured');
         }
 
-        $baseUrl = rtrim((string) config('services.product_supervisor.url'), '/');
-        if (! str_starts_with($baseUrl, 'https://')) {
-            throw new RuntimeException('product_supervisor_requires_https');
+        foreach ($endpoints as $index => $endpoint) {
+            try {
+                $response = Http::acceptJson()
+                    ->asJson()
+                    ->withToken($endpoint['token'])
+                    ->connectTimeout(8)
+                    ->timeout((int) config('services.product_supervisor.timeout', 40))
+                    ->post($endpoint['url'].'/v1/reviews/products', $snapshot);
+
+                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                if (! $response->successful()) {
+                    throw new RuntimeException('product_supervisor_request_failed');
+                }
+
+                $payload = $response->json();
+                if (! is_array($payload)
+                    || ! isset($payload['review_id'], $payload['product_id'], $payload['verdict'], $payload['score'], $payload['findings'])
+                    || (string) $payload['product_id'] !== (string) ($snapshot['product_id'] ?? '')
+                    || ! in_array($payload['verdict'], ['approved', 'needs_changes', 'blocked'], true)
+                    || ! is_array($payload['findings'])) {
+                    throw new RuntimeException('product_supervisor_invalid_response');
+                }
+
+                $payload['automated_publication'] = false;
+                return $payload;
+            } catch (ConnectionException $exception) {
+                if (isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                throw new RuntimeException('product_supervisor_unavailable', 0, $exception);
+            }
         }
 
-        $response = Http::acceptJson()
-            ->asJson()
-            ->withToken((string) config('services.product_supervisor.token'))
-            ->connectTimeout(8)
-            ->timeout((int) config('services.product_supervisor.timeout', 40))
-            ->post($baseUrl.'/v1/reviews/products', $snapshot);
-
-        if (! $response->successful()) {
-            throw new RuntimeException('product_supervisor_request_failed');
-        }
-
-        $payload = $response->json();
-        if (! is_array($payload)
-            || ! isset($payload['review_id'], $payload['product_id'], $payload['verdict'], $payload['score'], $payload['findings'])
-            || (string) $payload['product_id'] !== (string) ($snapshot['product_id'] ?? '')
-            || ! in_array($payload['verdict'], ['approved', 'needs_changes', 'blocked'], true)
-            || ! is_array($payload['findings'])) {
-            throw new RuntimeException('product_supervisor_invalid_response');
-        }
-
-        $payload['automated_publication'] = false;
-
-        return $payload;
+        throw new RuntimeException('product_supervisor_unavailable');
     }
 
     public function reviewFile($stream, string $filename, array $metadata, $readerSourceStream = null, ?string $readerSourceFilename = null): array
     {
-        if (! $this->configured()) {
-            throw new RuntimeException('product_supervisor_not_configured');
-        }
         if (! is_resource($stream)) {
             throw new RuntimeException('product_supervisor_file_stream_unavailable');
         }
 
-        $baseUrl = rtrim((string) config('services.product_supervisor.url'), '/');
-        if (! str_starts_with($baseUrl, 'https://')) {
-            throw new RuntimeException('product_supervisor_requires_https');
+        $endpoints = $this->endpoints();
+        if ($endpoints === []) {
+            throw new RuntimeException('product_supervisor_not_configured');
         }
 
-        $request = Http::acceptJson()
-            ->withToken((string) config('services.product_supervisor.token'))
-            // Free Render services can take roughly a minute to wake after idle suspension.
-            ->connectTimeout(90)
-            ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
-            ->attach('file', $stream, basename($filename));
+        foreach ($endpoints as $index => $endpoint) {
+            // A failed remote attempt may have consumed the streams. Rewind before
+            // retrying on the fallback node; never upload a partial document.
+            if ($index > 0) {
+                if (! @rewind($stream)) {
+                    throw new RuntimeException('product_supervisor_file_stream_not_rewindable');
+                }
+                if (is_resource($readerSourceStream) && ! @rewind($readerSourceStream)) {
+                    throw new RuntimeException('product_supervisor_reader_source_stream_not_rewindable');
+                }
+            }
 
-        if (is_resource($readerSourceStream) && filled($readerSourceFilename)) {
-            $request->attach('reader_source_file', $readerSourceStream, basename((string) $readerSourceFilename));
+            try {
+                $request = Http::acceptJson()
+                    ->withToken($endpoint['token'])
+                    // Free Render instances may need time to wake from idle suspension.
+                    ->connectTimeout(90)
+                    ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
+                    ->attach('file', $stream, basename($filename));
+
+                if (is_resource($readerSourceStream) && filled($readerSourceFilename)) {
+                    $request->attach('reader_source_file', $readerSourceStream, basename((string) $readerSourceFilename));
+                }
+
+                $response = $request->post($endpoint['url'].'/v1/reviews/files', $metadata);
+
+                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                if (! $response->successful()) {
+                    throw new RuntimeException('product_supervisor_file_review_failed');
+                }
+
+                $payload = $response->json();
+                if (! is_array($payload)
+                    || ! isset($payload['review_id'], $payload['product_id'], $payload['inspection'], $payload['security_gate'])
+                    || (string) $payload['product_id'] !== (string) ($metadata['product_id'] ?? '')
+                    || ! is_array($payload['inspection'])
+                    || ! in_array($payload['security_gate'], ['blocked', 'manual_scan_required', 'structural_checks_passed', 'upstream_scan_verified'], true)) {
+                    throw new RuntimeException('product_supervisor_invalid_file_response');
+                }
+
+                $payload['publication_authorized'] = false;
+                return $payload;
+            } catch (ConnectionException $exception) {
+                if (isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                throw new RuntimeException('product_supervisor_unavailable', 0, $exception);
+            }
         }
 
-        $response = $request->post($baseUrl.'/v1/reviews/files', $metadata);
-
-        if (! $response->successful()) {
-            throw new RuntimeException('product_supervisor_file_review_failed');
-        }
-
-        $payload = $response->json();
-        if (! is_array($payload)
-            || ! isset($payload['review_id'], $payload['product_id'], $payload['inspection'], $payload['security_gate'])
-            || (string) $payload['product_id'] !== (string) ($metadata['product_id'] ?? '')
-            || ! is_array($payload['inspection'])
-            || ! in_array($payload['security_gate'], ['blocked', 'manual_scan_required', 'structural_checks_passed', 'upstream_scan_verified'], true)) {
-            throw new RuntimeException('product_supervisor_invalid_file_response');
-        }
-
-        $payload['publication_authorized'] = false;
-
-        return $payload;
+        throw new RuntimeException('product_supervisor_unavailable');
     }
 
+    /**
+     * Return only explicitly configured HTTPS endpoints with their own bearer tokens.
+     * The fallback is optional; no endpoint or secret is guessed.
+     */
+    private function endpoints(): array
+    {
+        $configured = [
+            [
+                'url' => config('services.product_supervisor.url'),
+                'token' => config('services.product_supervisor.token'),
+            ],
+            [
+                'url' => config('services.product_supervisor.fallback_url'),
+                'token' => config('services.product_supervisor.fallback_token'),
+            ],
+        ];
+
+        $endpoints = [];
+        $seen = [];
+        foreach ($configured as $endpoint) {
+            $url = rtrim(trim((string) ($endpoint['url'] ?? '')), '/');
+            $token = trim((string) ($endpoint['token'] ?? ''));
+
+            if ($url === '' || $token === '' || isset($seen[$url])) {
+                continue;
+            }
+            if (! str_starts_with($url, 'https://')) {
+                throw new RuntimeException('product_supervisor_requires_https');
+            }
+
+            $seen[$url] = true;
+            $endpoints[] = ['url' => $url, 'token' => $token];
+        }
+
+        return $endpoints;
+    }
 }
