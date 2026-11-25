@@ -49,9 +49,6 @@ return new class extends Migration {
                 if (! Schema::hasColumn('role_assignments', 'department_id')) {
                     $table->foreignId('department_id')->nullable()->constrained('departments')->restrictOnDelete();
                 }
-                if (! Schema::hasColumn('role_assignments', 'department_id')) {
-                    $table->foreignId('department_id')->nullable()->constrained('departments')->restrictOnDelete();
-                }
             });
         }
     }
