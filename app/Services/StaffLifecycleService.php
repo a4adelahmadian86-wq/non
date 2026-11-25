@@ -114,8 +114,10 @@ class StaffLifecycleService
     {
         $this->assertPersonnelManagementAccess($actor);
         DB::transaction(function () use ($actor, $subject): void {
-            User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
-            if ($subject->isAdmin()) {
+            $subject = User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
+            $holdsAdminResponsibility = DB::table('role_assignments')->join('roles', 'roles.id', '=', 'role_assignments.role_id')
+                ->where('role_assignments.user_id', $subject->id)->where('roles.key', 'admin')->whereNull('role_assignments.ended_at')->exists();
+            if ($subject->isAdmin() || $holdsAdminResponsibility) {
                 throw ValidationException::withMessages(['user' => 'برکناری مدیر اصلی از این مسیر مجاز نیست.']);
             }
             $previousRole = $subject->role;
