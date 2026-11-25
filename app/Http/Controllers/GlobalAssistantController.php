@@ -68,12 +68,6 @@ class GlobalAssistantController extends Controller
             : ($gatewayUrl !== '' && $gatewayToken !== '');
         $chatGatewayMessage = '';
         $chatGatewayHealthUrl = '';
-        if (! $localOnly && $gatewayUrl !== '') {
-            $gatewayHost = strtolower((string) parse_url($gatewayUrl, PHP_URL_HOST));
-            if ($gatewayHost !== '' && str_ends_with($gatewayHost, '.onrender.com')) {
-                $chatGatewayHealthUrl = rtrim($gatewayUrl, '/').'/health';
-            }
-        }
         if (! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
@@ -137,7 +131,7 @@ class GlobalAssistantController extends Controller
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_asr_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
                 $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN را با توکن موتور صدای پیکربندی‌شده یکسان کن.',
                     429 => 'سرویس تشخیص گفتار فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
                     default => 'موتور گفتار خودمیزبان پاسخ معتبر نداد (HTTP '.$response->status().').',
                 };
