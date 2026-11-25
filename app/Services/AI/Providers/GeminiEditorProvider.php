@@ -23,6 +23,7 @@ class GeminiEditorProvider implements AiProvider
         $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
         $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
         $gatewayFailure = null;
+        $localOnly = (bool) config('services.voice.local_only', false);
 
         $gatewayTargets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
@@ -45,6 +46,15 @@ class GeminiEditorProvider implements AiProvider
             ];
         }
 
+        if ($localOnly) {
+            // Never send editor content to a public gateway or direct cloud provider
+            // when the installation explicitly requires local-only processing.
+            $gatewayTargets = array_values(array_filter(
+                $gatewayTargets,
+                fn (array $target): bool => $this->isPrivateServiceUrl($target['url'])
+            ));
+        }
+
         foreach ($gatewayTargets as $gatewayTarget) {
             try {
                 return $this->executeViaGateway(
@@ -59,6 +69,10 @@ class GeminiEditorProvider implements AiProvider
                 // Keep trying the configured private fallback before the legacy provider path.
                 $gatewayFailure = $e;
             }
+        }
+
+        if ($localOnly) {
+            throw new RuntimeException($gatewayFailure ? 'ai_gateway_unavailable' : 'ai_gateway_not_configured', 0, $gatewayFailure);
         }
 
         $key = SiteSetting::read('gemini_api_key') ?: config('services.gemini.key');
@@ -119,6 +133,24 @@ class GeminiEditorProvider implements AiProvider
             }
         }
         throw ($last instanceof RuntimeException ? $last : new RuntimeException('ai_provider_failure'));
+    }
+
+    private function isPrivateServiceUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) return false;
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') return false;
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        if ($host === 'localhost' || ! str_contains($host, '.')) return true;
+
+        return preg_match('/\\.(?:internal|local|localhost|test|svc|cluster\\.local)$/D', $host) === 1;
     }
 
     private function executeViaGateway(string $url, string $token, array $operation, array $payload, string $requestId, string $model = 'farast-general'): array
