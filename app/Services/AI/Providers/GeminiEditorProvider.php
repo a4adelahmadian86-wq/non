@@ -55,7 +55,7 @@ class GeminiEditorProvider implements AiProvider
                     $requestId,
                     $gatewayTarget['model']
                 );
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 // Keep trying the configured private fallback before the legacy provider path.
                 $gatewayFailure = $e;
             }
