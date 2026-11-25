@@ -14,9 +14,9 @@ Route::middleware(['auth', 'throttle:30,1', 'permission:access.manage'])
         Route::delete('/role-assignments/{assignment}', [AdminAccessController::class, 'revokeRole'])->name('role-assignments.revoke');
         Route::post('/users/{user}/permissions', [AdminAccessController::class, 'grantPermission'])->name('users.permissions.grant');
         Route::delete('/permission-grants/{grant}', [AdminAccessController::class, 'revokePermission'])->name('permission-grants.revoke');
-        Route::post('/users/{user}/responsibility/primary', [\\App\\Http\\Controllers\\StaffLifecycleController::class, 'primary'])->name('users.responsibility.primary');
-        Route::post('/users/{user}/responsibility/secondary', [\\App\\Http\\Controllers\\StaffLifecycleController::class, 'secondary'])->name('users.responsibility.secondary');
-        Route::delete('/responsibility-assignments/{assignment}', [\\App\\Http\\Controllers\\StaffLifecycleController::class, 'endResponsibility'])->name('responsibility.end');
-        Route::put('/users/{user}/departments', [\\App\\Http\\Controllers\\StaffLifecycleController::class, 'department'])->name('users.departments.update');
-        Route::post('/users/{user}/dismiss', [\\App\\Http\\Controllers\\StaffLifecycleController::class, 'dismiss'])->name('users.dismiss');
+        Route::post('/users/{user}/responsibility/primary', [\App\Http\Controllers\StaffLifecycleController::class, 'primary'])->name('users.responsibility.primary');
+        Route::post('/users/{user}/responsibility/secondary', [\App\Http\Controllers\StaffLifecycleController::class, 'secondary'])->name('users.responsibility.secondary');
+        Route::delete('/responsibility-assignments/{assignment}', [\App\Http\Controllers\StaffLifecycleController::class, 'endResponsibility'])->name('responsibility.end');
+        Route::put('/users/{user}/departments', [\App\Http\Controllers\StaffLifecycleController::class, 'department'])->name('users.departments.update');
+        Route::post('/users/{user}/dismiss', [\App\Http\Controllers\StaffLifecycleController::class, 'dismiss'])->name('users.dismiss');
     });
