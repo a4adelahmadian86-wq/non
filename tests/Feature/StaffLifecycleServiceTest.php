@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\User;
-use App\\Services\\StaffLifecycleService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\DB;
-use Tests\\TestCase;
+use App\Models\User;
+use App\Services\StaffLifecycleService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
 class StaffLifecycleServiceTest extends TestCase
 {
@@ -53,7 +53,7 @@ class StaffLifecycleServiceTest extends TestCase
         $service = app(StaffLifecycleService::class);
         $service->addSecondaryResponsibility($actor, $subject, 'organization_manager', 'مدیر ارشد');
 
-        $this->expectException(\\Illuminate\\Validation\\ValidationException::class);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
         $service->setPrimaryResponsibility($actor, $subject, 'organization_manager', 'مدیر ارشد');
     }
 }
