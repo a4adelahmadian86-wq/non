@@ -43,6 +43,9 @@ return new class extends Migration {
                 if (! Schema::hasColumn('role_assignments', 'ended_at')) {
                     $table->timestamp('ended_at')->nullable()->index();
                 }
+                if (! Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
+                    $table->unsignedBigInteger('active_primary_user_id')->nullable()->unique();
+                }
             });
         }
     }
