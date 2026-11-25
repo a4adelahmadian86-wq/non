@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\GlobalAssistantController;
 use App\Models\SiteSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -35,8 +37,8 @@ class GlobalAssistantGatewayTest extends TestCase
             ], 200),
         ]);
 
-        $response = app(\\App\\Http\\Controllers\\GlobalAssistantController::class)
-            ->voiceStatus(\\Illuminate\\Http\\Request::create('/assistant/voice/status', 'GET'));
+        $response = app(GlobalAssistantController::class)
+            ->voiceStatus(Request::create('/assistant/voice/status', 'GET'));
 
         $response->assertOk()
             ->assertJsonPath('local_only', true)
