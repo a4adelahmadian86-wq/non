@@ -44,6 +44,24 @@ class StaffLifecycleServiceTest extends TestCase
         $this->assertDatabaseHas('role_assignments', ['id' => $assignment->id, 'is_primary' => false]);
         $this->assertNotNull(DB::table('role_assignments')->where('id', $assignment->id)->value('ended_at'));
         $this->assertNotNull(DB::table('department_user')->where('department_id', $departmentId)->where('user_id', $subject->id)->value('left_at'));
+        $this->assertDatabaseHas('role_assignments', [
+            'user_id' => $subject->id,
+            'is_primary' => true,
+            'active_primary_user_id' => $subject->id,
+            'title' => 'مشتری عادی',
+            'ended_at' => null,
+        ]);
+        $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
+    }
+
+    public function test_a_primary_responsibility_cannot_be_ended_without_replacement(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => User::ROLE_USER]);
+        $assignment = app(StaffLifecycleService::class)->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس');
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(StaffLifecycleService::class)->endResponsibility($actor, $assignment->id);
     }
 
     public function test_a_user_cannot_hold_two_active_senior_manager_posts(): void
