@@ -74,6 +74,9 @@ class StaffLifecycleService
             if (! $assignment || $assignment->ended_at !== null) {
                 throw ValidationException::withMessages(['assignment' => 'مسئولیت فعال پیدا نشد.']);
             }
+            if ((bool) $assignment->is_primary) {
+                throw ValidationException::withMessages(['assignment' => 'مسئولیت اصلی باید با مسئولیت اصلی دیگری جایگزین شود.']);
+            }
             DB::table('role_assignments')->where('id', $assignmentId)->update([
                 'ended_at' => now(), 'updated_at' => now(), 'is_primary' => false, 'active_primary_user_id' => null,
             ]);
@@ -127,6 +130,15 @@ class StaffLifecycleService
                     $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
                 })->update(['expires_at' => now(), 'updated_at' => now()]);
             }
+            $customerRole = DB::table('roles')->where('key', 'user')->where('is_active', true)->first();
+            if (! $customerRole) {
+                throw ValidationException::withMessages(['role' => 'نقش پایه مشتری در سامانه تعریف نشده است.']);
+            }
+            DB::table('role_assignments')->insert([
+                'user_id' => $subject->id, 'role_id' => $customerRole->id, 'scope' => 'own',
+                'assigned_by' => $actor->id, 'is_primary' => true, 'active_primary_user_id' => $subject->id,
+                'title' => 'مشتری عادی', 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
             $subject->forceFill(['role' => 'user', 'access_control_managed' => false])->save();
             $this->audit($actor, $subject, 'staff.dismissed_to_customer', ['legacy_role_before' => $previousRole]);
         }, 3);
