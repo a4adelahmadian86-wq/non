@@ -62,6 +62,26 @@ class StaffLifecycleServiceTest extends TestCase
         $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
     }
 
+    public function test_department_rejoining_preserves_previous_membership_periods(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => 'user']);
+        $departmentId = DB::table('departments')->insertGetId([
+            'name' => 'آموزش', 'key' => 'education-history', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $service = app(StaffLifecycleService::class);
+
+        $service->setDepartmentMembership($actor, $subject, $departmentId, true);
+        $service->setDepartmentMembership($actor, $subject, $departmentId, false);
+        $service->setDepartmentMembership($actor, $subject, $departmentId, true);
+
+        $periods = DB::table('department_user')->where('department_id', $departmentId)->where('user_id', $subject->id)->orderBy('id')->get();
+        $this->assertCount(2, $periods);
+        $this->assertNotNull($periods[0]->left_at);
+        $this->assertNull($periods[1]->left_at);
+    }
+
     public function test_a_primary_responsibility_cannot_be_ended_without_replacement(): void
     {
         $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
