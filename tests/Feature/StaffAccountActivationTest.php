@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Http\\Controllers\\AuthController;
-use App\\Models\\User;
-use App\\Services\\EmailService;
-use App\\Services\\SmsService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Hash;
-use Tests\\TestCase;
+use App\Http\Controllers\AuthController;
+use App\Models\User;
+use App\Services\EmailService;
+use App\Services\SmsService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
 
 class StaffAccountActivationTest extends TestCase
 {
@@ -25,7 +25,7 @@ class StaffAccountActivationTest extends TestCase
         ]);
         $session = app('session')->driver();
         $session->flush();
-        $sms = \\Mockery::mock(SmsService::class);
+        $sms = \Mockery::mock(SmsService::class);
         $sms->shouldReceive('sendOtp')->once();
 
         app()->instance(SmsService::class, $sms);
@@ -66,7 +66,7 @@ class StaffAccountActivationTest extends TestCase
         ]);
         $request->setLaravelSession($session);
 
-        (new AuthController())->registerStore($request, \\Mockery::mock(EmailService::class));
+        (new AuthController())->registerStore($request, \Mockery::mock(EmailService::class));
 
         $this->assertDatabaseCount('users', 1);
         $fresh = $user->fresh();
