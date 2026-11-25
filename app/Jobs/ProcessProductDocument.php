@@ -22,8 +22,16 @@ class ProcessProductDocument implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Keep transient provider/storage outages in the durable queue instead of
+    // permanently failing a document after only a few short attempts.
     public int $tries = 3;
     public int $timeout = 600;
+    public array $backoff = [60, 300, 900, 1800, 3600];
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addDay();
+    }
 
     public function __construct(public readonly int $documentId)
     {
