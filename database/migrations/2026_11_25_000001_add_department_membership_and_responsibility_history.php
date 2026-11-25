@@ -46,6 +46,9 @@ return new class extends Migration {
                 if (! Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
                     $table->unsignedBigInteger('active_primary_user_id')->nullable()->unique();
                 }
+                if (! Schema::hasColumn('role_assignments', 'department_id')) {
+                    $table->foreignId('department_id')->nullable()->constrained('departments')->restrictOnDelete();
+                }
             });
         }
     }
