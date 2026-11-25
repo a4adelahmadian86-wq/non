@@ -23,6 +23,28 @@ class ProductSupervisorFailoverTest extends TestCase
         ]);
     }
 
+    public function test_local_only_mode_rejects_public_supervisor_endpoints(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.product_supervisor.url' => 'https://online-primary.example',
+            'services.product_supervisor.token' => 'online-primary-token',
+            'services.product_supervisor.fallback_url' => 'https://online-fallback.example',
+            'services.product_supervisor.fallback_token' => 'online-fallback-token',
+        ]);
+
+        Http::fake();
+
+        try {
+            app(ProductSupervisorClient::class)->review(['product_id' => '42']);
+            $this->fail('Expected public endpoints to be rejected in local-only mode.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('product_supervisor_not_configured', $exception->getMessage());
+        }
+
+        Http::assertNothingSent();
+    }
+
     public function test_product_review_falls_back_to_domestic_node_after_primary_server_error(): void
     {
         Http::fake([
