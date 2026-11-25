@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 class ProductSupervisorFailoverTest extends TestCase
