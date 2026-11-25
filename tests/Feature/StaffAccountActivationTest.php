@@ -15,6 +15,33 @@ class StaffAccountActivationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_new_customer_registration_receives_a_default_primary_responsibility(): void
+    {
+        $session = app('session')->driver();
+        $session->flush();
+        $session->put('register.mobile', '09120004570');
+        $session->put('register.verified_mobile', '09120004570');
+        $session->put('register.verified_at', now()->timestamp);
+
+        $request = Request::create('/register', 'POST', [
+            'name' => 'مشتری جدید',
+            'password' => 'SecureCustomerPassword123',
+            'password_confirmation' => 'SecureCustomerPassword123',
+        ]);
+        $request->setLaravelSession($session);
+
+        (new AuthController())->registerStore($request, \Mockery::mock(EmailService::class));
+
+        $user = User::query()->where('mobile', '09120004570')->firstOrFail();
+        $this->assertDatabaseHas('role_assignments', [
+            'user_id' => $user->id,
+            'is_primary' => true,
+            'active_primary_user_id' => $user->id,
+            'title' => 'مشتری عادی',
+            'ended_at' => null,
+        ]);
+    }
+
     public function test_manager_created_unverified_account_uses_the_existing_mobile_for_otp_activation(): void
     {
         $user = User::factory()->create([
