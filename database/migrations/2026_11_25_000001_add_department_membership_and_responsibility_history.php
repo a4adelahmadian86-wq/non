@@ -27,7 +27,7 @@ return new class extends Migration {
                 $table->timestamp('joined_at')->useCurrent();
                 $table->timestamp('left_at')->nullable();
                 $table->timestamps();
-                $table->unique(['department_id', 'user_id']);
+                $table->index(['department_id', 'user_id', 'left_at']);
                 $table->index(['user_id', 'left_at']);
             });
         }

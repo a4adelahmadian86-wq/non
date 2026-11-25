@@ -100,18 +100,17 @@ class StaffLifecycleService
             if (! $department) {
                 throw ValidationException::withMessages(['department_id' => 'دپارتمان فعال پیدا نشد.']);
             }
-            $membership = DB::table('department_user')->where('department_id', $departmentId)->where('user_id', $subject->id)->first();
-            if ($member) {
-                if (! $membership) {
-                    DB::table('department_user')->insert([
-                        'department_id' => $departmentId, 'user_id' => $subject->id,
-                        'added_by' => $actor->id, 'joined_at' => now(), 'created_at' => now(), 'updated_at' => now(),
-                    ]);
-                } elseif ($membership->left_at !== null) {
-                    DB::table('department_user')->where('id', $membership->id)->update(['left_at' => null, 'added_by' => $actor->id, 'joined_at' => now(), 'updated_at' => now()]);
-                }
-            } elseif ($membership && $membership->left_at === null) {
-                DB::table('department_user')->where('id', $membership->id)->update(['left_at' => now(), 'updated_at' => now()]);
+            $activeMembership = DB::table('department_user')
+                ->where('department_id', $departmentId)->where('user_id', $subject->id)
+                ->whereNull('left_at')->latest('joined_at')->first();
+            if ($member && ! $activeMembership) {
+                // Rejoining creates a new historical membership row; prior periods remain immutable.
+                DB::table('department_user')->insert([
+                    'department_id' => $departmentId, 'user_id' => $subject->id,
+                    'added_by' => $actor->id, 'joined_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            } elseif (! $member && $activeMembership) {
+                DB::table('department_user')->where('id', $activeMembership->id)->update(['left_at' => now(), 'updated_at' => now()]);
             }
             $this->audit($actor, $subject, $member ? 'department.joined' : 'department.left', ['department_id' => $departmentId]);
         }, 3);
