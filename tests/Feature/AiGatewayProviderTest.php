@@ -51,4 +51,43 @@ class AiGatewayProviderTest extends TestCase
                 && count($body['messages'] ?? []) === 2;
         });
     }
+
+    public function test_editor_ai_uses_domestic_gateway_after_primary_gateway_failure(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://render-gateway.example',
+            'services.ai_gateway.token' => 'render-token',
+            'services.ai_gateway.fallback_url' => 'https://domestic-gateway.example',
+            'services.ai_gateway.fallback_token' => 'domestic-token',
+            'services.ai_gateway.fallback_model' => 'farast-general',
+        ]);
+
+        Http::fake([
+            'https://render-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
+            'https://domestic-gateway.example/v1/chat/completions' => Http::response([
+                'id' => 'chatcmpl-editor-fallback',
+                'model' => 'farast-general',
+                'choices' => [[
+                    'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه کوتاه‌شده"}'],
+                ]],
+                'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 8, 'total_tokens' => 28],
+            ], 200, ['X-Farast-AI-Provider' => 'ollama-local']),
+        ]);
+
+        $provider = app(GeminiEditorProvider::class);
+        $result = $provider->execute(
+            ['name' => 'selection.shorten', 'result' => 'text'],
+            ['text' => 'این یک متن طولانی برای آزمایش مسیر پشتیبان است.', 'context' => []],
+            'editor-fallback-request',
+        );
+
+        $this->assertSame(['text' => 'نسخه کوتاه‌شده'], $result['result']);
+        $this->assertTrue($result['fallback_used']);
+
+        Http::assertSent(fn (ClientRequest $request): bool =>
+            $request->url() === 'https://domestic-gateway.example/v1/chat/completions'
+            && $request->header('Authorization') === ['Bearer domestic-token']
+        );
+    }
+
 }
