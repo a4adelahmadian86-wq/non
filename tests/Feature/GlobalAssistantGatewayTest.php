@@ -40,10 +40,11 @@ class GlobalAssistantGatewayTest extends TestCase
         $response = app(GlobalAssistantController::class)
             ->voiceStatus(Request::create('/assistant/voice/status', 'GET'));
 
-        $response->assertOk()
-            ->assertJsonPath('local_only', true)
-            ->assertJsonPath('chat_gateway_ready', true)
-            ->assertJsonPath('chat_gateway_health_url', 'https://domestic-gateway.internal/ready');
+        $this->assertSame(200, $response->getStatusCode());
+        $payload = $response->getData(true);
+        $this->assertTrue($payload['local_only']);
+        $this->assertTrue($payload['chat_gateway_ready']);
+        $this->assertSame('https://domestic-gateway.internal/ready', $payload['chat_gateway_health_url']);
 
         Http::assertSent(fn (ClientRequest $request): bool =>
             $request->method() === 'GET'
