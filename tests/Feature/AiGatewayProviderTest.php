@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\AI\Providers\GeminiEditorProvider;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 class AiGatewayProviderTest extends TestCase
