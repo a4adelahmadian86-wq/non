@@ -21,8 +21,8 @@ return new class extends Migration {
         if (! Schema::hasTable('department_user')) {
             Schema::create('department_user', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('department_id')->constrained()->cascadeOnDelete();
-                $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('department_id')->constrained()->restrictOnDelete();
+                $table->foreignId('user_id')->constrained()->restrictOnDelete();
                 $table->foreignId('added_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->timestamp('joined_at')->useCurrent();
                 $table->timestamp('left_at')->nullable();
