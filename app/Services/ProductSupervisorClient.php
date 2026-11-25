@@ -9,8 +9,8 @@ use RuntimeException;
 class ProductSupervisorClient
 {
     /**
-     * Render remains the primary endpoint. A separately hosted domestic node can
-     * be configured as fallback so this pipeline is not tied to international routing.
+     * A separately hosted domestic node can be configured as fallback so this
+     * pipeline can continue when international routing is unavailable.
      */
     public function configured(): bool
     {
@@ -88,7 +88,6 @@ class ProductSupervisorClient
             try {
                 $request = Http::acceptJson()
                     ->withToken($endpoint['token'])
-                    // Free Render instances may need time to wake from idle suspension.
                     ->connectTimeout(90)
                     ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
                     ->attach('file', $stream, basename($filename));
