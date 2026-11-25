@@ -92,15 +92,15 @@ class AiGatewayProviderTest extends TestCase
     public function test_editor_ai_uses_domestic_gateway_after_primary_gateway_failure(): void
     {
         config([
-            'services.ai_gateway.url' => 'https://render-gateway.example',
-            'services.ai_gateway.token' => 'render-token',
+            'services.ai_gateway.url' => 'https://online-gateway.example',
+            'services.ai_gateway.token' => 'online-token',
             'services.ai_gateway.fallback_url' => 'https://domestic-gateway.example',
             'services.ai_gateway.fallback_token' => 'domestic-token',
             'services.ai_gateway.fallback_model' => 'farast-general',
         ]);
 
         Http::fake([
-            'https://render-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
+            'https://online-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
             'https://domestic-gateway.example/v1/chat/completions' => Http::response([
                 'id' => 'chatcmpl-editor-fallback',
                 'model' => 'farast-general',
