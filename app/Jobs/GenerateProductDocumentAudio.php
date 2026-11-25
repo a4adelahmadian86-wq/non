@@ -21,9 +21,17 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Audio generation can depend on local or remote providers that may be
+    // temporarily unavailable. Preserve the queued work across short outages.
     public int $tries = 2;
     public int $timeout = 900;
     public int $uniqueFor = 1800;
+    public array $backoff = [120, 600, 1800, 3600];
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addDay();
+    }
 
     public function uniqueId(): string
     {
