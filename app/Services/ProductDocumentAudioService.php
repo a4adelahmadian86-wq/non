@@ -11,7 +11,15 @@ class ProductDocumentAudioService
 {
     public function configured(): bool
     {
-        return filled(config('services.document_audio.url')) && filled(config('services.document_audio.token'));
+        $url = trim((string) config('services.document_audio.url', ''));
+        $token = trim((string) config('services.document_audio.token', ''));
+
+        if ($url === '' || $token === '') {
+            return false;
+        }
+
+        return ! (bool) config('services.voice.local_only', false)
+            || $this->isPrivateServiceUrl($url);
     }
 
     /**
@@ -51,7 +59,7 @@ class ProductDocumentAudioService
                 $response = Http::accept('audio/wav')
                     ->withToken($token)
                     ->asJson()
-                    ->connectTimeout(75) // Free Render instances can need about a minute to wake from idle.
+                    ->connectTimeout(8)
                     ->timeout(180)
                     ->retry(3, 3000, static fn ($exception) =>
                         $exception instanceof ConnectionException
@@ -160,6 +168,24 @@ class ProductDocumentAudioService
             'duration_ms' => $durationMs,
             'segments' => $segments,
         ];
+    }
+
+    private function isPrivateServiceUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) return false;
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') return false;
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        if ($host === 'localhost' || ! str_contains($host, '.')) return true;
+
+        return preg_match('/\\.(?:internal|local|localhost|test|svc|cluster\\.local)$/D', $host) === 1;
     }
 
     /**
