@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RoleAssignment extends Model
 {
     protected $fillable = [
-        'user_id', 'role_id', 'scope', 'organization_id', 'team_id',
+        'user_id', 'role_id', 'scope', 'organization_id', 'team_id', 'department_id',
         'assigned_by', 'starts_at', 'expires_at', 'is_primary', 'title',
         'ended_at', 'active_primary_user_id',
     ];
