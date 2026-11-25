@@ -13,6 +13,42 @@ class GlobalAssistantGatewayTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_local_only_status_accepts_the_private_domestic_gateway_without_an_online_primary(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice.remote_batch_enabled' => false,
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
+            'services.ai_gateway.fallback_url' => 'https://domestic-gateway.internal',
+            'services.ai_gateway.fallback_token' => 'domestic-token',
+            'services.ai_gateway.health_url' => '',
+            'services.voice_tts.url' => '',
+            'services.voice_tts.token' => '',
+        ]);
+
+        Http::fake([
+            'https://domestic-gateway.internal/ready' => Http::response([
+                'ok' => true,
+                'model' => 'qwen-local',
+                'provider' => 'ollama',
+            ], 200),
+        ]);
+
+        $response = app(\\App\\Http\\Controllers\\GlobalAssistantController::class)
+            ->voiceStatus(\\Illuminate\\Http\\Request::create('/assistant/voice/status', 'GET'));
+
+        $response->assertOk()
+            ->assertJsonPath('local_only', true)
+            ->assertJsonPath('chat_gateway_ready', true)
+            ->assertJsonPath('chat_gateway_health_url', 'https://domestic-gateway.internal/ready');
+
+        Http::assertSent(fn (ClientRequest $request): bool =>
+            $request->method() === 'GET'
+            && $request->url() === 'https://domestic-gateway.internal/ready'
+        );
+    }
+
     public function test_global_assistant_prefers_central_gateway_before_direct_groq(): void
     {
         config([
