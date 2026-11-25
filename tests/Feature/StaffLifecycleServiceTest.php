@@ -25,6 +25,7 @@ class StaffLifecycleServiceTest extends TestCase
         $this->assertNotNull(DB::table('role_assignments')->where('id', $first->id)->value('ended_at'));
         $this->assertDatabaseHas('role_assignments', ['id' => $second->id, 'is_primary' => true, 'ended_at' => null]);
         $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
+        $this->assertSame('organization_manager', $subject->fresh()->role);
     }
 
     public function test_department_membership_is_independent_and_dismissal_restores_customer_role_without_deleting_history(): void
