@@ -48,4 +48,41 @@ class GlobalAssistantGatewayTest extends TestCase
                 && count($body['messages'] ?? []) >= 2;
         });
     }
+
+    public function test_global_assistant_falls_back_to_domestic_gateway_when_render_is_unavailable(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://render-gateway.example',
+            'services.ai_gateway.token' => 'render-token',
+            'services.ai_gateway.fallback_url' => 'https://domestic-gateway.example',
+            'services.ai_gateway.fallback_token' => 'domestic-token',
+            'services.ai_gateway.fallback_model' => 'farast-general',
+        ]);
+
+        $user = User::factory()->create();
+
+        Http::fake([
+            'https://render-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
+            'https://domestic-gateway.example/v1/chat/completions' => Http::response([
+                'id' => 'chatcmpl-domestic-fallback',
+                'model' => 'farast-general',
+                'choices' => [[
+                    'message' => ['role' => 'assistant', 'content' => 'پاسخ از درگاه داخلی'],
+                ]],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('provider', 'farast-ai-gateway')
+            ->assertJsonPath('reply', 'پاسخ از درگاه داخلی');
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn (ClientRequest $request): bool =>
+            $request->url() === 'https://domestic-gateway.example/v1/chat/completions'
+            && $request->header('Authorization') === ['Bearer domestic-token']
+        );
+    }
+
 }
