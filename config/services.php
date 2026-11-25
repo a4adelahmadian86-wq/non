@@ -6,12 +6,14 @@ $remoteBatchDefault = ! $voiceLocalOnly;
 return [
     // Central online assistant gateway. Set FARAST_AI_GATEWAY_URL empty only to use the compatibility provider path.
     'ai_gateway' => [
-        // Production AI requests are routed through the existing Render gateway by default.
-        // Local-only mode still rejects public gateway URLs in the controller.
+        // Render is primary; an independently hosted domestic gateway is the offline fallback.
         'url' => env('FARAST_AI_GATEWAY_URL', 'https://voice-typing-r5r7.onrender.com'),
         'token' => env('FARAST_VOICE_TOKEN', ''),
         'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
+        'fallback_url' => env('FARAST_AI_GATEWAY_FALLBACK_URL', ''),
+        'fallback_token' => env('FARAST_AI_GATEWAY_FALLBACK_TOKEN', ''),
+        'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', 'farast-general'),
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
