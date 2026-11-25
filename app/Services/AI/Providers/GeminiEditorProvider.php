@@ -20,12 +20,43 @@ class GeminiEditorProvider implements AiProvider
     {
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
         $gatewayFailure = null;
+
+        $gatewayTargets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
+            $gatewayTargets[] = [
+                'url' => $gatewayUrl,
+                'token' => $gatewayToken,
+                'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general',
+            ];
+        }
+        if (
+            $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && str_starts_with($fallbackGatewayUrl, 'https://')
+            && $fallbackGatewayUrl !== $gatewayUrl
+        ) {
+            $gatewayTargets[] = [
+                'url' => $fallbackGatewayUrl,
+                'token' => $fallbackGatewayToken,
+                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+            ];
+        }
+
+        foreach ($gatewayTargets as $gatewayTarget) {
             try {
-                return $this->executeViaGateway($gatewayUrl, $gatewayToken, $operation, $payload, $requestId);
-            } catch (\Throwable $e) {
-                // Keep the existing direct Gemini route as the next layer when Runflare is unavailable.
+                return $this->executeViaGateway(
+                    $gatewayTarget['url'],
+                    $gatewayTarget['token'],
+                    $operation,
+                    $payload,
+                    $requestId,
+                    $gatewayTarget['model']
+                );
+            } catch (\\Throwable $e) {
+                // Keep trying the configured private fallback before the legacy provider path.
                 $gatewayFailure = $e;
             }
         }
@@ -90,7 +121,7 @@ class GeminiEditorProvider implements AiProvider
         throw ($last instanceof RuntimeException ? $last : new RuntimeException('ai_provider_failure'));
     }
 
-    private function executeViaGateway(string $url, string $token, array $operation, array $payload, string $requestId): array
+    private function executeViaGateway(string $url, string $token, array $operation, array $payload, string $requestId, string $model = 'farast-general'): array
     {
         $prompt = $this->prompt($operation['name'], $payload['text'], $payload['context']);
         $schema = $this->schema($operation['result']);
@@ -103,7 +134,7 @@ class GeminiEditorProvider implements AiProvider
                 'Accept' => 'application/json',
                 'X-Farast-Request-Id' => $requestId,
             ])->post($url.'/v1/chat/completions', [
-                'model' => 'farast-general',
+                'model' => $model,
                 'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user', 'content' => $prompt],
