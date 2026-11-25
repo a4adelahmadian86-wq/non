@@ -478,11 +478,41 @@ class GlobalAssistantController extends Controller
 
         $targets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
-            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
+            $targets[] = [
+                'url' => $gatewayUrl.'/v1/chat/completions',
+                'token' => $gatewayToken,
+                'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general',
+                'limit_key' => 'max_tokens',
+                'name' => 'gateway',
+                'connect_timeout' => 8,
+                'timeout' => 100,
+            ];
         }
-        if (! $localVoiceOnly && $groqKey !== '' && ! ($gatewayUrl !== '' && $gatewayToken !== '')) {
-            // Direct Groq is a compatibility path only when no Render gateway is configured.
-            $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
+
+        // The domestic gateway is attempted after Render and is never exposed to the browser.
+        // Require HTTPS because this request carries private conversation history and a bearer token.
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+        if (
+            $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && str_starts_with($fallbackGatewayUrl, 'https://')
+            && $fallbackGatewayUrl !== $gatewayUrl
+        ) {
+            $targets[] = [
+                'url' => $fallbackGatewayUrl.'/v1/chat/completions',
+                'token' => $fallbackGatewayToken,
+                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+                'limit_key' => 'max_tokens',
+                'name' => 'domestic_fallback',
+                'connect_timeout' => 4,
+                'timeout' => 120,
+            ];
+        }
+
+        if (! $localVoiceOnly && $groqKey !== '' && $gatewayUrl === '' && $fallbackGatewayUrl === '') {
+            // Direct Groq is a compatibility path only when no central gateway is configured.
+            $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq', 'connect_timeout' => 8, 'timeout' => 100];
         }
         $upstream = null;
         foreach ($targets as $target) {
@@ -496,7 +526,8 @@ class GlobalAssistantController extends Controller
             try {
                 $candidate = Http::withToken($target['token'])->accept('text/event-stream')
                     ->withOptions(['stream' => true])
-                    ->connectTimeout(15)->timeout(100)
+                    ->connectTimeout((int) ($target['connect_timeout'] ?? 8))
+                    ->timeout((int) ($target['timeout'] ?? 100))
                     ->post($target['url'], $payload);
                 if ($candidate->successful() && str_contains(strtolower((string) $candidate->header('Content-Type', '')), 'text/event-stream')) {
                     $upstream = $candidate;
