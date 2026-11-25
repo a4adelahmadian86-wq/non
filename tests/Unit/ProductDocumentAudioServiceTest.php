@@ -82,7 +82,7 @@ class ProductDocumentAudioServiceTest extends TestCase
         ], $result['segments'][0]['words']);
     }
 
-    public function test_transient_render_cold_start_response_is_retried_before_synthesis(): void
+    public function test_transient_audio_provider_response_is_retried_before_synthesis(): void
     {
         config([
             'services.document_audio.url' => 'https://document-audio.example.test/v1/synthesize',
@@ -121,6 +121,25 @@ class ProductDocumentAudioServiceTest extends TestCase
         $this->assertTrue(class_exists(\App\Jobs\GenerateProductDocumentAudio::class));
         $this->assertTrue(class_exists(\App\Services\ProductKnowledgeService::class));
         $this->assertTrue(class_exists(\App\Console\Commands\PruneProductIngestions::class));
+    }
+
+    public function test_local_only_mode_rejects_public_tts_endpoints_without_sending_audio(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.document_audio.url' => 'https://public-audio.example/v1/synthesize',
+            'services.document_audio.token' => 'must-not-be-used',
+        ]);
+
+        Http::fake();
+
+        $service = app(ProductDocumentAudioService::class);
+        $this->assertFalse($service->configured());
+        $this->assertNull($service->generate([
+            ['content_text' => 'متن محرمانه'],
+        ]));
+
+        Http::assertNothingSent();
     }
 
     public function test_audio_generation_requires_configured_tts_endpoint(): void
