@@ -88,7 +88,9 @@ class ProductSupervisorClient
             try {
                 $request = Http::acceptJson()
                     ->withToken($endpoint['token'])
-                    ->connectTimeout(90)
+                    // Fail over quickly when international routing is unavailable;
+                    // the overall response timeout still allows long document analysis.
+                    ->connectTimeout($index === 0 ? 8 : 12)
                     ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
                     ->attach('file', $stream, basename($filename));
 
