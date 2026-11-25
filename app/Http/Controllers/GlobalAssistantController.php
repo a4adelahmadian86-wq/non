@@ -67,7 +67,7 @@ class GlobalAssistantController extends Controller
             ? ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy)
             : ($gatewayUrl !== '' && $gatewayToken !== '');
         $chatGatewayMessage = '';
-        $chatGatewayHealthUrl = '';
+        $chatGatewayHealthUrl = $gatewayHealthUrl;
         if (! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
