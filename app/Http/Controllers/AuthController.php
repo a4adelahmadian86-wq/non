@@ -39,7 +39,7 @@ class AuthController extends Controller
 
         $request->session()->put('login.phone', $phone);
 
-        if ($user && $user->password) {
+        if ($user && $user->password && $user->is_verified) {
             return response()->json(['ok' => true, 'next' => route('login.password')]);
         }
 
@@ -121,7 +121,7 @@ class AuthController extends Controller
             abort_if($existingUser->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
             $user = DB::transaction(function () use ($existingUser, $data): User {
                 $user = User::query()->whereKey($existingUser->id)->lockForUpdate()->firstOrFail();
-                abort_if($user->password, 409, 'برای این حساب قبلاً رمز عبور تعیین شده است.');
+                abort_if($user->password && $user->is_verified, 409, 'برای این حساب قبلاً رمز عبور تعیین شده است.');
                 $user->password = $data['password'];
                 $user->is_verified = true;
                 if (blank($user->name)) {
