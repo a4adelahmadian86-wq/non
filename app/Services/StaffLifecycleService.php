@@ -15,16 +15,17 @@ class StaffLifecycleService
         abort_unless($actor->isAdmin() || ($this->authorization->effectiveScope($actor) === 'global' && $this->authorization->allows($actor, 'access.manage')), 403);
     }
 
-    public function setPrimaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'global', ?int $organizationId = null, ?int $teamId = null): object
+    public function setPrimaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'global', ?int $organizationId = null, ?int $teamId = null, ?int $departmentId = null): object
     {
         $this->assertPersonnelManagementAccess($actor);
-        return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId): object {
+        return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId, $departmentId): object {
             User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
             if (! $role) {
                 throw ValidationException::withMessages(['role_key' => 'عنوان مسئولیت معتبر و فعال نیست.']);
             }
             $this->validateScope($scope, $organizationId, $teamId);
+            $this->validateDepartment($departmentId);
             $this->assertNoDuplicateSeniorPost($subject, $roleKey, $title, true);
 
             DB::table('role_assignments')->where('user_id', $subject->id)
@@ -33,7 +34,7 @@ class StaffLifecycleService
 
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
-                'organization_id' => $organizationId, 'team_id' => $teamId,
+                'organization_id' => $organizationId, 'team_id' => $teamId, 'department_id' => $departmentId,
                 'assigned_by' => $actor->id, 'is_primary' => true, 'active_primary_user_id' => $subject->id, 'title' => $title,
                 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -48,20 +49,21 @@ class StaffLifecycleService
         }, 3);
     }
 
-    public function addSecondaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'own', ?int $organizationId = null, ?int $teamId = null): object
+    public function addSecondaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'own', ?int $organizationId = null, ?int $teamId = null, ?int $departmentId = null): object
     {
         $this->assertPersonnelManagementAccess($actor);
-        return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId): object {
+        return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId, $departmentId): object {
             User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
             if (! $role) {
                 throw ValidationException::withMessages(['role_key' => 'عنوان مسئولیت معتبر و فعال نیست.']);
             }
             $this->validateScope($scope, $organizationId, $teamId);
+            $this->validateDepartment($departmentId);
             $this->assertNoDuplicateSeniorPost($subject, $roleKey, $title, false);
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
-                'organization_id' => $organizationId, 'team_id' => $teamId,
+                'organization_id' => $organizationId, 'team_id' => $teamId, 'department_id' => $departmentId,
                 'assigned_by' => $actor->id, 'is_primary' => false, 'active_primary_user_id' => null, 'title' => $title,
                 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -165,6 +167,13 @@ class StaffLifecycleService
         }
         if ($query->exists()) {
             throw ValidationException::withMessages(['title' => 'این فرد هم‌اکنون یک مسئولیت مدیر ارشد فعال دارد.']);
+        }
+    }
+
+    private function validateDepartment(?int $departmentId): void
+    {
+        if ($departmentId !== null && ! DB::table('departments')->where('id', $departmentId)->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages(['department_id' => 'دپارتمان فعال پیدا نشد.']);
         }
     }
 

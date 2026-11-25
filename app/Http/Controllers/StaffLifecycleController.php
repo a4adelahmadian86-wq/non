@@ -19,8 +19,9 @@ class StaffLifecycleController extends Controller
             'scope' => ['required', 'in:global,organization,team,own'],
             'organization_id' => ['nullable', 'integer', 'exists:organizations,id'],
             'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
         ]);
-        $assignment = $this->staff->setPrimaryResponsibility($request->user(), $user, $data['role_key'], $data['title'], $data['scope'], $data['organization_id'] ?? null, $data['team_id'] ?? null);
+        $assignment = $this->staff->setPrimaryResponsibility($request->user(), $user, $data['role_key'], $data['title'], $data['scope'], $data['organization_id'] ?? null, $data['team_id'] ?? null, $data['department_id'] ?? null);
         return response()->json(['assignment' => $assignment], 201);
     }
 
