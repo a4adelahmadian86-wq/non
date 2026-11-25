@@ -29,12 +29,12 @@ class StaffLifecycleService
 
             DB::table('role_assignments')->where('user_id', $subject->id)
                 ->where('is_primary', true)->whereNull('ended_at')
-                ->update(['is_primary' => false, 'ended_at' => now(), 'updated_at' => now()]);
+                ->update(['is_primary' => false, 'ended_at' => now(), 'active_primary_user_id' => null, 'updated_at' => now()]);
 
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
                 'organization_id' => $organizationId, 'team_id' => $teamId,
-                'assigned_by' => $actor->id, 'is_primary' => true, 'title' => $title,
+                'assigned_by' => $actor->id, 'is_primary' => true, 'active_primary_user_id' => $subject->id, 'title' => $title,
                 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
             $this->audit($actor, $subject, 'responsibility.primary.assigned', ['assignment_id' => $id, 'role_key' => $roleKey, 'title' => $title]);
@@ -57,7 +57,7 @@ class StaffLifecycleService
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
                 'organization_id' => $organizationId, 'team_id' => $teamId,
-                'assigned_by' => $actor->id, 'is_primary' => false, 'title' => $title,
+                'assigned_by' => $actor->id, 'is_primary' => false, 'active_primary_user_id' => null, 'title' => $title,
                 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
             $this->audit($actor, $subject, 'responsibility.secondary.assigned', ['assignment_id' => $id, 'role_key' => $roleKey, 'title' => $title]);
@@ -75,7 +75,7 @@ class StaffLifecycleService
                 throw ValidationException::withMessages(['assignment' => 'مسئولیت فعال پیدا نشد.']);
             }
             DB::table('role_assignments')->where('id', $assignmentId)->update([
-                'ended_at' => now(), 'updated_at' => now(), 'is_primary' => false,
+                'ended_at' => now(), 'updated_at' => now(), 'is_primary' => false, 'active_primary_user_id' => null,
             ]);
             $subject = User::query()->findOrFail($assignment->user_id);
             $this->audit($actor, $subject, 'responsibility.ended', ['assignment_id' => $assignmentId]);
@@ -117,7 +117,7 @@ class StaffLifecycleService
             }
             $previousRole = $subject->role;
             DB::table('role_assignments')->where('user_id', $subject->id)->whereNull('ended_at')->update([
-                'ended_at' => now(), 'is_primary' => false, 'updated_at' => now(),
+                'ended_at' => now(), 'is_primary' => false, 'active_primary_user_id' => null, 'updated_at' => now(),
             ]);
             if (DB::getSchemaBuilder()->hasTable('department_user')) {
                 DB::table('department_user')->where('user_id', $subject->id)->whereNull('left_at')->update(['left_at' => now(), 'updated_at' => now()]);
