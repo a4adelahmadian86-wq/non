@@ -37,6 +37,11 @@ class StaffLifecycleService
                 'assigned_by' => $actor->id, 'is_primary' => true, 'active_primary_user_id' => $subject->id, 'title' => $title,
                 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
+            // Keep legacy dashboard routing aligned with the new primary responsibility.
+            // The master-admin key is deliberately excluded from this promotion path.
+            if (in_array($roleKey, ['user', 'employee', 'organization_manager', 'team_supervisor', 'observer', 'guest'], true)) {
+                $subject->forceFill(['role' => $roleKey, 'access_control_managed' => true])->save();
+            }
             $this->audit($actor, $subject, 'responsibility.primary.assigned', ['assignment_id' => $id, 'role_key' => $roleKey, 'title' => $title]);
 
             return DB::table('role_assignments')->where('id', $id)->first();
