@@ -9,6 +9,40 @@ use Tests\TestCase;
 
 class AiGatewayProviderTest extends TestCase
 {
+    public function test_local_only_editor_ai_never_falls_through_to_direct_gemini_when_domestic_gateway_fails(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
+            'services.ai_gateway.fallback_url' => 'https://domestic-gateway.internal',
+            'services.ai_gateway.fallback_token' => 'domestic-token',
+            'services.ai_gateway.fallback_model' => 'qwen-local',
+            'services.gemini.key' => 'must-not-be-used',
+        ]);
+
+        Http::fake([
+            'https://domestic-gateway.internal/v1/chat/completions' => Http::response(['error' => 'offline'], 503),
+        ]);
+
+        try {
+            app(GeminiEditorProvider::class)->execute(
+                ['name' => 'selection.shorten', 'result' => 'text'],
+                ['text' => 'متن محرمانه', 'context' => []],
+                'local-only-failure-test',
+            );
+            $this->fail('Expected the local gateway outage to stop processing without cloud fallback.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('ai_gateway_unavailable', $exception->getMessage());
+        }
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request): bool =>
+            $request->url() === 'https://domestic-gateway.internal/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer domestic-token')
+        );
+    }
+
     public function test_editor_ai_can_use_the_optional_central_gateway_with_structured_output(): void
     {
         config([
