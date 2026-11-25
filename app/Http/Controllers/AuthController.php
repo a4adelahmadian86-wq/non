@@ -108,7 +108,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', $existingUser ? 'unique:users,email,'.$existingUser->id : 'unique:users,email'],
         ], [
             'name.required' => 'نام و نام خانوادگی را وارد کنید.',
             'password.min' => 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
