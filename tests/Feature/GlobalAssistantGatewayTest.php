@@ -88,11 +88,11 @@ class GlobalAssistantGatewayTest extends TestCase
         });
     }
 
-    public function test_global_assistant_falls_back_to_domestic_gateway_when_render_is_unavailable(): void
+    public function test_global_assistant_falls_back_to_domestic_gateway_when_primary_gateway_is_unavailable(): void
     {
         config([
-            'services.ai_gateway.url' => 'https://render-gateway.example',
-            'services.ai_gateway.token' => 'render-token',
+            'services.ai_gateway.url' => 'https://online-gateway.example',
+            'services.ai_gateway.token' => 'online-token',
             'services.ai_gateway.fallback_url' => 'https://domestic-gateway.example',
             'services.ai_gateway.fallback_token' => 'domestic-token',
             'services.ai_gateway.fallback_model' => 'farast-general',
@@ -101,7 +101,7 @@ class GlobalAssistantGatewayTest extends TestCase
         $user = User::factory()->create();
 
         Http::fake([
-            'https://render-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
+            'https://online-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
             'https://domestic-gateway.example/v1/chat/completions' => Http::response([
                 'id' => 'chatcmpl-domestic-fallback',
                 'model' => 'farast-general',
