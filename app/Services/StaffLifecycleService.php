@@ -25,6 +25,7 @@ class StaffLifecycleService
                 throw ValidationException::withMessages(['role_key' => 'عنوان مسئولیت معتبر و فعال نیست.']);
             }
             $this->validateScope($scope, $organizationId, $teamId);
+            $this->assertNoDuplicateSeniorPost($subject, $roleKey, $title, true);
 
             DB::table('role_assignments')->where('user_id', $subject->id)
                 ->where('is_primary', true)->whereNull('ended_at')
@@ -52,14 +53,7 @@ class StaffLifecycleService
                 throw ValidationException::withMessages(['role_key' => 'عنوان مسئولیت معتبر و فعال نیست.']);
             }
             $this->validateScope($scope, $organizationId, $teamId);
-            if ($roleKey === 'senior_manager' || trim($title) === 'مدیر ارشد') {
-                $alreadyHasSeniorPost = DB::table('role_assignments')->join('roles', 'roles.id', '=', 'role_assignments.role_id')
-                    ->where('role_assignments.user_id', $subject->id)->whereNull('role_assignments.ended_at')
-                    ->where(fn ($query) => $query->where('roles.key', 'senior_manager')->orWhere('role_assignments.title', 'مدیر ارشد'))->exists();
-                if ($alreadyHasSeniorPost) {
-                    throw ValidationException::withMessages(['title' => 'این فرد هم‌اکنون یک مسئولیت مدیر ارشد فعال دارد.']);
-                }
-            }
+            $this->assertNoDuplicateSeniorPost($subject, $roleKey, $title, false);
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
                 'organization_id' => $organizationId, 'team_id' => $teamId,
@@ -136,6 +130,23 @@ class StaffLifecycleService
             $subject->forceFill(['role' => 'user', 'access_control_managed' => false])->save();
             $this->audit($actor, $subject, 'staff.dismissed_to_customer', ['legacy_role_before' => $previousRole]);
         }, 3);
+    }
+
+    private function assertNoDuplicateSeniorPost(User $subject, string $roleKey, string $title, bool $ignoreCurrentPrimary): void
+    {
+        if ($roleKey !== 'senior_manager' && trim($title) !== 'مدیر ارشد') {
+            return;
+        }
+        $query = DB::table('role_assignments')->join('roles', 'roles.id', '=', 'role_assignments.role_id')
+            ->where('role_assignments.user_id', $subject->id)
+            ->whereNull('role_assignments.ended_at')
+            ->where(fn ($builder) => $builder->where('roles.key', 'senior_manager')->orWhere('role_assignments.title', 'مدیر ارشد'));
+        if ($ignoreCurrentPrimary) {
+            $query->where('role_assignments.is_primary', false);
+        }
+        if ($query->exists()) {
+            throw ValidationException::withMessages(['title' => 'این فرد هم‌اکنون یک مسئولیت مدیر ارشد فعال دارد.']);
+        }
     }
 
     private function validateScope(string $scope, ?int $organizationId, ?int $teamId): void
