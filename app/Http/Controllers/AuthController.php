@@ -135,15 +135,20 @@ class AuthController extends Controller
                 return $user;
             }, 3);
         } else {
-            $user = User::create([
-                'name' => $data['name'],
-                'mobile' => $phone,
-                'email' => $data['email'] ?? null,
-                'password' => $data['password'],
-                'role' => 'user',
-                'is_verified' => true,
-                'is_blocked' => false,
-            ]);
+            $user = DB::transaction(function () use ($data, $phone): User {
+                $user = User::create([
+                    'name' => $data['name'],
+                    'mobile' => $phone,
+                    'email' => $data['email'] ?? null,
+                    'password' => $data['password'],
+                    'role' => 'user',
+                    'is_verified' => true,
+                    'is_blocked' => false,
+                ]);
+                $this->assignCustomerPrimaryResponsibility($user);
+
+                return $user;
+            }, 3);
         }
 
         try {
@@ -460,6 +465,24 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('home');
+    }
+
+    private function assignCustomerPrimaryResponsibility(User $user): void
+    {
+        if (! \\Illuminate\\Support\\Facades\\Schema::hasTable('roles')
+            || ! \\Illuminate\\Support\\Facades\\Schema::hasTable('role_assignments')
+            || ! \\Illuminate\\Support\\Facades\\Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
+            return;
+        }
+        $roleId = DB::table('roles')->where('key', 'user')->where('is_active', true)->value('id');
+        if (! $roleId) {
+            return;
+        }
+        DB::table('role_assignments')->insert([
+            'user_id' => $user->id, 'role_id' => $roleId, 'scope' => 'own',
+            'is_primary' => true, 'active_primary_user_id' => $user->id,
+            'title' => 'مشتری عادی', 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
     private function validatedPhone(Request $request): string
