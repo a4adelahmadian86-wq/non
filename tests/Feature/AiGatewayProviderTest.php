@@ -37,10 +37,12 @@ class AiGatewayProviderTest extends TestCase
             $this->assertSame('ai_gateway_unavailable', $exception->getMessage());
         }
 
-        Http::assertSentCount(1);
         Http::assertSent(fn (ClientRequest $request): bool =>
             $request->url() === 'https://domestic-gateway.internal/v1/chat/completions'
             && $request->hasHeader('Authorization', 'Bearer domestic-token')
+        );
+        Http::assertNotSent(fn (ClientRequest $request): bool =>
+            str_contains($request->url(), 'generativelanguage.googleapis.com')
         );
     }
 
