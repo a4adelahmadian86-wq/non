@@ -15,7 +15,7 @@ class StaffLifecycleServiceTest extends TestCase
     public function test_user_has_at_most_one_active_primary_responsibility_and_keeps_history(): void
     {
         $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $subject = User::factory()->create(['role' => User::ROLE_USER]);
+        $subject = User::factory()->create(['role' => 'user']);
         $service = app(StaffLifecycleService::class);
 
         $first = $service->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس');
