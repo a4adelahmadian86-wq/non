@@ -129,6 +129,24 @@ class ProductSupervisorClient
         throw new RuntimeException('product_supervisor_unavailable');
     }
 
+    private function isPrivateServiceUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) return false;
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') return false;
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        if ($host === 'localhost' || ! str_contains($host, '.')) return true;
+
+        return preg_match('/\\.(?:internal|local|localhost|test|svc|cluster\\.local)$/D', $host) === 1;
+    }
+
     /**
      * Return only explicitly configured HTTPS endpoints with their own bearer tokens.
      * The fallback is optional; no endpoint or secret is guessed.
@@ -148,11 +166,15 @@ class ProductSupervisorClient
 
         $endpoints = [];
         $seen = [];
+        $localOnly = (bool) config('services.voice.local_only', false);
         foreach ($configured as $endpoint) {
             $url = rtrim(trim((string) ($endpoint['url'] ?? '')), '/');
             $token = trim((string) ($endpoint['token'] ?? ''));
 
             if ($url === '' || $token === '' || isset($seen[$url])) {
+                continue;
+            }
+            if ($localOnly && ! $this->isPrivateServiceUrl($url)) {
                 continue;
             }
             if (! str_starts_with($url, 'https://')) {
