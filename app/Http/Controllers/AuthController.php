@@ -469,9 +469,9 @@ class AuthController extends Controller
 
     private function assignCustomerPrimaryResponsibility(User $user): void
     {
-        if (! \\Illuminate\\Support\\Facades\\Schema::hasTable('roles')
-            || ! \\Illuminate\\Support\\Facades\\Schema::hasTable('role_assignments')
-            || ! \\Illuminate\\Support\\Facades\\Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('roles')
+            || ! \Illuminate\Support\Facades\Schema::hasTable('role_assignments')
+            || ! \Illuminate\Support\Facades\Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
             return;
         }
         $roleId = DB::table('roles')->where('key', 'user')->where('is_active', true)->value('id');
