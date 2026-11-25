@@ -636,7 +636,13 @@ class GlobalAssistantController extends Controller
         try {
             $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
             $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-            $gatewayConfigured = $gatewayUrl !== '' && $gatewayToken !== '';
+            $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+            $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+            $fallbackGatewayConfigured = $fallbackGatewayUrl !== ''
+                && $fallbackGatewayToken !== ''
+                && str_starts_with($fallbackGatewayUrl, 'https://')
+                && $fallbackGatewayUrl !== $gatewayUrl;
+            $gatewayConfigured = ($gatewayUrl !== '' && $gatewayToken !== '') || $fallbackGatewayConfigured;
             $groqKey = '';
             if (! $gatewayConfigured) {
                 try {
@@ -682,34 +688,60 @@ class GlobalAssistantController extends Controller
                 // Prefer the Render gateway. When it is configured, do not silently bypass it
                 // with a direct provider request if the gateway is unavailable.
                 if ($gatewayConfigured) {
-                    try {
-                        $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
-                        $gatewayResponse = Http::withToken($gatewayToken)->acceptJson()->timeout(35)->retry(1, 300, throw: false)
-                            ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
-                            ->post($gatewayUrl.'/v1/chat/completions', [
-                                'model' => 'farast-general',
-                                'messages' => $messages,
-                                'temperature' => 0.2,
-                                'max_tokens' => 500,
-                            ]);
-                        $gatewayReply = $gatewayResponse->json('choices.0.message.content');
-                        if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
-                            $gatewayReply = trim($gatewayReply);
-                            $this->persistExchange((int) $user->id, $data['message'], $gatewayReply);
-                            return response()->json(['ok' => true, 'reply' => $gatewayReply, 'provider' => 'farast-ai-gateway'], 200, ['Cache-Control' => 'no-store']);
-                        }
-                        Log::warning('farast.global_assistant_gateway_failed', [
-                            'user_id' => $user->id,
-                            'status' => $gatewayResponse->status(),
-                            'fallback' => 'disabled',
-                        ]);
-                    } catch (\Throwable $gatewayException) {
-                        Log::warning('farast.global_assistant_gateway_exception', [
-                            'user_id' => $user->id,
-                            'error_class' => class_basename($gatewayException),
-                            'fallback' => 'disabled',
-                        ]);
+                    $gatewayTargets = [];
+                    if ($gatewayUrl !== '' && $gatewayToken !== '') {
+                        $gatewayTargets[] = [
+                            'url' => $gatewayUrl,
+                            'token' => $gatewayToken,
+                            'name' => 'primary',
+                            'timeout' => 35,
+                        ];
                     }
+                    if ($fallbackGatewayConfigured) {
+                        $gatewayTargets[] = [
+                            'url' => $fallbackGatewayUrl,
+                            'token' => $fallbackGatewayToken,
+                            'name' => 'domestic_fallback',
+                            'timeout' => 120,
+                        ];
+                    }
+
+                    $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
+                    foreach ($gatewayTargets as $gatewayTarget) {
+                        try {
+                            $gatewayResponse = Http::withToken($gatewayTarget['token'])->acceptJson()
+                                ->connectTimeout($gatewayTarget['name'] === 'primary' ? 8 : 4)
+                                ->timeout($gatewayTarget['timeout'])
+                                ->retry(1, 300, throw: false)
+                                ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
+                                ->post($gatewayTarget['url'].'/v1/chat/completions', [
+                                    'model' => $gatewayTarget['name'] === 'primary'
+                                        ? (trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general')
+                                        : (trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general'),
+                                    'messages' => $messages,
+                                    'temperature' => 0.2,
+                                    'max_tokens' => 500,
+                                ]);
+                            $gatewayReply = $gatewayResponse->json('choices.0.message.content');
+                            if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
+                                $gatewayReply = trim($gatewayReply);
+                                $this->persistExchange((int) $user->id, $data['message'], $gatewayReply);
+                                return response()->json(['ok' => true, 'reply' => $gatewayReply, 'provider' => 'farast-ai-gateway'], 200, ['Cache-Control' => 'no-store']);
+                            }
+                            Log::warning('farast.global_assistant_gateway_failed', [
+                                'user_id' => $user->id,
+                                'provider' => $gatewayTarget['name'],
+                                'status' => $gatewayResponse->status(),
+                            ]);
+                        } catch (\Throwable $gatewayException) {
+                            Log::warning('farast.global_assistant_gateway_exception', [
+                                'user_id' => $user->id,
+                                'provider' => $gatewayTarget['name'],
+                                'error_class' => class_basename($gatewayException),
+                            ]);
+                        }
+                    }
+
                     throw new RuntimeException('ai_gateway_failure');
                 }
 
