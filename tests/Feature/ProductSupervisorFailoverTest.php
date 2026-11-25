@@ -15,7 +15,7 @@ class ProductSupervisorFailoverTest extends TestCase
         parent::setUp();
 
         config([
-            'services.product_supervisor.url' => 'https://render-primary.example',
+            'services.product_supervisor.url' => 'https://online-primary.example',
             'services.product_supervisor.token' => 'primary-secret',
             'services.product_supervisor.fallback_url' => 'https://domestic-node.example',
             'services.product_supervisor.fallback_token' => 'domestic-secret',
@@ -49,7 +49,7 @@ class ProductSupervisorFailoverTest extends TestCase
     public function test_product_review_falls_back_to_domestic_node_after_primary_server_error(): void
     {
         Http::fake([
-            'https://render-primary.example/*' => Http::response(['error' => 'temporarily unavailable'], 503),
+            'https://online-primary.example/*' => Http::response(['error' => 'temporarily unavailable'], 503),
             'https://domestic-node.example/*' => Http::response([
                 'review_id' => 'fallback-review',
                 'product_id' => '42',
@@ -65,7 +65,7 @@ class ProductSupervisorFailoverTest extends TestCase
         $this->assertFalse($result['automated_publication']);
 
         Http::assertSent(fn (Request $request) =>
-            $request->url() === 'https://render-primary.example/v1/reviews/products'
+            $request->url() === 'https://online-primary.example/v1/reviews/products'
             && $request->hasHeader('Authorization', 'Bearer primary-secret')
         );
         Http::assertSent(fn (Request $request) =>
@@ -77,7 +77,7 @@ class ProductSupervisorFailoverTest extends TestCase
     public function test_file_review_rewinds_stream_and_falls_back_after_primary_server_error(): void
     {
         Http::fake([
-            'https://render-primary.example/*' => Http::response(['error' => 'temporarily unavailable'], 503),
+            'https://online-primary.example/*' => Http::response(['error' => 'temporarily unavailable'], 503),
             'https://domestic-node.example/*' => Http::response([
                 'review_id' => 'fallback-file-review',
                 'product_id' => '42',
