@@ -77,7 +77,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
             $this->setAudioState($document, ['status' => 'awaiting_provider', 'reason' => 'document_audio_not_configured']);
             // Keep the job in the durable queue; it will retry when the local
             // speech service is configured or connectivity is restored.
-            throw new \\RuntimeException('document_audio_provider_not_configured');
+            throw new \RuntimeException('document_audio_provider_not_configured');
         }
 
         try {
