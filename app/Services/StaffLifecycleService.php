@@ -8,8 +8,16 @@ use Illuminate\Validation\ValidationException;
 
 class StaffLifecycleService
 {
+    public function __construct(private readonly AuthorizationService $authorization) {}
+
+    private function assertPersonnelManagementAccess(User $actor): void
+    {
+        abort_unless($actor->isAdmin() || ($this->authorization->effectiveScope($actor) === 'global' && $this->authorization->allows($actor, 'access.manage')), 403);
+    }
+
     public function setPrimaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'global', ?int $organizationId = null, ?int $teamId = null): object
     {
+        $this->assertPersonnelManagementAccess($actor);
         return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId): object {
             User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
@@ -36,6 +44,7 @@ class StaffLifecycleService
 
     public function addSecondaryResponsibility(User $actor, User $subject, string $roleKey, string $title, string $scope = 'own', ?int $organizationId = null, ?int $teamId = null): object
     {
+        $this->assertPersonnelManagementAccess($actor);
         return DB::transaction(function () use ($actor, $subject, $roleKey, $title, $scope, $organizationId, $teamId): object {
             User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             $role = DB::table('roles')->where('key', $roleKey)->where('is_active', true)->first();
@@ -43,6 +52,14 @@ class StaffLifecycleService
                 throw ValidationException::withMessages(['role_key' => 'عنوان مسئولیت معتبر و فعال نیست.']);
             }
             $this->validateScope($scope, $organizationId, $teamId);
+            if ($roleKey === 'senior_manager' || trim($title) === 'مدیر ارشد') {
+                $alreadyHasSeniorPost = DB::table('role_assignments')->join('roles', 'roles.id', '=', 'role_assignments.role_id')
+                    ->where('role_assignments.user_id', $subject->id)->whereNull('role_assignments.ended_at')
+                    ->where(fn ($query) => $query->where('roles.key', 'senior_manager')->orWhere('role_assignments.title', 'مدیر ارشد'))->exists();
+                if ($alreadyHasSeniorPost) {
+                    throw ValidationException::withMessages(['title' => 'این فرد هم‌اکنون یک مسئولیت مدیر ارشد فعال دارد.']);
+                }
+            }
             $id = DB::table('role_assignments')->insertGetId([
                 'user_id' => $subject->id, 'role_id' => $role->id, 'scope' => $scope,
                 'organization_id' => $organizationId, 'team_id' => $teamId,
@@ -57,6 +74,7 @@ class StaffLifecycleService
 
     public function endResponsibility(User $actor, int $assignmentId): void
     {
+        $this->assertPersonnelManagementAccess($actor);
         DB::transaction(function () use ($actor, $assignmentId): void {
             $assignment = DB::table('role_assignments')->where('id', $assignmentId)->lockForUpdate()->first();
             if (! $assignment || $assignment->ended_at !== null) {
@@ -72,6 +90,7 @@ class StaffLifecycleService
 
     public function setDepartmentMembership(User $actor, User $subject, int $departmentId, bool $member): void
     {
+        $this->assertPersonnelManagementAccess($actor);
         DB::transaction(function () use ($actor, $subject, $departmentId, $member): void {
             $department = DB::table('departments')->where('id', $departmentId)->where('is_active', true)->first();
             if (! $department) {
@@ -96,19 +115,26 @@ class StaffLifecycleService
 
     public function dismissToCustomer(User $actor, User $subject): void
     {
+        $this->assertPersonnelManagementAccess($actor);
         DB::transaction(function () use ($actor, $subject): void {
             User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             if ($subject->isAdmin()) {
                 throw ValidationException::withMessages(['user' => 'برکناری مدیر اصلی از این مسیر مجاز نیست.']);
             }
+            $previousRole = $subject->role;
             DB::table('role_assignments')->where('user_id', $subject->id)->whereNull('ended_at')->update([
                 'ended_at' => now(), 'is_primary' => false, 'updated_at' => now(),
             ]);
             if (DB::getSchemaBuilder()->hasTable('department_user')) {
                 DB::table('department_user')->where('user_id', $subject->id)->whereNull('left_at')->update(['left_at' => now(), 'updated_at' => now()]);
             }
-            $subject->forceFill(['role' => 'user', 'access_control_managed' => true])->save();
-            $this->audit($actor, $subject, 'staff.dismissed_to_customer', ['legacy_role_before' => $subject->getOriginal('role')]);
+            if (DB::getSchemaBuilder()->hasTable('user_permission_grants')) {
+                DB::table('user_permission_grants')->where('user_id', $subject->id)->where(function ($query): void {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->update(['expires_at' => now(), 'updated_at' => now()]);
+            }
+            $subject->forceFill(['role' => 'user', 'access_control_managed' => false])->save();
+            $this->audit($actor, $subject, 'staff.dismissed_to_customer', ['legacy_role_before' => $previousRole]);
         }, 3);
     }
 
