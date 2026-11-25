@@ -96,6 +96,7 @@ class StaffLifecycleService
     {
         $this->assertPersonnelManagementAccess($actor);
         DB::transaction(function () use ($actor, $subject, $departmentId, $member): void {
+            User::query()->whereKey($subject->id)->lockForUpdate()->firstOrFail();
             $department = DB::table('departments')->where('id', $departmentId)->where('is_active', true)->first();
             if (! $department) {
                 throw ValidationException::withMessages(['department_id' => 'دپارتمان فعال پیدا نشد.']);
