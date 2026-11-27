@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
+use App\Services\Storage\StorageManager;
 use Tests\TestCase;
 
 class SecureTicketAttachmentsCommandTest extends TestCase
@@ -120,6 +123,51 @@ class SecureTicketAttachmentsCommandTest extends TestCase
         $this->assertArrayNotHasKey('legacy_source_path_b64', $first->fresh()->attachments[0]);
     }
 
+    public function test_legacy_private_ticket_attachment_is_migrated_to_iran_primary_when_configured(): void
+    {
+        Storage::fake('public');
+        Storage::fake('private');
+
+        $iran = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 100,
+        ]);
+        $customer = User::factory()->create();
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'Private attachment migration',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        Storage::disk('public')->put('legacy/iran-proof.txt', 'safe attachment');
+        $message = TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'body' => 'Private attachment',
+            'is_staff' => false,
+            'is_internal' => false,
+            'attachments' => [[
+                'name' => 'iran-proof.txt',
+                'path' => 'legacy/iran-proof.txt',
+                'disk' => 'public',
+                'mime' => 'text/plain',
+                'size' => 15,
+            ]],
+        ]);
+
+        Artisan::call('farast:secure-ticket-attachments', ['--limit' => 500]);
+
+        $attachment = $message->fresh()->attachments[0];
+        $managed = StorageManagedFile::findOrFail($attachment['managed_file_id']);
+        $this->assertSame($iran->id, $managed->storage_volume_id);
+        $this->assertSame('iran_primary', $managed->drive_key);
+        $this->assertSame(StorageManager::CRITICAL, $managed->classification);
+        $this->assertSame('storage_volume:'.$iran->id, $attachment['disk']);
+        $this->assertFalse(Storage::disk('public')->exists('legacy/iran-proof.txt'));
+    }
+
     public function test_unmanaged_public_attachment_fails_closed_before_migration(): void
     {
         Storage::fake('public');
@@ -200,4 +248,12 @@ class SecureTicketAttachmentsCommandTest extends TestCase
             ]))
             ->assertNotFound();
     }
+    protected function tearDown(): void
+    {
+        foreach (StorageVolume::query()->pluck('id') as $id) {
+            File::deleteDirectory(storage_path('app/storage-volumes/'.$id));
+        }
+        parent::tearDown();
+    }
+
 }

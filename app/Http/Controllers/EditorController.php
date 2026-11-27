@@ -234,7 +234,7 @@ class EditorController extends Controller
                 FarastStorageObject::class,
                 null,
                 null,
-                StorageManager::NON_CRITICAL
+                StorageManager::CRITICAL
             );
 
             $asset = FarastStorageObject::create([
