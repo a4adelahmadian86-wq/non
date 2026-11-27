@@ -201,9 +201,10 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             "sample_pages": [],
         }
         with patch.dict(os.environ, {
-            "GROQ_API_KEY": "test-groq-key",
-            "GROQ_ZDR_CONFIRMED": "true",
-        }, clear=False), patch("file_pipeline.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
+            "CLOUDFLARE_ACCOUNT_ID": "test-cloudflare-account",
+            "CLOUDFLARE_API_TOKEN": "test-cloudflare-token",
+            "CLOUDFLARE_VISION_MODEL": "@cf/moondream/moondream3.1-9B-A2B",
+        }, clear=False), patch("file_pipeline.analyze_image_with_cloudflare", new_callable=AsyncMock) as vision, patch(
             "file_pipeline.analyze_extracted_content", new_callable=AsyncMock, return_value=review
         ):
             vision.return_value = "روی تصویر شماره تماس 09121234567 درج شده است."
