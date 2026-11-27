@@ -162,4 +162,32 @@ class ProductSupervisorFailoverTest extends TestCase
         );
     }
 
+
+    public function test_primary_readiness_requires_a_provider_assisted_file_review_endpoint(): void
+    {
+        config([
+            'services.product_supervisor.url' => 'https://online-primary.example',
+            'services.product_supervisor.token' => 'primary-token',
+            'services.product_supervisor.fallback_url' => null,
+            'services.product_supervisor.fallback_token' => null,
+            'services.voice.local_only' => false,
+        ]);
+
+        Http::fake([
+            'https://online-primary.example/v1/ready' => Http::response([
+                'processing_mode' => 'provider_assisted',
+                'providers' => [
+                    'cloudflare_workers_ai' => ['ready_for_file_text' => true],
+                ],
+            ]),
+        ]);
+
+        $this->assertTrue(app(ProductSupervisorClient::class)->primaryReadyForAi());
+
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://online-primary.example/v1/ready'
+            && $request->hasHeader('Authorization', 'Bearer primary-token')
+        );
+    }
+
 }
