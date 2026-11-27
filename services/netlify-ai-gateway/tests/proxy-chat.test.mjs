@@ -93,6 +93,20 @@ test("rejects missing or incorrect incoming credentials without calling upstream
   assert.equal(called, false);
 });
 
+test("rejects reuse of the same secret for both gateway directions", async () => {
+  setReadyEnv();
+  process.env.FARAST_CLOUDFLARE_AI_GATEWAY_TOKEN = process.env.FARAST_NETLIFY_GATEWAY_TOKEN;
+  let called = false;
+  globalThis.fetch = async () => { called = true; return new Response("ok"); };
+
+  const response = await proxyChat(makeRequest("/v1/chat/completions", {
+    messages: [{ role: "user", content: "x" }],
+  }), "text");
+
+  assert.equal(response.status, 503);
+  assert.equal(called, false);
+});
+
 test("rejects arbitrary upstream fields and malformed messages", async () => {
   setReadyEnv();
   const arbitrary = await proxyChat(makeRequest("/v1/chat/completions", {
