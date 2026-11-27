@@ -5,7 +5,7 @@
 ## نقش در معماری
 
 - **اجرای داخل ایران:** روی Runflare رایگان به‌عنوان worker سبک برای استخراج متن، ساخت chunk، بررسی ساختار فایل و ارسال درخواست‌های مدل.
-- **مدل‌های قوی:** فقط از طریق FARAST AI Worker در Cloudflare Workers AI؛ خود Product Supervisor هیچ درخواست مستقیمی به `api.cloudflare.com`، Gemini یا Groq نمی‌فرستد.
+- **مدل‌های قوی:** مسیر پیش‌فرض فقط از طریق FARAST AI Worker در Cloudflare Workers AI است؛ خود Product Supervisor مستقیماً به `api.cloudflare.com` وصل نمی‌شود. fallback مستقیم Gemini برای metadata با `GEMINI_METADATA_FALLBACK_ENABLED=false` غیرفعال است و نباید بدون بررسی حریم خصوصی فعال شود.
 - **منبع حقیقت:** Laravel/MySQL موجود؛ فایل‌ها از StorageManager خوانده می‌شوند و chunkها، factها، وضعیت بررسی و گزارش‌ها در دیتابیس اصلی ذخیره می‌شوند.
 - **حافظه خصوصی:** هیچ پروفایل کاربر، استنباط رفتاری یا حافظهٔ خصوصی کاربر به این سرویس ارسال نمی‌شود.
 - **ذخیره‌سازی:** این کانتینر فایل یا دانش دائمی نگهداری نمی‌کند. فایل موقت پس از پردازش حذف می‌شود.
@@ -14,7 +14,8 @@
 
 | کار | مدل پشت Worker | مسیر |
 |---|---|---|
-| تحلیل متن و metadata | GPT-OSS 20B | `POST /v1/chat/completions` |
+| تحلیل متن فایل | GPT-OSS 20B | `POST /v1/chat/completions` |
+| بازبینی metadata محصول | GPT-OSS 120B | `POST /v1/chat/completions/review` |
 | تحلیل تصویر | Moondream 3.1 | `POST /v1/ai/run/vision` |
 | رونویسی صوت | Whisper Large V3 Turbo | `POST /v1/ai/run/audio` |
 
