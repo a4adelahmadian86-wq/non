@@ -632,6 +632,8 @@ async def health():
     return {
         "status": "ok",
         "service": "product-supervisor",
+        "offline_mode": _offline_mode_enabled(),
+        "processing_mode": "offline_structural_only" if _offline_mode_enabled() else "provider_assisted",
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
@@ -669,6 +671,8 @@ async def authenticated_readiness():
         "status": "ok",
         "service": "product-supervisor",
         "authenticated": True,
+        "offline_mode": _offline_mode_enabled(),
+        "processing_mode": "offline_structural_only" if _offline_mode_enabled() else "provider_assisted",
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
