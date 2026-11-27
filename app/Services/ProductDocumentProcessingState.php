@@ -18,9 +18,17 @@ class ProductDocumentProcessingState
         int $readerPageCount,
     ): array {
         $detectedType = (string) ($inspection['detected_type'] ?? '');
+        $textProviderStatus = $this->combinedProviderStatus($providers, ['cloudflare_text', 'groq_text']);
+        $visionProviderStatus = $this->combinedProviderStatus($providers, ['cloudflare_vision', 'groq_vision']);
+        $audioProviderStatus = $this->combinedProviderStatus($providers, ['cloudflare_transcription', 'groq_transcription']);
+
+        $audioReviewRequired = $detectedType === 'audio'
+            || $audioProviderStatus !== 'not_requested';
         $transcriptionKnown = array_key_exists('transcription_truncated', $inspection);
-        $transcriptionComplete = $detectedType !== 'audio'
-            || ($transcriptionKnown && ! (bool) $inspection['transcription_truncated']);
+        $transcriptionComplete = ! $audioReviewRequired
+            || ($audioProviderStatus === 'completed'
+                && $transcriptionKnown
+                && ! (bool) $inspection['transcription_truncated']);
         $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false)
             && $transcriptionComplete;
 
@@ -30,7 +38,7 @@ class ProductDocumentProcessingState
             ? (bool) $inspection['visual_inventory_complete']
             : (! in_array($detectedType, $imageCapableTypes, true)
                 && ! ($detectedType === 'audio' && ! $transcriptionKnown));
-        if ($detectedType === 'image' && ($providers['groq_vision'] ?? null) === 'completed') {
+        if ($detectedType === 'image' && $visionProviderStatus === 'completed') {
             $visualInventoryComplete = true;
         }
 
@@ -38,13 +46,13 @@ class ProductDocumentProcessingState
             || $detectedType === 'image';
         $visualReviewComplete = ! $visualReviewRequired
             || (
-                ($providers['groq_vision'] ?? null) === 'completed'
+                $visionProviderStatus === 'completed'
                 && $visualInventoryComplete
                 && ! (bool) ($inspection['visual_review_truncated'] ?? false)
             );
         $textReviewComplete = $expectedBatches > 0
             && $successfulBatches >= $expectedBatches
-            && ($providers['groq_text'] ?? null) === 'completed';
+            && $textProviderStatus === 'completed';
         $visualOnlyReviewComplete = $expectedBatches === 0
             && $visualReviewRequired
             && $visualReviewComplete
@@ -80,5 +88,24 @@ class ProductDocumentProcessingState
                 'status' => $status,
             ],
         ];
+    }
+
+    private function combinedProviderStatus(array $providers, array $keys): string
+    {
+        $statuses = [];
+        foreach ($keys as $key) {
+            $status = $providers[$key] ?? null;
+            if (is_string($status) && $status !== 'not_requested') {
+                $statuses[] = $status;
+            }
+        }
+
+        foreach (['completed', 'partial', 'unavailable', 'privacy_not_confirmed', 'not_configured'] as $candidate) {
+            if (in_array($candidate, $statuses, true)) {
+                return $candidate;
+            }
+        }
+
+        return 'not_requested';
     }
 }
