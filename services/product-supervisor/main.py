@@ -206,6 +206,7 @@ async def review_product_file(
         groq_provider_ready,
     )
 
+    offline_mode = _offline_mode_enabled()
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     await file.close()
     if len(data) > MAX_UPLOAD_BYTES:
@@ -271,7 +272,8 @@ async def review_product_file(
         inspection.embedded_image_count = max(1, inspection.embedded_image_count)
 
     vision_provider = (
-        "cloudflare" if cloudflare_provider_ready("vision")
+        None if offline_mode
+        else "cloudflare" if cloudflare_provider_ready("vision")
         else "groq" if groq_provider_ready()
         else None
     )
@@ -302,6 +304,8 @@ async def review_product_file(
                         visual_parts.append(f"{label}: {report}")
                         successful_images += 1
                 except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in {401, 403}:
+                        raise HTTPException(status_code=503, detail="AI provider access is restricted or unavailable; retry through fallback") from None
                     if vision_provider == "cloudflare" and exc.response.status_code == 429:
                         raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
                     if vision_provider == "cloudflare" and exc.response.status_code >= 500:
@@ -324,9 +328,14 @@ async def review_product_file(
                 provider_status[status_key] = "unavailable"
                 warnings.append("تصاویر فایل به‌طور کامل بررسی نشدند.")
         else:
-            provider_status["cloudflare_vision"] = "not_configured"
-            provider_status["groq_vision"] = "not_configured"
-            warnings.append("سرویس بینایی امن تنظیم نشده است؛ هیچ تصویر محصولی برای تحلیل ارسال نشد.")
+            if offline_mode:
+                provider_status["cloudflare_vision"] = "disabled_offline"
+                provider_status["groq_vision"] = "disabled_offline"
+                warnings.append("حالت آفلاین فعال است؛ تصاویر استخراج شدند اما تحلیل معنایی تصویر به زمان اتصال بین‌الملل موکول شد.")
+            else:
+                provider_status["cloudflare_vision"] = "not_configured"
+                provider_status["groq_vision"] = "not_configured"
+                warnings.append("سرویس بینایی امن تنظیم نشده است؛ هیچ تصویر محصولی برای تحلیل ارسال نشد.")
 
     if not inspection.visual_inventory_complete:
         warnings.append("فهرست‌برداری از تصاویر جاسازی‌شده کامل نشد؛ تولید محتوای هوشمند تا بررسی کامل غیرفعال می‌ماند.")
@@ -334,7 +343,8 @@ async def review_product_file(
         warnings.append("تعداد یا قالب تصاویر از سقف بررسی کامل بیشتر است؛ سند به‌عنوان بررسی‌نشده علامت می‌خورد.")
 
     audio_provider = (
-        "cloudflare" if cloudflare_provider_ready("audio")
+        None if offline_mode
+        else "cloudflare" if cloudflare_provider_ready("audio")
         else "groq" if groq_provider_ready()
         else None
     )
@@ -351,6 +361,8 @@ async def review_product_file(
                     warnings.append("رونویسی صوت از سقف استخراج عبور کرده و ناقص است؛ تولید محتوا غیرفعال می‌ماند.")
                 provider_status[f"{audio_provider}_transcription"] = "partial" if transcription_truncated else "completed"
             except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in {401, 403}:
+                    raise HTTPException(status_code=503, detail="AI provider access is restricted or unavailable; retry through fallback") from None
                 if audio_provider == "cloudflare" and exc.response.status_code == 429:
                     raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
                 if audio_provider == "cloudflare" and exc.response.status_code >= 500:
@@ -361,9 +373,14 @@ async def review_product_file(
                 provider_status[f"{audio_provider}_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
         else:
-            provider_status["cloudflare_transcription"] = "not_configured"
-            provider_status["groq_transcription"] = "not_configured"
-            warnings.append("سرویس رونویسی امن تنظیم نشده است؛ هیچ صوتی برای پردازش ارسال نشد.")
+            if offline_mode:
+                provider_status["cloudflare_transcription"] = "disabled_offline"
+                provider_status["groq_transcription"] = "disabled_offline"
+                warnings.append("حالت آفلاین فعال است؛ صوت نگهداری شد اما رونویسی به زمان اتصال بین‌الملل موکول شد.")
+            else:
+                provider_status["cloudflare_transcription"] = "not_configured"
+                provider_status["groq_transcription"] = "not_configured"
+                warnings.append("سرویس رونویسی امن تنظیم نشده است؛ هیچ صوتی برای پردازش ارسال نشد.")
 
     combined_extracted = "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
     if len(combined_extracted) > MAX_EXTRACTED_CHARS:
@@ -372,7 +389,7 @@ async def review_product_file(
         combined_extracted = combined_extracted[:MAX_EXTRACTED_CHARS]
     extracted, redaction_count = redact_sensitive_content(combined_extracted)
     model_review: dict[str, Any] = {}
-    if extracted.strip() and (cloudflare_provider_ready("text") or groq_provider_ready()):
+    if not offline_mode and extracted.strip() and (cloudflare_provider_ready("text") or groq_provider_ready()):
         try:
             model_review = await analyze_extracted_content(
                 extracted,
@@ -396,6 +413,8 @@ async def review_product_file(
             elif analysis_status not in {"completed", "partial"}:
                 warnings.append("تحلیل متنی فایل کامل نشد؛ نتیجه برای تأیید نهایی قابل استفاده نیست.")
         except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {401, 403}:
+                raise HTTPException(status_code=503, detail="AI provider access is restricted or unavailable; retry through fallback") from None
             if exc.response.status_code == 429:
                 raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
             if exc.response.status_code >= 500:
@@ -406,12 +425,17 @@ async def review_product_file(
             provider_status["cloudflare_text"] = "unavailable"
             warnings.append("تحلیل محتوای فایل توسط مدل امن انجام نشد.")
     elif extracted.strip():
-        provider_status["cloudflare_text"] = "not_configured"
-        provider_status["groq_text"] = "not_configured"
-        if os.getenv("GROQ_API_KEY", "").strip() and not groq_provider_ready():
-            warnings.append("Groq به دلیل تأیید نشدن Zero Data Retention استفاده نشد؛ هیچ متن فایلی به مدل ارسال نشد.")
+        if offline_mode:
+            provider_status["cloudflare_text"] = "disabled_offline"
+            provider_status["groq_text"] = "disabled_offline"
+            warnings.append("حالت آفلاین فعال است؛ متن استخراج و نگهداری شد اما تحلیل معنایی به زمان اتصال بین‌الملل موکول شد.")
         else:
-            warnings.append("مدل تحلیل متن امن تنظیم نشده است؛ هیچ متن فایلی به مدل ارسال نشد.")
+            provider_status["cloudflare_text"] = "not_configured"
+            provider_status["groq_text"] = "not_configured"
+            if os.getenv("GROQ_API_KEY", "").strip() and not groq_provider_ready():
+                warnings.append("Groq به دلیل تأیید نشدن Zero Data Retention استفاده نشد؛ هیچ متن فایلی به مدل ارسال نشد.")
+            else:
+                warnings.append("مدل تحلیل متن امن تنظیم نشده است؛ هیچ متن فایلی به مدل ارسال نشد.")
     else:
         warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
 
@@ -567,6 +591,7 @@ async def review_product_file(
         "sample_page_numbers": sample_page_numbers,
         "sample_pdf_base64": sample_pdf_base64,
         "provider_status": provider_status,
+        "processing_mode": "offline_structural_only" if offline_mode else "provider_assisted",
         "summary": safe_summary[:700],
         "findings": safe_findings,
         "facts": safe_facts[:100],
@@ -576,6 +601,10 @@ async def review_product_file(
         "publication_authorized": False,
         "automated_publication": False,
     }
+
+
+def _offline_mode_enabled() -> bool:
+    return os.getenv("SUPERVISOR_OFFLINE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _groq_zdr_is_confirmed() -> bool:
@@ -744,6 +773,26 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
 
 @app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
 async def review_product(snapshot: ProductSnapshot):
+    if _offline_mode_enabled():
+        return ReviewResponse(
+            review_id=str(uuid.uuid4()),
+            product_id=snapshot.product_id,
+            verdict="needs_changes",
+            score=0,
+            summary="حالت آفلاین فعال است؛ بررسی معنایی محصول انجام نشد و نتیجه باید پس از بازگشت اتصال توسط مدل یا بازبین انسانی تکمیل شود.",
+            findings=[
+                Finding(
+                    area="general",
+                    severity="warning",
+                    title="بررسی معنایی به تعویق افتاد",
+                    detail="در این گره فقط بررسی ساختاری و قواعد قطعی قابل انجام است؛ هیچ تأیید هوشمندی صادر نشده است.",
+                    recommendation="پس از بازگشت اتصال، محصول را دوباره برای بررسی کامل ارسال کنید.",
+                )
+            ],
+            model="offline-structural-only",
+            generated_at=datetime.now(timezone.utc).isoformat(),
+        )
+
     use_cloudflare = cloudflare_provider_ready("text")
     api_key = os.getenv("GEMINI_API_KEY", "").strip() if _gemini_api_key_is_configured() else ""
     if not use_cloudflare and not api_key:
