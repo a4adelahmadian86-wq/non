@@ -1245,7 +1245,7 @@ async def ocr_image_with_cloudflare(image_bytes: bytes, mime: str, page_number: 
     return str(result.get("answer") or "").strip()[:12000]
 
 
-async def transcribe_audio_with_cloudflare(data: bytes, filename: str) -> tuple[str, bool]:
+async def transcribe_audio_with_cloudflare(data: bytes, filename: str, language: str = "fa") -> tuple[str, bool]:
     if not cloudflare_provider_ready("audio"):
         return "", False
     if len(data) > 25 * 1024 * 1024:
@@ -1254,7 +1254,7 @@ async def transcribe_audio_with_cloudflare(data: bytes, filename: str) -> tuple[
         "audio",
         {
             "audio": base64.b64encode(data).decode("ascii"),
-            "language": "fa",
+            "language": language if language in {"fa", "en", "ar"} else "fa",
             "task": "transcribe",
         },
         timeout_seconds=120,
