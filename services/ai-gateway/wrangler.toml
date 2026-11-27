@@ -4,7 +4,9 @@ compatibility_date = "2026-11-27"
 workers_dev = true
 
 [vars]
-CF_MODEL = "@cf/openai/gpt-oss-20b"
+CF_TEXT_MODEL = "@cf/openai/gpt-oss-20b"
+CF_VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B"
+CF_AUDIO_MODEL = "@cf/openai/whisper-large-v3-turbo"
 
 [secrets]
 required = ["FARAST_AI_GATEWAY_TOKEN", "CF_API_TOKEN", "CF_ACCOUNT_ID"]
