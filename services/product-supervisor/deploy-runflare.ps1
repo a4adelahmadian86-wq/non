@@ -13,6 +13,11 @@ if (-not (Get-Command runflare -ErrorAction SilentlyContinue)) {
 Write-Host "Deploying FARAST Product Supervisor from: $PSScriptRoot"
 Write-Host "This service is stateless. Do not attach a persistent disk or store product data here."
 Write-Host "If the three-month service was deleted, first create a new project and Docker service in the Runflare dashboard; the CLI cannot create them. Then select that project/service when prompted."
+Write-Host "Clearing any cached service selection to avoid deploying to the gateway service."
+runflare reset
+if ($LASTEXITCODE -ne 0) {
+    throw "Runflare selection reset failed. Check CLI output and retry."
+}
 runflare deploy
 if ($LASTEXITCODE -ne 0) {
     throw "Runflare deploy failed. Check CLI output and Runflare service logs."
