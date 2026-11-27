@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import json
@@ -89,6 +90,28 @@ async def authenticate(authorization: str | None = Header(default=None)) -> None
     supplied = authorization.removeprefix("Bearer ").strip() if authorization else ""
     if not expected or not supplied or not hmac.compare_digest(expected, supplied):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+file_review_semaphore = asyncio.Semaphore(1)
+
+
+@app.middleware("http")
+async def limit_file_review_concurrency(request: Request, call_next):
+    if request.method == "POST" and request.url.path == "/v1/reviews/files":
+        try:
+            await asyncio.wait_for(file_review_semaphore.acquire(), timeout=0.05)
+        except asyncio.TimeoutError:
+            from starlette.responses import JSONResponse
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "File review capacity is busy; retry later."},
+                headers={"Retry-After": "30"},
+            )
+        try:
+            return await call_next(request)
+        finally:
+            file_review_semaphore.release()
+    return await call_next(request)
 
 
 @app.middleware("http")
