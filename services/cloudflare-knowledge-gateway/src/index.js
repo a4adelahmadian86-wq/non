@@ -359,7 +359,7 @@ async function deleteKnowledge(request, env) {
   const productId = validIdentifier(body.product_id);
   const documentId = validIdentifier(body.document_id);
   const knowledgeType = String(body.knowledge_type || "");
-  if (!productId || !documentId || !KNOWLEDGE_TYPES.has(knowledgeType)) {
+  if (!productId || !documentId || !ALLOWED_KNOWLEDGE_TYPES.has(knowledgeType)) {
     throw new RequestError(400, "invalid_delete_scope");
   }
 
