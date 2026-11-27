@@ -44,8 +44,7 @@ const INSTANCE_CONFIG = {
   max_num_results: 10,
   score_threshold: 0.22,
   custom_metadata: CUSTOM_METADATA,
-  cache: true,
-  cache_ttl: 86400,
+  cache: false,
   reranking: false,
   rewrite_query: false,
 };
@@ -272,7 +271,7 @@ async function searchKnowledge(request, env) {
         filters,
         return_on_failure: true,
       },
-      cache: { enabled: true, cache_threshold: "close_enough" },
+      cache: { enabled: false },
     },
   });
 
