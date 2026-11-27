@@ -51,12 +51,7 @@ function upstreamHeaders(env, contentType = "application/json") {
         Authorization: `Bearer ${env.CF_API_TOKEN}`,
         "Content-Type": contentType,
         Accept: "application/json",
-        "cf-aig-collect-log": "false",
-        "cf-aig-collect-log-payload": "false",
     };
-    if (env.CF_AI_GATEWAY_ID) {
-        headers["cf-aig-gateway-id"] = String(env.CF_AI_GATEWAY_ID);
-    }
     return headers;
 }
 
