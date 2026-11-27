@@ -390,7 +390,7 @@ async function deleteKnowledge(request, env) {
     }
   }
 
-  return { status: "deleted", product_id: productId, document_id: documentId, knowledge_type: knowledgeType, deleted };
+  return { status: "deleted", product_id: productId, document_id: documentId, knowledge_type: knowledgeType, key, matched: matches.length, deleted };
 }
 
 async function stats(env) {
