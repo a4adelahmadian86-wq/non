@@ -271,10 +271,10 @@ async def review_product_file(
         }]
         inspection.embedded_image_count = max(1, inspection.embedded_image_count)
 
+    # Vision stays on the selected Cloudflare model. Do not silently route
+    # customer images to Groq's Qwen vision model as a fallback.
     vision_provider = (
-        None if offline_mode
-        else "cloudflare" if cloudflare_provider_ready("vision")
-        else "groq" if groq_provider_ready()
+        "cloudflare" if not offline_mode and cloudflare_provider_ready("vision")
         else None
     )
     if inspection.embedded_image_count > 0:
