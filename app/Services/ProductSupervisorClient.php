@@ -6,6 +6,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class ProductSupervisorClient
 {
@@ -43,7 +44,7 @@ class ProductSupervisorClient
 
             return data_get($payload, 'providers.cloudflare_workers_ai.ready_for_file_text') === true
                 || data_get($payload, 'providers.groq.ready_for_file_review') === true;
-        } catch (\\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }
