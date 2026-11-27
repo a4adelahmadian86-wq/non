@@ -145,6 +145,8 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertIn("تصویر شامل", result)
         request = FakeAsyncClient.calls[-1]
         self.assertIn("/ai/run/@cf/moondream/moondream3.1-9B-A2B", request["url"])
+        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
+        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
         self.assertTrue(request["json"]["image"].startswith("data:image/jpeg;base64,"))
         self.assertEqual(request["json"]["task"], "query")
 
@@ -159,6 +161,8 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertFalse(truncated)
         request = FakeAsyncClient.calls[-1]
         self.assertIn("/ai/run/@cf/openai/whisper-large-v3-turbo", request["url"])
+        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
+        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
         self.assertEqual(request["json"]["audio"], base64.b64encode(audio).decode("ascii"))
         self.assertNotIn("private-original-name", json.dumps(request["json"]))
 
