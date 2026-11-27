@@ -18,6 +18,36 @@ class ProductSupervisorClient
         return $this->endpoints() !== [];
     }
 
+    public function primaryReadyForAi(): bool
+    {
+        try {
+            $endpoint = $this->endpoints()[0] ?? null;
+            if (! $endpoint) {
+                return false;
+            }
+
+            $response = Http::acceptJson()
+                ->withToken($endpoint['token'])
+                ->connectTimeout(4)
+                ->timeout(8)
+                ->get($endpoint['url'].'/v1/ready');
+
+            if (! $response->successful()) {
+                return false;
+            }
+
+            $payload = $response->json();
+            if (! is_array($payload) || data_get($payload, 'processing_mode') !== 'provider_assisted') {
+                return false;
+            }
+
+            return data_get($payload, 'providers.cloudflare_workers_ai.ready_for_file_text') === true
+                || data_get($payload, 'providers.groq.ready_for_file_review') === true;
+        } catch (\\Throwable) {
+            return false;
+        }
+    }
+
     public function review(array $snapshot): array
     {
         $endpoints = $this->endpoints();
