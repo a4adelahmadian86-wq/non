@@ -23,6 +23,8 @@ services:
         value: default
       - key: CLOUDFLARE_TEXT_MODEL
         value: "@cf/openai/gpt-oss-20b"
+      - key: CLOUDFLARE_PRODUCT_MODEL
+        value: "@cf/openai/gpt-oss-120b"
       - key: CLOUDFLARE_VISION_MODEL
         value: "@cf/moondream/moondream3.1-9B-A2B"
       - key: CLOUDFLARE_AUDIO_MODEL
