@@ -24,13 +24,15 @@
 6. `FARAST_VOICE_TOKEN` باید با مقدار متناظر در سرویس Voice-typing یکسان باشد. کلیدهای Gemini، Groq، Kavenegar و سرویس‌های کمکی نیز فقط در محیط سرور تنظیم شوند.
 7. SMTP را با `MAIL_HOST`، `MAIL_PORT`، `MAIL_USERNAME`، `MAIL_PASSWORD` و `MAIL_ENCRYPTION` پیکربندی کنید؛ بدون این مقادیر ارسال ایمیل Production را تأییدشده تلقی نکنید.
 
-### مسیر پشتیبان داخلی هوش مصنوعی
+### مسیر پشتیبان رایگان هوش مصنوعی
 
-- مقادیر `FARAST_AI_GATEWAY_FALLBACK_URL` و `FARAST_AI_GATEWAY_FALLBACK_TOKEN` فقط پس از استقرار یک Gateway سازگار با API چت و دارای HTTPS تنظیم شوند. این نشانی باید از سرور Laravel قابل دسترسی باشد؛ در حالت `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` فقط نشانی خصوصی/محلی پذیرفته می‌شود.
-- مقادیر `FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL` و `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN` به یک سرویس جداگانه نیاز دارند که APIهای `/v1/reviews/products` و `/v1/reviews/files` را پیاده‌سازی کند.
-- تنظیم URL پشتیبان به‌تنهایی مدل محلی ایجاد نمی‌کند. نسخه فعلی `services/product-supervisor` برای بازبینی فراداده از Gemini و برای تحلیل متن/تصویر/صوت از Groq با شرط ZDR استفاده می‌کند؛ بنابراین استقرار همان کد بدون تغییر و بدون کلیدهای ارائه‌دهنده، تحلیل کاملاً آفلاین محسوب نمی‌شود.
-- Gateway فعلی `voice-stream/local-ai-gateway` فقط API گفت‌وگوی سازگار با Ollama را ارائه می‌کند و به‌تنهایی جایگزین Product Supervisor نیست.
-- هیچ‌یک از این URLها یا Tokenها را در Git ثبت نکنید. ابتدا سرویس داخلی، مدل، احراز هویت، DNS خصوصی و گواهی TLS را جداگانه آماده و آزمایش کنید؛ سپس مقادیر را در Environment میزبان Laravel وارد و Cache تنظیمات را بازسازی کنید.
+- برای استفاده از Cloudflare Workers AI، مقدار `FARAST_AI_GATEWAY_FALLBACK_URL` را به شکل `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai` تنظیم کنید؛ شناسه حساب واقعی را جایگزین کنید.
+- مقدار `FARAST_AI_GATEWAY_FALLBACK_MODEL` را `@cf/openai/gpt-oss-20b` و مقدار `FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID` را `default` قرار دهید.
+- توکن Cloudflare باید فقط مجوزهای `AI Gateway Read`، `AI Gateway Edit` و `Workers AI Read` را داشته باشد. برای درخواست‌های گفت‌وگو، برنامه شناسه Gateway را می‌فرستد و ثبت لاگ و محتوای درخواست را غیرفعال می‌کند. مجوز R2 لازم نیست.
+- در حالت `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` نشانی عمومی Cloudflare عمداً رد می‌شود تا حالت فقط-محلی به سرویس ابری نشت نکند.
+- مقادیر `FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL` و `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN` به یک سرویس جداگانه نیاز دارند که APIهای `/v1/reviews/products` و `/v1/reviews/files` را پیاده‌سازی کند. نامزد رایگان فعلی Back4App است؛ تا استقرار و آزمایش واقعی، URL آن را در Production ثبت نکنید.
+- سرویس Product Supervisor از Cloudflare Workers AI برای GPT-OSS 20B، Moondream و Whisper استفاده می‌کند؛ سهمیه رایگان Workers AI محدود و روزانه است. در پاسخ محدودیت، صف Laravel باید کار را برای تلاش بعدی نگه دارد.
+- هیچ URL یا Token واقعی را در Git ثبت نکنید. توکن‌ها فقط در Environment میزبان مربوط به خودشان نگهداری شوند.
 
 ## ساخت و انتشار برنامه
 
