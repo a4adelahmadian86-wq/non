@@ -13,6 +13,7 @@ import httpx
 
 DEFAULT_MODELS = {
     "text": "@cf/openai/gpt-oss-20b",
+    "review": "@cf/openai/gpt-oss-120b",
     "vision": "@cf/moondream/moondream3.1-9B-A2B",
     "audio": "@cf/openai/whisper-large-v3-turbo",
 }
@@ -51,11 +52,14 @@ def cloudflare_auth_headers(*, include_gateway: bool = False) -> dict[str, str]:
     }
 
 
-def cloudflare_chat_completions_url() -> str:
+def cloudflare_chat_completions_url(task: str = "text") -> str:
+    if task not in {"text", "review"}:
+        raise ValueError("unsupported_cloudflare_chat_task")
     base = ai_gateway_url()
     if not base:
         raise RuntimeError("farast_ai_gateway_url_not_configured")
-    return f"{base}/v1/chat/completions"
+    suffix = "/review" if task == "review" else ""
+    return f"{base}/v1/chat/completions{suffix}"
 
 
 def cloudflare_run_url(task: str) -> str:
@@ -74,12 +78,13 @@ async def cloudflare_chat_completion(
     max_tokens: int = 1800,
     temperature: float = 0.1,
     timeout_seconds: float = 90,
+    task: str = "text",
 ) -> str:
-    if not cloudflare_provider_ready("text"):
+    if not cloudflare_provider_ready(task):
         raise RuntimeError("farast_ai_gateway_not_configured")
 
     payload: dict[str, Any] = {
-        "model": cloudflare_model("text"),
+        "model": cloudflare_model(task),
         "messages": messages,
         "max_tokens": max(1, min(int(max_tokens), 8192)),
         "temperature": max(0.0, min(float(temperature), 1.0)),
@@ -91,7 +96,7 @@ async def cloudflare_chat_completion(
     timeout = httpx.Timeout(timeout_seconds, connect=8.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
-            cloudflare_chat_completions_url(),
+            cloudflare_chat_completions_url(task),
             headers=cloudflare_auth_headers(),
             json=payload,
         )
