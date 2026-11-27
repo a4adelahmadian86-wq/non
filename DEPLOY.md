@@ -28,7 +28,7 @@
 
 - برای استفاده از Cloudflare Workers AI، مقدار `FARAST_AI_GATEWAY_FALLBACK_URL` را به شکل `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai` تنظیم کنید؛ شناسه حساب واقعی را جایگزین کنید.
 - مقدار `FARAST_AI_GATEWAY_FALLBACK_MODEL` را `@cf/openai/gpt-oss-20b` و مقدار `FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID` را `default` قرار دهید.
-- توکن Cloudflare باید فقط مجوزهای `AI Gateway Read`، `AI Gateway Edit` و `Workers AI Read` را داشته باشد. برای درخواست‌های گفت‌وگو، برنامه شناسه Gateway را می‌فرستد و ثبت لاگ و محتوای درخواست را غیرفعال می‌کند. مجوز R2 لازم نیست.
+- توکن Cloudflare باید فقط مجوزهای `AI Gateway Read`، `AI Gateway Edit` و `Workers AI Read` را داشته باشد. برای درخواست‌های گفت‌وگو، برنامه شناسه Gateway را می‌فرستد و ثبت لاگ و محتوای درخواست را غیرفعال می‌کند. مجوز R2 لازم نیست. برای Laravel و سرویس Product Supervisor دو توکن جداگانه بسازید و آن‌ها را در محیط همان سرویس نگه دارید.
 - در حالت `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` نشانی عمومی Cloudflare عمداً رد می‌شود تا حالت فقط-محلی به سرویس ابری نشت نکند.
 - مقادیر `FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL` و `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN` به یک سرویس جداگانه نیاز دارند که APIهای `/v1/reviews/products` و `/v1/reviews/files` را پیاده‌سازی کند. نامزد رایگان فعلی Back4App است؛ تا استقرار و آزمایش واقعی، URL آن را در Production ثبت نکنید.
 - سرویس Product Supervisor از Cloudflare Workers AI برای GPT-OSS 20B، Moondream و Whisper استفاده می‌کند؛ سهمیه رایگان Workers AI محدود و روزانه است. در پاسخ محدودیت، صف Laravel باید کار را برای تلاش بعدی نگه دارد.
