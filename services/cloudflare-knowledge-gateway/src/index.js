@@ -351,6 +351,33 @@ async function getItemStatus(itemId, env) {
   return await instance.items.get(itemId).info();
 }
 
+async function deleteKnowledge(request, env) {
+  if (!isAuthorized(request, env.FARAST_KB_LARAVEL_TOKEN)) {
+    throw new RequestError(403, "laravel_token_required");
+  }
+
+  const body = await readJson(request, 16_384);
+  const productId = validIdentifier(body.product_id);
+  const documentId = validIdentifier(body.document_id);
+  const knowledgeType = String(body.knowledge_type || "");
+  if (!productId || !documentId || !KNOWLEDGE_TYPES.has(knowledgeType)) {
+    throw new RequestError(400, "invalid_delete_scope");
+  }
+
+  const key = itemKey(productId, knowledgeType, documentId);
+  const instance = await ensureInstance(env);
+  const listed = await instance.items.list({ search: key, per_page: 50 });
+  const matches = (listed.result || []).filter((item) => item.key === key);
+  let deleted = 0;
+
+  for (const item of matches) {
+    await instance.items.delete(item.id);
+    deleted += 1;
+  }
+
+  return { status: "deleted", product_id: productId, document_id: documentId, knowledge_type: knowledgeType, deleted };
+}
+
 async function deleteItem(request, env) {
   const body = await readJson(request, 16_384);
   const itemId = String(body.item_id || "");
@@ -418,7 +445,7 @@ export async function handleRequest(request, env) {
     }
 
     if (request.method === "POST" && path === "/v1/knowledge/delete") {
-      return jsonResponse(await deleteItem(request, env));
+      return jsonResponse(await deleteKnowledge(request, env));
     }
 
     if (request.method === "GET" && path === "/v1/knowledge/stats") {
