@@ -395,7 +395,9 @@ class SupportTicketService
                     (int) $file->getSize(),
                     'support',
                     Ticket::class,
-                    (int) $ticket->id
+                    (int) $ticket->id,
+                    null,
+                    StorageManager::CRITICAL
                 );
             } catch (\Throwable $exception) {
                 if ($temporaryPath !== '') {
