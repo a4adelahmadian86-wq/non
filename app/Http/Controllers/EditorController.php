@@ -403,7 +403,7 @@ class EditorController extends Controller
         $ocrJobId = null;
         if (\Illuminate\Schema\Schema::hasTable('farast_ocr_jobs')) {
             $ocrJobId = DB::table('farast_ocr_jobs')->insertGetId([
-                'user_id' => auth()->id(), 'provider' => 'gemini', 'status' => 'processing',
+                'user_id' => auth()->id(), 'provider' => 'farast-ai-gateway', 'status' => 'processing',
                 'source_path' => $data['path'], 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
@@ -423,7 +423,7 @@ class EditorController extends Controller
         }
 
         $commerce->commit($ocrReservation, [
-            'cost_metadata'=>['provider'=>$result['engine'] ?? 'gemini','input_bytes'=>strlen($bytes)],
+            'cost_metadata'=>['provider'=>$result['engine'] ?? 'farast-ai-gateway','input_bytes'=>strlen($bytes)],
             'metadata'=>['page_count'=>(int)($result['page_count'] ?? 1),'rejected'=>(bool)($result['rejected'] ?? false),'interaction_id'=>$result['_ai_interaction_id'] ?? null],
         ]);
 
