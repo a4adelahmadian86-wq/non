@@ -89,7 +89,7 @@ class RetryIncompleteProductDocuments extends Command
 
                 $previousStatus = $locked->processing_status;
                 $locked->update([
-                    'processing_status' => 'pending',
+                    'processing_status' => 'processing',
                     'failure_code' => null,
                 ]);
 
