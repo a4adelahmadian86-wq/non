@@ -195,6 +195,9 @@ test("product knowledge upsert attaches public metadata and replaces old copies 
       knowledge_type: "product_document",
       visibility: "public",
       language: "fa",
+      access_scope: "public_sample_only",
+      review_status: "approved",
+      product_status: "published",
       content: "# دانش محصول\n\nاین محتوا تأیید شده است.",
     },
   }), env);
@@ -214,6 +217,47 @@ test("product knowledge upsert attaches public metadata and replaces old copies 
   assert.deepEqual(state.deleted, ["old-item"]);
 });
 
+test("paid full-document content cannot enter the public knowledge index", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "paid-doc-1",
+      knowledge_type: "product_document",
+      visibility: "public",
+      language: "fa",
+      access_scope: "purchased_full_document",
+      review_status: "approved",
+      product_status: "published",
+      content: "محتوای کامل پولی",
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "only_public_sample_documents_can_be_indexed");
+});
+
+test("product metadata must be approved and published before indexing", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "metadata-1",
+      knowledge_type: "product_metadata",
+      visibility: "public",
+      language: "fa",
+      review_status: "pending",
+      product_status: "published",
+      content: "توضیحات محصول",
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "product_metadata_requires_approved_publication");
+});
+
 test("approved experiences cannot be indexed before reviewer approval", async () => {
   const { env } = makeEnvironment();
   const response = await handleRequest(request("/v1/knowledge/upsert", {
@@ -230,6 +274,27 @@ test("approved experiences cannot be indexed before reviewer approval", async ()
   }), env);
   assert.equal(response.status, 403);
   assert.equal((await response.json()).error, "experience_requires_approval");
+});
+
+test("approved experiences must be anonymized and pass a privacy review", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "experience-2",
+      knowledge_type: "approved_experience",
+      visibility: "public",
+      language: "fa",
+      approval_status: "approved",
+      privacy_review_status: "approved",
+      anonymized: false,
+      content: "تجربه با اطلاعات هویتی",
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "experience_requires_privacy_review");
 });
 
 test("private profile and behavior fields are rejected before indexing", async () => {
