@@ -5,6 +5,7 @@ workers_dev = true
 
 [vars]
 CF_TEXT_MODEL = "@cf/openai/gpt-oss-20b"
+CF_REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 CF_VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B"
 CF_AUDIO_MODEL = "@cf/openai/whisper-large-v3-turbo"
 
