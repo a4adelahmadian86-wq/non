@@ -162,6 +162,18 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertEqual(request["json"]["audio"], base64.b64encode(audio).decode("ascii"))
         self.assertNotIn("private-original-name", json.dumps(request["json"]))
 
+    def test_file_analysis_propagates_cloudflare_rate_limit_for_laravel_queue_retry(self):
+        FakeAsyncClient.response_factory = lambda url, headers, payload: FakeResponse(
+            {"success": False, "errors": [{"message": "rate limited"}]},
+            status_code=429,
+            url=url,
+        )
+        with self.assertRaises(httpx.HTTPStatusError):
+            asyncio.run(file_pipeline.analyze_extracted_content(
+                "این متن باید پس از بازنشانی سهمیه دوباره بررسی شود.",
+                {"detected_file_type": "text"},
+            ))
+
     def test_cloudflare_rate_limit_is_not_hidden_as_a_success(self):
         FakeAsyncClient.response_factory = lambda url, headers, payload: FakeResponse(
             {"success": False, "errors": [{"message": "rate limited"}]},
