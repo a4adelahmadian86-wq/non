@@ -38,7 +38,7 @@ The service is stateless. Uploaded files are inspected in request-scoped tempora
 The repository already contains `render.yaml` with the `farast-product-supervisor` service. Reuse that definition; do not create another supervisor implementation.
 
 The Render Free web service is the current no-card external-host candidate:
-- 512 MiB RAM and 750 free instance hours per workspace per calendar month.
+- 0.1 CPU, 512 MiB RAM and 750 free instance hours per workspace per calendar month.
 - Free web services sleep after 15 minutes without traffic and wake on the next request; cold start can take about a minute.
 - Free services have no persistent disk and are not covered by a production SLA. This is acceptable only because the supervisor is stateless and Laravel keeps the durable jobs and source data.
 - Render's official first-deploy guide says no payment is required. The free tier is a best-effort endpoint, not an uptime guarantee.
