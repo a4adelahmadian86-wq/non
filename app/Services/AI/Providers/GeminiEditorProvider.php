@@ -63,9 +63,9 @@ class GeminiEditorProvider implements AiProvider
         }
 
         $gatewayFailure = null;
-        foreach ($gatewayTargets as $gatewayTarget) {
+        foreach ($gatewayTargets as $index => $gatewayTarget) {
             try {
-                return $this->executeViaGateway(
+                $result = $this->executeViaGateway(
                     $gatewayTarget['url'],
                     $gatewayTarget['token'],
                     $operation,
@@ -73,6 +73,9 @@ class GeminiEditorProvider implements AiProvider
                     $requestId,
                     $gatewayTarget['model']
                 );
+                $result['fallback_used'] = $index > 0;
+
+                return $result;
             } catch (\Throwable $exception) {
                 $gatewayFailure = $exception;
             }
