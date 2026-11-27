@@ -15,6 +15,18 @@ This is a stateless, server-side gateway for the existing Laravel AI-provider co
 
 Cloudflare Workers Free has request and CPU limits. Workers AI currently includes 10,000 Neurons per day at no charge; exceeding the daily allocation causes further inference requests to fail until reset. This is a bounded API path, not unlimited inference or a production SLA. Laravel's existing queue must retain work after 429/5xx responses and retry later.
 
+## One-click GitHub deployment
+
+The repository includes a manual workflow: **Actions → deploy-farast-ai-gateway → Run workflow**. Before using it, add these repository secrets in GitHub Settings → Secrets and variables → Actions:
+
+- `CLOUDFLARE_API_TOKEN`: token with permission to create/deploy the Worker.
+- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID.
+- `CF_API_TOKEN`: token with Account → Workers AI → Read permission.
+- `CF_ACCOUNT_ID`: the same Cloudflare account ID for the upstream AI request.
+- `FARAST_AI_GATEWAY_TOKEN`: a long random secret shared with the Laravel host.
+
+The workflow runs tests first, writes the secrets to an ephemeral runner file (never to the repository or logs), deploys the Worker, and deletes that temporary file. It runs only when manually started; it does not deploy on every push.
+
 ## Configure and deploy
 
 Install Node.js 22+ and the Wrangler CLI. From this directory:
