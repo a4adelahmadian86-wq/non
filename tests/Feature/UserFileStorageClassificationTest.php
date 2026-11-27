@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Http\\Controllers\\UserFileController;
-use App\\Models\\User;
-use App\\Models\\UserFile;
-use App\\Services\\CapabilityService;
-use App\\Services\\PricingService;
-use App\\Services\\Storage\\StorageManager;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Http\\Request;
-use Illuminate\\Http\\UploadedFile;
+use App\Http\Controllers\UserFileController;
+use App\Models\User;
+use App\Models\UserFile;
+use App\Services\CapabilityService;
+use App\Services\PricingService;
+use App\Services\Storage\StorageManager;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Mockery;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class UserFileStorageClassificationTest extends TestCase
 {
