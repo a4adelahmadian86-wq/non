@@ -7,7 +7,15 @@ globalThis.crypto ??= webcrypto;
 
 function makeEnvironment(options = {}) {
   const state = {
-    config: null,
+    config: options.mismatch ? {
+      custom_metadata: [
+        { field_name: "product_id", data_type: "text" },
+        { field_name: "document_id", data_type: "text" },
+        { field_name: "knowledge_type", data_type: "text" },
+        { field_name: "visibility", data_type: "text" },
+        { field_name: "language", data_type: "text" },
+      ],
+    } : null,
     items: [],
     deleted: [],
     lastSearch: null,
