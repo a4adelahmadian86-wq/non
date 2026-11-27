@@ -165,6 +165,7 @@ test("setup creates a hybrid multilingual instance with five privacy-scoped meta
   assert.equal(state.config.index_method.keyword, true);
   assert.equal(state.config.indexing_options.keyword_tokenizer, "trigram");
   assert.equal(state.config.custom_metadata.length, 5);
+  assert.equal(state.config.cache, false);
   assert.equal(state.config.ai_search_model, undefined);
 });
 
@@ -277,6 +278,7 @@ test("semantic search always filters public knowledge and scopes to the requeste
   const body = await response.json();
   assert.equal(body.chunks.length, 1);
   assert.equal(body.chunks[0].metadata.product_id, "42");
+  assert.equal(state.lastSearch.ai_search_options.cache.enabled, false);
   assert.equal(state.lastSearch.ai_search_options.retrieval.filters.visibility, "public");
   assert.equal(state.lastSearch.ai_search_options.retrieval.filters.product_id, "42");
   assert.deepEqual(
