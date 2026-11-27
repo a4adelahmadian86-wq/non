@@ -112,7 +112,7 @@ function hasPrivateFields(value) {
     const normalizedKey = key
       .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
       .toLowerCase()
-      .replace(/[\\s-]+/g, "_");
+      .replace(/[\s-]+/g, "_");
     return PRIVATE_FIELD_NAMES.has(normalizedKey)
       || (child && typeof child === "object" && hasPrivateFields(child));
   });
