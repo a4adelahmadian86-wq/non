@@ -14,6 +14,7 @@ return [
         'fallback_url' => env('FARAST_AI_GATEWAY_FALLBACK_URL', ''),
         'fallback_token' => env('FARAST_AI_GATEWAY_FALLBACK_TOKEN', ''),
         'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', 'farast-general'),
+        'fallback_gateway_id' => env('FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID', 'default'),
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
