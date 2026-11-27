@@ -735,7 +735,8 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
 @app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
 async def review_product(snapshot: ProductSnapshot):
     use_cloudflare = cloudflare_provider_ready("text")
-    api_key = os.getenv("GEMINI_API_KEY", "").strip() if _gemini_api_key_is_configured() else ""
+    gemini_fallback_enabled = os.getenv("GEMINI_METADATA_FALLBACK_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    api_key = os.getenv("GEMINI_API_KEY", "").strip() if gemini_fallback_enabled and _gemini_api_key_is_configured() else ""
     if not use_cloudflare and not api_key:
         raise HTTPException(status_code=503, detail="Supervisor provider is not configured")
 
