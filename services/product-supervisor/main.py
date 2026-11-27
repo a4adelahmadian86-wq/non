@@ -807,6 +807,7 @@ async def review_product(snapshot: ProductSnapshot):
                 max_tokens=2200,
                 temperature=0.15,
                 timeout_seconds=60,
+                task="review",
             )
             result = json.loads(raw)
         else:
