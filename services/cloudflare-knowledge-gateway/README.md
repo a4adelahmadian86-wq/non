@@ -35,7 +35,7 @@ Allowed knowledge types are `product_document`, `product_metadata` and `approved
 - `product_metadata` requires `review_status=approved` and `product_status=published`.
 - `approved_experience` requires `approval_status=approved`, `privacy_review_status=approved` and `anonymized=true`.
 
-No `user_id`, email, phone, profile, behavior, personality, audience-profile or private-memory fields are accepted at the request's top level. The gateway also rejects obvious email addresses and Iranian mobile numbers in public experience text. This is only a secondary safeguard: the Laravel indexer must still anonymize and sanitize experience content before sending it, because the gateway cannot reliably identify names or every form of personal data.
+No `user_id`, email, phone, profile, behavior, personality, audience-profile or private-memory fields are accepted anywhere in the request, including nested objects and camelCase variants. The gateway also rejects obvious email addresses and Iranian mobile numbers in public experience text. This is only a secondary safeguard: the Laravel indexer must still anonymize and sanitize experience content before sending it, because the gateway cannot reliably identify names or every form of personal data.
 
 ## API
 
