@@ -74,6 +74,27 @@ class ProductSupervisorFailoverTest extends TestCase
         );
     }
 
+    public function test_product_review_falls_back_when_primary_endpoint_forbids_access(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'forbidden'], 403),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'forbidden-fallback-review',
+                'product_id' => '42',
+                'verdict' => 'needs_changes',
+                'score' => 70,
+                'findings' => [],
+            ]),
+        ]);
+
+        $result = app(ProductSupervisorClient::class)->review(['product_id' => '42']);
+
+        $this->assertSame('forbidden-fallback-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/products'
+        );
+    }
+
     public function test_file_review_rewinds_stream_and_falls_back_after_primary_server_error(): void
     {
         Http::fake([
@@ -108,4 +129,86 @@ class ProductSupervisorFailoverTest extends TestCase
             && $request->hasHeader('Authorization', 'Bearer domestic-secret')
         );
     }
+
+    public function test_product_review_falls_back_to_domestic_node_after_primary_rate_limit(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'rate limited'], 429),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'rate-limit-fallback-review',
+                'product_id' => '42',
+                'verdict' => 'needs_changes',
+                'score' => 70,
+                'findings' => [],
+            ]),
+        ]);
+
+        $result = app(ProductSupervisorClient::class)->review(['product_id' => '42']);
+
+        $this->assertSame('rate-limit-fallback-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/products'
+        );
+    }
+
+    public function test_file_review_falls_back_to_domestic_node_after_primary_rate_limit(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'rate limited'], 429),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'rate-limit-fallback-file-review',
+                'product_id' => '42',
+                'inspection' => ['detected_type' => 'text'],
+                'security_gate' => 'manual_scan_required',
+            ]),
+        ]);
+
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, 'complete-document-payload');
+        rewind($stream);
+
+        try {
+            $result = app(ProductSupervisorClient::class)->reviewFile(
+                $stream,
+                'document.txt',
+                ['product_id' => '42']
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $this->assertSame('rate-limit-fallback-file-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/files'
+        );
+    }
+
+
+    public function test_primary_readiness_requires_a_provider_assisted_file_review_endpoint(): void
+    {
+        config([
+            'services.product_supervisor.url' => 'https://online-primary.example',
+            'services.product_supervisor.token' => 'primary-token',
+            'services.product_supervisor.fallback_url' => null,
+            'services.product_supervisor.fallback_token' => null,
+            'services.voice.local_only' => false,
+        ]);
+
+        Http::fake([
+            'https://online-primary.example/v1/ready' => Http::response([
+                'processing_mode' => 'provider_assisted',
+                'providers' => [
+                    'cloudflare_workers_ai' => ['ready_for_file_text' => true],
+                ],
+            ]),
+        ]);
+
+        $this->assertTrue(app(ProductSupervisorClient::class)->primaryReadyForAi());
+
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://online-primary.example/v1/ready'
+            && $request->hasHeader('Authorization', 'Bearer primary-token')
+        );
+    }
+
 }

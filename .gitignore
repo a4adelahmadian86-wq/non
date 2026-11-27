@@ -21,3 +21,4 @@ voice-stream/.env.runtime
 voice-stream/.env.ai-runtime
 voice-stream/.env
 voice-stream/local-ai-gateway/node_modules/
+services/product-supervisor/runflare.env

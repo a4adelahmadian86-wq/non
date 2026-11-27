@@ -97,16 +97,53 @@ class ProductKnowledgeService
 
             $review = (array) data_get($document->structure_json, 'ai_review', []);
             $completeness = (array) data_get($document->structure_json, 'completeness', []);
+            $inspection = (array) data_get($document->structure_json, 'inspection', []);
+            $providers = (array) data_get($review, 'provider_status', []);
+            $detectedType = (string) ($inspection['detected_type'] ?? $document->detected_type ?? '');
+            $expectedBatches = (int) ($completeness['analysis_batch_count'] ?? $review['analysis_batch_count'] ?? 0);
+            $successfulBatches = (int) ($completeness['successful_analysis_batches'] ?? $review['successful_analysis_batches'] ?? 0);
+            $visionReviewCompleted = in_array(
+                'completed',
+                [$providers['cloudflare_vision'] ?? null, $providers['groq_vision'] ?? null],
+                true
+            );
+            $imageCapableTypes = ['pdf', 'docx', 'pptx', 'xlsx'];
+            $inventoryKnown = array_key_exists('visual_inventory_complete', $inspection);
+            $visualInventoryComplete = $inventoryKnown
+                ? (bool) $inspection['visual_inventory_complete']
+                : (! in_array($detectedType, $imageCapableTypes, true)
+                    && ! ($detectedType === 'audio' && ! array_key_exists('transcription_truncated', $inspection)));
+            if ($detectedType === 'image' && $visionReviewCompleted) {
+                $visualInventoryComplete = true;
+            }
+            $visualReviewRequired = (int) ($inspection['embedded_image_count'] ?? 0) > 0
+                || $detectedType === 'image';
+            $visualReviewComplete = ! $visualReviewRequired
+                || ($visionReviewCompleted
+                    && $visualInventoryComplete
+                    && ! (bool) ($inspection['visual_review_truncated'] ?? false));
+            $textReviewComplete = $expectedBatches > 0
+                && $successfulBatches >= $expectedBatches
+                && in_array(
+                    'completed',
+                    [$providers['cloudflare_text'] ?? null, $providers['groq_text'] ?? null, $providers['gemini'] ?? null],
+                    true
+                )
+                && (bool) ($completeness['analysis_batches_complete'] ?? false);
+            $visualOnlyReviewComplete = $expectedBatches === 0
+                && $visualReviewRequired
+                && $visualReviewComplete
+                && (int) ($inspection['extracted_characters'] ?? 0) === 0;
+            $semanticReviewComplete = $visualInventoryComplete
+                && (($textReviewComplete && $visualReviewComplete) || $visualOnlyReviewComplete);
+
             $sources[] = [
                 'source_file_id' => (int) $file->id,
                 'source_sha256' => (string) $document->source_sha256,
                 'original_name' => (string) $file->original_name,
                 'source_type' => (string) ($document->detected_type ?: $file->mime),
                 'processing_status' => (string) $document->processing_status,
-                'semantic_review_complete' => (
-                    data_get($review, 'provider_status.groq_text') === 'completed'
-                    || data_get($review, 'provider_status.gemini') === 'completed'
-                ) && (bool) ($completeness['analysis_batches_complete'] ?? false),
+                'semantic_review_complete' => $semanticReviewComplete,
                 'extraction_complete' => (bool) ($completeness['extraction_complete'] ?? false),
                 'analysis_batch_count' => (int) ($completeness['analysis_batch_count'] ?? data_get($review, 'analysis_batch_count', 0)),
                 'successful_analysis_batches' => (int) ($completeness['successful_analysis_batches'] ?? data_get($review, 'successful_analysis_batches', 0)),
@@ -249,7 +286,12 @@ class ProductKnowledgeService
                 ? (bool) $inspection['visual_inventory_complete']
                 : (! in_array($detectedType, $imageCapableTypes, true)
                     && ! ($detectedType === 'audio' && ! $transcriptionKnown));
-            if ($detectedType === 'image' && ($providers['groq_vision'] ?? null) === 'completed') {
+            $visionReviewCompleted = in_array(
+                'completed',
+                [$providers['cloudflare_vision'] ?? null, $providers['groq_vision'] ?? null],
+                true
+            );
+            if ($detectedType === 'image' && $visionReviewCompleted) {
                 $visualInventoryComplete = true;
             }
 
@@ -257,13 +299,17 @@ class ProductKnowledgeService
                 || $detectedType === 'image';
             $visualReviewComplete = ! $visualReviewRequired
                 || (
-                    ($providers['groq_vision'] ?? null) === 'completed'
+                    $visionReviewCompleted
                     && $visualInventoryComplete
                     && ! (bool) ($inspection['visual_review_truncated'] ?? false)
                 );
             $textReviewComplete = $expected > 0
                 && $successful >= $expected
-                && ($providers['groq_text'] ?? null) === 'completed'
+                && in_array(
+                    'completed',
+                    [$providers['cloudflare_text'] ?? null, $providers['groq_text'] ?? null, $providers['gemini'] ?? null],
+                    true
+                )
                 && (bool) ($completeness['analysis_batches_complete'] ?? false);
             $visualOnlyReviewComplete = $expected === 0
                 && $visualReviewRequired

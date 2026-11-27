@@ -6,15 +6,15 @@ An isolated, stateless product-quality review service. It is separate from the e
 
 | Task | Primary free provider | Data sent |
 |---|---|---|
-| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 20B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
+| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 120B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
 | Extracted file text and content quality | Cloudflare Workers AI GPT-OSS 20B | Redacted extracted text in bounded batches |
 | Product image understanding | Cloudflare Workers AI Moondream 3.1 | Resized image plus redacted product context |
 | Audio transcription | Cloudflare Workers AI Whisper Large V3 Turbo | Extracted audio bytes; no original filename |
 | Optional product-metadata fallback | Gemini | Used only when Cloudflare Workers AI is not configured; never receives raw file text or original files |
-| Optional file-review fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; otherwise no file data is sent to Groq |
+| Optional text/audio fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; image analysis is not routed to Groq |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
+Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-120b` for compact final product metadata review, `@cf/openai/gpt-oss-20b` for bulk file-text analysis, `@cf/moondream/moondream3.1-9B-A2B` for images and `@cf/openai/whisper-large-v3-turbo` for audio. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account). GPT-OSS 120B uses more neurons, so it is reserved for the short final metadata review; GPT-OSS 20B handles bulk document text. When the allowance is exhausted, the primary endpoint returns a retryable rate-limit response; Laravel may use the domestic offline node for extraction only, then the scheduled recovery command requeues the full AI review after the primary provider is ready. No automatic paid-provider fallback is performed after a Cloudflare error.
 
 The service never sends private user profiles, behavioral observations or account memory to these provider calls. Product metadata and product-file content are separate from those user records. Cloudflare Workers AI inference is not used to train models and is processed under Cloudflare's Workers AI data-handling policy. The later AI Search index is a separate persistent knowledge store; only verified product knowledge and explicitly approved, sanitized experiences may be indexed there.
 
@@ -33,29 +33,75 @@ The service never sends private user profiles, behavioral observations or accoun
 
 The service is stateless. Uploaded files are inspected in request-scoped temporary storage and removed after processing; no product files or customer data are kept on the container filesystem. The Laravel queue remains the durable source of truth and retries when this worker is unavailable.
 
-A Dockerfile is provided for a no-card free-container pilot on Back4App:
+### External primary endpoint: existing Render Blueprint
 
-- Published free limits: 0.25 vCPU, 256 MiB RAM and 100 GB outbound transfer.
-- The free tier is intended for testing and learning, not a production SLA.
-- CI builds the image and has successfully inspected a synthetic 24 MiB text upload with Docker constrained to 256 MiB RAM and 0.25 vCPU.
-- This test does not prove every file format will fit those limits. The service's existing 25 MiB upload ceiling remains; 2 GiB processing is not claimed or enabled.
-- File-review requests are serialized to reduce memory spikes. A busy worker returns HTTP 429 so Laravel can retry instead of losing the job.
+The repository already contains `render.yaml` with the `farast-product-supervisor` service. Reuse that definition; do not create another supervisor implementation.
 
-### Back4App pilot deployment
+The Render Free web service is the current no-card external-host candidate:
+- 0.1 CPU, 512 MiB RAM and 750 free instance hours per workspace per calendar month.
+- Free web services sleep after 15 minutes without traffic and wake on the next request; cold start can take about a minute.
+- Free services have no persistent disk and are not covered by a production SLA. This is acceptable only because the supervisor is stateless and Laravel keeps the durable jobs and source data.
+- Render's official first-deploy guide says no payment is required. The free tier is a best-effort endpoint, not an uptime guarantee.
 
-1. Create a Back4App Containers application and connect the public repository `a4adelahmadian86-wq/non`.
-2. Select the `main` branch, set the application directory/build context to `services/product-supervisor`, and use its `Dockerfile`.
-3. Expose port `8000`. Do not attach a persistent disk; this service must remain stateless.
-4. Add secrets only in the Back4App environment settings:
-   - `SUPERVISOR_API_TOKEN`: a new, dedicated random secret.
-   - `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: preferred inference provider. Create a dedicated API token for this worker with AI Gateway Read, AI Gateway Edit and Workers AI Read permissions. Use the default gateway ID `default` unless a dedicated gateway is created. No R2 permissions are needed. Create a separate token for the Laravel site's assistant/editor; do not reuse this worker token. All model requests explicitly disable AI Gateway request and payload logging.
-   - `CLOUDFLARE_TEXT_MODEL`, `CLOUDFLARE_VISION_MODEL` and `CLOUDFLARE_AUDIO_MODEL`: optional model overrides; the defaults in `.env.example` are the tested model identifiers.
-   - `GEMINI_API_KEY`: optional product-metadata fallback, used only when Cloudflare is not configured.
-   - `GROQ_API_KEY`: optional fallback; file text, image and audio review stay disabled unless account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true` is explicitly set.
-5. Deploy and verify `/health`, then verify authenticated `/v1/ready`.
-6. In the Laravel hosting environment, set `FARAST_PRODUCT_SUPERVISOR_URL` to the Back4App HTTPS service URL and `FARAST_PRODUCT_SUPERVISOR_TOKEN` to the exact dedicated token. Rebuild Laravel's configuration cache through the hosting provider's supported workflow.
+The existing `render.yaml` configures Cloudflare Workers AI as the preferred inference provider and keeps automatic deployment disabled. Configure secrets in the Render dashboard only:
+- `SUPERVISOR_API_TOKEN`: generated by the Blueprint; copy it into Laravel's primary supervisor token setting.
+- `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: dedicated Workers AI token for this service; no R2 permissions are needed.
+- `GEMINI_API_KEY`: optional metadata-only fallback.
+- `GROQ_API_KEY`: optional file fallback only if account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`.
 
-Do not change the site's existing production endpoint until the Back4App deployment has passed the live health/readiness checks and a real test product has completed successfully. No service is deployed by this repository change.
+The model identifiers and gateway ID are set in `render.yaml`; do not put credentials in Git. After deploying, verify `/health` and authenticated `/v1/ready`, then run a test product and a test file before configuring the Production primary URL.
+
+Back4App Containers is not selected for a persistent endpoint: Back4App's own September 2026 engineering guide says the free URL expires 60 minutes after deployment. Northflank and Koyeb are excluded because their current official signup/billing guidance requires a valid payment method. Hugging Face's free CPU hardware does not permit creating a Docker/Gradio compute Space on a free plan.
+
+Sources:
+- https://render.com/docs/your-first-deploy
+- https://render.com/docs/free
+- https://render.com/changelog/free-web-services-now-remain-active-while-receiving-websocket-messages
+- https://www.back4app.com/blog/deploy-node-app-dockerfile-back4app
+- https://northflank.com/pricing
+- https://www.koyeb.com/docs/faqs/pricing
+- https://huggingface.co/docs/hub/spaces-overview
+
+### Queue recovery after offline processing
+
+When the domestic Runflare node returns `processing_mode=offline_structural_only`, Laravel saves the extracted content and marks the document as `extracted` or `partial`, not semantically complete. The existing queue is not allowed to call this a successful AI review.
+
+The scheduled `farast:retry-offline-product-documents` command checks only due offline documents. It probes the primary endpoint's authenticated `/v1/ready` and re-dispatches the existing `ProcessProductDocument` job only when a provider-assisted primary is ready. If the primary is still unavailable or the free quota is exhausted, the document remains recoverable and receives another six-hour retry delay. No second queue or second document pipeline is created.
+
+## Domestic Runflare fallback
+
+The same Docker image can run as a temporary domestic fallback node. It is not a VPN, proxy, tunnel, or data store. Runflare's free tier is limited to three months, has no backup, and is explicitly unsuitable for production-critical data. Runflare's terms prohibit VPN/proxy/tunneling workloads.
+
+For the Runflare instance, set only:
+- `SUPERVISOR_API_TOKEN`: a new, dedicated random token, different from the primary node.
+- `SUPERVISOR_OFFLINE_MODE=true`.
+
+Do not configure Cloudflare, Gemini or Groq credentials on this node. Offline mode deliberately skips all external model calls:
+- file reviews perform bounded local file inspection and text extraction, return content chunks and warnings, and never authorize publication;
+- product metadata reviews return `needs_changes` with an explicit manual-review warning, never an AI approval;
+- after international connectivity returns, Laravel's existing queue can retry the full review through the primary endpoint.
+
+The Laravel `ProductSupervisorClient` now fails over to the next configured endpoint on connection errors, HTTP 408/425/429 and 5xx responses. The primary service maps upstream provider 401/403 access restrictions to 503 so the client can try the next endpoint. It does not fail over on ordinary validation errors such as 400/413/422.
+
+### Runflare setup and renewal
+
+1. Create a free project in the Iran cluster and one Docker service using the existing `services/product-supervisor/Dockerfile`.
+2. Connect the existing public GitHub repository through Runflare's GitHub OAuth app; select branch `main`, directory/build context `services/product-supervisor`, and enable auto-pull.
+3. Set the two environment variables above in Runflare's service settings. Do not attach a database or persistent volume.
+4. Verify public `/health` reports `offline_mode: true` and authenticated `/v1/ready` reports `processing_mode: offline_structural_only`.
+5. Set the new URL and its separate token as Laravel's Product Supervisor fallback endpoint only after the health/readiness test.
+
+When the free service expires and is deleted, run `runflare-recreate.cmd` from Windows CMD. It opens the Runflare portal, creates a private local `runflare.env` from the example if needed, copies its contents to the clipboard without printing the token, and then invokes `runflare deploy`. In the portal, create a new Docker item, paste the copied values into Environment Variables → Bulk Edit, save, and return to the CMD window.
+ 
+Keep `runflare.env` private; it is ignored by Git. Its `SUPERVISOR_API_TOKEN` must match Laravel's `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN`. For an already-existing Docker item, use the simpler `runflare-deploy.cmd`.
+ 
+Runflare's documented CLI deploy command targets an existing project and Docker item; it does not create the new item automatically. The portal creation step cannot be removed without an officially supported project-creation API. No data recovery is needed from Runflare because it stores no source-of-truth data.
+
+Official Runflare documentation:
+- https://runflare.com/free-cloud-hosting/
+- https://docs.runflare.com/docker/docker-create-app/
+- https://docs.runflare.com/docker/deploy-github/
+- https://docs.runflare.com/docker/deploy-cli/
 
 ## Provider secrets
 

@@ -89,7 +89,7 @@ class ProductContentGenerationTest extends TestCase
                     'successful_analysis_batches' => 1,
                 ],
                 'ai_review' => [
-                    'provider_status' => ['groq_text' => 'completed'],
+                    'provider_status' => ['cloudflare_text' => 'completed'],
                     'analysis_batch_count' => 1,
                     'successful_analysis_batches' => 1,
                     'summary' => 'این فایل شامل راهنمای نصب و استفاده از محصول است.',
@@ -220,6 +220,51 @@ class ProductContentGenerationTest extends TestCase
         $this->assertSame($data['fact']->id, $result['sources'][1]['facts'][0]['id']);
         $this->assertNotEmpty($result['sources'][1]['file_name']);
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
+    }
+
+    public function test_cloudflare_vision_completes_image_only_product_knowledge(): void
+    {
+        $data = $this->productWithKnowledge();
+        $data['file']->update([
+            'mime' => 'image/jpeg',
+            'original_name' => 'cover.jpg',
+        ]);
+
+        $structure = (array) $data['document']->structure_json;
+        $structure['inspection'] = [
+            'detected_type' => 'image',
+            'extracted_characters' => 0,
+            'extraction_truncated' => false,
+            'transcription_truncated' => false,
+            'embedded_image_count' => 0,
+            'visual_inventory_complete' => true,
+            'visual_review_truncated' => false,
+        ];
+        $structure['completeness'] = [
+            'extraction_complete' => true,
+            'analysis_batches_complete' => true,
+            'analysis_batch_count' => 0,
+            'successful_analysis_batches' => 0,
+        ];
+        $structure['ai_review'] = [
+            'provider_status' => ['cloudflare_vision' => 'completed'],
+            'analysis_batch_count' => 0,
+            'successful_analysis_batches' => 0,
+            'summary' => 'تصویر جلد محصول بررسی شده است.',
+            'findings' => [],
+        ];
+        $data['document']->update([
+            'detected_type' => 'image',
+            'processing_status' => 'completed',
+            'page_count' => 1,
+            'word_count' => 0,
+            'character_count' => 0,
+            'structure_json' => $structure,
+        ]);
+
+        $readiness = app(ProductContentGenerationService::class)->readiness($data['product']->fresh());
+
+        $this->assertSame('available', $readiness['status']);
     }
 
     public function test_generation_rejects_required_fields_without_field_level_evidence(): void
