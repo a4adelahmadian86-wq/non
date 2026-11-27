@@ -1,11 +1,11 @@
 <?php
 
-namespace Tests\\Unit;
+namespace Tests\Unit;
 
-use App\\Services\\AI\\Providers\\GeminiEditorProvider;
-use Illuminate\\Support\\Facades\\Http;
+use App\Services\AI\Providers\GeminiEditorProvider;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class GeminiEditorProviderRuntimeTest extends TestCase
 {
