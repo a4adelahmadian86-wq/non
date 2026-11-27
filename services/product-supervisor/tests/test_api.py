@@ -391,6 +391,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-120b")
         self.assertEqual(response.json()["verdict"], "approved")
         cloudflare_review.assert_awaited_once()
+        self.assertEqual(cloudflare_review.await_args.kwargs["task"], "review")
 
 
     def test_direct_gemini_metadata_fallback_is_disabled_even_when_a_key_exists(self):
