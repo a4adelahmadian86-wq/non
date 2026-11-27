@@ -398,6 +398,7 @@ test("Laravel can revoke an indexed public document by its stable key", async ()
   }), env);
   assert.equal(uploaded.status, 202);
   assert.equal(state.items.length, 1);
+  assert.equal(state.items[0].key, "products/42/product_document/sample-1.md");
 
   const deleted = await handleRequest(request("/v1/knowledge/delete", {
     method: "POST",
@@ -410,6 +411,7 @@ test("Laravel can revoke an indexed public document by its stable key", async ()
   }), env);
   const deletedPayload = await deleted.json();
   assert.equal(deleted.status, 200, JSON.stringify(deletedPayload));
+  assert.equal(deletedPayload.matched, 1);
   assert.equal(deletedPayload.deleted, 1);
   assert.equal(state.items.length, 0);
 });
