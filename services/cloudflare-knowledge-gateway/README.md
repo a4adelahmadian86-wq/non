@@ -16,7 +16,7 @@ The Laravel database remains the source of truth. AI Search is a rebuildable ret
 
 Cloudflare AI Search's free allowance is limited: 10 GB-month storage, 5 million ingestion tokens per month, 1,000 semantic queries per month and 1,000 full-text queries per month. These are not unlimited quotas. The application must keep its MySQL keyword/full-text retrieval as a fallback and must not assume paid overage is available.
 
-The index uses multilingual `@cf/baai/bge-m3` embeddings, hybrid vector + keyword retrieval, and a trigram keyword tokenizer for Persian text. It stores only sanitized knowledge text, not original product files.
+The index uses multilingual `@cf/baai/bge-m3` embeddings, hybrid vector + keyword retrieval, and a trigram keyword tokenizer for Persian text. Query caching is disabled so user questions are not persisted as cache entries. It stores only sanitized knowledge text, not original product files.
 
 ## Index design
 
