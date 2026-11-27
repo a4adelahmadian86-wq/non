@@ -33,7 +33,7 @@ class ProductSupervisorClient
                     ->timeout((int) config('services.product_supervisor.timeout', 40))
                     ->post($endpoint['url'].'/v1/reviews/products', $snapshot);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -100,7 +100,7 @@ class ProductSupervisorClient
 
                 $response = $request->post($endpoint['url'].'/v1/reviews/files', $metadata);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -127,6 +127,17 @@ class ProductSupervisorClient
         }
 
         throw new RuntimeException('product_supervisor_unavailable');
+    }
+
+    /**
+     * Retry on transient capacity/network gateway responses using the next
+     * explicitly configured endpoint. Authentication and validation errors
+     * must remain visible instead of being hidden by a second service.
+     */
+    private function shouldFailover($response): bool
+    {
+        return $response->serverError()
+            || in_array($response->status(), [408, 425, 429], true);
     }
 
     private function isPrivateServiceUrl(string $url): bool
