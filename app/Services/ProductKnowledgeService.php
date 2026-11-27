@@ -307,7 +307,7 @@ class ProductKnowledgeService
                 && $successful >= $expected
                 && in_array(
                     'completed',
-                    [$providers['cloudflare_text'] ?? null, $providers['groq_text'] ?? null],
+                    [$providers['cloudflare_text'] ?? null, $providers['groq_text'] ?? null, $providers['gemini'] ?? null],
                     true
                 )
                 && (bool) ($completeness['analysis_batches_complete'] ?? false);
