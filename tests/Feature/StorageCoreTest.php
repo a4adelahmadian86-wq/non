@@ -49,6 +49,43 @@ class StorageCoreTest extends TestCase
         $this->assertSame('iran-only', app(StorageManager::class)->get($stored['disk'], $stored['path']));
     }
 
+    public function test_adopting_an_existing_private_file_defaults_to_iran_primary(): void
+    {
+        $foreign = StorageVolume::create([
+            'drive_key' => 'foreign_primary', 'name' => 'Foreign', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $iran = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 100,
+        ]);
+
+        Storage::fake('private');
+        Storage::disk('private')->put('legacy/private-ticket.txt', 'private-data');
+
+        $stored = app(StorageManager::class)->adoptExistingPrivate(
+            'legacy/private-ticket.txt',
+            'private-ticket.txt',
+            'text/plain',
+            12,
+            'support',
+            Ticket::class,
+            123
+        );
+
+        $this->assertSame($iran->id, $stored['volume_id']);
+        $this->assertNotSame($foreign->id, $stored['volume_id']);
+        $this->assertSame('private-data', app(StorageManager::class)->get($stored['disk'], $stored['path']));
+        $this->assertDatabaseHas('storage_managed_files', [
+            'id' => $stored['managed_file_id'],
+            'classification' => StorageManager::CRITICAL,
+            'visibility' => 'private',
+            'drive_key' => 'iran_primary',
+        ]);
+    }
+
     public function test_non_critical_uploads_use_foreign_volume(): void
     {
         $foreign = StorageVolume::create([
