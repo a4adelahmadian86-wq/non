@@ -4,8 +4,9 @@ This is a small, stateless Cloudflare Worker that exposes a private API for the 
 
 ## Responsibilities
 
-- Index sanitized, public product-document knowledge and product metadata.
-- Index user experiences only when the caller explicitly marks them as reviewer-approved.
+- Index only published, reviewer-approved product metadata.
+- Index only reviewer-approved public sample pages; full paid/purchased document content is never indexed here and remains behind Laravel purchase authorization.
+- Index user experiences only when they are reviewer-approved, privacy-reviewed and anonymized.
 - Search by Persian/English query, with strict metadata filters for product, language, visibility and knowledge type.
 - Report item indexing status and index statistics.
 - Keep private user profiles, behavior/personality observations, account identifiers and private memories out of the public knowledge index.
@@ -59,7 +60,7 @@ All routes except `GET /health` require `Authorization: Bearer <service-token>`.
 }
 ```
 
-For `approved_experience`, the caller must also send `"approval_status": "approved"`. The Worker computes SHA-256 itself and returns the checksum and queued item ID. Content is limited to 1 MiB per request; current FARAST extracted-text limits are well below this.
+For `product_document`, the caller must send `"access_scope": "public_sample_only"`, `"review_status": "approved"` and `"product_status": "published"`; paid full-document content is rejected. For `product_metadata`, the caller must send approved review and published status. For `approved_experience`, the caller must also send `"approval_status": "approved"`, `"privacy_review_status": "approved"` and `"anonymized": true`. The Worker computes SHA-256 itself and returns the checksum and queued item ID. Content is limited to 1 MiB per request; current FARAST extracted-text limits are well below this.
 
 ### Search request
 
