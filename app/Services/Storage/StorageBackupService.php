@@ -179,7 +179,7 @@ class StorageBackupService
                 ]);
                 $target->refresh();
                 $pruned++;
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 // A retention cleanup failure must never invalidate the newly verified backup.
                 report($exception);
             }
@@ -383,7 +383,7 @@ class StorageBackupService
                 if (! $file->volume) continue;
                 $temporary = $work.'/managed-'.$file->id;
                 $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
-                $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
+                $safeKey = str_replace(['..', '\'], '_', $file->file_key);
                 $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
                 $this->addEncryptedFile($zip, $temporary, $entry, $entries);
                 $managedCount++;
@@ -409,7 +409,7 @@ class StorageBackupService
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if ($file->isLink() || ! $file->isFile()) continue;
-            $relative = ltrim(str_replace('\\', '/', substr($file->getPathname(), strlen($directory))), '/');
+            $relative = ltrim(str_replace('\', '/', substr($file->getPathname(), strlen($directory))), '/');
             $this->addEncryptedFile($zip, $file->getPathname(), $prefix.'/'.$relative, $entries);
         }
     }
