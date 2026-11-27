@@ -124,7 +124,7 @@ final class ProviderConnectionHealth
 
     private function prefix(string $provider): string
     {
-        if (! in_array($provider, ['gemini', 'groq'], true)) {
+        if (! in_array($provider, ['gemini', 'groq', 'farast-ai-gateway'], true)) {
             throw new \InvalidArgumentException('provider_health_not_supported');
         }
 
