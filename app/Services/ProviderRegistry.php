@@ -65,40 +65,47 @@ final class ProviderRegistry
         }
 
         foreach ($this->ai->capabilities() as $name => $capabilities) {
-            $key = $name === 'gemini'
-                ? trim((string) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key', '')))
-                : '';
-            $model = $name === 'gemini'
-                ? trim((string) (SiteSetting::read('gemini_model') ?: config('services.gemini.model', 'gemini-3.8-flash')))
-                : '';
-            $health = $name === 'gemini'
-                ? $this->connectionHealth->state('gemini', $key, $model, ['text'])
-                : [
-                    'configured' => false,
-                    'connection_verified' => false,
-                    'api_reachable' => false,
-                    'ready' => false,
-                    'status' => 'unavailable',
-                    'last_success_at' => null,
-                    'last_failure_at' => null,
-                    'capabilities' => [],
-                ];
+            if ($name !== 'farast-ai-gateway') {
+                continue;
+            }
+
+            $url = rtrim(trim((string) (SiteSetting::read('ai_gateway_url') ?: config('services.ai_gateway.url', ''))), '/');
+            $key = trim((string) (SiteSetting::read('ai_gateway_token') ?: config('services.ai_gateway.token', '')));
+            $model = '@cf/openai/gpt-oss-20b';
+            $health = $this->connectionHealth->state(
+                'farast-ai-gateway',
+                $key,
+                $model,
+                ['text' => true, 'review' => true, 'vision' => true, 'audio' => true]
+            );
+
+            $configured = $url !== '' && $key !== '';
+            if (! $configured) {
+                $health['configured'] = false;
+                $health['connection_verified'] = false;
+                $health['api_reachable'] = false;
+                $health['ready'] = false;
+                $health['status'] = 'unavailable';
+            }
 
             $items[] = [
-                'id' => 'ai:'.$name,
-                'name' => $name,
-                'provider' => $name,
+                'id' => 'ai:farast-ai-gateway',
+                'name' => 'FARAST AI Gateway',
+                'provider' => 'farast-ai-gateway',
                 'type' => 'ai',
-                'model' => $model ?: null,
-                'capabilities' => array_values(array_unique(array_merge(['ai.text'], array_keys((array) $capabilities)))),
+                'model' => $model,
+                'capabilities' => ['ai.text', 'ai.review', 'ai.vision', 'ai.audio', 'ai.structured_output'],
                 'priority' => 0,
                 'status' => $health['status'],
                 'connection_verified' => $health['connection_verified'],
                 'api_reachable' => $health['api_reachable'],
                 'ready' => $health['ready'],
-                'capability_readiness' => $name === 'gemini'
-                    ? ['text' => (bool) ($health['capabilities']['text'] ?? false)]
-                    : [],
+                'capability_readiness' => [
+                    'ai.text' => (bool) ($health['capabilities']['text'] ?? false),
+                    'ai.review' => (bool) ($health['capabilities']['review'] ?? false),
+                    'ai.vision' => (bool) ($health['capabilities']['vision'] ?? false),
+                    'ai.audio' => (bool) ($health['capabilities']['audio'] ?? false),
+                ],
                 'last_success_at' => $health['last_success_at'],
                 'last_failure_at' => $health['last_failure_at'],
                 'last_failure_code' => $health['last_failure_code'] ?? null,
@@ -110,37 +117,6 @@ final class ProviderRegistry
                 'fallback' => false,
             ];
         }
-
-        $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key', '')));
-        $groqModel = trim((string) (SiteSetting::read('assistant_groq_model') ?: 'openai/gpt-oss-120b'));
-        $groqHealth = $this->connectionHealth->state('groq', $groqKey, $groqModel, ['chat']);
-
-        $items[] = [
-            'id' => 'ai:groq',
-            'name' => 'Groq',
-            'provider' => 'groq',
-            'type' => 'ai',
-            'model' => $groqModel,
-            'capabilities' => ['ai.text', 'speech.stt'],
-            'priority' => 0,
-            'status' => $groqHealth['status'],
-            'connection_verified' => $groqHealth['connection_verified'],
-            'api_reachable' => $groqHealth['api_reachable'],
-            'ready' => $groqHealth['ready'],
-            'capability_readiness' => [
-                'chat' => (bool) ($groqHealth['capabilities']['chat'] ?? false),
-                'speech' => (bool) ($groqHealth['capabilities']['speech'] ?? false),
-            ],
-            'last_success_at' => $groqHealth['last_success_at'],
-            'last_failure_at' => $groqHealth['last_failure_at'],
-            'last_failure_code' => $groqHealth['last_failure_code'],
-            'quota' => null,
-            'latency_ms' => null,
-            'reliability' => null,
-            'quality' => null,
-            'credential_configured' => $groqHealth['configured'],
-            'fallback' => false,
-        ];
 
         return $items;
     }
