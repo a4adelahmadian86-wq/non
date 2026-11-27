@@ -20,7 +20,6 @@ class ProviderRegistryInfrastructureTest extends TestCase
             'provider' => 'gladia',
             'name' => 'Gladia',
             'model' => 'whisper-large-v3',
-            'credentials_array' => ['api_key' => 'encrypted-test-key'],
             'billing_mode' => 'monthly_free',
             'enabled' => false,
             'healthy' => false,
