@@ -27,7 +27,7 @@ Netlify's Free plan is $0 with a hard monthly credit cap and no automatic rechar
    - FARAST_CLOUDFLARE_AI_GATEWAY_URL: the exact HTTPS origin of the deployed FARAST Cloudflare AI Worker, without a path.
    - FARAST_CLOUDFLARE_AI_GATEWAY_TOKEN: the Worker token; never reuse the Netlify incoming token.
 5. Deploy. Verify GET /health and GET /ready; then test both authenticated chat routes from the Laravel host.
-6. Only after live tests pass, set Laravel's FARAST_AI_GATEWAY_FALLBACK_URL to the Netlify site origin and FARAST_AI_GATEWAY_FALLBACK_TOKEN to the incoming Netlify token.
+6. Only after the gateway-only Laravel client in PR #753 (or its verified successor) is merged, and live tests from the actual Laravel host pass, set FARAST_AI_GATEWAY_FALLBACK_URL to the Netlify site origin and FARAST_AI_GATEWAY_FALLBACK_TOKEN to the incoming Netlify token.
 
 The Worker must already be deployed before this service can become ready. No real secrets or production URLs belong in Git.
 
