@@ -120,6 +120,7 @@ function makeEnvironment(options = {}) {
       AI_SEARCH: namespace,
       FARAST_KB_LARAVEL_TOKEN: "l".repeat(48),
       FARAST_KB_SUPERVISOR_TOKEN: "s".repeat(48),
+      TEST_MODE: true,
     },
   };
 }
