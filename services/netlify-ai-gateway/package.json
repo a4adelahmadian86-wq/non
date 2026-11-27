@@ -1,0 +1,7 @@
+{
+  "name": "farast-netlify-ai-gateway",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" }
+}
