@@ -42,7 +42,7 @@ class GeminiEditorProvider implements AiProvider
             $gatewayTargets[] = [
                 'url' => $fallbackGatewayUrl,
                 'token' => $fallbackGatewayToken,
-                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+                'model' => trim((string) config('services.ai_gateway.fallback_model', '@cf/openai/gpt-oss-20b')) ?: '@cf/openai/gpt-oss-20b',
             ];
         }
 
