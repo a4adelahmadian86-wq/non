@@ -48,8 +48,9 @@ if errorlevel 1 (
 )
 
 echo In Runflare, use Bulk Edit, paste the environment variables, and save.
-echo Then return here and press a key to deploy the existing Docker item.
+echo Then return here and press a key. The clipboard will be cleared before deployment.
 pause
+echo. | clip
 
 runflare deploy
 if errorlevel 1 (
