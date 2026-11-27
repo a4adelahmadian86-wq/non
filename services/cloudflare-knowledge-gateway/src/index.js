@@ -40,7 +40,7 @@ const INSTANCE_CONFIG = {
   },
   retrieval_options: { keyword_match_mode: "or" },
   chunk_size: 512,
-  chunk_overlap: 64,
+  chunk_overlap: 30,
   max_num_results: 10,
   score_threshold: 0.22,
   custom_metadata: CUSTOM_METADATA,
@@ -95,7 +95,9 @@ function validIdentifier(value) {
   return typeof value === "string"
     && value.length >= 1
     && value.length <= 64
-    && /^[A-Za-z0-9._-]+$/.test(value);
+    && value !== "."
+    && value !== ".."
+    && /^[A-Za-z0-9_-]+$/.test(value);
 }
 
 function itemKey(productId, knowledgeType, documentId) {
