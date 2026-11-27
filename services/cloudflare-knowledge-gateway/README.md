@@ -39,7 +39,7 @@ No `user_id`, email, phone, profile, behavior, personality, audience-profile or 
 
 ## API
 
-All routes except `GET /health` require `Authorization: Bearer <service-token>`. Use separate random tokens for Laravel and the Product Supervisor service.
+All routes except `GET /health` require `Authorization: Bearer <service-token>`. Use separate random tokens for Laravel and the Product Supervisor service. The delete route accepts only the Laravel token and only a deterministic product/document/type scope; arbitrary item-ID deletion is not exposed.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -48,7 +48,7 @@ All routes except `GET /health` require `Authorization: Bearer <service-token>`.
 | POST | `/v1/knowledge/upsert` | Upload or replace one knowledge document |
 | POST | `/v1/knowledge/search` | Hybrid search with product/visibility/type filters |
 | GET | `/v1/knowledge/items/{item_id}` | Check indexing status |
-| POST | `/v1/knowledge/delete` | Delete one indexed item by ID |
+| POST | `/v1/knowledge/delete` | Laravel-only, idempotent deletion by product/document/type key |
 | GET | `/v1/knowledge/stats` | Indexing and storage statistics |
 
 ### Upsert request
