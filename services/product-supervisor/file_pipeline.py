@@ -1456,10 +1456,14 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 status_code = exc.response.status_code
-                if status_code == 429 or status_code >= 500:
+                if provider == "cloudflare" and (status_code == 429 or status_code >= 500):
                     raise
                 if status_code in {401, 403}:
                     record_failure("provider_auth_error")
+                elif status_code == 429:
+                    record_failure("provider_rate_limited")
+                elif status_code >= 500:
+                    record_failure("provider_unavailable")
                 else:
                     record_failure("provider_request_rejected")
                 continue
