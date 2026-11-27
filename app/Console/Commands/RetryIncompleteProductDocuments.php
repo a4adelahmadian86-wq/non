@@ -1,13 +1,13 @@
 <?php
 
-namespace App\\Console\\Commands;
+namespace App\Console\Commands;
 
-use App\\Jobs\\ProcessProductDocument;
-use App\\Models\\StoreProductDocument;
-use App\\Services\\AuditEventService;
-use App\\Services\\ProductSupervisorClient;
-use Illuminate\\Console\\Command;
-use Illuminate\\Support\\Facades\\DB;
+use App\Jobs\ProcessProductDocument;
+use App\Models\StoreProductDocument;
+use App\Services\AuditEventService;
+use App\Services\ProductSupervisorClient;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class RetryIncompleteProductDocuments extends Command
 {
