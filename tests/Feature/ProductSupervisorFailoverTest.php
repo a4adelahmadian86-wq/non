@@ -108,4 +108,58 @@ class ProductSupervisorFailoverTest extends TestCase
             && $request->hasHeader('Authorization', 'Bearer domestic-secret')
         );
     }
+
+    public function test_product_review_falls_back_to_domestic_node_after_primary_rate_limit(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'rate limited'], 429),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'rate-limit-fallback-review',
+                'product_id' => '42',
+                'verdict' => 'needs_changes',
+                'score' => 70,
+                'findings' => [],
+            ]),
+        ]);
+
+        $result = app(ProductSupervisorClient::class)->review(['product_id' => '42']);
+
+        $this->assertSame('rate-limit-fallback-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/products'
+        );
+    }
+
+    public function test_file_review_falls_back_to_domestic_node_after_primary_rate_limit(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'rate limited'], 429),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'rate-limit-fallback-file-review',
+                'product_id' => '42',
+                'inspection' => ['detected_type' => 'text'],
+                'security_gate' => 'manual_scan_required',
+            ]),
+        ]);
+
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, 'complete-document-payload');
+        rewind($stream);
+
+        try {
+            $result = app(ProductSupervisorClient::class)->reviewFile(
+                $stream,
+                'document.txt',
+                ['product_id' => '42']
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $this->assertSame('rate-limit-fallback-file-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/files'
+        );
+    }
+
 }
