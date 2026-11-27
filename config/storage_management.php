@@ -6,7 +6,7 @@ return [
         // Keep this secret outside the database and outside the backup destination.
         'encryption_key' => env('FARAST_BACKUP_ENCRYPTION_KEY'),
         'enable_iran_replica' => filter_var(env('FARAST_ENABLE_IRAN_BACKUP', false), FILTER_VALIDATE_BOOLEAN),
-        'weekly_retention' => max(1, min(12, (int) env('FARAST_BACKUP_WEEKLY_RETENTION', 2)),
+        'weekly_retention' => max(1, min(12, (int) env('FARAST_BACKUP_WEEKLY_RETENTION', 2))),
     ],
     'health' => [
         'connect_timeout' => (int) env('FARAST_STORAGE_CONNECT_TIMEOUT', 8),
