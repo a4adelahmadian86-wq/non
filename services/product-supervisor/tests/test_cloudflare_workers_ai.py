@@ -125,13 +125,13 @@ class CloudflareWorkersAiTests(unittest.TestCase):
                 task="review",
             ))
 
-        request = FakeAsyncClient.requests[-1]
+        request = FakeAsyncClient.calls[-1]
         self.assertEqual(
             request["url"],
             "https://farast-ai-gateway.example.workers.dev/v1/chat/completions/review",
         )
         self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-120b")
-        self.assertEqual(result, '{"choices":[{"message":{"content":"ok"}}]}')
+        self.assertIn('"summary": "خلاصه"', result)
 
     def test_file_text_analysis_prefers_cloudflare_without_groq_zdr(self):
         result = asyncio.run(file_pipeline.analyze_extracted_content(
