@@ -102,7 +102,10 @@ export default {
         }
 
         if (request.method === "GET" && url.pathname === "/ready") {
-            const ready = Boolean(env.FARAST_AI_GATEWAY_TOKEN && configured(env));
+            if (!authorized(request, env)) {
+                return json(401, { error: { message: "unauthorized" } });
+            }
+            const ready = configured(env);
             return json(ready ? 200 : 503, {
                 ok: ready,
                 provider: "cloudflare-workers-ai",
