@@ -2,7 +2,6 @@
 
 namespace App\Services\AI\Providers;
 
-use App\Models\SiteSetting;
 use App\Services\AI\Contracts\AiProvider;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
