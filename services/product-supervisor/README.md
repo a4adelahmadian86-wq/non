@@ -57,6 +57,37 @@ A Dockerfile is provided for a no-card free-container pilot on Back4App:
 
 Do not change the site's existing production endpoint until the Back4App deployment has passed the live health/readiness checks and a real test product has completed successfully. No service is deployed by this repository change.
 
+## Domestic Runflare fallback
+
+The same Docker image can run as a temporary domestic fallback node. It is not a VPN, proxy, tunnel, or data store. Runflare's free tier is limited to three months, has no backup, and is explicitly unsuitable for production-critical data. Runflare's terms prohibit VPN/proxy/tunneling workloads.
+
+For the Runflare instance, set only:
+- `SUPERVISOR_API_TOKEN`: a new, dedicated random token, different from the primary node.
+- `SUPERVISOR_OFFLINE_MODE=true`.
+
+Do not configure Cloudflare, Gemini or Groq credentials on this node. Offline mode deliberately skips all external model calls:
+- file reviews perform bounded local file inspection and text extraction, return content chunks and warnings, and never authorize publication;
+- product metadata reviews return `needs_changes` with an explicit manual-review warning, never an AI approval;
+- after international connectivity returns, Laravel's existing queue can retry the full review through the primary endpoint.
+
+The Laravel `ProductSupervisorClient` now fails over to the next configured endpoint on connection errors, HTTP 408/425/429 and 5xx responses. The primary service maps upstream provider 401/403 access restrictions to 503 so the client can try the next endpoint. It does not fail over on ordinary validation errors such as 400/413/422.
+
+### Runflare setup and renewal
+
+1. Create a free project in the Iran cluster and one Docker service using the existing `services/product-supervisor/Dockerfile`.
+2. Connect the existing public GitHub repository through Runflare's GitHub OAuth app; select branch `main`, directory/build context `services/product-supervisor`, and enable auto-pull.
+3. Set the two environment variables above in Runflare's service settings. Do not attach a database or persistent volume.
+4. Verify public `/health` reports `offline_mode: true` and authenticated `/v1/ready` reports `processing_mode: offline_structural_only`.
+5. Set the new URL and its separate token as Laravel's Product Supervisor fallback endpoint only after the health/readiness test.
+
+When the free service expires and is deleted, the new project and Docker service must first be recreated in the Runflare panel. The included `runflare-deploy.cmd` then deploys the existing Docker item from Windows CMD. Runflare's CLI documentation currently requires a project/service item to exist before `runflare deploy`; it does not document fully automatic creation of a deleted project. No data recovery is needed from Runflare because it stores no source-of-truth data.
+
+Official Runflare documentation:
+- https://runflare.com/free-cloud-hosting/
+- https://docs.runflare.com/docker/docker-create-app/
+- https://docs.runflare.com/docker/deploy-github/
+- https://docs.runflare.com/docker/deploy-cli/
+
 ## Provider secrets
 
 The service never needs a frontend key. Keep all provider keys and the dedicated supervisor token in the worker's secret environment only. Do not commit keys, put them in frontend code, or send them through chat.
