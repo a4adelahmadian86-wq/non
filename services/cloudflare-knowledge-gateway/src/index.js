@@ -471,12 +471,6 @@ export async function handleRequest(request, env) {
     if (error?.message === "ai_search_instance_schema_mismatch") {
       return jsonResponse({ error: "ai_search_instance_schema_mismatch" }, 409);
     }
-    if (env.TEST_MODE === true) {
-      return jsonResponse({
-        error: "knowledge_service_unavailable",
-        diagnostic: String(error?.name || "Error") + ": " + String(error?.message || "unknown").slice(0, 160),
-      }, 503);
-    }
     return jsonResponse({ error: "knowledge_service_unavailable" }, 503);
   }
 }
