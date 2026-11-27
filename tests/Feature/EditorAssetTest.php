@@ -15,6 +15,14 @@ class EditorAssetTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        foreach (StorageVolume::query()->pluck('id') as $id) {
+            File::deleteDirectory(storage_path('app/storage-volumes/'.$id));
+        }
+        parent::tearDown();
+    }
+
     private function makeUser(): User
     {
         return User::create([
@@ -73,6 +81,26 @@ class EditorAssetTest extends TestCase
         }
 
         return [$user, $document->fresh(), $resource, $object->fresh()];
+    }
+
+    public function test_private_editor_asset_upload_uses_iran_primary_when_configured(): void
+    {
+        $iran = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 100,
+        ]);
+
+        [$user, , $resource, $object] = $this->makeAsset();
+        $managed = StorageManagedFile::query()
+            ->where('source_type', FarastStorageObject::class)
+            ->where('source_id', $object->id)
+            ->firstOrFail();
+
+        $this->assertSame($iran->id, $managed->storage_volume_id);
+        $this->assertSame('iran_primary', $managed->drive_key);
+        $this->assertSame(StorageManager::CRITICAL, $managed->classification);
+        $this->actingAs($user)->get($resource['url'])->assertOk();
     }
 
     public function test_newly_uploaded_quarantined_asset_is_not_delivered_until_approved(): void
