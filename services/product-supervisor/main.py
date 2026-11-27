@@ -578,6 +578,9 @@ def _gemini_api_key_is_configured() -> bool:
     # Guard against accidentally pasting the model identifier into the API-key field.
     return bool(key and key != model and not key.lower().startswith("gemini-"))
 
+def _gemini_metadata_fallback_enabled() -> bool:
+    return os.getenv("GEMINI_METADATA_FALLBACK_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
 
 
 
