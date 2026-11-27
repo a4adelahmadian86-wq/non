@@ -17,11 +17,11 @@ class EditorAiAssistTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config()->set('services.gemini.key', 'test-secret-key');
-        config()->set('services.gemini.model', 'test-model');
+        config()->set('services.gemini.key', 'must-not-be-used');
+        config()->set('services.gemini.model', 'must-not-be-used');
         config()->set('services.ai_gateway.url', 'https://farast-ai-gateway.example.workers.dev');
         config()->set('services.ai_gateway.token', 'test-secret-key');
-        config()->set('services.ai_gateway.model', 'test-model');
+        config()->set('services.ai_gateway.model', 'farast-general');
         config()->set('services.ai_gateway.fallback_url', '');
         config()->set('services.ai_gateway.fallback_token', '');
         config()->set('services.voice.local_only', false);
@@ -36,9 +36,9 @@ class EditorAiAssistTest extends TestCase
 
     public function test_normalized_response_and_legacy_compatibility(): void
     {
-        Http::fake(fn () => Http::response(['id'=>'p1','model'=>'test-model','choices'=>[['message'=>['role'=>'assistant','content'=>json_encode(['text'=>'سلام، دنیا!'], JSON_UNESCAPED_UNICODE)]]],'usage'=>['prompt_tokens'=>2,'completion_tokens'=>3,'total_tokens'=>5]],200));
+        Http::fake(fn () => Http::response(['id'=>'p1','model'=>'@cf/openai/gpt-oss-20b','choices'=>[['message'=>['role'=>'assistant','content'=>json_encode(['text'=>'سلام، دنیا!'], JSON_UNESCAPED_UNICODE)]]],'usage'=>['prompt_tokens'=>2,'completion_tokens'=>3,'total_tokens'=>5]],200));
         $response = $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'punctuation','text'=>'سلام دنیا','processing_mode'=>'external']);
-        $response->assertOk()->assertJsonPath('text','سلام، دنیا!')->assertJsonPath('ai.operation','selection.punctuation')->assertJsonPath('ai.provider','gemini')->assertJsonPath('ai.processing_mode','external')->assertJsonPath('ai.model','test-model');
+        $response->assertOk()->assertJsonPath('text','سلام، دنیا!')->assertJsonPath('ai.operation','selection.punctuation')->assertJsonPath('ai.provider','cloudflare-workers-ai')->assertJsonPath('ai.processing_mode','external')->assertJsonPath('ai.model','@cf/openai/gpt-oss-20b');
         $this->assertStringNotContainsString('test-secret-key',$response->getContent());
         $this->assertArrayNotHasKey('text', AiInteraction::latest('id')->firstOrFail()->input_meta);
     }
