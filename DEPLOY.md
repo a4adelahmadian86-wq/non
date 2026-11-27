@@ -26,6 +26,15 @@
 
 ### درگاه AI و مسیرهای جایگزین
 
+درگاه چت اولیه در `services/ai-gateway` پیاده‌سازی شده است. پیش از فعال‌کردن مسیر gateway-only:
+
+1. از راهنمای `services/ai-gateway/README.md` برای اجرای تست‌ها و انتشار Cloudflare Worker استفاده کنید.
+2. در Worker، سه secret مستقل `FARAST_AI_GATEWAY_TOKEN`، `CF_API_TOKEN` و `CF_ACCOUNT_ID` را در تنظیمات محرمانه قرار دهید.
+3. مسیرهای `/health` و `/ready` را بررسی کنید و یک درخواست واقعیِ احراز هویت‌شده به `/v1/chat/completions` بفرستید.
+4. URL دقیق Worker را در `FARAST_AI_GATEWAY_URL` و همان token سمت Laravel را در `FARAST_AI_GATEWAY_TOKEN` ثبت کنید.
+5. تا وقتی یک endpoint دوم مستقل و تست‌شده نداریم، `FARAST_AI_GATEWAY_FALLBACK_URL` را خالی بگذارید. شکست AI باید به صف و retry منجر شود، نه اتصال مستقیم سایت به provider.
+
+
 - Laravel باید فقط به endpoint درگاه FARAST وصل شود که مسیر `/v1/chat/completions` را پیاده‌سازی کرده باشد. URL مستقیم `api.cloudflare.com`، `generativelanguage.googleapis.com` یا `api.groq.com` را در متغیرهای Gateway وارد نکنید.
 - Cloudflare Workers AI می‌تواند در سمت درگاه به‌عنوان ارائه‌دهندهٔ مدل استفاده شود؛ کلید Cloudflare فقط در Environment همان درگاه قرار می‌گیرد. سهمیهٔ رایگان آن ۱۰٬۰۰۰ Neurons در روز است و پس از سقف، درخواست جدید با خطا مواجه می‌شود.
 - `FARAST_AI_GATEWAY_URL` و `FARAST_AI_GATEWAY_FALLBACK_URL` باید دو endpoint واقعیِ درگاه باشند، نه آدرس خام API ارائه‌دهنده. هر endpoint باید با Bearer token مستقل، health check و درخواست واقعی `/v1/chat/completions` آزمایش شود.
