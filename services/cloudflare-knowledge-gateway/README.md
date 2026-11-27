@@ -1,0 +1,109 @@
+# FARAST Cloudflare Knowledge Gateway
+
+This is a small, stateless Cloudflare Worker that exposes a private API for the FARAST knowledge index. It uses Cloudflare AI Search built-in storage; it does not require an R2 bucket, D1 database, separate vector database, or a paid server.
+
+## Responsibilities
+
+- Index only published, reviewer-approved product metadata.
+- Index only reviewer-approved public sample pages; full paid/purchased document content is never indexed here and remains behind Laravel purchase authorization.
+- Index user experiences only when they are reviewer-approved, privacy-reviewed and anonymized.
+- Search by Persian/English query, with strict metadata filters for product, language, visibility and knowledge type.
+- Report item indexing status and index statistics.
+- Keep private user profiles, behavior/personality observations, account identifiers and private memories out of the public knowledge index.
+
+The Laravel database remains the source of truth. AI Search is a rebuildable retrieval index, not a replacement for product, user, order, or review records.
+
+## Free-tier limits
+
+Cloudflare AI Search's free allowance is limited: 10 GB-month storage, 5 million ingestion tokens per month, 1,000 semantic queries per month and 1,000 full-text queries per month. These are not unlimited quotas. The application must keep its MySQL keyword/full-text retrieval as a fallback and must not assume paid overage is available.
+
+The index uses multilingual `@cf/baai/bge-m3` embeddings, hybrid vector + keyword retrieval, and a trigram keyword tokenizer for Persian text. Query caching is disabled so user questions are not persisted as cache entries. It stores only sanitized knowledge text, not original product files.
+
+## Index design
+
+One built-in-storage instance named `farast-knowledge` is created automatically by `POST /v1/setup`. It has five filterable metadata fields:
+
+- `product_id`
+- `document_id`
+- `knowledge_type`
+- `visibility`
+- `language`
+
+Allowed knowledge types are `product_document`, `product_metadata` and `approved_experience`. All indexed records must have `visibility=public`.
+
+- `product_document` requires `access_scope=public_sample_only`, `review_status=approved` and `product_status=published`. Purchased/full document content is rejected.
+- `product_metadata` requires `review_status=approved` and `product_status=published`.
+- `approved_experience` requires `approval_status=approved`, `privacy_review_status=approved` and `anonymized=true`.
+
+No `user_id`, email, phone, profile, behavior, personality, audience-profile or private-memory fields are accepted anywhere in the request, including nested objects and camelCase variants. The gateway also rejects obvious email addresses and Iranian mobile numbers in public experience text. This is only a secondary safeguard: the Laravel indexer must still anonymize and sanitize experience content before sending it, because the gateway cannot reliably identify names or every form of personal data.
+
+## API
+
+All routes except `GET /health` require `Authorization: Bearer <service-token>`. Use separate random tokens for Laravel and the Product Supervisor service. The delete route accepts only the Laravel token and only a deterministic product/document/type scope; arbitrary item-ID deletion is not exposed.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Public liveness check; no account details or secrets |
+| POST | `/v1/setup` | Create/validate the dedicated index |
+| POST | `/v1/knowledge/upsert` | Upload or replace one knowledge document |
+| POST | `/v1/knowledge/search` | Hybrid search with product/visibility/type filters |
+| GET | `/v1/knowledge/items/{item_id}` | Check indexing status |
+| POST | `/v1/knowledge/delete` | Laravel-only, idempotent deletion by product/document/type key |
+| GET | `/v1/knowledge/stats` | Indexing and storage statistics |
+
+### Upsert request
+
+```json
+{
+  "product_id": "42",
+  "document_id": "product-document-91",
+  "knowledge_type": "product_document",
+  "visibility": "public",
+  "language": "fa",
+  "access_scope": "public_sample_only",
+  "review_status": "approved",
+  "product_status": "published",
+  "content": "# خلاصه دانش محصول\n\nمتن پالایش‌شده و تأییدشده..."
+}
+```
+
+For `product_document`, the caller must send `"access_scope": "public_sample_only"`, `"review_status": "approved"` and `"product_status": "published"`; paid full-document content is rejected. For `product_metadata`, the caller must send approved review and published status. For `approved_experience`, the caller must also send `"approval_status": "approved"`, `"privacy_review_status": "approved"` and `"anonymized": true`. The Worker computes SHA-256 itself and returns the checksum and queued item ID. Content is limited to 1 MiB per request; current FARAST extracted-text limits are well below this.
+
+### Search request
+
+```json
+{
+  "query": "این محصول چه قابلیت‌هایی دارد؟",
+  "product_id": "42",
+  "knowledge_types": ["product_document", "product_metadata"],
+  "language": "fa",
+  "top_k": 8
+}
+```
+
+The Worker always adds `visibility=public` to the retrieval filters. A product ID filter is applied before retrieval, not after it.
+
+## Deploy
+
+1. Create a free Cloudflare account. No R2 bucket or payment card is needed for this Worker + AI Search built-in-storage design.
+2. Create a Cloudflare API token for deployment with Workers Admin at the account scope and AI Search Edit/Run permissions. Do not use the token as an application API token.
+3. Add GitHub repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`.
+4. Run the manual GitHub Actions workflow **Deploy FARAST Knowledge Gateway**.
+5. In Cloudflare Dashboard → Workers & Pages → `farast-knowledge-gateway` → Settings → Variables and Secrets, add two Secret variables:
+   - `FARAST_KB_LARAVEL_TOKEN`
+   - `FARAST_KB_SUPERVISOR_TOKEN`
+6. Call `POST /v1/setup` with either service token. This creates the built-in AI Search instance if it does not already exist.
+
+Do not put any of these tokens in Git, source files, chat messages or the public `.env.example`.
+
+## Local checks
+
+Requires Node.js 22.12 or newer.
+
+```sh
+npm install
+npm test
+npx wrangler deploy --dry-run
+```
+
+The tests use a mocked AI Search binding. They verify authorization, public-only indexing, experience approval, product-level filtering, metadata shape and protection against overwriting an incompatible existing index. They do not claim that a live Cloudflare account has been connected or deployed.
