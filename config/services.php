@@ -6,15 +6,14 @@ $remoteBatchDefault = ! $voiceLocalOnly;
 return [
     // Central online assistant gateway. Both URLs must be FARAST-owned gateway endpoints, never raw provider APIs.
     'ai_gateway' => [
-        // Keep the existing primary endpoint unchanged; the optional secondary AI gateway is a fallback.
+        // Both endpoints must be independently configured FARAST gateway services.
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
-        'token' => env('FARAST_VOICE_TOKEN', ''),
+        'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
         'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
         'fallback_url' => env('FARAST_AI_GATEWAY_FALLBACK_URL', ''),
         'fallback_token' => env('FARAST_AI_GATEWAY_FALLBACK_TOKEN', ''),
         'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', 'farast-general'),
-        'fallback_gateway_id' => env('FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID', 'default'),
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
