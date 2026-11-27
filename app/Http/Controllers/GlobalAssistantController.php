@@ -524,7 +524,7 @@ class GlobalAssistantController extends Controller
             $targets[] = [
                 'url' => $fallbackGatewayUrl.'/v1/chat/completions',
                 'token' => $fallbackGatewayToken,
-                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+                'model' => trim((string) config('services.ai_gateway.fallback_model', '@cf/openai/gpt-oss-20b')) ?: '@cf/openai/gpt-oss-20b',
                 'limit_key' => 'max_tokens',
                 'name' => 'gateway_fallback',
                 'connect_timeout' => 4,
