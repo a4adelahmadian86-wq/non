@@ -250,7 +250,12 @@ class ProductKnowledgeService
                 ? (bool) $inspection['visual_inventory_complete']
                 : (! in_array($detectedType, $imageCapableTypes, true)
                     && ! ($detectedType === 'audio' && ! $transcriptionKnown));
-            if ($detectedType === 'image' && ($providers['groq_vision'] ?? null) === 'completed') {
+            $visionReviewCompleted = in_array(
+                'completed',
+                [$providers['cloudflare_vision'] ?? null, $providers['groq_vision'] ?? null],
+                true
+            );
+            if ($detectedType === 'image' && $visionReviewCompleted) {
                 $visualInventoryComplete = true;
             }
 
@@ -258,13 +263,17 @@ class ProductKnowledgeService
                 || $detectedType === 'image';
             $visualReviewComplete = ! $visualReviewRequired
                 || (
-                    ($providers['groq_vision'] ?? null) === 'completed'
+                    $visionReviewCompleted
                     && $visualInventoryComplete
                     && ! (bool) ($inspection['visual_review_truncated'] ?? false)
                 );
             $textReviewComplete = $expected > 0
                 && $successful >= $expected
-                && ($providers['groq_text'] ?? null) === 'completed'
+                && in_array(
+                    'completed',
+                    [$providers['cloudflare_text'] ?? null, $providers['groq_text'] ?? null],
+                    true
+                )
                 && (bool) ($completeness['analysis_batches_complete'] ?? false);
             $visualOnlyReviewComplete = $expected === 0
                 && $visualReviewRequired
