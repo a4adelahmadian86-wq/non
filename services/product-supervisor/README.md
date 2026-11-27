@@ -1,91 +1,95 @@
 # FARAST Product Supervisor
 
-An isolated, stateless product-quality review service. It is separate from the existing voice/AI gateway and never publishes a product.
+سرویس مستقل و stateless برای بررسی فایل‌های محصولات FARAST. این سرویس جایگزین هسته Laravel یا دیتابیس آن نیست و هیچ محصولی را منتشر/تأیید نهایی نمی‌کند.
 
-## Provider routing
+## نقش در معماری
 
-| Task | Primary free provider | Data sent |
+- **اجرای داخل ایران:** روی Runflare رایگان به‌عنوان worker سبک برای استخراج متن، ساخت chunk، بررسی ساختار فایل و ارسال درخواست‌های مدل.
+- **مدل‌های قوی:** فقط از طریق FARAST AI Worker در Cloudflare Workers AI؛ خود Product Supervisor هیچ درخواست مستقیمی به `api.cloudflare.com`، Gemini یا Groq نمی‌فرستد.
+- **منبع حقیقت:** Laravel/MySQL موجود؛ فایل‌ها از StorageManager خوانده می‌شوند و chunkها، factها، وضعیت بررسی و گزارش‌ها در دیتابیس اصلی ذخیره می‌شوند.
+- **حافظه خصوصی:** هیچ پروفایل کاربر، استنباط رفتاری یا حافظهٔ خصوصی کاربر به این سرویس ارسال نمی‌شود.
+- **ذخیره‌سازی:** این کانتینر فایل یا دانش دائمی نگهداری نمی‌کند. فایل موقت پس از پردازش حذف می‌شود.
+
+## مسیرهای مدل
+
+| کار | مدل پشت Worker | مسیر |
 |---|---|---|
-| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 20B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
-| Extracted file text and content quality | Cloudflare Workers AI GPT-OSS 20B | Redacted extracted text in bounded batches |
-| Product image understanding | Cloudflare Workers AI Moondream 3.1 | Resized image plus redacted product context |
-| Audio transcription | Cloudflare Workers AI Whisper Large V3 Turbo | Extracted audio bytes; no original filename |
-| Optional product-metadata fallback | Gemini | Used only when Cloudflare Workers AI is not configured; never receives raw file text or original files |
-| Optional file-review fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; otherwise no file data is sent to Groq |
-| Optional audio provider | Gladia | Disabled; no Gladia request is made |
+| تحلیل متن و metadata | GPT-OSS 20B | `POST /v1/chat/completions` |
+| تحلیل تصویر | Moondream 3.1 | `POST /v1/ai/run/vision` |
+| رونویسی صوت | Whisper Large V3 Turbo | `POST /v1/ai/run/audio` |
 
-Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
+Cloudflare Workers AI سهمیهٔ رایگان روزانهٔ ۱۰٬۰۰۰ Neurons دارد. سهمیه میان دستیار/ویرایشگر و Product Supervisor در همان حساب مشترک است. پس از اتمام سهمیه یا قطع اینترنت، تحلیل AI موقتاً متوقف می‌شود؛ فایل اصلی و job پایدار در زیرساخت FARAST باقی می‌مانند تا دوباره پردازش شوند.
 
-The service never sends private user profiles, behavioral observations or account memory to these provider calls. Product metadata and product-file content are separate from those user records. Cloudflare Workers AI inference is not used to train models and is processed under Cloudflare's Workers AI data-handling policy. The later AI Search index is a separate persistent knowledge store; only verified product knowledge and explicitly approved, sanitized experiences may be indexed there.
+## حالت قطعی اینترنت بین‌الملل
 
-## File safety and privacy
+Runflare می‌تواند در ایران فایل را دریافت و استخراج ساختاری انجام دهد؛ اما بدون اتصال به Worker خارجی، تولید تحلیل زبانی/بینایی/رونویسی ممکن نیست. در این حالت:
 
-- Uploads are handled as request-scoped temporary data and are not persisted by this service. The ASGI upload spool and the optional ClamAV temporary file are closed/removed after processing.
-- Maximum upload size is 25 MiB. Request bodies are bounded. File type is determined from content signatures, not just the supplied extension or MIME type.
-- Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX, XLSX and PPTX are parsed only after archive checks; spreadsheet and slide extraction are capped. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
-- Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before model submission. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
-- Laravel invokes this endpoint only after its primary upload scanner has marked the asset clean. If the optional secondary ClamAV scanner in this service is unavailable, the response says `upstream_scan_verified` and separately reports `antivirus_status: not_configured`; it does not pretend a second scan ran. An infected result from the secondary scanner is rejected.
-- A successful AI review is advisory only. The endpoint always returns `publication_authorized: false` and `automated_publication: false`.
-- Cloudflare Workers AI is the default when configured. Gemini is restricted to product metadata and compact database reports and is used only when Cloudflare is not configured. Groq file processing is disabled unless the operator has independently enabled account-level ZDR and then explicitly sets `GROQ_ZDR_CONFIRMED=true`. That variable is only an operator assertion, not proof supplied by Groq. Never assume a free tier is confidential.
-- Gladia remains disabled because its free tier/data-retention terms are not appropriate as a default path for sensitive product uploads.
+- متن و chunkهای قابل استخراج در Laravel ذخیره می‌شوند.
+- وضعیت سند به‌صورت `extracted` یا `partial` می‌ماند و مجوز انتشار صادر نمی‌شود.
+- jobهای تحلیل باید پس از بازگشت اتصال دوباره اجرا شوند؛ در این شاخه، retry خودکار اسناد ناقص در حال تکمیل است.
+- هیچ دادهٔ دائمی فقط روی Runflare باقی نمی‌ماند.
 
-## Deployment model
+## ایمنی فایل و حریم خصوصی
 
-The service is stateless. Uploaded files are inspected in request-scoped temporary storage and removed after processing; no product files or customer data are kept on the container filesystem. The Laravel queue remains the durable source of truth and retries when this worker is unavailable.
+- حداکثر اندازهٔ آپلود ۲۵ MiB است؛ این سرویس برای فایل‌های چندگیگابایتی طراحی نشده است.
+- نوع فایل از امضای محتوا تشخیص داده می‌شود، نه فقط پسوند یا MIME اعلام‌شده.
+- فایل اجرایی و اسکریپت رد می‌شود. ZIP دارای محدودیت تعداد entry، حجم بازشده، نسبت فشرده‌سازی، رمزگذاری و مسیرهای خطرناک است.
+- PDF، DOCX، XLSX و PPTX پس از بررسی ساختار آرشیو پردازش می‌شوند. صفحات، متن، chunkها و تصاویر دارای سقف‌اند.
+- تصاویر پیش از ارسال به Worker resize و بررسی ابعاد می‌شوند. صوت حداکثر ۲۵ MiB است و نام اصلی فایل برای مدل ارسال نمی‌شود.
+- داده‌های حساس رایج مانند کلیدها، bearer tokenها، ایمیل و شماره تلفن پیش از ارسال تا حد امکان redacted می‌شوند؛ این کار تضمین حذف تمام دادهٔ حساس نیست.
+- متن و تصویر محصول فقط برای همان تحلیل محصول به Worker فرستاده می‌شود؛ پروفایل خصوصی کاربران، رفتار پنهان، رمزها و اطلاعات حساب هرگز ارسال نمی‌شوند.
+- نتیجهٔ AI صرفاً پیشنهاد است. پاسخ سرویس همیشه `publication_authorized=false` و `automated_publication=false` دارد.
+- Groq و Gemini در مسیر پیش‌فرض استفاده نمی‌شوند. اگر بعداً fallback اضافه شد، باید سیاست نگهداری داده و محدودیت منطقه‌ای همان سرویس جداگانه بررسی شود.
 
-A Dockerfile is provided for a no-card free-container pilot on Back4App:
+## منابع و محدودیت Runflare
 
-- Published free limits: 0.25 vCPU, 256 MiB RAM and 100 GB outbound transfer.
-- The free tier is intended for testing and learning, not a production SLA.
-- CI builds the image and has successfully inspected a synthetic 24 MiB text upload with Docker constrained to 256 MiB RAM and 0.25 vCPU.
-- This test does not prove every file format will fit those limits. The service's existing 25 MiB upload ceiling remains; 2 GiB processing is not claimed or enabled.
-- File-review requests are serialized to reduce memory spikes. A busy worker returns HTTP 429 so Laravel can retry instead of losing the job.
+پلن رایگان Runflare فعلی ۳GB RAM، حدود ۱٫۵ vCPU، ۳GB دیسک و حداکثر دو Deployment دارد. این پلن برای توسعه/تست است، بکاپ و SLA تولیدی ندارد و پس از سه ماه سرویس و دادهٔ روی آن حذف می‌شود.
 
-### Back4App pilot deployment
+این سرویس stateless است و دادهٔ دائمی ندارد؛ بنابراین حذف کانتینر نباید دادهٔ محصول را از بین ببرد. با این حال، برای تضمین بازیابی باید Laravel/MySQL و Object Storage مستقل از Runflare باشند.
 
-1. Create a Back4App Containers application and connect the public repository `a4adelahmadian86-wq/non`.
-2. Select the `main` branch, set the application directory/build context to `services/product-supervisor`, and use its `Dockerfile`.
-3. Expose port `8000`. Do not attach a persistent disk; this service must remain stateless.
-4. Add secrets only in the Back4App environment settings:
-   - `SUPERVISOR_API_TOKEN`: a new, dedicated random secret.
-   - `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: preferred inference provider. Create a dedicated API token for this worker with AI Gateway Read, AI Gateway Edit and Workers AI Read permissions. Use the default gateway ID `default` unless a dedicated gateway is created. No R2 permissions are needed. Create a separate token for the Laravel site's assistant/editor; do not reuse this worker token. All model requests explicitly disable AI Gateway request and payload logging.
-   - `CLOUDFLARE_TEXT_MODEL`, `CLOUDFLARE_VISION_MODEL` and `CLOUDFLARE_AUDIO_MODEL`: optional model overrides; the defaults in `.env.example` are the tested model identifiers.
-   - `GEMINI_API_KEY`: optional product-metadata fallback, used only when Cloudflare is not configured.
-   - `GROQ_API_KEY`: optional fallback; file text, image and audio review stay disabled unless account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true` is explicitly set.
-5. Deploy and verify `/health`, then verify authenticated `/v1/ready`.
-6. In the Laravel hosting environment, set `FARAST_PRODUCT_SUPERVISOR_URL` to the Back4App HTTPS service URL and `FARAST_PRODUCT_SUPERVISOR_TOKEN` to the exact dedicated token. Rebuild Laravel's configuration cache through the hosting provider's supported workflow.
+منابع:
+- https://runflare.com/free-cloud-hosting/
+- https://runflare.com/docs/work-with-cli/cli-commands/
+- https://developers.cloudflare.com/workers-ai/platform/pricing/
 
-Do not change the site's existing production endpoint until the Back4App deployment has passed the live health/readiness checks and a real test product has completed successfully. No service is deployed by this repository change.
+## استقرار روی Runflare
 
-## Provider secrets
+1. در Runflare یک Docker service بسازید و ریشهٔ build را روی `services/product-supervisor` قرار دهید؛ از Dockerfile همین پوشه استفاده می‌شود.
+2. پورت سرویس `8000` است؛ دیسک دائمی وصل نکنید.
+3. در بخش Environment/Secrets این مقادیر را ثبت کنید:
+   - `SUPERVISOR_API_TOKEN`: یک secret تصادفی مستقل برای ارتباط Laravel با این سرویس.
+   - `FARAST_AI_GATEWAY_URL`: URL دقیق Worker مستقرشده در Cloudflare.
+   - `FARAST_AI_GATEWAY_TOKEN`: token مورد انتظار Worker.
+   - `MAX_CONCURRENT_FILE_REVIEWS=1`
+   - `MAX_UPLOAD_BYTES=26214400`
+4. پس از deploy، `/health` و سپس `/v1/ready` را با Bearer token بررسی کنید.
+5. در محیط Laravel مقدار `FARAST_PRODUCT_SUPERVISOR_URL` را به URL همین سرویس و `FARAST_PRODUCT_SUPERVISOR_TOKEN` را به همان token مرحلهٔ ۳ وصل کنید. تا وقتی تست زنده موفق نشده، تنظیم Production را تغییر ندهید.
 
-The service never needs a frontend key. Keep all provider keys and the dedicated supervisor token in the worker's secret environment only. Do not commit keys, put them in frontend code, or send them through chat.
+### تمدید بعد از سه ماه
+
+در این پوشه اسکریپت CMD/PowerShell deploy نگهداری می‌شود. بعد از حذف سرویس، Runflare CLI به‌تنهایی پروژه و سرویس جدید نمی‌سازد؛ ابتدا باید پروژه و Docker service جدید در پنل Runflare ساخته شود، سپس فایل CMD را اجرا کنید. چون سرویس هیچ فایل یا دیتابیسی نگهداری نمی‌کند، فقط لازم است URL جدید در تنظیمات Laravel ثبت شود.
 
 ## API
 
-- `GET /health`: public liveness/configuration status; does not disclose secrets.
-- `POST /v1/reviews/products`: authenticated product metadata review.
-- `POST /v1/reviews/files`: authenticated multipart file inspection. Fields: `file`, `product_id`, `product_title`, `product_type` (`digital_file` or `course`), `primary_scan_status=clean` (asserted by the authenticated Laravel caller after its upload scanner succeeds), optional `category_name`, `tags_json`, and `description`.
+- `GET /health`: liveness عمومی.
+- `GET /v1/ready`: readiness احراز هویت‌شده.
+- `POST /v1/reviews/products`: بررسی metadata محصول.
+- `POST /v1/reviews/files`: بررسی فایل multipart.
 
-Both review endpoints require `Authorization: Bearer <SUPERVISOR_API_TOKEN>`. File review returns detected type, extraction counts, provider status, warnings, antivirus status, and structured findings. It never authorizes publication.
+تمام مسیرهای `/v1/*` به `Authorization: Bearer <SUPERVISOR_API_TOKEN>` نیاز دارند.
 
-## Local run
+## اجرای محلی
 
-The Docker image and local development use Python 3.12; `.python-version` pins the local interpreter for prebuilt Pydantic Core wheels.
+Python 3.12:
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 export SUPERVISOR_API_TOKEN='local-only-secret'
-export CLOUDFLARE_ACCOUNT_ID='your-account-id'
-export CLOUDFLARE_API_TOKEN='your-workers-ai-token'
-# Optional fallbacks:
-# export GEMINI_API_KEY='your-own-key'
-# export GROQ_API_KEY='your-own-key'
-# Set only after enabling account-level Groq ZDR:
-# export GROQ_ZDR_CONFIRMED=true
+export FARAST_AI_GATEWAY_URL='https://your-worker.workers.dev'
+export FARAST_AI_GATEWAY_TOKEN='your-gateway-token'
 uvicorn main:app --reload --port 8091
 ```
 
-Run unit tests with `pytest -q`.
+تست‌ها: `pytest -q`.
