@@ -359,7 +359,7 @@ async def review_product_file(
         combined_extracted = combined_extracted[:MAX_EXTRACTED_CHARS]
     extracted, redaction_count = redact_sensitive_content(combined_extracted)
     model_review: dict[str, Any] = {}
-    if extracted.strip():
+    if extracted.strip() and (cloudflare_provider_ready("text") or groq_provider_ready()):
         try:
             model_review = await analyze_extracted_content(
                 extracted,
@@ -378,13 +378,6 @@ async def review_product_file(
                     else "partial" if analysis_status == "partial"
                     else "unavailable"
                 )
-            elif analysis_status == "privacy_not_confirmed":
-                provider_status["groq_text"] = "not_configured"
-                warnings.append("Groq به دلیل تأیید نشدن Zero Data Retention استفاده نشد.")
-            else:
-                provider_status["cloudflare_text"] = "not_configured"
-                provider_status["groq_text"] = "not_configured"
-                warnings.append("مدل تحلیل متن امن تنظیم نشده است؛ متن فایل به سرویس مدل ارسال نشد.")
             if analysis_status == "partial":
                 warnings.append("تحلیل متنی فایل ناقص است.")
             elif analysis_status not in {"completed", "partial"}:
@@ -392,6 +385,13 @@ async def review_product_file(
         except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
             provider_status["cloudflare_text"] = "unavailable"
             warnings.append("تحلیل محتوای فایل توسط مدل امن انجام نشد.")
+    elif extracted.strip():
+        provider_status["cloudflare_text"] = "not_configured"
+        provider_status["groq_text"] = "not_configured"
+        if os.getenv("GROQ_API_KEY", "").strip() and not groq_provider_ready():
+            warnings.append("Groq به دلیل تأیید نشدن Zero Data Retention استفاده نشد؛ هیچ متن فایلی به مدل ارسال نشد.")
+        else:
+            warnings.append("مدل تحلیل متن امن تنظیم نشده است؛ هیچ متن فایلی به مدل ارسال نشد.")
     else:
         warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
 
