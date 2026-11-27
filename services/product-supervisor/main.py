@@ -583,7 +583,7 @@ def _gemini_api_key_is_configured() -> bool:
 async def health():
     groq_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
     groq_ready = groq_configured and _groq_zdr_is_confirmed()
-    gemini_configured = _gemini_api_key_is_configured()
+    gemini_configured = _gemini_metadata_fallback_enabled() and _gemini_api_key_is_configured()
     cloudflare_configured = cloudflare_provider_ready()
     cloudflare_ready = {
         "text": cloudflare_provider_ready("text"),
@@ -596,7 +596,7 @@ async def health():
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
-                "ready_for_product_review": cloudflare_ready["text"],
+                "ready_for_product_review": cloudflare_ready["review"],
                 "text_review": cloudflare_ready["text"],
                 "vision": cloudflare_ready["vision"],
                 "audio_transcription": cloudflare_ready["audio"],
@@ -633,7 +633,7 @@ async def authenticated_readiness():
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
-                "ready_for_product_review": cloudflare_provider_ready("text"),
+                "ready_for_product_review": cloudflare_provider_ready("review"),
                 "ready_for_file_text": cloudflare_provider_ready("text"),
                 "ready_for_file_vision": cloudflare_provider_ready("vision"),
                 "ready_for_audio_transcription": cloudflare_provider_ready("audio"),
@@ -653,7 +653,7 @@ async def authenticated_readiness():
     }
 
 
-def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, Any] | None:
+def minimize_document_knowledge_for_review(knowledge: Any, redact) -> dict[str, Any] | None:
     """Only pass persisted reports and short evidence quotes to a reviewer model; never send raw chunks."""
     if not isinstance(knowledge, dict):
         return None
@@ -735,7 +735,7 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
 @app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
 async def review_product(snapshot: ProductSnapshot):
     use_cloudflare = cloudflare_provider_ready("review")
-    gemini_fallback_enabled = os.getenv("GEMINI_METADATA_FALLBACK_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    gemini_fallback_enabled = _gemini_metadata_fallback_enabled()
     api_key = os.getenv("GEMINI_API_KEY", "").strip() if gemini_fallback_enabled and _gemini_api_key_is_configured() else ""
     if not use_cloudflare and not api_key:
         raise HTTPException(status_code=503, detail="Supervisor provider is not configured")
@@ -752,7 +752,7 @@ async def review_product(snapshot: ProductSnapshot):
             safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
     safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
     knowledge = safe_snapshot.get("document_knowledge")
-    safe_snapshot["document_knowledge"] = minimize_document_knowledge_for_gemini(knowledge, redact_sensitive_content)
+    safe_snapshot["document_knowledge"] = minimize_document_knowledge_for_review(knowledge, redact_sensitive_content)
 
     prompt = {
         "role": "product_quality_supervisor",
