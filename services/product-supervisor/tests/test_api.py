@@ -363,9 +363,9 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             "findings": [],
         }, ensure_ascii=False)
         with patch.dict(os.environ, {
-            "CLOUDFLARE_ACCOUNT_ID": "account-test",
-            "CLOUDFLARE_API_TOKEN": "cloudflare-test-token",
-            "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
+            "FARAST_AI_GATEWAY_URL": "https://farast-ai-gateway.example.workers.dev",
+            "FARAST_AI_GATEWAY_TOKEN": "gateway-test-token",
+            "GEMINI_METADATA_FALLBACK_ENABLED": "false",
             "GEMINI_API_KEY": "",
             "GROQ_API_KEY": "",
         }, clear=False), patch(
@@ -388,9 +388,35 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-20b")
+        self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-120b")
         self.assertEqual(response.json()["verdict"], "approved")
         cloudflare_review.assert_awaited_once()
+
+
+    def test_direct_gemini_metadata_fallback_is_disabled_even_when_a_key_exists(self):
+        with patch.dict(os.environ, {
+            "FARAST_AI_GATEWAY_URL": "",
+            "FARAST_AI_GATEWAY_TOKEN": "",
+            "GEMINI_METADATA_FALLBACK_ENABLED": "false",
+            "GEMINI_API_KEY": "configured-but-disabled",
+            "GROQ_API_KEY": "",
+        }, clear=False), patch("httpx.AsyncClient.post") as direct_provider:
+            response = self.client.post(
+                "/v1/reviews/products",
+                headers={"Authorization": "Bearer test-token"},
+                json={
+                    "product_id": "p-no-direct-gemini",
+                    "product_type": "digital_file",
+                    "title": "محصول آزمایشی",
+                    "price_rials": 100000,
+                    "category_name": "آموزشی",
+                    "has_clean_primary_file": True,
+                    "checks": ["content"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        direct_provider.assert_not_called()
 
     def test_health_does_not_disclose_secret(self):
         response = self.client.get("/health")
