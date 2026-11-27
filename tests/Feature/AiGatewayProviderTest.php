@@ -56,12 +56,12 @@ class AiGatewayProviderTest extends TestCase
         Http::fake([
             'https://gateway.example/v1/chat/completions' => Http::response([
                 'id' => 'chatcmpl-test',
-                'model' => 'gemini-3.8-flash',
+                'model' => '@cf/openai/gpt-oss-20b',
                 'choices' => [[
                     'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه کوتاه"}'],
                 ]],
                 'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4, 'total_tokens' => 16],
-            ], 200, ['X-Farast-AI-Provider' => 'gemini']),
+            ], 200, ['X-Farast-AI-Provider' => 'cloudflare-workers-ai']),
         ]);
 
         $provider = app(GeminiEditorProvider::class);
@@ -73,7 +73,7 @@ class AiGatewayProviderTest extends TestCase
 
         $this->assertSame(['text' => 'نسخه کوتاه'], $result['result']);
         $this->assertSame('chatcmpl-test', $result['provider_interaction_id']);
-        $this->assertSame('gemini-3.8-flash', $result['model']);
+        $this->assertSame('@cf/openai/gpt-oss-20b', $result['model']);
         $this->assertSame(['input_tokens' => 12, 'output_tokens' => 4, 'total_tokens' => 16], $result['usage']);
         $this->assertFalse($result['fallback_used']);
 
@@ -141,7 +141,7 @@ class AiGatewayProviderTest extends TestCase
                     'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه کوتاه‌شده"}'],
                 ]],
                 'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 8, 'total_tokens' => 28],
-            ], 200, ['X-Farast-AI-Provider' => 'ollama-local']),
+            ], 200, ['X-Farast-AI-Provider' => 'cloudflare-workers-ai']),
         ]);
 
         $provider = app(GeminiEditorProvider::class);
