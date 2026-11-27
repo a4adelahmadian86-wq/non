@@ -18,6 +18,15 @@ const PRIVATE_FIELD_NAMES = new Set([
   "personality",
   "audience_profile",
   "customer_profile",
+  "author_name",
+  "customer_name",
+  "user_name",
+  "account_id",
+  "session_id",
+  "ip_address",
+  "address",
+  "mobile",
+  "email_address",
 ]);
 
 const CUSTOM_METADATA = [
@@ -180,8 +189,26 @@ async function upsertKnowledge(request, env) {
     throw new RequestError(400, "unsupported_knowledge_type");
   }
   if (visibility !== "public") throw new RequestError(403, "only_public_knowledge_can_be_indexed");
-  if (knowledgeType === "approved_experience" && body.approval_status !== "approved") {
-    throw new RequestError(403, "experience_requires_approval");
+  if (knowledgeType === "product_document") {
+    if (body.access_scope !== "public_sample_only") {
+      throw new RequestError(403, "only_public_sample_documents_can_be_indexed");
+    }
+    if (body.review_status !== "approved" || body.product_status !== "published") {
+      throw new RequestError(403, "product_document_requires_approved_publication");
+    }
+  }
+  if (knowledgeType === "product_metadata") {
+    if (body.review_status !== "approved" || body.product_status !== "published") {
+      throw new RequestError(403, "product_metadata_requires_approved_publication");
+    }
+  }
+  if (knowledgeType === "approved_experience") {
+    if (body.approval_status !== "approved") {
+      throw new RequestError(403, "experience_requires_approval");
+    }
+    if (body.privacy_review_status !== "approved" || body.anonymized !== true) {
+      throw new RequestError(403, "experience_requires_privacy_review");
+    }
   }
   if (typeof content !== "string" || !content.trim()) {
     throw new RequestError(400, "knowledge_content_required");
