@@ -1,0 +1,7 @@
+name = "farast-ai-gateway"
+main = "worker.mjs"
+compatibility_date = "2026-11-27"
+workers_dev = true
+
+[vars]
+CF_MODEL = "@cf/openai/gpt-oss-20b"
