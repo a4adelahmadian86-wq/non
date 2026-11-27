@@ -625,6 +625,7 @@ async def health():
     cloudflare_configured = cloudflare_provider_ready()
     cloudflare_ready = {
         "text": cloudflare_provider_ready("text"),
+        "product": cloudflare_provider_ready("product"),
         "vision": cloudflare_provider_ready("vision"),
         "audio": cloudflare_provider_ready("audio"),
     }
@@ -636,12 +637,13 @@ async def health():
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
-                "ready_for_product_review": cloudflare_ready["text"],
+                "ready_for_product_review": cloudflare_ready["product"],
                 "text_review": cloudflare_ready["text"],
                 "vision": cloudflare_ready["vision"],
                 "audio_transcription": cloudflare_ready["audio"],
                 "models": {
                     "text": os.getenv("CLOUDFLARE_TEXT_MODEL", "@cf/openai/gpt-oss-20b"),
+                    "product": os.getenv("CLOUDFLARE_PRODUCT_MODEL", "@cf/openai/gpt-oss-120b"),
                     "vision": os.getenv("CLOUDFLARE_VISION_MODEL", "@cf/moondream/moondream3.1-9B-A2B"),
                     "audio": os.getenv("CLOUDFLARE_AUDIO_MODEL", "@cf/openai/whisper-large-v3-turbo"),
                 },
@@ -675,11 +677,12 @@ async def authenticated_readiness():
         "providers": {
             "cloudflare_workers_ai": {
                 "configured": cloudflare_configured,
-                "ready_for_product_review": cloudflare_provider_ready("text"),
+                "ready_for_product_review": cloudflare_provider_ready("product"),
                 "ready_for_file_text": cloudflare_provider_ready("text"),
                 "ready_for_file_vision": cloudflare_provider_ready("vision"),
                 "ready_for_audio_transcription": cloudflare_provider_ready("audio"),
                 "text_model": os.getenv("CLOUDFLARE_TEXT_MODEL", "@cf/openai/gpt-oss-20b"),
+                "product_model": os.getenv("CLOUDFLARE_PRODUCT_MODEL", "@cf/openai/gpt-oss-120b"),
                 "vision_model": os.getenv("CLOUDFLARE_VISION_MODEL", "@cf/moondream/moondream3.1-9B-A2B"),
                 "audio_model": os.getenv("CLOUDFLARE_AUDIO_MODEL", "@cf/openai/whisper-large-v3-turbo"),
             },
@@ -796,12 +799,12 @@ async def review_product(snapshot: ProductSnapshot):
             generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
-    use_cloudflare = cloudflare_provider_ready("text")
+    use_cloudflare = cloudflare_provider_ready("product")
     api_key = os.getenv("GEMINI_API_KEY", "").strip() if _gemini_api_key_is_configured() else ""
     if not use_cloudflare and not api_key:
         raise HTTPException(status_code=503, detail="Supervisor provider is not configured")
 
-    model = cloudflare_model("text") if use_cloudflare else GEMINI_MODEL
+    model = cloudflare_model("product") if use_cloudflare else GEMINI_MODEL
     if not model:
         raise HTTPException(status_code=503, detail="Supervisor model is not configured")
 
@@ -868,7 +871,7 @@ async def review_product(snapshot: ProductSnapshot):
                 max_tokens=2200,
                 temperature=0.15,
                 timeout_seconds=90,
-                model=os.getenv("CLOUDFLARE_PRODUCT_MODEL", "@cf/openai/gpt-oss-120b"),
+                model=model,
             )
             result = json.loads(raw)
         else:
