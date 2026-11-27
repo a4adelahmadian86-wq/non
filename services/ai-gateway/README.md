@@ -7,6 +7,7 @@ This is a stateless, server-side gateway for the existing Laravel AI-provider co
 - `GET /health`: public liveness only.
 - `GET /ready`: confirms that required secrets and the account ID are configured.
 - `POST /v1/chat/completions`: Bearer-authenticated OpenAI-compatible text/chat endpoint, pinned to GPT-OSS 20B.
+- `POST /v1/chat/completions/review`: separate high-capability product-review endpoint, pinned to GPT-OSS 120B.
 - `POST /v1/ai/run/vision`: authenticated, streamed JSON pass-through to the pinned Moondream 3.1 vision model.
 - `POST /v1/ai/run/audio`: authenticated, streamed JSON pass-through to the pinned Whisper Large V3 Turbo transcription model.
 - The Worker pins all three model IDs server-side, caps chat output at 4,096 tokens, rejects oversized requests, streams image/audio request bodies without materializing their base64 payloads in Worker memory, passes SSE/JSON responses through, and does not log request bodies.
@@ -48,7 +49,7 @@ npx wrangler secret put CF_ACCOUNT_ID
 ```
 
 Optional secret/configuration:
-- Model IDs are pinned in `wrangler.toml` as `CF_TEXT_MODEL`, `CF_VISION_MODEL`, and `CF_AUDIO_MODEL`; change only after model quality, ZDR, and quota tests.
+- Model IDs are pinned in `wrangler.toml` as `CF_TEXT_MODEL`, `CF_REVIEW_MODEL`, `CF_VISION_MODEL`, and `CF_AUDIO_MODEL`; change only after model quality, ZDR, and quota tests.
 
 After deployment, test `/health`, `/ready`, and an authenticated chat request. Only then place the returned exact Worker URL in Laravel's `FARAST_AI_GATEWAY_URL`.
 
