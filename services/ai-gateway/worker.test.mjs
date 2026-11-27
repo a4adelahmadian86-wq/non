@@ -137,7 +137,7 @@ test("review endpoint pins the higher-capability GPT-OSS 120B model", async () =
                 },
                 body: JSON.stringify({
                     model: "client-selected-model-must-be-ignored",
-                    max_tokens: 2200,
+                    max_tokens: 99999,
                     messages: [{ role: "user", content: "Review this product" }],
                 }),
             }),
