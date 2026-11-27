@@ -5,6 +5,7 @@ const MAX_OUTPUT_TOKENS = 4096;
 
 const DEFAULT_MODELS = {
     text: "@cf/openai/gpt-oss-20b",
+    review: "@cf/openai/gpt-oss-120b",
     vision: "@cf/moondream/moondream3.1-9B-A2B",
     audio: "@cf/openai/whisper-large-v3-turbo",
 };
@@ -41,6 +42,7 @@ function validAccountId(value) {
 
 function modelForTask(task, env) {
     if (task === "text") return String(env.CF_TEXT_MODEL || DEFAULT_MODELS.text);
+    if (task === "review") return String(env.CF_REVIEW_MODEL || DEFAULT_MODELS.review);
     if (task === "vision") return String(env.CF_VISION_MODEL || DEFAULT_MODELS.vision);
     if (task === "audio") return String(env.CF_AUDIO_MODEL || DEFAULT_MODELS.audio);
     return "";
@@ -106,6 +108,7 @@ export default {
                 provider: "cloudflare-workers-ai",
                 models: {
                     text: modelForTask("text", env),
+                    review: modelForTask("review", env),
                     vision: modelForTask("vision", env),
                     audio: modelForTask("audio", env),
                 },
@@ -124,7 +127,8 @@ export default {
             return json(503, { error: { message: "ai_gateway_not_configured" } });
         }
 
-        if (url.pathname === "/v1/chat/completions") {
+        const chatTask = url.pathname === "/v1/chat/completions/review" ? "review" : (url.pathname === "/v1/chat/completions" ? "text" : "");
+        if (chatTask) {
             const contentLength = Number(request.headers.get("Content-Length") || 0);
             if (contentLength > MAX_CHAT_BODY_BYTES) {
                 return json(413, { error: { message: "request_too_large" } });
@@ -151,7 +155,7 @@ export default {
                 return json(422, { error: { message: "messages_required_or_invalid" } });
             }
 
-            const model = modelForTask("text", env);
+            const model = modelForTask(chatTask, env);
             try {
                 const upstream = await fetch(upstreamUrl(env, "/ai/v1/chat/completions"), {
                     method: "POST",
