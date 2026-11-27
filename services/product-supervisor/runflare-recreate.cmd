@@ -68,6 +68,25 @@ echo Then return here and press a key. The clipboard will be cleared before depl
 pause
 echo. | clip
 
+echo.
+echo Checking Runflare login...
+runflare login
+if errorlevel 1 (
+    echo Runflare login failed. Sign in, then run this script again.
+    pause
+    exit /b 1
+)
+
+echo Clearing the old project/service selection so a deleted 3-month service is not reused...
+runflare reset
+if errorlevel 1 (
+    echo Could not reset the cached Runflare selection. Check the CLI message above.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Select the newly created project and Docker service when the CLI asks.
 runflare deploy
 if errorlevel 1 (
     echo.
@@ -77,5 +96,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Deployment command completed. Verify /health and authenticated /v1/ready.
+echo Deployment command completed.
+echo Verify /health and authenticated /v1/ready.
+echo If Runflare issued a new public URL, update FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL on the Laravel host.
+echo Keep runflare.env private; it contains the shared supervisor token.
 pause
