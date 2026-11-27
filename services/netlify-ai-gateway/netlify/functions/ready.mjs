@@ -6,6 +6,7 @@ function configured() {
     const url = new URL(rawUrl);
     return incoming.length >= 32 &&
       upstreamToken.length >= 32 &&
+      incoming !== upstreamToken &&
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
