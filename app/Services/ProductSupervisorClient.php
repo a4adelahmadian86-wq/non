@@ -33,7 +33,7 @@ class ProductSupervisorClient
                     ->timeout((int) config('services.product_supervisor.timeout', 40))
                     ->post($endpoint['url'].'/v1/reviews/products', $snapshot);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -100,7 +100,7 @@ class ProductSupervisorClient
 
                 $response = $request->post($endpoint['url'].'/v1/reviews/files', $metadata);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -127,6 +127,11 @@ class ProductSupervisorClient
         }
 
         throw new RuntimeException('product_supervisor_unavailable');
+    }
+
+    private function shouldFailover(\\Illuminate\\Http\\Client\\Response $response): bool
+    {
+        return $response->serverError() || in_array($response->status(), [408, 425, 429], true);
     }
 
     private function isPrivateServiceUrl(string $url): bool
