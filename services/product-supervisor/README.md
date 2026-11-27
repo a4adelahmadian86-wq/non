@@ -11,7 +11,7 @@ An isolated, stateless product-quality review service. It is separate from the e
 | Product image understanding | Cloudflare Workers AI Moondream 3.1 | Resized image plus redacted product context |
 | Audio transcription | Cloudflare Workers AI Whisper Large V3 Turbo | Extracted audio bytes; no original filename |
 | Optional product-metadata fallback | Gemini | Used only when Cloudflare Workers AI is not configured; never receives raw file text or original files |
-| Optional file-review fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; otherwise no file data is sent to Groq |
+| Optional text/audio fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; image analysis is not routed to Groq |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
 Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
