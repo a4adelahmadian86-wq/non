@@ -73,7 +73,7 @@ class GeminiEditorProvider implements AiProvider
                     $requestId,
                     $gatewayTarget['model']
                 );
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $gatewayFailure = $exception;
             }
         }
