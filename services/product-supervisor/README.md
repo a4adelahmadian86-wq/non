@@ -14,7 +14,7 @@ An isolated, stateless product-quality review service. It is separate from the e
 | Optional file-review fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; otherwise no file data is sent to Groq |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day; when the free allowance is exhausted, requests are expected to fail with a rate-limit response and the Laravel queue can retry later. No automatic paid-provider fallback is performed after a Cloudflare error.
+Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
 
 The service never sends private user profiles, behavioral observations or account memory to these provider calls. Product metadata and product-file content are separate from those user records. Cloudflare Workers AI inference is not used to train models and is processed under Cloudflare's Workers AI data-handling policy. The later AI Search index is a separate persistent knowledge store; only verified product knowledge and explicitly approved, sanitized experiences may be indexed there.
 
@@ -48,7 +48,7 @@ A Dockerfile is provided for a no-card free-container pilot on Back4App:
 3. Expose port `8000`. Do not attach a persistent disk; this service must remain stateless.
 4. Add secrets only in the Back4App environment settings:
    - `SUPERVISOR_API_TOKEN`: a new, dedicated random secret.
-   - `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: preferred inference provider. Create a scoped API token with AI Gateway Read, AI Gateway Edit and Workers AI Read permissions. Use the default gateway ID `default` unless a dedicated gateway is created. No R2 permissions are needed. The OpenAI-compatible text endpoint explicitly disables AI Gateway request and payload logging.
+   - `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: preferred inference provider. Create a dedicated API token for this worker with AI Gateway Read, AI Gateway Edit and Workers AI Read permissions. Use the default gateway ID `default` unless a dedicated gateway is created. No R2 permissions are needed. Create a separate token for the Laravel site's assistant/editor; do not reuse this worker token. The OpenAI-compatible text endpoint explicitly disables AI Gateway request and payload logging.
    - `CLOUDFLARE_TEXT_MODEL`, `CLOUDFLARE_VISION_MODEL` and `CLOUDFLARE_AUDIO_MODEL`: optional model overrides; the defaults in `.env.example` are the tested model identifiers.
    - `GEMINI_API_KEY`: optional product-metadata fallback, used only when Cloudflare is not configured.
    - `GROQ_API_KEY`: optional fallback; file text, image and audio review stay disabled unless account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true` is explicitly set.
