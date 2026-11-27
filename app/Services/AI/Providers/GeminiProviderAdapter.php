@@ -47,6 +47,7 @@ final class GeminiProviderAdapter implements AiProviderInterface
                 'output_bytes' => $raw['output_bytes'] ?? 0,
                 'prompt_hash' => $raw['prompt_hash'] ?? null,
                 'fallback_used' => $raw['fallback_used'] ?? false,
+                'provider' => $raw['provider'] ?? 'cloudflare-workers-ai',
             ],
         );
     }
