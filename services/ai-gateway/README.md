@@ -53,6 +53,7 @@ After deployment, test `/health`, `/ready`, and an authenticated chat request. O
 
 ## Privacy and network limits
 
-- Never send private user-memory profiles, inferred behavior, credentials, or confidential user documents to this free API gateway.
-- Only send the minimum content required for the operation. Public/approved product text may be routed according to the site's data policy.
+- Never send private user-memory profiles, hidden behavioral inferences, credentials, passwords, or account secrets to this gateway.
+- For editor tasks, send only the text the user explicitly selected or asked to process; do not silently send the full document or unrelated history.
+- Product files may be analyzed only through the approved ZDR model path and only for the product-processing purpose. The application must keep the private user profile and product knowledge in its own database.
 - This Worker is an API gateway, not a VPN or a general-purpose proxy. It does not bypass a provider's legal/regional restrictions. If the Worker domain is unreachable from the application host, the application needs a separately tested fallback endpoint.
