@@ -301,6 +301,12 @@ async def review_product_file(
                         label = f"تصویر {index + 1}" + (f" صفحه {page_number}" if page_number else "")
                         visual_parts.append(f"{label}: {report}")
                         successful_images += 1
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 429:
+                        raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
+                    if exc.response.status_code >= 500:
+                        raise HTTPException(status_code=503, detail="Workers AI is temporarily unavailable; retry later") from None
+                    warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
                 except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
                     warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
             visual_report = "\n".join(visual_parts)
@@ -344,6 +350,13 @@ async def review_product_file(
                 if transcription_truncated:
                     warnings.append("رونویسی صوت از سقف استخراج عبور کرده و ناقص است؛ تولید محتوا غیرفعال می‌ماند.")
                 provider_status[f"{audio_provider}_transcription"] = "partial" if transcription_truncated else "completed"
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429:
+                    raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
+                if exc.response.status_code >= 500:
+                    raise HTTPException(status_code=503, detail="Workers AI is temporarily unavailable; retry later") from None
+                provider_status[f"{audio_provider}_transcription"] = "unavailable"
+                warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
             except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
                 provider_status[f"{audio_provider}_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
@@ -382,6 +395,13 @@ async def review_product_file(
                 warnings.append("تحلیل متنی فایل ناقص است.")
             elif analysis_status not in {"completed", "partial"}:
                 warnings.append("تحلیل متنی فایل کامل نشد؛ نتیجه برای تأیید نهایی قابل استفاده نیست.")
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429:
+                raise HTTPException(status_code=429, detail="Workers AI free quota is temporarily exhausted; retry later") from None
+            if exc.response.status_code >= 500:
+                raise HTTPException(status_code=503, detail="Workers AI is temporarily unavailable; retry later") from None
+            provider_status["cloudflare_text"] = "unavailable"
+            warnings.append("تحلیل محتوای فایل توسط مدل امن انجام نشد.")
         except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
             provider_status["cloudflare_text"] = "unavailable"
             warnings.append("تحلیل محتوای فایل توسط مدل امن انجام نشد.")
