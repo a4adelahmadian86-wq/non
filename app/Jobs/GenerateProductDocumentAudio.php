@@ -21,9 +21,17 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Audio generation can depend on local or remote providers that may be
+    // temporarily unavailable. Preserve the queued work across short outages.
     public int $tries = 2;
     public int $timeout = 900;
     public int $uniqueFor = 1800;
+    public array $backoff = [120, 600, 1800, 3600];
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addDay();
+    }
 
     public function uniqueId(): string
     {
@@ -67,7 +75,9 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
         if (! $audioService->configured()) {
             $this->setAudioState($document, ['status' => 'awaiting_provider', 'reason' => 'document_audio_not_configured']);
-            return;
+            // Keep the job in the durable queue; it will retry when the local
+            // speech service is configured or connectivity is restored.
+            throw new \RuntimeException('document_audio_provider_not_configured');
         }
 
         try {
@@ -228,7 +238,11 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'document_id' => $this->documentId,
                 'exception' => class_basename($exception),
             ]);
-            $this->setAudioState($document, ['status' => 'failed', 'reason' => 'audio_generation_failed']);
+            $awaitingProvider = $exception->getMessage() === 'document_audio_provider_not_configured';
+            $this->setAudioState($document, [
+                'status' => $awaitingProvider ? 'awaiting_provider' : 'failed',
+                'reason' => $awaitingProvider ? 'document_audio_not_configured' : 'audio_generation_failed',
+            ]);
             throw $exception;
         }
     }

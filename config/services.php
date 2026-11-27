@@ -6,18 +6,23 @@ $remoteBatchDefault = ! $voiceLocalOnly;
 return [
     // Central online assistant gateway. Set FARAST_AI_GATEWAY_URL empty only to use the compatibility provider path.
     'ai_gateway' => [
-        // Production AI requests are routed through the existing Render gateway by default.
-        // Local-only mode still rejects public gateway URLs in the controller.
+        // Keep the existing primary endpoint unchanged; the optional domestic gateway is an offline fallback.
         'url' => env('FARAST_AI_GATEWAY_URL', 'https://voice-typing-r5r7.onrender.com'),
         'token' => env('FARAST_VOICE_TOKEN', ''),
         'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
+        'fallback_url' => env('FARAST_AI_GATEWAY_FALLBACK_URL', ''),
+        'fallback_token' => env('FARAST_AI_GATEWAY_FALLBACK_TOKEN', ''),
+        'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', 'farast-general'),
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
     'product_supervisor' => [
+        // Keep the existing primary endpoint unchanged; the optional domestic node is an offline fallback.
         'url' => env('FARAST_PRODUCT_SUPERVISOR_URL', ''),
         'token' => env('FARAST_PRODUCT_SUPERVISOR_TOKEN', ''),
+        'fallback_url' => env('FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL', ''),
+        'fallback_token' => env('FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN', ''),
         'timeout' => max(10, min(180, (int) env('FARAST_PRODUCT_SUPERVISOR_TIMEOUT', 40))),
         'file_timeout' => max(300, min(540, (int) env('FARAST_PRODUCT_SUPERVISOR_FILE_TIMEOUT', 540))),
     ],

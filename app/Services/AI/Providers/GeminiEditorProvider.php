@@ -20,14 +20,59 @@ class GeminiEditorProvider implements AiProvider
     {
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
         $gatewayFailure = null;
+        $localOnly = (bool) config('services.voice.local_only', false);
+
+        $gatewayTargets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
+            $gatewayTargets[] = [
+                'url' => $gatewayUrl,
+                'token' => $gatewayToken,
+                'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general',
+            ];
+        }
+        if (
+            $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && str_starts_with($fallbackGatewayUrl, 'https://')
+            && $fallbackGatewayUrl !== $gatewayUrl
+        ) {
+            $gatewayTargets[] = [
+                'url' => $fallbackGatewayUrl,
+                'token' => $fallbackGatewayToken,
+                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+            ];
+        }
+
+        if ($localOnly) {
+            // Never send editor content to a public gateway or direct cloud provider
+            // when the installation explicitly requires local-only processing.
+            $gatewayTargets = array_values(array_filter(
+                $gatewayTargets,
+                fn (array $target): bool => $this->isPrivateServiceUrl($target['url'])
+            ));
+        }
+
+        foreach ($gatewayTargets as $gatewayTarget) {
             try {
-                return $this->executeViaGateway($gatewayUrl, $gatewayToken, $operation, $payload, $requestId);
+                return $this->executeViaGateway(
+                    $gatewayTarget['url'],
+                    $gatewayTarget['token'],
+                    $operation,
+                    $payload,
+                    $requestId,
+                    $gatewayTarget['model']
+                );
             } catch (\Throwable $e) {
-                // Keep the existing direct Gemini route as the next layer when Runflare is unavailable.
+                // Keep trying the configured private fallback before the legacy provider path.
                 $gatewayFailure = $e;
             }
+        }
+
+        if ($localOnly) {
+            throw new RuntimeException($gatewayFailure ? 'ai_gateway_unavailable' : 'ai_gateway_not_configured', 0, $gatewayFailure);
         }
 
         $key = SiteSetting::read('gemini_api_key') ?: config('services.gemini.key');
@@ -90,7 +135,25 @@ class GeminiEditorProvider implements AiProvider
         throw ($last instanceof RuntimeException ? $last : new RuntimeException('ai_provider_failure'));
     }
 
-    private function executeViaGateway(string $url, string $token, array $operation, array $payload, string $requestId): array
+    private function isPrivateServiceUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) return false;
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') return false;
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        if ($host === 'localhost' || ! str_contains($host, '.')) return true;
+
+        return preg_match('/\\.(?:internal|local|localhost|test|svc|cluster\\.local)$/D', $host) === 1;
+    }
+
+    private function executeViaGateway(string $url, string $token, array $operation, array $payload, string $requestId, string $model = 'farast-general'): array
     {
         $prompt = $this->prompt($operation['name'], $payload['text'], $payload['context']);
         $schema = $this->schema($operation['result']);
@@ -103,7 +166,7 @@ class GeminiEditorProvider implements AiProvider
                 'Accept' => 'application/json',
                 'X-Farast-Request-Id' => $requestId,
             ])->post($url.'/v1/chat/completions', [
-                'model' => 'farast-general',
+                'model' => $model,
                 'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user', 'content' => $prompt],

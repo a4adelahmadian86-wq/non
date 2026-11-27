@@ -34,9 +34,27 @@ class GlobalAssistantController extends Controller
         }
         $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-        $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
-        $gatewayHealthy = ! $localOnly;
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
         $gatewayHealthUrl = trim((string) config('services.ai_gateway.health_url', ''));
+        $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
+
+        // In local-only mode, a configured domestic endpoint is a valid primary
+        // even when the optional online endpoint is absent or not private.
+        if (
+            $localOnly
+            && (! $gatewayPrivate || $gatewayToken === '')
+            && $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && $this->isPrivateServiceUrl($fallbackGatewayUrl)
+        ) {
+            $gatewayUrl = $fallbackGatewayUrl;
+            $gatewayToken = $fallbackGatewayToken;
+            $gatewayPrivate = true;
+            $gatewayHealthUrl = $fallbackGatewayUrl.'/ready';
+        }
+
+        $gatewayHealthy = ! $localOnly;
         if ($localOnly && $gatewayPrivate && $gatewayToken !== '' && $gatewayHealthUrl !== '') {
             try {
                 $health = Http::acceptJson()->connectTimeout(2)->timeout(4)->get($gatewayHealthUrl);
@@ -49,13 +67,7 @@ class GlobalAssistantController extends Controller
             ? ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy)
             : ($gatewayUrl !== '' && $gatewayToken !== '');
         $chatGatewayMessage = '';
-        $chatGatewayHealthUrl = '';
-        if (! $localOnly && $gatewayUrl !== '') {
-            $gatewayHost = strtolower((string) parse_url($gatewayUrl, PHP_URL_HOST));
-            if ($gatewayHost !== '' && str_ends_with($gatewayHost, '.onrender.com')) {
-                $chatGatewayHealthUrl = rtrim($gatewayUrl, '/').'/health';
-            }
-        }
+        $chatGatewayHealthUrl = $gatewayHealthUrl;
         if (! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
@@ -64,7 +76,7 @@ class GlobalAssistantController extends Controller
             if ($localOnly && $gatewayPrivate && $gatewayToken !== '' && ! $gatewayHealthy) $missing[] = 'مدل زبانی محلی آماده نیست؛ start.cmd را اجرا کن و سلامت /ready را بررسی کن';
             $chatGatewayMessage = $localOnly
                 ? 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.'
-                : 'درگاه آنلاین Render برای چت آماده نیست؛ این تنظیمات لازم است: '.implode('، ', $missing).'.';
+                : 'درگاه هوش مصنوعی برای چت آماده نیست؛ این تنظیمات لازم است: '.implode('، ', $missing).'.';
         }
 
         return response()->json([
@@ -119,7 +131,7 @@ class GlobalAssistantController extends Controller
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_asr_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
                 $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN را با توکن موتور صدای پیکربندی‌شده یکسان کن.',
                     429 => 'سرویس تشخیص گفتار فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
                     default => 'موتور گفتار خودمیزبان پاسخ معتبر نداد (HTTP '.$response->status().').',
                 };
@@ -168,9 +180,7 @@ class GlobalAssistantController extends Controller
             return response()->json(['ok' => false, 'code' => 'tts_token_missing', 'message' => 'برای اتصال امن به موتور صدا، FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN باید تنظیم شود.'], 503, ['Cache-Control' => 'no-store']);
         }
         try {
-            // The free Render service can cold-start; keep a bounded connection timeout
-            // separate from the longer inference/read timeout so the browser does not
-            // fail before the upstream has a chance to wake up.
+            // Keep connection establishment bounded separately from the longer inference timeout.
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')
                 ->connectTimeout(10)
                 ->timeout(120);
@@ -421,7 +431,19 @@ class GlobalAssistantController extends Controller
         $localVoiceOnly = (bool) config('services.voice.local_only', false);
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-        // The normal Render-gateway path must not depend on the local SiteSetting table.
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+        if (
+            $localVoiceOnly
+            && (! $this->isPrivateServiceUrl($gatewayUrl) || $gatewayToken === '')
+            && $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && $this->isPrivateServiceUrl($fallbackGatewayUrl)
+        ) {
+            $gatewayUrl = $fallbackGatewayUrl;
+            $gatewayToken = $fallbackGatewayToken;
+        }
+        // The gateway path must not depend on the local SiteSetting table.
         $groqKey = '';
         if (! $localVoiceOnly && ($gatewayUrl === '' || $gatewayToken === '')) {
             try {
@@ -478,11 +500,41 @@ class GlobalAssistantController extends Controller
 
         $targets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
-            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
+            $targets[] = [
+                'url' => $gatewayUrl.'/v1/chat/completions',
+                'token' => $gatewayToken,
+                'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general',
+                'limit_key' => 'max_tokens',
+                'name' => 'gateway',
+                'connect_timeout' => 8,
+                'timeout' => 100,
+            ];
         }
-        if (! $localVoiceOnly && $groqKey !== '' && ! ($gatewayUrl !== '' && $gatewayToken !== '')) {
-            // Direct Groq is a compatibility path only when no Render gateway is configured.
-            $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
+
+        // The domestic gateway is a private server-side fallback and is never exposed to the browser.
+        // Require HTTPS because this request carries private conversation history and a bearer token.
+        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+        if (
+            $fallbackGatewayUrl !== ''
+            && $fallbackGatewayToken !== ''
+            && str_starts_with($fallbackGatewayUrl, 'https://')
+            && $fallbackGatewayUrl !== $gatewayUrl
+        ) {
+            $targets[] = [
+                'url' => $fallbackGatewayUrl.'/v1/chat/completions',
+                'token' => $fallbackGatewayToken,
+                'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
+                'limit_key' => 'max_tokens',
+                'name' => 'domestic_fallback',
+                'connect_timeout' => 4,
+                'timeout' => 120,
+            ];
+        }
+
+        if (! $localVoiceOnly && $groqKey !== '' && $gatewayUrl === '' && $fallbackGatewayUrl === '') {
+            // Direct Groq is a compatibility path only when no central gateway is configured.
+            $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq', 'connect_timeout' => 8, 'timeout' => 100];
         }
         $upstream = null;
         foreach ($targets as $target) {
@@ -496,7 +548,8 @@ class GlobalAssistantController extends Controller
             try {
                 $candidate = Http::withToken($target['token'])->accept('text/event-stream')
                     ->withOptions(['stream' => true])
-                    ->connectTimeout(15)->timeout(100)
+                    ->connectTimeout((int) ($target['connect_timeout'] ?? 8))
+                    ->timeout((int) ($target['timeout'] ?? 100))
                     ->post($target['url'], $payload);
                 if ($candidate->successful() && str_contains(strtolower((string) $candidate->header('Content-Type', '')), 'text/event-stream')) {
                     $upstream = $candidate;
@@ -605,7 +658,13 @@ class GlobalAssistantController extends Controller
         try {
             $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
             $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-            $gatewayConfigured = $gatewayUrl !== '' && $gatewayToken !== '';
+            $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
+            $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+            $fallbackGatewayConfigured = $fallbackGatewayUrl !== ''
+                && $fallbackGatewayToken !== ''
+                && str_starts_with($fallbackGatewayUrl, 'https://')
+                && $fallbackGatewayUrl !== $gatewayUrl;
+            $gatewayConfigured = ($gatewayUrl !== '' && $gatewayToken !== '') || $fallbackGatewayConfigured;
             $groqKey = '';
             if (! $gatewayConfigured) {
                 try {
@@ -648,37 +707,63 @@ class GlobalAssistantController extends Controller
                 }
                 $messages[] = ['role' => 'user', 'content' => $data['message']];
 
-                // Prefer the Render gateway. When it is configured, do not silently bypass it
+                // Prefer the configured central gateway. When it is configured, do not silently bypass it
                 // with a direct provider request if the gateway is unavailable.
                 if ($gatewayConfigured) {
-                    try {
-                        $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
-                        $gatewayResponse = Http::withToken($gatewayToken)->acceptJson()->timeout(35)->retry(1, 300, throw: false)
-                            ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
-                            ->post($gatewayUrl.'/v1/chat/completions', [
-                                'model' => 'farast-general',
-                                'messages' => $messages,
-                                'temperature' => 0.2,
-                                'max_tokens' => 500,
-                            ]);
-                        $gatewayReply = $gatewayResponse->json('choices.0.message.content');
-                        if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
-                            $gatewayReply = trim($gatewayReply);
-                            $this->persistExchange((int) $user->id, $data['message'], $gatewayReply);
-                            return response()->json(['ok' => true, 'reply' => $gatewayReply, 'provider' => 'farast-ai-gateway'], 200, ['Cache-Control' => 'no-store']);
-                        }
-                        Log::warning('farast.global_assistant_gateway_failed', [
-                            'user_id' => $user->id,
-                            'status' => $gatewayResponse->status(),
-                            'fallback' => 'disabled',
-                        ]);
-                    } catch (\Throwable $gatewayException) {
-                        Log::warning('farast.global_assistant_gateway_exception', [
-                            'user_id' => $user->id,
-                            'error_class' => class_basename($gatewayException),
-                            'fallback' => 'disabled',
-                        ]);
+                    $gatewayTargets = [];
+                    if ($gatewayUrl !== '' && $gatewayToken !== '') {
+                        $gatewayTargets[] = [
+                            'url' => $gatewayUrl,
+                            'token' => $gatewayToken,
+                            'name' => 'primary',
+                            'timeout' => 35,
+                        ];
                     }
+                    if ($fallbackGatewayConfigured) {
+                        $gatewayTargets[] = [
+                            'url' => $fallbackGatewayUrl,
+                            'token' => $fallbackGatewayToken,
+                            'name' => 'domestic_fallback',
+                            'timeout' => 120,
+                        ];
+                    }
+
+                    $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
+                    foreach ($gatewayTargets as $gatewayTarget) {
+                        try {
+                            $gatewayResponse = Http::withToken($gatewayTarget['token'])->acceptJson()
+                                ->connectTimeout($gatewayTarget['name'] === 'primary' ? 8 : 4)
+                                ->timeout($gatewayTarget['timeout'])
+                                ->retry(1, 300, throw: false)
+                                ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
+                                ->post($gatewayTarget['url'].'/v1/chat/completions', [
+                                    'model' => $gatewayTarget['name'] === 'primary'
+                                        ? (trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general')
+                                        : (trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general'),
+                                    'messages' => $messages,
+                                    'temperature' => 0.2,
+                                    'max_tokens' => 500,
+                                ]);
+                            $gatewayReply = $gatewayResponse->json('choices.0.message.content');
+                            if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
+                                $gatewayReply = trim($gatewayReply);
+                                $this->persistExchange((int) $user->id, $data['message'], $gatewayReply);
+                                return response()->json(['ok' => true, 'reply' => $gatewayReply, 'provider' => 'farast-ai-gateway'], 200, ['Cache-Control' => 'no-store']);
+                            }
+                            Log::warning('farast.global_assistant_gateway_failed', [
+                                'user_id' => $user->id,
+                                'provider' => $gatewayTarget['name'],
+                                'status' => $gatewayResponse->status(),
+                            ]);
+                        } catch (\Throwable $gatewayException) {
+                            Log::warning('farast.global_assistant_gateway_exception', [
+                                'user_id' => $user->id,
+                                'provider' => $gatewayTarget['name'],
+                                'error_class' => class_basename($gatewayException),
+                            ]);
+                        }
+                    }
+
                     throw new RuntimeException('ai_gateway_failure');
                 }
 
