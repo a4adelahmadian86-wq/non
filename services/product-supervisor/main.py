@@ -580,6 +580,46 @@ def _gemini_api_key_is_configured() -> bool:
 
 
 
+
+@app.post("/v1/transcribe", dependencies=[Depends(authenticate)])
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    locale: str = Form(default="fa-IR", max_length=12),
+    source_name: str | None = Form(default=None, max_length=240),
+):
+    from file_pipeline import transcribe_audio_with_cloudflare
+
+    if locale not in {"fa-IR", "en-US", "ar-SA"}:
+        raise HTTPException(status_code=422, detail="Unsupported transcription locale")
+
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Audio exceeds 25 MB")
+    if not data:
+        raise HTTPException(status_code=422, detail="Audio file is empty")
+    if not cloudflare_provider_ready("audio"):
+        raise HTTPException(status_code=503, detail="Audio transcription provider is temporarily unavailable")
+
+    filename = (source_name or file.filename or "audio").replace("\\", "/").split("/")[-1][:240]
+    language = {"fa-IR": "fa", "en-US": "en", "ar-SA": "ar"}[locale]
+    try:
+        transcript, truncated = await transcribe_audio_with_cloudflare(data, filename, language)
+    except (httpx.HTTPError, RuntimeError):
+        raise HTTPException(status_code=503, detail="Audio transcription failed; retry later") from None
+
+    return {
+        "text": transcript,
+        "empty": not bool(transcript.strip()),
+        "truncated": bool(truncated),
+        "locale": locale,
+        "engine": "farast-ai-gateway",
+        "model": cloudflare_model("audio"),
+        "provider_status": {"audio": "completed"},
+        "request_id": str(uuid.uuid4()),
+    }
+
+
 @app.post("/v1/ocr", dependencies=[Depends(authenticate)])
 async def ocr_document(
     file: UploadFile = File(...),
