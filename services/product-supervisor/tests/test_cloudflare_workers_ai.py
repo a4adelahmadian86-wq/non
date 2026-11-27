@@ -83,6 +83,7 @@ class CloudflareWorkersAiTests(unittest.TestCase):
             "CLOUDFLARE_ACCOUNT_ID": "account-test",
             "CLOUDFLARE_API_TOKEN": "token-test-only",
             "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
+            "CLOUDFLARE_PRODUCT_MODEL": "@cf/openai/gpt-oss-120b",
             "CLOUDFLARE_VISION_MODEL": "@cf/moondream/moondream3.1-9B-A2B",
             "CLOUDFLARE_AUDIO_MODEL": "@cf/openai/whisper-large-v3-turbo",
             "GROQ_API_KEY": "",
@@ -98,8 +99,18 @@ class CloudflareWorkersAiTests(unittest.TestCase):
 
     def test_cloudflare_provider_requires_account_and_scoped_token(self):
         self.assertTrue(cloudflare_provider.cloudflare_provider_ready("text"))
+        self.assertTrue(cloudflare_provider.cloudflare_provider_ready("product"))
         with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": ""}, clear=False):
             self.assertFalse(cloudflare_provider.cloudflare_provider_ready("text"))
+            self.assertFalse(cloudflare_provider.cloudflare_provider_ready("product"))
+
+    def test_product_model_has_its_own_validated_setting(self):
+        self.assertEqual(
+            cloudflare_provider.cloudflare_model("product"),
+            "@cf/openai/gpt-oss-120b",
+        )
+        with patch.dict(os.environ, {"CLOUDFLARE_PRODUCT_MODEL": "gpt-oss-120b"}, clear=False):
+            self.assertFalse(cloudflare_provider.cloudflare_provider_ready("product"))
 
     def test_gpt_oss_20b_uses_account_scoped_openai_compatible_endpoint(self):
         answer = asyncio.run(cloudflare_provider.cloudflare_chat_completion(
