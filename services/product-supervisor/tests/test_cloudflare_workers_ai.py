@@ -120,6 +120,15 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-20b")
         self.assertEqual(request["json"]["response_format"], {"type": "json_object"})
 
+    def test_product_review_model_can_override_bulk_text_model(self):
+        answer = asyncio.run(cloudflare_provider.cloudflare_chat_completion(
+            [{"role": "user", "content": "بررسی محصول"}],
+            model="@cf/openai/gpt-oss-120b",
+        ))
+
+        self.assertIn("خلاصه", answer)
+        self.assertEqual(FakeAsyncClient.calls[-1]["json"]["model"], "@cf/openai/gpt-oss-120b")
+
     def test_file_text_analysis_prefers_cloudflare_without_groq_zdr(self):
         result = asyncio.run(file_pipeline.analyze_extracted_content(
             "این متن برای بررسی دقیق محصول است.",
