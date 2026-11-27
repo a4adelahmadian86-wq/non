@@ -27,6 +27,16 @@ const PRIVATE_FIELD_NAMES = new Set([
   "address",
   "mobile",
   "email_address",
+  "user_profile",
+  "user_memory",
+  "memory",
+  "behavior_profile",
+  "personality_profile",
+  "psychographic_profile",
+  "user_preferences",
+  "purchase_history",
+  "order_history",
+  "private_notes",
 ]);
 
 const CUSTOM_METADATA = [
@@ -95,8 +105,17 @@ function isAuthorized(request, env) {
 }
 
 function hasPrivateFields(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.keys(value).some((key) => PRIVATE_FIELD_NAMES.has(key.toLowerCase()));
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some((item) => hasPrivateFields(item));
+
+  return Object.entries(value).some(([key, child]) => {
+    const normalizedKey = key
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .toLowerCase()
+      .replace(/[\\s-]+/g, "_");
+    return PRIVATE_FIELD_NAMES.has(normalizedKey)
+      || (child && typeof child === "object" && hasPrivateFields(child));
+  });
 }
 
 function validIdentifier(value) {
