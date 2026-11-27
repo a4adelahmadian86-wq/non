@@ -364,14 +364,30 @@ async function deleteKnowledge(request, env) {
   }
 
   const key = itemKey(productId, knowledgeType, documentId);
-  const instance = await ensureInstance(env);
-  const listed = await instance.items.list({ search: key, per_page: 50 });
+  let instance;
+  try {
+    instance = await ensureInstance(env);
+  } catch {
+    throw new RequestError(503, "knowledge_index_unavailable");
+  }
+
+  let listed;
+  try {
+    listed = await instance.items.list({ search: key, per_page: 50 });
+  } catch {
+    throw new RequestError(503, "knowledge_item_lookup_failed");
+  }
+
   const matches = (listed.result || []).filter((item) => item.key === key);
   let deleted = 0;
 
   for (const item of matches) {
-    await instance.items.delete(item.id);
-    deleted += 1;
+    try {
+      await instance.items.delete(item.id);
+      deleted += 1;
+    } catch {
+      throw new RequestError(503, "knowledge_item_delete_failed");
+    }
   }
 
   return { status: "deleted", product_id: productId, document_id: documentId, knowledge_type: knowledgeType, deleted };
