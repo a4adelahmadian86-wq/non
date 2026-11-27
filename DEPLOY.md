@@ -27,6 +27,8 @@
 ### درگاه AI و مسیرهای جایگزین
 
 درگاه چت اولیه در `services/ai-gateway` پیاده‌سازی شده است. پیش از فعال‌کردن مسیر gateway-only:
+برای انتشار بدون اجرای CLI روی رایانه، workflow دستی **Actions → deploy-farast-ai-gateway → Run workflow** آماده شده است. نام secretهای لازم و مجوز دقیق token در `services/ai-gateway/README.md` آمده است. Workflow فقط با اقدام دستی اجرا می‌شود و قبل از deploy تست‌ها را اجرا می‌کند.
+
 
 1. از راهنمای `services/ai-gateway/README.md` برای اجرای تست‌ها و انتشار Cloudflare Worker استفاده کنید.
 2. در Worker، سه secret مستقل `FARAST_AI_GATEWAY_TOKEN`، `CF_API_TOKEN` و `CF_ACCOUNT_ID` را در تنظیمات محرمانه قرار دهید.
