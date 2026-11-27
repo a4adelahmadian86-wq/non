@@ -70,6 +70,34 @@ AI Gateway برای درخواست‌های این سرویس، جمع‌آور�
 
 راهکار انتخابی، **مسیر سرویس‌به‌سرویس با endpointهای مستقل و قابل‌تعویض** است؛ نه VPN یا پراکسی عمومی رایگان.
 
+### میزبان خارجی اصلی: Render Free، فقط برای پردازش stateless
+
+مخزن از قبل `render.yaml` دارد و سرویس `farast-product-supervisor` را تعریف کرده است؛ همان سرویس باید استفاده شود، نه یک پیاده‌سازی موازی.
+
+Render در مرحلهٔ رایگان نامزد اصلی خارجی است، چون:
+- ساخت سرویس رایگان به کارت نیاز ندارد.
+- ۵۱۲ MiB RAM و ۷۵۰ ساعت اجرای رایگان در هر workspace در ماه دارد.
+- از Docker و Python پشتیبانی می‌کند و URL HTTPS می‌دهد.
+- بعد از ۱۵ دقیقه بی‌درخواستی sleep می‌شود و cold start ممکن است حدود یک دقیقه طول بکشد.
+- دیسک پایدار ندارد و خود Render پلن رایگان را برای Production توصیه نمی‌کند.
+
+این محدودیت‌ها فقط برای یک پردازشگر stateless قابل‌قبول‌اند؛ هیچ فایل، صف یا دانش مرجع روی Render نگهداری نمی‌شود. صف Laravel منبع پایدار است. از ۷۵۰ ساعت هم نباید برای uptime تضمینی برداشت کرد.
+
+`render.yaml` فعلی باید همان متغیرهای Cloudflare Workers AI و `SUPERVISOR_OFFLINE_MODE=false` را دریافت کند؛ کلیدها فقط در محیط Render تنظیم می‌شوند. Auto-deploy فعلی خاموش می‌ماند تا انتشارها کنترل‌شده باشند.
+
+گزینه‌های دیگر بررسی و فعلاً کنار گذاشته شدند:
+- Back4App Containers: راهنمای رسمی مهندسی خودش می‌گوید URL رایگان پس از ۶۰ دقیقه منقضی می‌شود؛ پس endpoint دائمی نیست.
+- Northflank و Koyeb: برای ثبت‌نام/استفاده از پلن رایگان، روش پرداخت معتبر می‌خواهند.
+- Hugging Face Spaces: سخت‌افزار CPU Basic رایگان است، اما اجرای Docker/Gradio روی compute به پلن پولی نیاز دارد.
+
+منابع رسمی:
+- https://render.com/docs/your-first-deploy
+- https://render.com/docs/free
+- https://www.back4app.com/blog/deploy-node-app-dockerfile-back4app
+- https://northflank.com/pricing
+- https://www.koyeb.com/docs/faqs/pricing
+- https://huggingface.co/docs/hub/spaces-overview
+
 مسیر مطلوب:
 `Laravel → ProductSupervisorClient → Supervisor endpoint → AI provider`
 
