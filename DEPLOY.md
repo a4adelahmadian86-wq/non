@@ -171,3 +171,7 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 ## نکته امنیتی مهم
 
 جلوگیری مطلق از کپی متن در مرورگر ممکن نیست؛ کاربر دارای کنترل کامل روی دستگاه خود می‌تواند DevTools یا ابزارهای ضبط صفحه استفاده کند. این پروژه کپی عادی، cut، context menu و میانبرهای رایج را در ویرایشگر می‌بندد و متن خام را از API عمومی ارائه نمی‌کند. امنیت واقعی باید با کنترل دسترسی سمت سرور و محدود کردن export پیاده شود.
+
+## Storage
+
+برای راه‌اندازی volume اصلی ایران‌محور و بکاپ رمزگذاری‌شده، فقط از راهنمای `docs/storage/iran-primary-arvan.md` استفاده کنید. این راهنما روی StorageManager و StorageBackupService موجود سوار است و storage engine جدیدی نمی‌سازد.
