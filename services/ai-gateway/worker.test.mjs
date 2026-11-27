@@ -33,9 +33,18 @@ test("health is public and reveals no configuration secrets", async () => {
     });
 });
 
-test("readiness requires both private tokens and a valid account id", async () => {
+
+test("readiness does not disclose model inventory without the gateway token", async () => {
     const response = await worker.fetch(
         new Request("https://gateway.test/ready"),
+        baseEnv
+    );
+    assert.equal(response.status, 401);
+});
+
+test("readiness requires both private tokens and a valid account id", async () => {
+    const response = await worker.fetch(
+        new Request("https://gateway.test/ready", { headers: { Authorization: "Bearer site-to-gateway-secret" } }),
         { ...baseEnv, CF_ACCOUNT_ID: "invalid" }
     );
     assert.equal(response.status, 503);
