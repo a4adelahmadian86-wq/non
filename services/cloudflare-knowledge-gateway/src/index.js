@@ -257,7 +257,7 @@ async function upsertKnowledge(request, env) {
   if (key.length > 128) throw new RequestError(400, "knowledge_key_too_long");
 
   const instance = await ensureInstance(env);
-  const previous = await instance.items.list({ search: key, per_page: 50 });
+  const previous = await instance.items.list({ key, per_page: 50 });
   const uploaded = await instance.items.upload(key, content, {
     metadata: {
       product_id: productId,
@@ -373,7 +373,7 @@ async function deleteKnowledge(request, env) {
 
   let listed;
   try {
-    listed = await instance.items.list({ search: key, per_page: 50 });
+    listed = await instance.items.list({ key, per_page: 50 });
   } catch {
     throw new RequestError(503, "knowledge_item_lookup_failed");
   }
