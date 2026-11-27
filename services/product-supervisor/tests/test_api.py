@@ -419,10 +419,11 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         direct_provider.assert_not_called()
 
     def test_health_does_not_disclose_secret(self):
-        response = self.client.get("/health")
+        with patch.dict(os.environ, {"GEMINI_METADATA_FALLBACK_ENABLED": "false"}):
+            response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("test-token", response.text)
-        self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()) and not os.getenv("GEMINI_API_KEY", "").strip().lower().startswith("gemini-"))
+        self.assertFalse(response.json()["providers"]["gemini"]["configured"])
         self.assertEqual(response.json()["providers"]["groq"]["configured"], bool(os.getenv("GROQ_API_KEY", "").strip()))
 
 
