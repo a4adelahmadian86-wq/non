@@ -63,7 +63,7 @@ class MigrateLegacyEditorAssets extends Command
             FarastStorageObject::class,
             (int) $object->id,
             null,
-            StorageManager::NON_CRITICAL
+            StorageManager::CRITICAL
         );
 
         try {
