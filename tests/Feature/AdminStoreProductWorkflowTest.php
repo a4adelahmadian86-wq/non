@@ -787,7 +787,21 @@ class AdminStoreProductWorkflowTest extends TestCase
             'page_count' => 10,
             'structure_json' => [
                 'sample' => ['selected_pages' => [2]],
-                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
+                'inspection' => [
+                    'detected_type' => 'pdf',
+                    'extracted_characters' => 15000,
+                    'extraction_truncated' => false,
+                    'transcription_truncated' => false,
+                    'embedded_image_count' => 0,
+                    'visual_inventory_complete' => true,
+                    'visual_review_truncated' => false,
+                ],
+                'completeness' => [
+                    'extraction_complete' => true,
+                    'analysis_batches_complete' => true,
+                    'analysis_batch_count' => 1,
+                    'successful_analysis_batches' => 1,
+                ],
                 'ai_review' => ['provider_status' => ['groq_text' => 'completed']],
             ],
         ]);
