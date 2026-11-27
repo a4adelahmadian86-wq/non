@@ -1,0 +1,31 @@
+[build]
+  command = "npm test"
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ready"
+  to = "/.netlify/functions/ready"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v1/chat/completions/review"
+  to = "/.netlify/functions/review"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v1/chat/completions"
+  to = "/.netlify/functions/chat"
+  status = 200
+  force = true
