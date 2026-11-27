@@ -1,7 +1,8 @@
 const MAX_CHAT_BODY_BYTES = 512 * 1024;
 const MAX_MULTIMODAL_BODY_BYTES = 40 * 1024 * 1024;
 const MAX_MESSAGES = 64;
-const MAX_OUTPUT_TOKENS = 4096;
+const MAX_CHAT_OUTPUT_TOKENS = 1024;
+const MAX_REVIEW_OUTPUT_TOKENS = 2200;
 
 const DEFAULT_MODELS = {
     text: "@cf/openai/gpt-oss-20b",
@@ -61,12 +62,12 @@ function upstreamUrl(env, path) {
     return `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}${path}`;
 }
 
-function sanitizeChatPayload(payload, model) {
+function sanitizeChatPayload(payload, model, outputLimit) {
     const output = { ...payload, model };
     const requested = Number(payload.max_tokens ?? payload.max_completion_tokens ?? 1800);
     output.max_tokens = Number.isFinite(requested)
-        ? Math.max(1, Math.min(MAX_OUTPUT_TOKENS, Math.trunc(requested)))
-        : 1800;
+        ? Math.max(1, Math.min(outputLimit, Math.trunc(requested)))
+        : Math.min(1800, outputLimit);
     delete output.max_completion_tokens;
     return output;
 }
@@ -163,7 +164,7 @@ export default {
                 const upstream = await fetch(upstreamUrl(env, "/ai/v1/chat/completions"), {
                     method: "POST",
                     headers: upstreamHeaders(env),
-                    body: JSON.stringify(sanitizeChatPayload(payload, model)),
+                    body: JSON.stringify(sanitizeChatPayload(payload, model, chatTask === "review" ? MAX_REVIEW_OUTPUT_TOKENS : MAX_CHAT_OUTPUT_TOKENS)),
                 });
                 return passthrough(upstream, model);
             } catch {
@@ -185,7 +186,7 @@ export default {
             const model = modelForTask(task, env);
             try {
                 // Stream the bounded JSON body through; do not materialize base64 audio/image data in Worker memory.
-                const upstream = await fetch(upstreamUrl(env, `/ai/run/${encodeURIComponent(model)}`), {
+                const upstream = await fetch(upstreamUrl(env, `/ai/run/${model.split("/").map(encodeURIComponent).join("/")}`), {
                     method: "POST",
                     headers: upstreamHeaders(env),
                     body: request.body,
