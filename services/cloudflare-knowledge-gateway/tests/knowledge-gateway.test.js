@@ -203,7 +203,7 @@ test("product knowledge upsert attaches public metadata and replaces old copies 
   assert.equal(body.status, "queued");
   assert.equal(body.key, "products/42/product_document/doc-1.md");
   assert.ok(body.checksum);
-  assert.deepEqual(state.items[1].metadata, {
+  assert.deepEqual(state.items.find((item) => item.id === body.item_id)?.metadata, {
     product_id: "42",
     document_id: "doc-1",
     knowledge_type: "product_document",
