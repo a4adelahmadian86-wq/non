@@ -100,6 +100,45 @@ test("chat forwards only through the gateway and pins model and output limits", 
 });
 
 
+
+test("review endpoint pins the higher-capability GPT-OSS 120B model", async () => {
+    await withFetch(async (input, init) => {
+        assert.equal(
+            String(input),
+            "https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1/chat/completions"
+        );
+        const sent = JSON.parse(init.body);
+        assert.equal(sent.model, "@cf/openai/gpt-oss-120b");
+        assert.equal(sent.max_tokens, 2200);
+        return new Response(JSON.stringify({
+            id: "review-123",
+            model: "@cf/openai/gpt-oss-120b",
+            choices: [{ message: { role: "assistant", content: "{\\"verdict\\":\\"approved\\"}" } }],
+        }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        });
+    }, async () => {
+        const response = await worker.fetch(
+            new Request("https://gateway.test/v1/chat/completions/review", {
+                method: "POST",
+                headers: {
+                    Authorization: "Bearer site-to-gateway-secret",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: "client-selected-model-must-be-ignored",
+                    max_tokens: 2200,
+                    messages: [{ role: "user", content: "Review this product" }],
+                }),
+            }),
+            baseEnv
+        );
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("X-Farast-AI-Model"), "@cf/openai/gpt-oss-120b");
+    });
+});
+
 test("vision inference is routed to the pinned vision model without buffering its JSON body", async () => {
     await withFetch(async (input, init) => {
         assert.equal(
