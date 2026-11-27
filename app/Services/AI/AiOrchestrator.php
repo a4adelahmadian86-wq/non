@@ -31,7 +31,7 @@ class AiOrchestrator
         $providerName = 'unresolved';
         $interaction = $this->quota->reserveInteraction($user, [
             'document_id' => $context['document_id'] ?? null,
-            'provider' => $providerName,
+            'provider' => $resolvedProvider,
             'model' => 'pending',
             'operation' => $operation['name'],
             'request_id' => $requestId,
@@ -62,11 +62,13 @@ class AiOrchestrator
             $latency = (int) ((hrtime(true) - $started) / 1_000_000);
             $result = $normalized->result;
             $resolvedModel = $normalized->model ?: $model;
+            $resolvedProvider = (string) ($normalized->metadata['provider'] ?? $providerName);
             $usage = (array) ($normalized->usage ?? []);
             $inputTokens = (int) ($usage['input_tokens'] ?? 0);
             $outputTokens = (int) ($usage['output_tokens'] ?? 0);
             $totalTokens = (int) ($usage['total_tokens'] ?? ($inputTokens + $outputTokens));
             $interaction->update([
+                'provider' => $resolvedProvider,
                 'provider_interaction_id' => $normalized->providerRequestId,
                 'model' => $resolvedModel,
                 'prompt_hash' => $normalized->metadata['prompt_hash'] ?? null,
@@ -82,11 +84,11 @@ class AiOrchestrator
                     'result_type' => $operation['result'],
                 ],
             ]);
-            Log::info('farast.ai.completed', ['request_id' => $requestId, 'interaction_id' => $interaction->id, 'operation' => $operation['name'], 'provider' => $providerName, 'model' => $resolvedModel, 'latency_ms' => $latency]);
+            Log::info('farast.ai.completed', ['request_id' => $requestId, 'interaction_id' => $interaction->id, 'operation' => $operation['name'], 'provider' => $resolvedProvider, 'model' => $resolvedModel, 'latency_ms' => $latency]);
             $contract = [
                 'request_id' => $requestId,
                 'operation' => $operation['name'],
-                'provider' => $providerName,
+                'provider' => $resolvedProvider,
                 'model' => $resolvedModel,
                 'processing_mode' => $mode,
                 'status' => 'completed',
@@ -108,7 +110,7 @@ class AiOrchestrator
             $latency = (int) ((hrtime(true) - $started) / 1_000_000);
             $code = preg_match('/^ai_[a-z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'ai_provider_failure';
             $interaction->update([
-                'provider' => $providerName,
+                'provider' => $resolvedProvider,
                 'latency_ms' => $latency,
                 'status' => 'failed',
                 'error_message' => $code,

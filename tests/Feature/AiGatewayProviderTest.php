@@ -56,12 +56,12 @@ class AiGatewayProviderTest extends TestCase
         Http::fake([
             'https://gateway.example/v1/chat/completions' => Http::response([
                 'id' => 'chatcmpl-test',
-                'model' => 'gemini-3.8-flash',
+                'model' => '@cf/openai/gpt-oss-20b',
                 'choices' => [[
                     'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه کوتاه"}'],
                 ]],
                 'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4, 'total_tokens' => 16],
-            ], 200, ['X-Farast-AI-Provider' => 'gemini']),
+            ], 200, ['X-Farast-AI-Provider' => 'cloudflare-workers-ai']),
         ]);
 
         $provider = app(GeminiEditorProvider::class);
@@ -73,7 +73,7 @@ class AiGatewayProviderTest extends TestCase
 
         $this->assertSame(['text' => 'نسخه کوتاه'], $result['result']);
         $this->assertSame('chatcmpl-test', $result['provider_interaction_id']);
-        $this->assertSame('gemini-3.8-flash', $result['model']);
+        $this->assertSame('@cf/openai/gpt-oss-20b', $result['model']);
         $this->assertSame(['input_tokens' => 12, 'output_tokens' => 4, 'total_tokens' => 16], $result['usage']);
         $this->assertFalse($result['fallback_used']);
 
@@ -89,7 +89,7 @@ class AiGatewayProviderTest extends TestCase
         });
     }
 
-    public function test_editor_ai_uses_cloudflare_gateway_with_logging_disabled(): void
+    public function test_editor_ai_never_calls_the_raw_cloudflare_provider_api_from_laravel(): void
     {
         config([
             'services.ai_gateway.url' => 'https://online-gateway.example',
@@ -97,38 +97,28 @@ class AiGatewayProviderTest extends TestCase
             'services.ai_gateway.fallback_url' => 'https://api.cloudflare.com/client/v4/accounts/account-test/ai',
             'services.ai_gateway.fallback_token' => 'cloudflare-token',
             'services.ai_gateway.fallback_model' => '@cf/openai/gpt-oss-20b',
-            'services.ai_gateway.fallback_gateway_id' => 'default',
         ]);
 
-        $cloudflareUrl = 'https://api.cloudflare.com/client/v4/accounts/account-test/ai/v1/chat/completions';
         Http::fake([
             'https://online-gateway.example/v1/chat/completions' => Http::response(['error' => 'unavailable'], 503),
-            $cloudflareUrl => Http::response([
-                'id' => 'chatcmpl-cloudflare-editor',
-                'model' => '@cf/openai/gpt-oss-20b',
-                'choices' => [[
-                    'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه ویرایش‌شده"}'],
-                ]],
-                'usage' => ['prompt_tokens' => 25, 'completion_tokens' => 9, 'total_tokens' => 34],
-            ], 200),
         ]);
 
-        $result = app(GeminiEditorProvider::class)->execute(
-            ['name' => 'selection.shorten', 'result' => 'text'],
-            ['text' => 'متن آزمایشی برای ویرایش.', 'context' => []],
-            'cloudflare-editor-request',
-        );
-
-        $this->assertSame(['text' => 'نسخه ویرایش‌شده'], $result['result']);
-        $this->assertTrue($result['fallback_used']);
-        $this->assertSame('@cf/openai/gpt-oss-20b', $result['model']);
+        try {
+            app(GeminiEditorProvider::class)->execute(
+                ['name' => 'selection.shorten', 'result' => 'text'],
+                ['text' => 'متن آزمایشی برای ویرایش.', 'context' => []],
+                'no-direct-cloudflare-request',
+            );
+            $this->fail('Expected the failed gateway to stop without a raw provider request.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('ai_gateway_unavailable', $exception->getMessage());
+        }
 
         Http::assertSent(fn (ClientRequest $request): bool =>
-            $request->url() === $cloudflareUrl
-            && $request->header('Authorization') === ['Bearer cloudflare-token']
-            && $request->header('cf-aig-gateway-id') === ['default']
-            && $request->header('cf-aig-collect-log') === ['false']
-            && $request->header('cf-aig-collect-log-payload') === ['false']
+            $request->url() === 'https://online-gateway.example/v1/chat/completions'
+        );
+        Http::assertNotSent(fn (ClientRequest $request): bool =>
+            str_contains($request->url(), 'api.cloudflare.com')
         );
     }
 
@@ -151,7 +141,7 @@ class AiGatewayProviderTest extends TestCase
                     'message' => ['role' => 'assistant', 'content' => '{"text":"نسخه کوتاه‌شده"}'],
                 ]],
                 'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 8, 'total_tokens' => 28],
-            ], 200, ['X-Farast-AI-Provider' => 'ollama-local']),
+            ], 200, ['X-Farast-AI-Provider' => 'cloudflare-workers-ai']),
         ]);
 
         $provider = app(GeminiEditorProvider::class);

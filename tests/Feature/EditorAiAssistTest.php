@@ -17,8 +17,14 @@ class EditorAiAssistTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config()->set('services.gemini.key', 'test-secret-key');
-        config()->set('services.gemini.model', 'test-model');
+        config()->set('services.gemini.key', 'must-not-be-used');
+        config()->set('services.gemini.model', 'must-not-be-used');
+        config()->set('services.ai_gateway.url', 'https://farast-ai-gateway.example.workers.dev');
+        config()->set('services.ai_gateway.token', 'test-secret-key');
+        config()->set('services.ai_gateway.model', 'farast-general');
+        config()->set('services.ai_gateway.fallback_url', '');
+        config()->set('services.ai_gateway.fallback_token', '');
+        config()->set('services.voice.local_only', false);
     }
 
     public function test_guest_cannot_call_ai(): void
@@ -30,9 +36,9 @@ class EditorAiAssistTest extends TestCase
 
     public function test_normalized_response_and_legacy_compatibility(): void
     {
-        Http::fake(fn () => Http::response(['id'=>'p1','outputs'=>[['type'=>'text','text'=>json_encode(['text'=>'سلام، دنیا!'], JSON_UNESCAPED_UNICODE)]]],200));
+        Http::fake(fn () => Http::response(['id'=>'p1','model'=>'@cf/openai/gpt-oss-20b','choices'=>[['message'=>['role'=>'assistant','content'=>json_encode(['text'=>'سلام، دنیا!'], JSON_UNESCAPED_UNICODE)]]],'usage'=>['prompt_tokens'=>2,'completion_tokens'=>3,'total_tokens'=>5]],200));
         $response = $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'punctuation','text'=>'سلام دنیا','processing_mode'=>'external']);
-        $response->assertOk()->assertJsonPath('text','سلام، دنیا!')->assertJsonPath('ai.operation','selection.punctuation')->assertJsonPath('ai.provider','gemini')->assertJsonPath('ai.processing_mode','external')->assertJsonPath('ai.model','test-model');
+        $response->assertOk()->assertJsonPath('text','سلام، دنیا!')->assertJsonPath('ai.operation','selection.punctuation')->assertJsonPath('ai.provider','cloudflare-workers-ai')->assertJsonPath('ai.processing_mode','external')->assertJsonPath('ai.model','@cf/openai/gpt-oss-20b');
         $this->assertStringNotContainsString('test-secret-key',$response->getContent());
         $this->assertArrayNotHasKey('text', AiInteraction::latest('id')->firstOrFail()->input_meta);
     }
@@ -91,7 +97,7 @@ class EditorAiAssistTest extends TestCase
         Http::fake(fn()=>Http::response(['error'=>['message'=>'PRIVATE BODY']],500));
         $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'selection.punctuation','text'=>'متن خصوصی'])->assertStatus(502);
         $error=(string)AiInteraction::latest('id')->firstOrFail()->error_message;
-        $this->assertSame('ai_provider_http_500',$error);
+        $this->assertSame('ai_gateway_unavailable',$error);
         $this->assertStringNotContainsString('PRIVATE BODY',$error);
         $this->assertStringNotContainsString('متن خصوصی',$error);
     }
@@ -100,7 +106,7 @@ class EditorAiAssistTest extends TestCase
     {
         Http::fake(fn()=>Http::response(['id'=>'p2','outputs'=>[['type'=>'text','text'=>json_encode(['unexpected'=>'shape'])]]],200));
         $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'selection.punctuation','text'=>'سلام'])->assertStatus(502);
-        $this->assertSame('ai_provider_invalid_shape', AiInteraction::latest('id')->firstOrFail()->error_message);
+        $this->assertSame('ai_gateway_unavailable', AiInteraction::latest('id')->firstOrFail()->error_message);
     }
 
     public function test_provider_timeout_is_normalized_without_leaking_exception_text(): void
@@ -108,13 +114,13 @@ class EditorAiAssistTest extends TestCase
         Http::fake(fn()=>throw new ConnectionException('PRIVATE TIMEOUT DETAIL'));
         $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'selection.punctuation','text'=>'سلام'])->assertStatus(502);
         $error=(string)AiInteraction::latest('id')->firstOrFail()->error_message;
-        $this->assertSame('ai_provider_failure',$error);
+        $this->assertSame('ai_gateway_unavailable',$error);
         $this->assertStringNotContainsString('PRIVATE TIMEOUT DETAIL',$error);
     }
 
     public function test_unvalidated_document_id_is_not_linked_to_telemetry(): void
     {
-        Http::fake(fn () => Http::response(['id'=>'p3','outputs'=>[['type'=>'text','text'=>json_encode(['text'=>'سلام'], JSON_UNESCAPED_UNICODE)]]],200));
+        Http::fake(fn () => Http::response(['id'=>'p3','model'=>'test-model','choices'=>[['message'=>['role'=>'assistant','content'=>json_encode(['text'=>'سلام'], JSON_UNESCAPED_UNICODE)]]],'usage'=>['prompt_tokens'=>1,'completion_tokens'=>1,'total_tokens'=>2]],200));
         $this->actingAs($this->user())->postJson('/editor/ai/assist',['operation'=>'selection.punctuation','text'=>'سلام','document_id'=>999])->assertOk();
         $this->assertNull(AiInteraction::latest('id')->firstOrFail()->document_id);
     }

@@ -1,41 +1,46 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\\Feature;
 
-use App\Models\SiteSetting;
-use App\Services\ProviderRegistry;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use App\\Models\\SiteSetting;
+use App\\Services\\ProviderRegistry;
+use Illuminate\\Foundation\\Testing\\RefreshDatabase;
+use Tests\\TestCase;
 
 class ProviderRegistryCatalogTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_catalog_includes_groq_with_server_side_configuration_without_claiming_live_verification(): void
+    public function test_catalog_exposes_one_farast_gateway_without_claiming_live_verification(): void
     {
-        SiteSetting::write('voice_groq_key', 'test-groq-secret', true);
-        SiteSetting::write('assistant_groq_model', 'openai/gpt-oss-120b');
+        SiteSetting::write('ai_gateway_url', 'https://gateway.example.test');
+        SiteSetting::write('ai_gateway_token', 'test-gateway-secret', true);
 
         $catalog = collect(app(ProviderRegistry::class)->catalog())->keyBy('id');
 
-        $this->assertTrue($catalog->has('ai:groq'));
-        $groq = $catalog->get('ai:groq');
+        $this->assertTrue($catalog->has('ai:farast-ai-gateway'));
+        $gateway = $catalog->get('ai:farast-ai-gateway');
 
-        $this->assertSame('Groq', $groq['name']);
-        $this->assertSame('openai/gpt-oss-120b', $groq['model']);
-        $this->assertSame(['ai.text', 'speech.stt'], $groq['capabilities']);
-        $this->assertSame('configured', $groq['status']);
-        $this->assertTrue($groq['credential_configured']);
-        $this->assertFalse($groq['connection_verified']);
+        $this->assertSame('FARAST AI Gateway', $gateway['name']);
+        $this->assertSame('@cf/openai/gpt-oss-20b', $gateway['model']);
+        $this->assertSame(
+            ['ai.text', 'ai.review', 'ai.vision', 'ai.audio', 'ai.structured_output'],
+            $gateway['capabilities']
+        );
+        $this->assertSame('configured', $gateway['status']);
+        $this->assertTrue($gateway['credential_configured']);
+        $this->assertFalse($gateway['connection_verified']);
+        $this->assertFalse($catalog->has('ai:groq'));
+        $this->assertFalse($catalog->has('ai:gemini'));
     }
 
-    public function test_catalog_does_not_report_groq_as_configured_without_a_key(): void
+    public function test_catalog_does_not_report_the_gateway_as_configured_without_url_and_token(): void
     {
         $catalog = collect(app(ProviderRegistry::class)->catalog())->keyBy('id');
 
-        $this->assertTrue($catalog->has('ai:groq'));
-        $this->assertSame('unavailable', $catalog->get('ai:groq')['status']);
-        $this->assertFalse($catalog->get('ai:groq')['credential_configured']);
-        $this->assertFalse($catalog->get('ai:groq')['connection_verified']);
+        $this->assertTrue($catalog->has('ai:farast-ai-gateway'));
+        $this->assertSame('unavailable', $catalog->get('ai:farast-ai-gateway')['status']);
+        $this->assertFalse($catalog->get('ai:farast-ai-gateway')['credential_configured']);
+        $this->assertFalse($catalog->get('ai:farast-ai-gateway')['connection_verified']);
     }
 }

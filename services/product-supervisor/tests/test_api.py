@@ -6,6 +6,7 @@ import json
 import threading
 import os
 import unittest
+import httpx
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -140,6 +141,50 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
 
+
+
+    def test_text_provider_rate_limit_returns_extracted_chunks_for_later_review(self):
+        request = httpx.Request(
+            "POST",
+            "https://farast-ai-gateway.example.workers.dev/v1/chat/completions",
+        )
+        provider_error = httpx.HTTPStatusError(
+            "rate limited",
+            request=request,
+            response=httpx.Response(429, request=request),
+        )
+
+        with patch.dict(os.environ, {
+            "FARAST_AI_GATEWAY_URL": "https://farast-ai-gateway.example.workers.dev",
+            "FARAST_AI_GATEWAY_TOKEN": "gateway-test-token",
+            "GROQ_API_KEY": "",
+            "GROQ_ZDR_CONFIRMED": "",
+            "GEMINI_API_KEY": "",
+        }, clear=False), patch(
+            "file_pipeline.analyze_extracted_content",
+            new_callable=AsyncMock,
+            side_effect=provider_error,
+        ):
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-offline-extraction",
+                    "product_title": "محصول برای پردازش آفلاین",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("offline.txt", "این متن باید حتی بدون مدل ذخیره شود.".encode(), "text/plain")},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertGreater(len(body["content_chunks"]), 0)
+        self.assertEqual(body["provider_status"]["cloudflare_text"], "unavailable")
+        self.assertEqual(body["provider_status"]["cloudflare"], "unavailable")
+        self.assertFalse(body["publication_authorized"])
+        self.assertFalse(body["automated_publication"])
+        self.assertTrue(any("بعداً تکرار می‌شود" in warning for warning in body["warnings"]))
 
     def test_mixed_document_images_fail_closed_without_groq_zdr_and_never_use_gemini(self):
         image_stream = io.BytesIO()
@@ -318,9 +363,9 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             "findings": [],
         }, ensure_ascii=False)
         with patch.dict(os.environ, {
-            "CLOUDFLARE_ACCOUNT_ID": "account-test",
-            "CLOUDFLARE_API_TOKEN": "cloudflare-test-token",
-            "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
+            "FARAST_AI_GATEWAY_URL": "https://farast-ai-gateway.example.workers.dev",
+            "FARAST_AI_GATEWAY_TOKEN": "gateway-test-token",
+            "GEMINI_METADATA_FALLBACK_ENABLED": "false",
             "GEMINI_API_KEY": "",
             "GROQ_API_KEY": "",
         }, clear=False), patch(
@@ -343,15 +388,43 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-20b")
+        self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-120b")
         self.assertEqual(response.json()["verdict"], "approved")
         cloudflare_review.assert_awaited_once()
+        self.assertEqual(cloudflare_review.await_args.kwargs["task"], "review")
+
+
+    def test_direct_gemini_metadata_fallback_is_disabled_even_when_a_key_exists(self):
+        with patch.dict(os.environ, {
+            "FARAST_AI_GATEWAY_URL": "",
+            "FARAST_AI_GATEWAY_TOKEN": "",
+            "GEMINI_METADATA_FALLBACK_ENABLED": "false",
+            "GEMINI_API_KEY": "configured-but-disabled",
+            "GROQ_API_KEY": "",
+        }, clear=False), patch("httpx.AsyncClient.post") as direct_provider:
+            response = self.client.post(
+                "/v1/reviews/products",
+                headers={"Authorization": "Bearer test-token"},
+                json={
+                    "product_id": "p-no-direct-gemini",
+                    "product_type": "digital_file",
+                    "title": "محصول آزمایشی",
+                    "price_rials": 100000,
+                    "category_name": "آموزشی",
+                    "has_clean_primary_file": True,
+                    "checks": ["content"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        direct_provider.assert_not_called()
 
     def test_health_does_not_disclose_secret(self):
-        response = self.client.get("/health")
+        with patch.dict(os.environ, {"GEMINI_METADATA_FALLBACK_ENABLED": "false"}):
+            response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("test-token", response.text)
-        self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()) and not os.getenv("GEMINI_API_KEY", "").strip().lower().startswith("gemini-"))
+        self.assertFalse(response.json()["providers"]["gemini"]["configured"])
         self.assertEqual(response.json()["providers"]["groq"]["configured"], bool(os.getenv("GROQ_API_KEY", "").strip()))
 
 

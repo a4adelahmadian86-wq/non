@@ -4,17 +4,16 @@ $voiceLocalOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FI
 $remoteBatchDefault = ! $voiceLocalOnly;
 
 return [
-    // Central online assistant gateway. Set FARAST_AI_GATEWAY_URL empty only to use the compatibility provider path.
+    // Central online assistant gateway. Both URLs must be FARAST-owned gateway endpoints, never raw provider APIs.
     'ai_gateway' => [
-        // Keep the existing primary endpoint unchanged; the optional secondary AI gateway is a fallback.
-        'url' => env('FARAST_AI_GATEWAY_URL', 'https://voice-typing-r5r7.onrender.com'),
-        'token' => env('FARAST_VOICE_TOKEN', ''),
+        // Both endpoints must be independently configured FARAST gateway services.
+        'url' => env('FARAST_AI_GATEWAY_URL', ''),
+        'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
         'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
         'fallback_url' => env('FARAST_AI_GATEWAY_FALLBACK_URL', ''),
         'fallback_token' => env('FARAST_AI_GATEWAY_FALLBACK_TOKEN', ''),
-        'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', '@cf/openai/gpt-oss-20b'),
-        'fallback_gateway_id' => env('FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID', 'default'),
+        'fallback_model' => env('FARAST_AI_GATEWAY_FALLBACK_MODEL', 'farast-general'),
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.

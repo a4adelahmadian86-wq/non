@@ -23,6 +23,10 @@ final class AiProviderRegistry
 
     public function get(string $name): AiProviderInterface
     {
+        // Backward-compatible alias for clients that still submit the old provider key.
+        if ($name === 'gemini') {
+            $name = 'farast-ai-gateway';
+        }
         if (! isset($this->providers[$name])) {
             throw new InvalidArgumentException('ai_provider_not_registered');
         }

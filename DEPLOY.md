@@ -24,15 +24,27 @@
 6. `FARAST_VOICE_TOKEN` باید با مقدار متناظر در سرویس Voice-typing یکسان باشد. کلیدهای Gemini، Groq، Kavenegar و سرویس‌های کمکی نیز فقط در محیط سرور تنظیم شوند.
 7. SMTP را با `MAIL_HOST`، `MAIL_PORT`، `MAIL_USERNAME`، `MAIL_PASSWORD` و `MAIL_ENCRYPTION` پیکربندی کنید؛ بدون این مقادیر ارسال ایمیل Production را تأییدشده تلقی نکنید.
 
-### مسیر پشتیبان رایگان هوش مصنوعی
+### درگاه AI و مسیرهای جایگزین
 
-- برای استفاده از Cloudflare Workers AI، مقدار `FARAST_AI_GATEWAY_FALLBACK_URL` را به شکل `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai` تنظیم کنید؛ شناسه حساب واقعی را جایگزین کنید.
-- مقدار `FARAST_AI_GATEWAY_FALLBACK_MODEL` را `@cf/openai/gpt-oss-20b` و مقدار `FARAST_AI_GATEWAY_FALLBACK_GATEWAY_ID` را `default` قرار دهید.
-- توکن Cloudflare باید فقط مجوزهای `AI Gateway Read`، `AI Gateway Edit` و `Workers AI Read` را داشته باشد. برای همه درخواست‌های مدل، برنامه شناسه Gateway را می‌فرستد و ثبت لاگ و محتوای درخواست را غیرفعال می‌کند. مجوز R2 لازم نیست. برای Laravel و سرویس Product Supervisor دو توکن جداگانه بسازید و آن‌ها را در محیط همان سرویس نگه دارید.
-- در حالت `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` نشانی عمومی Cloudflare عمداً رد می‌شود تا حالت فقط-محلی به سرویس ابری نشت نکند.
-- مقادیر `FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL` و `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN` به یک سرویس جداگانه نیاز دارند که APIهای `/v1/reviews/products` و `/v1/reviews/files` را پیاده‌سازی کند. نامزد رایگان فعلی Back4App است؛ تا استقرار و آزمایش واقعی، URL آن را در Production ثبت نکنید.
-- سرویس Product Supervisor از Cloudflare Workers AI برای GPT-OSS 20B، Moondream و Whisper استفاده می‌کند؛ سهمیه رایگان Workers AI محدود و روزانه است. در پاسخ محدودیت، صف Laravel باید کار را برای تلاش بعدی نگه دارد.
-- هیچ URL یا Token واقعی را در Git ثبت نکنید. توکن‌ها فقط در Environment میزبان مربوط به خودشان نگهداری شوند.
+درگاه چت اولیه در `services/ai-gateway` پیاده‌سازی شده است. پیش از فعال‌کردن مسیر gateway-only:
+برای انتشار بدون اجرای CLI روی رایانه، workflow دستی **Actions → deploy-farast-ai-gateway → Run workflow** آماده شده است. نام secretهای لازم و مجوز دقیق token در `services/ai-gateway/README.md` آمده است. Workflow فقط با اقدام دستی اجرا می‌شود و قبل از deploy تست‌ها را اجرا می‌کند.
+
+
+1. از راهنمای `services/ai-gateway/README.md` برای اجرای تست‌ها و انتشار Cloudflare Worker استفاده کنید.
+2. در Worker، سه secret مستقل `FARAST_AI_GATEWAY_TOKEN`، `CF_API_TOKEN` و `CF_ACCOUNT_ID` را در تنظیمات محرمانه قرار دهید.
+3. مسیرهای `/health` و `/ready` را بررسی کنید و یک درخواست واقعیِ احراز هویت‌شده به `/v1/chat/completions` بفرستید.
+4. URL دقیق Worker را در `FARAST_AI_GATEWAY_URL` و همان token سمت Laravel را در `FARAST_AI_GATEWAY_TOKEN` ثبت کنید.
+5. تا وقتی یک endpoint دوم مستقل و تست‌شده نداریم، `FARAST_AI_GATEWAY_FALLBACK_URL` را خالی بگذارید. شکست AI باید به صف و retry منجر شود، نه اتصال مستقیم سایت به provider.
+
+
+- Laravel باید فقط به endpoint درگاه FARAST وصل شود که مسیر `/v1/chat/completions` را پیاده‌سازی کرده باشد. URL مستقیم `api.cloudflare.com`، `generativelanguage.googleapis.com` یا `api.groq.com` را در متغیرهای Gateway وارد نکنید.
+- Cloudflare Workers AI می‌تواند در سمت درگاه به‌عنوان ارائه‌دهندهٔ مدل استفاده شود؛ کلید Cloudflare فقط در Environment همان درگاه قرار می‌گیرد. سهمیهٔ رایگان آن ۱۰٬۰۰۰ Neurons در روز است و پس از سقف، درخواست جدید با خطا مواجه می‌شود.
+- `FARAST_AI_GATEWAY_URL` و `FARAST_AI_GATEWAY_FALLBACK_URL` باید دو endpoint واقعیِ درگاه باشند، نه آدرس خام API ارائه‌دهنده. هر endpoint باید با Bearer token مستقل، health check و درخواست واقعی `/v1/chat/completions` آزمایش شود.
+- سرویس فعلی `voice-typing-r5r7.onrender.com` در مخزن مکمل برای ASR/TTS مستند شده است؛ وجود آن به‌تنهایی اثبات نمی‌کند endpoint چت دارد. تا زمان استقرار و آزمایش درگاه چت، آن را برای AI editor/chat تأییدشده تلقی نکنید.
+- مخزن مکمل `Voice-typing` از قبل `runflare-gateway` دارد، اما مدل محلی پیش‌فرض آن Qwen3 1.7B است و برای این پروژه انتخاب نشده است. از آن تا زمان جایگزینی/غیرفعال‌سازی آن مدل و تست endpoint استفاده نکنید.
+- Back4App free container برای endpoint دائمی انتخاب نشده است: URL رایگان آن موقت است و پس از ۶۰ دقیقه منقضی می‌شود. Render Free نیز بعد از idle می‌خوابد و برای پاسخ همیشه‌فعال تضمین ندارد.
+- Product Supervisor با درگاه چت یکی نیست. مقادیر `FARAST_PRODUCT_SUPERVISOR_URL` و `FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL` باید به دو سرویس Product Supervisor با قراردادهای `/v1/reviews/products` و `/v1/reviews/files` اشاره کنند. تا زمان استقرار و آزمایش واقعی، URLها را خالی نگه دارید.
+- کلیدهای API و محتوای درخواست را در Git یا لاگ‌ها قرار ندهید. دادهٔ خصوصی کاربران و پروفایل رفتاری برای APIهای رایگان یا مدل‌هایی که سیاست نگهداری دادهٔ آن‌ها تأیید نشده است ارسال نشود.
 
 ## ساخت و انتشار برنامه
 
@@ -159,3 +171,7 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 ## نکته امنیتی مهم
 
 جلوگیری مطلق از کپی متن در مرورگر ممکن نیست؛ کاربر دارای کنترل کامل روی دستگاه خود می‌تواند DevTools یا ابزارهای ضبط صفحه استفاده کند. این پروژه کپی عادی، cut، context menu و میانبرهای رایج را در ویرایشگر می‌بندد و متن خام را از API عمومی ارائه نمی‌کند. امنیت واقعی باید با کنترل دسترسی سمت سرور و محدود کردن export پیاده شود.
+
+## Storage
+
+برای راه‌اندازی volume اصلی ایران‌محور و بکاپ رمزگذاری‌شده، فقط از راهنمای `docs/storage/iran-primary-arvan.md` استفاده کنید. این راهنما روی StorageManager و StorageBackupService موجود سوار است و storage engine جدیدی نمی‌سازد.

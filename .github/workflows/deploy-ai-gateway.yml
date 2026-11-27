@@ -1,0 +1,72 @@
+name: deploy-farast-ai-gateway
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test gateway contract
+        working-directory: services/ai-gateway
+        run: npm test
+
+      - name: Validate deployment secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          FARAST_AI_GATEWAY_TOKEN: ${{ secrets.FARAST_AI_GATEWAY_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          required = [
+              "CLOUDFLARE_API_TOKEN",
+              "CLOUDFLARE_ACCOUNT_ID",
+              "CF_API_TOKEN",
+              "CF_ACCOUNT_ID",
+              "FARAST_AI_GATEWAY_TOKEN",
+          ]
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("Missing required GitHub repository secrets: " + ", ".join(missing))
+          PY
+
+      - name: Prepare ephemeral Worker secrets file
+        working-directory: services/ai-gateway
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          FARAST_AI_GATEWAY_TOKEN: ${{ secrets.FARAST_AI_GATEWAY_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          with open("/tmp/farast-worker-secrets.json", "w", encoding="utf-8") as handle:
+              json.dump({
+                  "CF_API_TOKEN": os.environ["CF_API_TOKEN"],
+                  "CF_ACCOUNT_ID": os.environ["CF_ACCOUNT_ID"],
+                  "FARAST_AI_GATEWAY_TOKEN": os.environ["FARAST_AI_GATEWAY_TOKEN"],
+              }, handle)
+          PY
+
+      - name: Deploy Cloudflare Worker
+        working-directory: services/ai-gateway
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy --secrets-file /tmp/farast-worker-secrets.json
+
+      - name: Remove ephemeral secrets file
+        if: always()
+        run: rm -f /tmp/farast-worker-secrets.json

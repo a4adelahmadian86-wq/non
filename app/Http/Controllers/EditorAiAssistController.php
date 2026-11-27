@@ -39,12 +39,12 @@ class EditorAiAssistController extends Controller
     private function safeMessage(string $code): string
     {
         return match ($code) {
-            'ai_provider_not_configured' => 'اتصال هوش مصنوعی تنظیم نشده است. کلید Gemini را در تنظیمات مدیریت ثبت کنید یا GEMINI_API_KEY را در محیط سرور قرار دهید.',
-            'ai_provider_auth_failed' => 'کلید Gemini معتبر نیست یا دسترسی آن رد شده است. تنظیمات کلید و مدل را بررسی کنید.',
-            'ai_provider_rate_limited' => 'سرویس Gemini موقتاً سقف درخواست را اعلام کرده است. چند لحظه بعد دوباره تلاش کنید.',
-            'ai_provider_service_unavailable' => 'سرویس Gemini موقتاً در دسترس نیست. متن شما به ارائه‌دهنده دیگری ارسال نشد.',
-            'ai_provider_invalid_json', 'ai_provider_invalid_shape' => 'پاسخ هوش مصنوعی با قرارداد خروجی فراست سازگار نبود و برای جلوگیری از اعمال نتیجه ناقص رد شد.',
-            'ai_provider_model_unavailable' => 'مدل هوش مصنوعی تنظیم نشده است.',
+            'ai_provider_not_configured', 'ai_gateway_not_configured' => 'درگاه هوش مصنوعی FARAST تنظیم نشده است. نشانی و توکن امن درگاه باید در محیط سرور ثبت شوند.',
+            'ai_provider_auth_failed', 'ai_gateway_http_401' => 'احراز هویت درگاه هوش مصنوعی ناموفق بود؛ تنظیمات توکن امن باید بررسی شود.',
+            'ai_provider_rate_limited', 'ai_gateway_http_429' => 'سهمیهٔ رایگان مدل‌ها موقتاً تمام شده است. درخواست در دسترس‌پذیری بعدی دوباره قابل اجراست.',
+            'ai_provider_service_unavailable', 'ai_gateway_http_503', 'ai_gateway_unavailable' => 'درگاه مدل موقتاً در دسترس نیست. متن شما به ارائه‌دهندهٔ تأییدنشده‌ای ارسال نشده است.',
+            'ai_provider_invalid_json', 'ai_provider_invalid_shape', 'ai_gateway_invalid_json' => 'پاسخ هوش مصنوعی با قرارداد خروجی فراست سازگار نبود و برای جلوگیری از اعمال نتیجه ناقص رد شد.',
+            'ai_provider_model_unavailable' => 'مدل هوش مصنوعی در درگاه تنظیم نشده است.',
             'ai_provider_unavailable' => 'هیچ ارائه‌دهنده فعال برای این عملیات وجود ندارد و fallback خودکار انجام نشد.',
             'ai_provider_operation_unsupported' => 'ارائه‌دهنده انتخاب‌شده از این عملیات پشتیبانی نمی‌کند و ارائه‌دهنده دیگری جایگزین نشد.',
             default => 'پردازش هوش مصنوعی انجام نشد. جزئیات محرمانه سرویس به مرورگر نمایش داده نمی‌شود.',
