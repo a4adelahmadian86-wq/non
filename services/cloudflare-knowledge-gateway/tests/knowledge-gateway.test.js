@@ -71,8 +71,11 @@ function makeEnvironment(options = {}) {
       };
     },
     items: {
-      list: async ({ search } = {}) => ({
-        result: state.items.filter((item) => !search || item.key.includes(search)),
+      list: async ({ key, search } = {}) => ({
+        result: state.items.filter((item) => {
+          if (key) return item.key === key;
+          return !search || item.key.includes(search);
+        }),
         result_info: { total_count: state.items.length },
       }),
       upload: async (key, body, options) => {
