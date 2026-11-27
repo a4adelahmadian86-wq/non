@@ -1,0 +1,8 @@
+{
+  "name": "farast-ai-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
