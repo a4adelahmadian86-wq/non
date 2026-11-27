@@ -511,7 +511,7 @@ class GlobalAssistantController extends Controller
             ];
         }
 
-        // The domestic gateway is a private server-side fallback and is never exposed to the browser.
+        // The configured fallback is server-side only and is never exposed to the browser.
         // Require HTTPS because this request carries private conversation history and a bearer token.
         $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
         $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
@@ -526,7 +526,7 @@ class GlobalAssistantController extends Controller
                 'token' => $fallbackGatewayToken,
                 'model' => trim((string) config('services.ai_gateway.fallback_model', 'farast-general')) ?: 'farast-general',
                 'limit_key' => 'max_tokens',
-                'name' => 'domestic_fallback',
+                'name' => 'gateway_fallback',
                 'connect_timeout' => 4,
                 'timeout' => 120,
             ];
@@ -547,6 +547,7 @@ class GlobalAssistantController extends Controller
             $payload[$target['limit_key']] = 500;
             try {
                 $candidate = Http::withToken($target['token'])->accept('text/event-stream')
+                    ->withHeaders($this->aiGatewayHeadersForTarget($target))
                     ->withOptions(['stream' => true])
                     ->connectTimeout((int) ($target['connect_timeout'] ?? 8))
                     ->timeout((int) ($target['timeout'] ?? 100))
@@ -723,7 +724,7 @@ class GlobalAssistantController extends Controller
                         $gatewayTargets[] = [
                             'url' => $fallbackGatewayUrl,
                             'token' => $fallbackGatewayToken,
-                            'name' => 'domestic_fallback',
+                            'name' => 'gateway_fallback',
                             'timeout' => 120,
                         ];
                     }
@@ -735,7 +736,10 @@ class GlobalAssistantController extends Controller
                                 ->connectTimeout($gatewayTarget['name'] === 'primary' ? 8 : 4)
                                 ->timeout($gatewayTarget['timeout'])
                                 ->retry(1, 300, throw: false)
-                                ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
+                                ->withHeaders(array_merge(
+                                    ['X-Farast-Request-Id' => $gatewayRequestId],
+                                    $this->aiGatewayHeadersForTarget($gatewayTarget),
+                                ))
                                 ->post($gatewayTarget['url'].'/v1/chat/completions', [
                                     'model' => $gatewayTarget['name'] === 'primary'
                                         ? (trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general')
@@ -829,5 +833,23 @@ class GlobalAssistantController extends Controller
             Log::warning('farast.global_assistant_failed', ['user_id' => $user->id, 'error_code' => $code]);
             return response()->json(['ok' => false, 'message' => 'سرویس گفت‌وگو فعلاً در دسترس نیست. تنظیمات هوش مصنوعی و دسترسی حساب را بررسی کنید.'], 503, ['Cache-Control' => 'no-store']);
         }
+    }
+
+    /**
+     * Cloudflare's account REST endpoint requires an AI Gateway ID for Workers AI
+     * chat completions. Disable both metadata and payload logging for private chats.
+     */
+    private function aiGatewayHeadersForTarget(array $target): array
+    {
+        $host = strtolower((string) parse_url((string) ($target['url'] ?? ''), PHP_URL_HOST));
+        if ($host !== 'api.cloudflare.com') {
+            return [];
+        }
+
+        return [
+            'cf-aig-gateway-id' => trim((string) config('services.ai_gateway.fallback_gateway_id', 'default')) ?: 'default',
+            'cf-aig-collect-log' => 'false',
+            'cf-aig-collect-log-payload' => 'false',
+        ];
     }
 }
