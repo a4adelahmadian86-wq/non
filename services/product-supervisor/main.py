@@ -197,7 +197,6 @@ async def review_product_file(
         MAX_VISUAL_ASSETS,
         analyze_extracted_content,
         analyze_image_with_cloudflare,
-        analyze_image_with_groq,
         build_pdf_sample,
         inspect_file,
         redact_sensitive_content,
@@ -281,7 +280,7 @@ async def review_product_file(
         if vision_provider:
             visual_parts = []
             successful_images = 0
-            analyze_image = analyze_image_with_cloudflare if vision_provider == "cloudflare" else analyze_image_with_groq
+            analyze_image = analyze_image_with_cloudflare
             for index, asset in enumerate(image_assets[:MAX_VISUAL_ASSETS]):
                 image_data = asset.get("image_bytes")
                 if not isinstance(image_data, bytes) or not image_data:
