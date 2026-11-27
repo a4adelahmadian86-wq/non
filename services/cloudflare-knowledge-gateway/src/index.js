@@ -110,9 +110,9 @@ function validIdentifier(value) {
 
 function containsDirectContactDetails(value) {
   if (typeof value !== "string") return false;
-  const compact = value.replace(/[\\s().-]/g, "");
-  const hasEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i.test(value);
-  const hasIranianMobile = /(?:\\+?98|0)?9\\d{9}/.test(compact);
+  const compact = value.replace(/[\s().-]/g, "");
+  const hasEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value);
+  const hasIranianMobile = /(?:\+?98|0)?9\d{9}/.test(compact);
   return hasEmail || hasIranianMobile;
 }
 
