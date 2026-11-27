@@ -1,0 +1,14 @@
+name = "farast-knowledge-gateway"
+main = "src/index.js"
+compatibility_date = "2026-11-27"
+workers_dev = true
+
+[observability]
+enabled = false
+
+[vars]
+KB_INSTANCE_ID = "farast-knowledge"
+
+[[ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
