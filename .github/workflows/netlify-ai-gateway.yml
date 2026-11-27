@@ -1,0 +1,26 @@
+name: Netlify AI Gateway Contract Tests
+
+on:
+  pull_request:
+    paths:
+      - "services/netlify-ai-gateway/**"
+      - ".github/workflows/netlify-ai-gateway.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/netlify-ai-gateway/**"
+      - ".github/workflows/netlify-ai-gateway.yml"
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/netlify-ai-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
