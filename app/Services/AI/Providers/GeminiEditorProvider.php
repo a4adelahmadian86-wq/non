@@ -15,10 +15,10 @@ class GeminiEditorProvider implements AiProvider
 
     public function execute(array $operation, array $payload, string $requestId): array
     {
-        $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
-        $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-        $fallbackGatewayUrl = rtrim(trim((string) config('services.ai_gateway.fallback_url', '')), '/');
-        $fallbackGatewayToken = trim((string) config('services.ai_gateway.fallback_token', ''));
+        $gatewayUrl = rtrim(trim((string) (SiteSetting::read('ai_gateway_url') ?: config('services.ai_gateway.url', ''))), '/');
+        $gatewayToken = trim((string) (SiteSetting::read('ai_gateway_token') ?: config('services.ai_gateway.token', '')));
+        $fallbackGatewayUrl = rtrim(trim((string) (SiteSetting::read('ai_gateway_fallback_url') ?: config('services.ai_gateway.fallback_url', ''))), '/');
+        $fallbackGatewayToken = trim((string) (SiteSetting::read('ai_gateway_fallback_token') ?: config('services.ai_gateway.fallback_token', '')));
         $localOnly = (bool) config('services.voice.local_only', false);
 
         $configuredTargets = [
