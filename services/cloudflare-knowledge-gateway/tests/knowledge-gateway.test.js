@@ -379,6 +379,55 @@ test("private profile and behavior fields are rejected before indexing", async (
   assert.equal((await response.json()).error, "private_fields_not_allowed");
 });
 
+test("Laravel can revoke an indexed public document by its stable key", async () => {
+  const { env, state } = makeEnvironment();
+  const uploaded = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "sample-1",
+      knowledge_type: "product_document",
+      visibility: "public",
+      language: "fa",
+      access_scope: "public_sample_only",
+      review_status: "approved",
+      product_status: "published",
+      content: "نمونه عمومی محصول",
+    },
+  }), env);
+  assert.equal(uploaded.status, 202);
+  assert.equal(state.items.length, 1);
+
+  const deleted = await handleRequest(request("/v1/knowledge/delete", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "sample-1",
+      knowledge_type: "product_document",
+    },
+  }), env);
+  assert.equal(deleted.status, 200);
+  assert.equal((await deleted.json()).deleted, 1);
+  assert.equal(state.items.length, 0);
+});
+
+test("the supervisor token cannot use the Laravel-scoped delete endpoint", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/delete", {
+    method: "POST",
+    token: env.FARAST_KB_SUPERVISOR_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "sample-1",
+      knowledge_type: "product_document",
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "laravel_token_required");
+});
+
 test("semantic search always filters public knowledge and scopes to the requested product", async () => {
   const { env, state } = makeEnvironment();
   state.config = {
