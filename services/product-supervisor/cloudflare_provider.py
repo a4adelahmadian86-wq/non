@@ -101,12 +101,17 @@ async def cloudflare_chat_completion(
     max_tokens: int = 1800,
     temperature: float = 0.1,
     timeout_seconds: float = 90,
+    model: str | None = None,
 ) -> str:
     if not cloudflare_provider_ready("text"):
         raise RuntimeError("cloudflare_workers_ai_not_configured")
 
+    selected_model = (model or cloudflare_model("text")).strip()
+    if len(selected_model) > 160 or not re.fullmatch(r"@[A-Za-z0-9._/-]+", selected_model):
+        raise ValueError("invalid_cloudflare_model_name")
+
     payload: dict[str, Any] = {
-        "model": cloudflare_model("text"),
+        "model": selected_model,
         "messages": messages,
         "max_tokens": max(1, min(int(max_tokens), 8192)),
         "temperature": max(0.0, min(float(temperature), 1.0)),
