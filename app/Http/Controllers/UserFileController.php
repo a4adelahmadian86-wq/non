@@ -27,7 +27,7 @@ class UserFileController extends Controller
         $bytes = $file->getSize() ?: 0;
         $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $file->getRealPath());
         $quote = $pricing->estimateByPages($pages);
-        $stored = $storage->storeUploadedFile($file, StorageManager::NON_CRITICAL, 'editor', UserFile::class, null, null, 'private');
+        $stored = $storage->storeUploadedFile($file, StorageManager::CRITICAL, 'editor', UserFile::class, null, null, 'private');
         $path = $stored['path'];
         $now = now();
         try {
