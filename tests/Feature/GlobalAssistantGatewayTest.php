@@ -88,6 +88,44 @@ class GlobalAssistantGatewayTest extends TestCase
         });
     }
 
+    public function test_global_assistant_uses_cloudflare_ai_gateway_without_payload_logging(): void
+    {
+        config([
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
+            'services.ai_gateway.fallback_url' => 'https://api.cloudflare.com/client/v4/accounts/account-test/ai',
+            'services.ai_gateway.fallback_token' => 'cloudflare-gateway-token',
+            'services.ai_gateway.fallback_model' => '@cf/openai/gpt-oss-20b',
+            'services.ai_gateway.fallback_gateway_id' => 'default',
+        ]);
+
+        $user = User::factory()->create();
+        $url = 'https://api.cloudflare.com/client/v4/accounts/account-test/ai/v1/chat/completions';
+        Http::fake([
+            $url => Http::response([
+                'id' => 'chatcmpl-cloudflare-test',
+                'model' => '@cf/openai/gpt-oss-20b',
+                'choices' => [[
+                    'message' => ['role' => 'assistant', 'content' => 'پاسخ از Workers AI'],
+                ]],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('reply', 'پاسخ از Workers AI');
+
+        Http::assertSent(fn (ClientRequest $request): bool =>
+            $request->url() === $url
+            && $request->header('Authorization') === ['Bearer cloudflare-gateway-token']
+            && $request->header('cf-aig-gateway-id') === ['default']
+            && $request->header('cf-aig-collect-log') === ['false']
+            && $request->header('cf-aig-collect-log-payload') === ['false']
+            && ($request->data()['model'] ?? null) === '@cf/openai/gpt-oss-20b'
+        );
+    }
+
     public function test_global_assistant_falls_back_to_domestic_gateway_when_primary_gateway_is_unavailable(): void
     {
         config([
