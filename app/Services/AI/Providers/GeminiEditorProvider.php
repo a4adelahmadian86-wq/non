@@ -10,8 +10,8 @@ use RuntimeException;
 class GeminiEditorProvider implements AiProvider
 {
 
-    public function name(): string { return 'gemini'; }
-    public function model(): string { return (string) (SiteSetting::read('gemini_model') ?: config('services.gemini.model', 'gemini-3.8-flash')); }
+    public function name(): string { return 'farast-ai-gateway'; }
+    public function model(): string { return '@cf/openai/gpt-oss-20b'; }
     public function supports(array $operation): bool { return ($operation['provider_capability'] ?? null) === 'text'; }
 
     public function execute(array $operation, array $payload, string $requestId): array
@@ -170,7 +170,8 @@ class GeminiEditorProvider implements AiProvider
             'output_bytes' => strlen($raw),
             'http_status' => $response->status(),
             'prompt_hash' => hash('sha256', $prompt),
-            'model' => (string) ($response->json('model') ?: 'farast-general'),
+            'model' => (string) ($response->json('model') ?: '@cf/openai/gpt-oss-20b'),
+            'provider' => $provider,
             'usage' => ['input_tokens' => $inputTokens, 'output_tokens' => $outputTokens, 'total_tokens' => $totalTokens],
             'fallback_used' => $provider !== 'gemini',
         ];
