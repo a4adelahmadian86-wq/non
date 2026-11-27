@@ -108,6 +108,14 @@ function validIdentifier(value) {
     && /^[A-Za-z0-9_-]+$/.test(value);
 }
 
+function containsDirectContactDetails(value) {
+  if (typeof value !== "string") return false;
+  const compact = value.replace(/[\\s().-]/g, "");
+  const hasEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i.test(value);
+  const hasIranianMobile = /(?:\\+?98|0)?9\\d{9}/.test(compact);
+  return hasEmail || hasIranianMobile;
+}
+
 function itemKey(productId, knowledgeType, documentId) {
   const prefix = knowledgeType === "approved_experience" ? "experiences" : "products";
   return `${prefix}/${productId}/${knowledgeType}/${documentId}.md`;
@@ -208,6 +216,9 @@ async function upsertKnowledge(request, env) {
     }
     if (body.privacy_review_status !== "approved" || body.anonymized !== true) {
       throw new RequestError(403, "experience_requires_privacy_review");
+    }
+    if (containsDirectContactDetails(content)) {
+      throw new RequestError(403, "experience_contains_contact_details");
     }
   }
   if (typeof content !== "string" || !content.trim()) {
