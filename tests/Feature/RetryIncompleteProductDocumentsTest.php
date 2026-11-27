@@ -1,9 +1,9 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Services\\ProductSupervisorClient;
-use Tests\\TestCase;
+use App\Services\ProductSupervisorClient;
+use Tests\TestCase;
 
 class RetryIncompleteProductDocumentsTest extends TestCase
 {
