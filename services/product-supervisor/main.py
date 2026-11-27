@@ -867,7 +867,8 @@ async def review_product(snapshot: ProductSnapshot):
                 response_format={"type": "json_object"},
                 max_tokens=2200,
                 temperature=0.15,
-                timeout_seconds=60,
+                timeout_seconds=90,
+                model=os.getenv("CLOUDFLARE_PRODUCT_MODEL", "@cf/openai/gpt-oss-120b"),
             )
             result = json.loads(raw)
         else:
