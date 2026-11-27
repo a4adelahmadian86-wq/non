@@ -29,8 +29,9 @@ class ProductSupervisorClient
 
             $response = Http::acceptJson()
                 ->withToken($endpoint['token'])
-                ->connectTimeout(4)
-                ->timeout(8)
+                // Render's free instance may need roughly a minute to wake from sleep.
+                ->connectTimeout(8)
+                ->timeout(120)
                 ->get($endpoint['url'].'/v1/ready');
 
             if (! $response->successful()) {
