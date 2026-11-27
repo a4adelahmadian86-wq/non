@@ -274,8 +274,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         vision.assert_awaited_once()
 
     def test_gemini_knowledge_payload_excludes_raw_document_chunks(self):
-        from main import minimize_document_knowledge_for_gemini
-        report = minimize_document_knowledge_for_gemini({
+        from main import minimize_document_knowledge_for_review
+        report = minimize_document_knowledge_for_review({
             "knowledge_status": "available",
             "access_scope": "full_document",
             "sources": [{
