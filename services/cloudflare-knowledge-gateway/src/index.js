@@ -92,18 +92,17 @@ function constantTimeEqual(left, right) {
   return difference === 0;
 }
 
-function isAuthorized(request, env) {
+function isAuthorizedWithToken(request, token) {
   const authorization = request.headers.get("authorization") || "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!match) return false;
-  const supplied = match[1].trim();
-  const allowed = [
-    env.FARAST_KB_LARAVEL_TOKEN,
-    env.FARAST_KB_SUPERVISOR_TOKEN,
-  ].filter((value) => typeof value === "string" && value.length >= 32);
-  return allowed.some((token) => constantTimeEqual(supplied, token));
+  if (!match || typeof token !== "string" || token.length < 32) return false;
+  return constantTimeEqual(match[1].trim(), token);
 }
 
+function isAuthorized(request, env) {
+  return isAuthorizedWithToken(request, env.FARAST_KB_LARAVEL_TOKEN)
+    || isAuthorizedWithToken(request, env.FARAST_KB_SUPERVISOR_TOKEN);
+}
 function hasPrivateFields(value) {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some((item) => hasPrivateFields(item));
@@ -352,7 +351,7 @@ async function getItemStatus(itemId, env) {
 }
 
 async function deleteKnowledge(request, env) {
-  if (!isAuthorized(request, env.FARAST_KB_LARAVEL_TOKEN)) {
+  if (!isAuthorizedWithToken(request, env.FARAST_KB_LARAVEL_TOKEN)) {
     throw new RequestError(403, "laravel_token_required");
   }
 
