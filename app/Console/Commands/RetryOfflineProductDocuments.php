@@ -60,22 +60,23 @@ class RetryOfflineProductDocuments extends Command
                     continue;
                 }
 
-                $wasQueued = DB::transaction(function () use ($document, $audit, $now): bool {
+                $queuedId = DB::transaction(function () use ($document, $audit, $now): ?int {
                     $locked = StoreProductDocument::query()
                         ->whereKey($document->id)
                         ->lockForUpdate()
                         ->first();
 
                     if (! $locked || ! in_array($locked->processing_status, ['extracted', 'partial'], true)) {
-                        return false;
+                        return null;
                     }
 
                     $structure = (array) ($locked->structure_json ?? []);
                     if (data_get($structure, 'ai_review.processing_mode') !== 'offline_structural_only'
                         || (int) data_get($structure, 'ai_review.offline_retry_after', PHP_INT_MAX) > $now) {
-                        return false;
+                        return null;
                     }
 
+                    $previousStatus = $locked->processing_status;
                     $structure['ai_review']['offline_retry_after'] = now()->addHours(6)->timestamp;
                     $locked->update([
                         'processing_status' => 'pending',
@@ -91,18 +92,21 @@ class RetryOfflineProductDocuments extends Command
                         (int) $locked->id,
                         [
                             'source_sha256' => $locked->source_sha256,
-                            'previous_status' => $document->processing_status,
+                            'previous_status' => $previousStatus,
                             'recovery' => 'offline_ai_review_retry',
                         ],
                         'system_scheduler'
                     );
 
-                    DB::afterCommit(fn () => ProcessProductDocument::dispatch((int) $locked->id));
-
-                    return true;
+                    return (int) $locked->id;
                 }, 3);
 
-                $wasQueued ? $queued++ : $skipped++;
+                if ($queuedId !== null) {
+                    ProcessProductDocument::dispatch($queuedId);
+                    $queued++;
+                } else {
+                    $skipped++;
+                }
             } catch (Throwable $exception) {
                 report($exception);
                 $skipped++;
