@@ -74,6 +74,27 @@ class ProductSupervisorFailoverTest extends TestCase
         );
     }
 
+    public function test_product_review_falls_back_when_primary_endpoint_forbids_access(): void
+    {
+        Http::fake([
+            'https://online-primary.example/*' => Http::response(['error' => 'forbidden'], 403),
+            'https://domestic-node.example/*' => Http::response([
+                'review_id' => 'forbidden-fallback-review',
+                'product_id' => '42',
+                'verdict' => 'needs_changes',
+                'score' => 70,
+                'findings' => [],
+            ]),
+        ]);
+
+        $result = app(ProductSupervisorClient::class)->review(['product_id' => '42']);
+
+        $this->assertSame('forbidden-fallback-review', $result['review_id']);
+        Http::assertSent(fn (Request $request) =>
+            $request->url() === 'https://domestic-node.example/v1/reviews/products'
+        );
+    }
+
     public function test_file_review_rewinds_stream_and_falls_back_after_primary_server_error(): void
     {
         Http::fake([
