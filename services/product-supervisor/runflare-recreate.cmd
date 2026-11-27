@@ -34,6 +34,22 @@ if not errorlevel 1 (
     exit /b 1
 )
 
+findstr /R /C:"^SUPERVISOR_API_TOKEN=." "runflare.env" >nul
+if errorlevel 1 (
+    echo SUPERVISOR_API_TOKEN is missing or empty. Edit runflare.env first.
+    start "" notepad "runflare.env"
+    pause
+    exit /b 1
+)
+
+findstr /I /C:"SUPERVISOR_OFFLINE_MODE=true" "runflare.env" >nul
+if errorlevel 1 (
+    echo Runflare must remain in offline-only mode. Set SUPERVISOR_OFFLINE_MODE=true.
+    start "" notepad "runflare.env"
+    pause
+    exit /b 1
+)
+
 echo Opening Runflare portal. Create a new Docker app in your existing project
 echo (or create a project if Runflare deleted it), then open its Environment Variables.
 start "" "https://portal.runflare.com"
