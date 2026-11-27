@@ -49,7 +49,7 @@ class FakeAsyncClient:
         self.calls.append({"url": url, "headers": headers or {}, "json": json or {}})
         if type(self).response_factory:
             return type(self).response_factory(url, headers or {}, json or {})
-        if url.endswith("/v1/chat/completions"):
+        if "/v1/chat/completions" in url:
             body = {
                 "choices": [{
                     "message": {
@@ -93,7 +93,7 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.client_patch.stop()
         self.env.__exit__(None, None, None)
 
-    def test_cloudflare_provider_requires_account_and_scoped_token(self):
+    def test_cloudflare_provider_requires_worker_url_and_gateway_token(self):
         self.assertTrue(cloudflare_provider.cloudflare_provider_ready("text"))
         with patch.dict(os.environ, {"FARAST_AI_GATEWAY_TOKEN": ""}, clear=False):
             self.assertFalse(cloudflare_provider.cloudflare_provider_ready("text"))
@@ -114,6 +114,24 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertNotIn("cf-aig-gateway-id", request["headers"])
         self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-20b")
         self.assertEqual(request["json"]["response_format"], {"type": "json_object"})
+
+
+    def test_product_review_uses_the_dedicated_gpt_oss_120b_route(self):
+        with patch("cloudflare_provider.httpx.AsyncClient", FakeAsyncClient):
+            result = asyncio.run(cloudflare_provider.cloudflare_chat_completion(
+                [{"role": "user", "content": "بررسی محصول"}],
+                response_format={"type": "json_object"},
+                max_tokens=2200,
+                task="review",
+            ))
+
+        request = FakeAsyncClient.requests[-1]
+        self.assertEqual(
+            request["url"],
+            "https://farast-ai-gateway.example.workers.dev/v1/chat/completions/review",
+        )
+        self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-120b")
+        self.assertEqual(result, '{"choices":[{"message":{"content":"ok"}}]}')
 
     def test_file_text_analysis_prefers_cloudflare_without_groq_zdr(self):
         result = asyncio.run(file_pipeline.analyze_extracted_content(
