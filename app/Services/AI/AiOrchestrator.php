@@ -31,7 +31,7 @@ class AiOrchestrator
         $providerName = 'unresolved';
         $interaction = $this->quota->reserveInteraction($user, [
             'document_id' => $context['document_id'] ?? null,
-            'provider' => $resolvedProvider,
+            'provider' => $providerName,
             'model' => 'pending',
             'operation' => $operation['name'],
             'request_id' => $requestId,
