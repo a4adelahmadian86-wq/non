@@ -53,6 +53,8 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run service tests
         run: pytest -q
+      - name: Compile provider modules
+        run: python -m py_compile main.py file_pipeline.py cloudflare_provider.py
       - name: Build stateless Product Supervisor container
         run: docker build -t farast-product-supervisor .
       - name: Smoke-test container at Back4App free resource limits
@@ -111,5 +113,6 @@ jobs:
           php -l ../../app/Http/Controllers/AdminCourseController.php
           php -l ../../app/Services/ProductSupervisorClient.php
           php -l ../../app/Services/ProductSupervisorSnapshotBuilder.php
+          php -l ../../app/Services/ProductDocumentProcessingState.php
           php -l ../../routes/store_routes.php
           php -l ../../config/services.php
