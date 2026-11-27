@@ -6,7 +6,7 @@ An isolated, stateless product-quality review service. It is separate from the e
 
 | Task | Primary free provider | Data sent |
 |---|---|---|
-| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 20B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
+| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 120B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
 | Extracted file text and content quality | Cloudflare Workers AI GPT-OSS 20B | Redacted extracted text in bounded batches |
 | Product image understanding | Cloudflare Workers AI Moondream 3.1 | Resized image plus redacted product context |
 | Audio transcription | Cloudflare Workers AI Whisper Large V3 Turbo | Extracted audio bytes; no original filename |
@@ -14,7 +14,7 @@ An isolated, stateless product-quality review service. It is separate from the e
 | Optional text/audio fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; image analysis is not routed to Groq |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
+Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-120b` for compact final product metadata review, `@cf/openai/gpt-oss-20b` for bulk file-text analysis, `@cf/moondream/moondream3.1-9B-A2B` for images and `@cf/openai/whisper-large-v3-turbo` for audio. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
 
 The service never sends private user profiles, behavioral observations or account memory to these provider calls. Product metadata and product-file content are separate from those user records. Cloudflare Workers AI inference is not used to train models and is processed under Cloudflare's Workers AI data-handling policy. The later AI Search index is a separate persistent knowledge store; only verified product knowledge and explicitly approved, sanitized experiences may be indexed there.
 
