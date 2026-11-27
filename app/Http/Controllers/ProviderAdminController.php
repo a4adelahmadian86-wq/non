@@ -17,55 +17,72 @@ class ProviderAdminController extends Controller
     public function updateAi(Request $request)
     {
         $data = $request->validate([
-            'gemini_api_key' => 'nullable|string|max:500',
-            'gemini_model' => 'required|string|max:120',
-            'gemini_fallback_model' => 'nullable|string|max:120',
+            'ai_gateway_url' => 'nullable|url|max:255',
+            'ai_gateway_token' => 'nullable|string|max:500',
+            'ai_gateway_fallback_url' => 'nullable|url|max:255',
+            'ai_gateway_fallback_token' => 'nullable|string|max:500',
         ]);
 
-        if (filled($data['gemini_api_key'] ?? null)) {
-            SiteSetting::write('gemini_api_key', trim($data['gemini_api_key']), true);
+        foreach (['ai_gateway_url', 'ai_gateway_fallback_url'] as $key) {
+            $value = trim((string) ($data[$key] ?? ''));
+            if ($value !== '') {
+                $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+                $host = strtolower((string) parse_url($value, PHP_URL_HOST));
+                if ($scheme !== 'https' || in_array($host, [
+                    'generativelanguage.googleapis.com',
+                    'api.groq.com',
+                    'api.openai.com',
+                    'api.cloudflare.com',
+                ], true)) {
+                    return back()->withErrors([$key => 'فقط نشانی HTTPS درگاه FARAST مجاز است؛ نشانی مستقیم ارائه‌دهنده پذیرفته نمی‌شود.']);
+                }
+                SiteSetting::write($key, rtrim($value, '/'));
+            }
         }
-        SiteSetting::write('gemini_model', trim($data['gemini_model']));
-        SiteSetting::write('gemini_fallback_model', trim((string) ($data['gemini_fallback_model'] ?? '')));
 
-        app(AuditLogService::class)->record(auth()->id(), 'provider.gemini.updated', $request->ip(), [
-            'model' => $data['gemini_model'],
-            'key_replaced' => filled($data['gemini_api_key'] ?? null),
+        foreach (['ai_gateway_token', 'ai_gateway_fallback_token'] as $key) {
+            if (filled($data[$key] ?? null)) {
+                SiteSetting::write($key, trim($data[$key]), true);
+            }
+        }
+
+        app(AuditLogService::class)->record(auth()->id(), 'provider.farast_ai_gateway.updated', $request->ip(), [
+            'primary_url_updated' => filled($data['ai_gateway_url'] ?? null),
+            'primary_token_replaced' => filled($data['ai_gateway_token'] ?? null),
+            'fallback_url_updated' => filled($data['ai_gateway_fallback_url'] ?? null),
+            'fallback_token_replaced' => filled($data['ai_gateway_fallback_token'] ?? null),
         ]);
 
-        return back()->with('status', 'تنظیمات Gemini ذخیره شد.');
+        return back()->with('status', 'تنظیمات درگاه هوش مصنوعی FARAST ذخیره شد.');
     }
 
     public function testAi(ProviderConnectionHealth $health)
     {
-        $key = trim((string) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key', '')));
-        if ($key === '') {
+        $url = rtrim(trim((string) (SiteSetting::read('ai_gateway_url') ?: config('services.ai_gateway.url', ''))), '/');
+        $token = trim((string) (SiteSetting::read('ai_gateway_token') ?: config('services.ai_gateway.token', '')));
+        $model = '@cf/openai/gpt-oss-20b';
+
+        if ($url === '' || $token === '') {
             return response()->json([
                 'ok' => false,
                 'configured' => false,
                 'api_reachable' => false,
                 'connection_verified' => false,
                 'ready' => false,
-                'message' => 'کلید Gemini تنظیم نشده است.',
+                'message' => 'نشانی و توکن درگاه FARAST تنظیم نشده‌اند.',
             ], 422);
         }
 
-        $selectedModel = trim((string) (SiteSetting::read('gemini_model') ?: config('services.gemini.model', 'gemini-3.8-flash')));
-
         try {
-            $response = Http::withHeaders([
-                'x-goog-api-key' => $key,
-                'Accept' => 'application/json',
-            ])->connectTimeout(5)->timeout(10)->get('https://generativelanguage.googleapis.com/v1beta/models');
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->connectTimeout(5)
+                ->timeout(12)
+                ->get($url.'/ready');
 
             if (! $response->successful()) {
                 $status = $response->status();
-                $health->recordFailure('gemini', $key, $selectedModel, 'http_'.$status, true);
-                $message = match ($status) {
-                    401, 403 => 'کلید معتبر نیست یا دسترسی Gemini API برای این پروژه فعال نشده است.',
-                    429 => 'محدودیت نرخ یا سهمیهٔ حساب Gemini مانع پاسخ‌گویی شد.',
-                    default => 'Gemini API پاسخ موفق نداد؛ تنظیمات پروژه و دسترسی API را بررسی کنید.',
-                };
+                $health->recordFailure('farast-ai-gateway', $token, $model, 'http_'.$status, true);
 
                 return response()->json([
                     'ok' => false,
@@ -74,35 +91,33 @@ class ProviderAdminController extends Controller
                     'connection_verified' => false,
                     'ready' => false,
                     'http_status' => $status,
-                    'message' => $message,
+                    'message' => $status === 401
+                        ? 'توکن درگاه پذیرفته نشد.'
+                        : 'درگاه FARAST پاسخ آماده‌به‌کار نداد؛ وضعیت Worker و سهمیه را بررسی کنید.',
                 ], $status === 429 ? 429 : 502);
             }
 
             $models = $response->json('models', []);
-            $models = is_array($models) ? $models : [];
-            $modelAvailable = collect($models)->contains(function ($model) use ($selectedModel): bool {
-                $name = (string) ($model['name'] ?? '');
+            $required = ['text', 'review', 'vision', 'audio'];
+            $ready = $response->json('ok') === true
+                && is_array($models)
+                && collect($required)->every(fn ($task) => filled($models[$task] ?? null));
 
-                return $name === $selectedModel || str_ends_with($name, '/'.$selectedModel);
-            });
-
-            $health->recordSuccess('gemini', $key, $selectedModel, ['text' => $modelAvailable]);
+            $health->recordSuccess('farast-ai-gateway', $token, $model, array_fill_keys($required, $ready));
 
             return response()->json([
-                'ok' => true,
+                'ok' => $ready,
                 'configured' => true,
                 'api_reachable' => true,
                 'connection_verified' => true,
-                'ready' => $modelAvailable,
-                'model' => $selectedModel,
-                'model_available' => $modelAvailable,
-                'models_count' => count($models),
-                'message' => $modelAvailable
-                    ? 'اتصال Gemini برقرار است و مدل انتخاب‌شده در فهرست حساب دیده می‌شود.'
-                    : 'API پاسخ‌گو است، اما مدل انتخاب‌شده در فهرست این حساب دیده نشد.',
-            ]);
+                'ready' => $ready,
+                'models' => $models,
+                'message' => $ready
+                    ? 'درگاه FARAST در دسترس است و مسیرهای متن، بازبینی، تصویر و صوت آماده‌اند.'
+                    : 'درگاه پاسخ داد، اما همهٔ مسیرهای مدل آماده نیستند.',
+            ], $ready ? 200 : 503);
         } catch (ConnectionException) {
-            $health->recordFailure('gemini', $key, $selectedModel, 'network_error');
+            $health->recordFailure('farast-ai-gateway', $token, $model, 'network_error');
 
             return response()->json([
                 'ok' => false,
@@ -110,11 +125,11 @@ class ProviderAdminController extends Controller
                 'api_reachable' => false,
                 'connection_verified' => false,
                 'ready' => false,
-                'message' => 'ارتباط شبکه با Gemini برقرار نشد؛ دسترسی خروجی سرور را بررسی کنید.',
+                'message' => 'ارتباط با درگاه FARAST برقرار نشد؛ نشانی و دسترسی شبکه را بررسی کنید.',
             ], 504);
         } catch (Throwable $exception) {
-            $health->recordFailure('gemini', $key, $selectedModel, 'internal_error');
-            Log::warning('farast.admin.gemini_test_failed', ['error_class' => get_class($exception)]);
+            $health->recordFailure('farast-ai-gateway', $token, $model, 'internal_error');
+            Log::warning('farast.admin.ai_gateway_test_failed', ['error_class' => get_class($exception)]);
 
             return response()->json([
                 'ok' => false,
@@ -122,7 +137,7 @@ class ProviderAdminController extends Controller
                 'api_reachable' => false,
                 'connection_verified' => false,
                 'ready' => false,
-                'message' => 'خطای داخلی هنگام بررسی اتصال Gemini رخ داد.',
+                'message' => 'خطای داخلی هنگام بررسی درگاه FARAST رخ داد.',
             ], 502);
         }
     }
@@ -151,119 +166,20 @@ class ProviderAdminController extends Controller
         ], $ready ? 200 : 503);
     }
 
-    // Groq credentials are shared by assistant chat and speech-to-text.
+    // Direct Groq access is intentionally disabled; model calls must use the FARAST Worker.
     public function updateGroq(Request $request)
     {
-        $data = $request->validate([
-            'voice_groq_key' => 'nullable|string|max:500',
-            'assistant_groq_model' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:\/-]+$/'],
-        ]);
-
-        if (filled($data['voice_groq_key'] ?? null)) {
-            SiteSetting::write('voice_groq_key', trim($data['voice_groq_key']), true);
-            app(AuditLogService::class)->record(auth()->id(), 'provider.groq.updated', $request->ip(), [
-                'key_replaced' => true,
-                'model' => $data['assistant_groq_model'],
-            ]);
-        }
-        SiteSetting::write('assistant_groq_model', trim($data['assistant_groq_model']));
-
-        return back()->with(
-            'status',
-            filled($data['voice_groq_key'] ?? null)
-                ? 'کلید Groq و مدل دستیار ذخیره شد.'
-                : 'مدل Groq ذخیره شد؛ کلید قبلی بدون تغییر باقی ماند.'
-        );
+        return back()->with('status', 'اتصال مستقیم Groq غیرفعال است؛ همهٔ درخواست‌های مدل از درگاه FARAST عبور می‌کنند.');
     }
 
-    public function testGroq(ProviderConnectionHealth $health)
+    public function testGroq()
     {
-        $key = trim((string) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key', '')));
-        if ($key === '') {
-            return response()->json([
-                'ok' => false,
-                'configured' => false,
-                'api_reachable' => false,
-                'connection_verified' => false,
-                'ready' => false,
-                'message' => 'کلید Groq وارد نشده است.',
-            ], 422);
-        }
-
-        $model = trim((string) (SiteSetting::read('assistant_groq_model') ?: 'openai/gpt-oss-120b'));
-
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$key,
-                'Accept' => 'application/json',
-            ])->connectTimeout(5)->timeout(10)->get('https://api.groq.com/openai/v1/models');
-
-            if (! $response->successful()) {
-                $status = $response->status();
-                $health->recordFailure('groq', $key, $model, 'http_'.$status, true);
-
-                return response()->json([
-                    'ok' => false,
-                    'configured' => true,
-                    'api_reachable' => true,
-                    'connection_verified' => false,
-                    'ready' => false,
-                    'http_status' => $status,
-                    'message' => match ($status) {
-                        401, 403 => 'کلید Groq معتبر نیست یا دسترسی این حساب محدود شده است.',
-                        429 => 'محدودیت نرخ یا سهمیهٔ حساب Groq مانع پاسخ‌گویی شد.',
-                        default => 'Groq API پاسخ موفق نداد؛ تنظیمات حساب و دسترسی API را بررسی کنید.',
-                    },
-                ], $status === 429 ? 429 : 502);
-            }
-
-            $ids = collect($response->json('data', []))
-                ->pluck('id')
-                ->map(fn ($id) => (string) $id);
-            $chatAvailable = $ids->contains($model);
-            $speechAvailable = $ids->contains('whisper-large-v3') || $ids->contains('whisper-large-v3-turbo');
-
-            $health->recordSuccess('groq', $key, $model, [
-                'chat' => $chatAvailable,
-                'speech' => $speechAvailable,
-            ]);
-
-            return response()->json([
-                'ok' => true,
-                'configured' => true,
-                'api_reachable' => true,
-                'connection_verified' => true,
-                'ready' => $chatAvailable,
-                'chat_model_available' => $chatAvailable,
-                'speech_model_available' => $speechAvailable,
-                'model' => $model,
-                'message' => $chatAvailable
-                    ? 'اتصال Groq برقرار است و مدل گفت‌وگو در دسترس است.'.($speechAvailable ? ' مدل تشخیص گفتار نیز موجود است.' : ' مدل تشخیص گفتار در فهرست فعلی دیده نشد.')
-                    : 'API پاسخ‌گو است، اما مدل گفت‌وگوی تنظیم‌شده در فهرست این حساب دیده نشد.',
-            ]);
-        } catch (ConnectionException) {
-            $health->recordFailure('groq', $key, $model, 'network_error');
-
-            return response()->json([
-                'ok' => false,
-                'configured' => true,
-                'api_reachable' => false,
-                'connection_verified' => false,
-                'ready' => false,
-                'message' => 'ارتباط شبکه با Groq برقرار نشد؛ دسترسی خروجی سرور را بررسی کنید.',
-            ], 504);
-        } catch (Throwable $exception) {
-            $health->recordFailure('groq', $key, $model, 'internal_error');
-            Log::warning('farast.admin.groq_test_failed', ['error_class' => get_class($exception)]);
-
-            return response()->json([
-                'ok' => false,
-                'configured' => true,
-                'api_reachable' => false,
-                'connection_verified' => false,
-                'ready' => false,
-                'message' => 'خطای داخلی هنگام بررسی اتصال Groq رخ داد.',
-            ], 502);
-        }
+        return response()->json([
+            'ok' => false,
+            'configured' => false,
+            'disabled' => true,
+            'message' => 'اتصال مستقیم Groq غیرفعال است؛ وضعیت مدل‌ها را از درگاه FARAST بررسی کنید.',
+        ], 410);
     }
+
 }
