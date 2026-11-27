@@ -47,6 +47,12 @@ Schedule::command('farast:recover-product-documents --limit=50')
     ->everyFiveMinutes()
     ->withoutOverlapping(30);
 
+// Re-run documents whose deterministic extraction was saved while external AI was unavailable.
+// Only incomplete provider tasks are retried; already-completed reader content is preserved.
+Schedule::command('farast:retry-incomplete-product-documents --limit=25 --age-hours=6')
+    ->everySixHours()
+    ->withoutOverlapping(60);
+
 // Process document ingestion and the default queue on cron-only/shared hosting.
 // The worker exits when idle and is protected from overlapping scheduler launches.
 Schedule::command('queue:work --queue=documents,documents-audio,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
