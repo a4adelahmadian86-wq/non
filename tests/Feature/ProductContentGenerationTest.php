@@ -89,7 +89,7 @@ class ProductContentGenerationTest extends TestCase
                     'successful_analysis_batches' => 1,
                 ],
                 'ai_review' => [
-                    'provider_status' => ['groq_text' => 'completed'],
+                    'provider_status' => ['cloudflare_text' => 'completed'],
                     'analysis_batch_count' => 1,
                     'successful_analysis_batches' => 1,
                     'summary' => 'این فایل شامل راهنمای نصب و استفاده از محصول است.',
