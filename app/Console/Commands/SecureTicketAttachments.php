@@ -255,7 +255,7 @@ class SecureTicketAttachments extends Command
                                 TicketMessage::class,
                                 (int) $message->id,
                                 null,
-                                StorageManager::NON_CRITICAL
+                                StorageManager::CRITICAL
                             );
                             $storage->bindReference(
                                 (int) $managed['managed_file_id'],
