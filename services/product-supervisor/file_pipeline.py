@@ -1373,7 +1373,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
         provider = "cloudflare"
         model = cloudflare_model("text")
         url = cloudflare_chat_completions_url()
-        headers = cloudflare_auth_headers()
+        headers = cloudflare_auth_headers(include_gateway=True)
     else:
         key = os.getenv("GROQ_API_KEY", "").strip()
         if not key:
