@@ -1239,7 +1239,11 @@ async def analyze_image_with_groq(image_bytes: bytes, mime: str, context: dict[s
     key = _groq_api_key()
     if not key:
         return ""
-    model = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b").strip()
+    # Groq vision is deliberately disabled by default; the former default
+    # was a Qwen model that is not part of FARAST's selected provider set.
+    model = os.getenv("GROQ_VISION_MODEL", "").strip()
+    if not model:
+        return ""
     data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     safe_context, _ = redact_sensitive_content(json.dumps(context or {}, ensure_ascii=False))
     payload = {
