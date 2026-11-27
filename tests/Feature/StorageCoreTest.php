@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
