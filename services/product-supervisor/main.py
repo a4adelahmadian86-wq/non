@@ -616,7 +616,7 @@ async def health():
                     "audio": os.getenv("CLOUDFLARE_AUDIO_MODEL", "@cf/openai/whisper-large-v3-turbo"),
                 },
             },
-            "gemini": {"configured": gemini_configured, "role": "optional_product_snapshot_fallback"},
+            "gemini": {"configured": gemini_configured, "role": "product_snapshot_and_database_report_review"},
             "groq": {
                 "configured": groq_configured,
                 "privacy_gate_confirmed": _groq_zdr_is_confirmed(),
