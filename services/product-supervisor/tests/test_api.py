@@ -357,7 +357,12 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
 
 
     def test_authenticated_readiness_verifies_shared_token_without_provider_call(self):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "",
+            "GROQ_API_KEY": "",
+            "CLOUDFLARE_ACCOUNT_ID": "",
+            "CLOUDFLARE_API_TOKEN": "",
+        }, clear=False):
             response = self.client.get(
                 "/v1/ready",
                 headers={"Authorization": "Bearer test-token"},
