@@ -134,7 +134,9 @@ export async function proxyChat(request, task) {
 
   const upstreamBase = normalizeUpstreamBase(process.env.FARAST_CLOUDFLARE_AI_GATEWAY_URL || "");
   const upstreamToken = process.env.FARAST_CLOUDFLARE_AI_GATEWAY_TOKEN || "";
-  if (!upstreamBase || !upstreamToken) return json(503, { error: "upstream_not_configured" });
+  if (!upstreamBase || !upstreamToken || secureEqual(expectedToken, upstreamToken)) {
+    return json(503, { error: "upstream_not_configured" });
+  }
 
   const tokenLimit = task === "review" ? 2200 : 1024;
   const requested = Number(payload.max_tokens ?? payload.max_completion_tokens ?? tokenLimit);
