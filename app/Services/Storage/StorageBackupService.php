@@ -120,6 +120,9 @@ class StorageBackupService
                     ]);
                     $target->increment('used_bytes', (int) filesize($archivePath));
                     $target->increment('object_count');
+                    if ($backupType === 'weekly') {
+                        $this->pruneWeeklyBackupsForVolume($target);
+                    }
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
                     try {
@@ -139,6 +142,50 @@ class StorageBackupService
         } finally {
             $this->removeDirectory($work);
         }
+    }
+
+
+    /**
+     * Keep only the configured number of verified weekly backups per destination.
+     * Manual backups are intentionally retained and never pruned by this policy.
+     */
+    public function pruneWeeklyBackupsForVolume(StorageVolume $target): int
+    {
+        $keep = max(1, min(12, (int) config('storage_management.backup.weekly_retention', 2)));
+        $runs = StorageBackupRun::query()
+            ->where('storage_volume_id', $target->id)
+            ->where('backup_type', 'weekly')
+            ->where('status', 'completed')
+            ->whereNotNull('object_key')
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $pruned = 0;
+        foreach ($runs->skip($keep) as $run) {
+            try {
+                $disk = $this->storage->volumeDisk($target);
+                $this->storage->delete($disk, (string) $run->object_key);
+
+                $target->decrement('used_bytes', min((int) $target->used_bytes, (int) $run->size_bytes));
+                $target->decrement('object_count', min((int) $target->object_count, 1));
+
+                $metadata = (array) $run->metadata;
+                $metadata['retention_pruned_at'] = now()->toIso8601String();
+                $metadata['retention_policy'] = 'weekly_keep_latest_'.$keep;
+                $run->update([
+                    'status' => 'pruned',
+                    'metadata' => $metadata,
+                ]);
+                $target->refresh();
+                $pruned++;
+            } catch (\\Throwable $exception) {
+                // A retention cleanup failure must never invalidate the newly verified backup.
+                report($exception);
+            }
+        }
+
+        return $pruned;
     }
 
     private function assertArchiveReadable(string $archivePath, string $password): void
