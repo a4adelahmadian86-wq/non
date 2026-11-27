@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import threading
 import os
 import unittest
@@ -308,6 +309,43 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         )
         self.assertEqual(body["content_chunks"][0]["locator"]["heading_level"], 1)
         self.assertEqual(body["content_chunks"][2]["locator"]["cells"], ["عنوان", "مقدار"])
+
+    def test_product_metadata_review_prefers_cloudflare_gpt_oss_without_gemini(self):
+        response_text = json.dumps({
+            "verdict": "approved",
+            "score": 92,
+            "summary": "اطلاعات محصول برای بررسی کافی است.",
+            "findings": [],
+        }, ensure_ascii=False)
+        with patch.dict(os.environ, {
+            "CLOUDFLARE_ACCOUNT_ID": "account-test",
+            "CLOUDFLARE_API_TOKEN": "cloudflare-test-token",
+            "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
+            "GEMINI_API_KEY": "",
+            "GROQ_API_KEY": "",
+        }, clear=False), patch(
+            "main.cloudflare_chat_completion",
+            new_callable=AsyncMock,
+            return_value=response_text,
+        ) as cloudflare_review:
+            response = self.client.post(
+                "/v1/reviews/products",
+                headers={"Authorization": "Bearer test-token"},
+                json={
+                    "product_id": "p-cloudflare",
+                    "product_type": "digital_file",
+                    "title": "محصول آزمایشی",
+                    "price_rials": 100000,
+                    "category_name": "آموزشی",
+                    "has_clean_primary_file": True,
+                    "checks": ["content"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["model"], "@cf/openai/gpt-oss-20b")
+        self.assertEqual(response.json()["verdict"], "approved")
+        cloudflare_review.assert_awaited_once()
 
     def test_health_does_not_disclose_secret(self):
         response = self.client.get("/health")

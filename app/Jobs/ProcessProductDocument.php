@@ -30,7 +30,8 @@ class ProcessProductDocument implements ShouldQueue
 
     public function retryUntil(): \DateTimeInterface
     {
-        return now()->addDay();
+        // Free Workers AI quotas reset daily; keep the durable job alive across temporary quota windows.
+        return now()->addDays(3);
     }
 
     public function __construct(public readonly int $documentId)

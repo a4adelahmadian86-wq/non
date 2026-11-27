@@ -4,74 +4,62 @@ An isolated, stateless product-quality review service. It is separate from the e
 
 ## Provider routing
 
-| Task | Provider | Data sent |
+| Task | Primary free provider | Data sent |
 |---|---|---|
-| Product metadata, SEO and review of persisted database reports | Gemini | Product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw document chunks |
-| Extracted file text and content quality | Groq Text | Only when `GROQ_ZDR_CONFIRMED=true` and the Groq account's ZDR is actually enabled; otherwise no file text is sent |
-
-| Product image understanding | Groq Vision | Only when the same explicit ZDR gate is enabled; otherwise no image is sent |
-| Audio transcription | Groq Whisper | Only when the same explicit ZDR gate is enabled; otherwise no audio is sent |
+| Product metadata, SEO and review of persisted reports | Cloudflare Workers AI GPT-OSS 20B | Redacted product metadata plus bounded DB summaries, findings and short evidence-backed facts; never raw source chunks in this endpoint |
+| Extracted file text and content quality | Cloudflare Workers AI GPT-OSS 20B | Redacted extracted text in bounded batches |
+| Product image understanding | Cloudflare Workers AI Moondream 3.1 | Resized image plus redacted product context |
+| Audio transcription | Cloudflare Workers AI Whisper Large V3 Turbo | Extracted audio bytes; no original filename |
+| Optional product-metadata fallback | Gemini | Used only when Cloudflare Workers AI is not configured; never receives raw file text or original files |
+| Optional file-review fallback | Groq | Used only when account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true`; otherwise no file data is sent to Groq |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-Gemini never receives the original file, extracted full text, or raw document chunks. File-text review is a separate Groq path and is fail-closed unless `GROQ_ZDR_CONFIRMED=true` is set after account-level Zero Data Retention is enabled in Groq. Legacy binary Office formats (.doc/.xls/.ppt), encrypted documents and unsupported file types are rejected. ZIP files are inspected as archives; their entries are not extracted or executed. MP4/MOV, WebM and AVI video containers are recognized. When bundled FFmpeg can decode them, only a short audio track and one resized frame are extracted locally; the original video is never sent to a provider. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
+Cloudflare Workers AI is the preferred inference provider. The selected models are `@cf/openai/gpt-oss-20b`, `@cf/moondream/moondream3.1-9B-A2B` and `@cf/openai/whisper-large-v3-turbo`. Its Free plan includes 10,000 neurons per day across the account's Workers AI usage (shared with the site's assistant/editor if they use the same account); when the free allowance is exhausted, requests fail with a rate-limit response and the Laravel queue retries later. No automatic paid-provider fallback is performed after a Cloudflare error.
+
+The service never sends private user profiles, behavioral observations or account memory to these provider calls. Product metadata and product-file content are separate from those user records. Cloudflare Workers AI inference is not used to train models and is processed under Cloudflare's Workers AI data-handling policy. The later AI Search index is a separate persistent knowledge store; only verified product knowledge and explicitly approved, sanitized experiences may be indexed there.
 
 ## File safety and privacy
 
 - Uploads are handled as request-scoped temporary data and are not persisted by this service. The ASGI upload spool and the optional ClamAV temporary file are closed/removed after processing.
 - Maximum upload size is 25 MiB. Request bodies are bounded. File type is determined from content signatures, not just the supplied extension or MIME type.
 - Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX, XLSX and PPTX are parsed only after archive checks; spreadsheet and slide extraction are capped. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
-- Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before any permitted Groq file-review request. Redaction is best-effort. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
+- Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before model submission. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
 - Laravel invokes this endpoint only after its primary upload scanner has marked the asset clean. If the optional secondary ClamAV scanner in this service is unavailable, the response says `upstream_scan_verified` and separately reports `antivirus_status: not_configured`; it does not pretend a second scan ran. An infected result from the secondary scanner is rejected.
 - A successful AI review is advisory only. The endpoint always returns `publication_authorized: false` and `automated_publication: false`.
-- Gemini is restricted to product metadata and compact database reports. Groq file processing is disabled unless the operator has independently enabled account-level ZDR and then explicitly sets `GROQ_ZDR_CONFIRMED=true`. That variable is only an operator assertion, not proof supplied by Groq. Never assume a free tier is confidential.
+- Cloudflare Workers AI is the default when configured. Gemini is restricted to product metadata and compact database reports and is used only when Cloudflare is not configured. Groq file processing is disabled unless the operator has independently enabled account-level ZDR and then explicitly sets `GROQ_ZDR_CONFIRMED=true`. That variable is only an operator assertion, not proof supplied by Groq. Never assume a free tier is confidential.
 - Gladia remains disabled because its free tier/data-retention terms are not appropriate as a default path for sensitive product uploads.
 
-## Deploy
+## Deployment model
 
-The repository root `render.yaml` defines a separate Render web service named `farast-product-supervisor`. Render generates `SUPERVISOR_API_TOKEN`. Configure these secrets only in the Render service's Environment page:
+The service is stateless. Uploaded files are inspected in request-scoped temporary storage and removed after processing; no product files or customer data are kept on the container filesystem. The Laravel queue remains the durable source of truth and retries when this worker is unavailable.
 
-- `GEMINI_API_KEY` — required only for product metadata and compact persisted-report review; never used for file text.
-- `GROQ_API_KEY` — optional; enables file text, image and audio review only after the ZDR gate is satisfied.
-- `GROQ_ZDR_CONFIRMED` — leave unset until account-level ZDR is actually enabled in Groq; then set to `true`.
-- `GROQ_TEXT_MODEL` — non-secret text model selection.
+A Dockerfile is provided for a no-card free-container pilot on Back4App:
 
-Non-secret model settings are `GROQ_TEXT_MODEL`, `GROQ_VISION_MODEL` and `GROQ_AUDIO_MODEL`. The Gemini model is pinned in code. Do not commit keys, put them in frontend code, or send them through chat.
+- Published free limits: 0.25 vCPU, 256 MiB RAM and 100 GB outbound transfer.
+- The free tier is intended for testing and learning, not a production SLA.
+- CI builds the image and has successfully inspected a synthetic 24 MiB text upload with Docker constrained to 256 MiB RAM and 0.25 vCPU.
+- This test does not prove every file format will fit those limits. The service's existing 25 MiB upload ceiling remains; 2 GiB processing is not claimed or enabled.
+- File-review requests are serialized to reduce memory spikes. A busy worker returns HTTP 429 so Laravel can retry instead of losing the job.
 
-Free Render instances may sleep when idle and have usage/availability limits. A timeout or provider outage is a failed/incomplete review, never an approval.
+### Back4App pilot deployment
 
-## Activate the dedicated Render service
+1. Create a Back4App Containers application and connect the public repository `a4adelahmadian86-wq/non`.
+2. Select the `main` branch, set the application directory/build context to `services/product-supervisor`, and use its `Dockerfile`.
+3. Expose port `8000`. Do not attach a persistent disk; this service must remain stateless.
+4. Add secrets only in the Back4App environment settings:
+   - `SUPERVISOR_API_TOKEN`: a new, dedicated random secret.
+   - `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`: preferred inference provider. Create a dedicated API token for this worker with AI Gateway Read, AI Gateway Edit and Workers AI Read permissions. Use the default gateway ID `default` unless a dedicated gateway is created. No R2 permissions are needed. Create a separate token for the Laravel site's assistant/editor; do not reuse this worker token. All model requests explicitly disable AI Gateway request and payload logging.
+   - `CLOUDFLARE_TEXT_MODEL`, `CLOUDFLARE_VISION_MODEL` and `CLOUDFLARE_AUDIO_MODEL`: optional model overrides; the defaults in `.env.example` are the tested model identifiers.
+   - `GEMINI_API_KEY`: optional product-metadata fallback, used only when Cloudflare is not configured.
+   - `GROQ_API_KEY`: optional fallback; file text, image and audio review stay disabled unless account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true` is explicitly set.
+5. Deploy and verify `/health`, then verify authenticated `/v1/ready`.
+6. In the Laravel hosting environment, set `FARAST_PRODUCT_SUPERVISOR_URL` to the Back4App HTTPS service URL and `FARAST_PRODUCT_SUPERVISOR_TOKEN` to the exact dedicated token. Rebuild Laravel's configuration cache through the hosting provider's supported workflow.
 
-This service is intentionally separate from the site's existing AI and voice gateway.
+Do not change the site's existing production endpoint until the Back4App deployment has passed the live health/readiness checks and a real test product has completed successfully. No service is deployed by this repository change.
 
-1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
-2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. It is used only for product metadata and compact persisted database reports, never raw file text or chunks.
-3. Optionally add `GROQ_API_KEY` for file text, image understanding and audio transcription. First enable account-level ZDR in Groq; only then set `GROQ_ZDR_CONFIRMED=true`. Without both, all Groq file/media calls remain disabled.
-4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
-5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
-6. Confirm `/health` identifies Gemini's role as product metadata/database-report review and shows Groq's privacy gate. Then use the authenticated `/v1/ready` endpoint to verify the service token.
+## Provider secrets
 
-### Connect Laravel to this exact service
-
-Set these values in the Laravel application's hosting environment (not in frontend JavaScript and not in Git):
-
-```dotenv
-FARAST_PRODUCT_SUPERVISOR_URL=https://farast-product-supervisor-dhp5.onrender.com
-FARAST_PRODUCT_SUPERVISOR_TOKEN=<the exact SUPERVISOR_API_TOKEN from this Render service>
-FARAST_PRODUCT_SUPERVISOR_TIMEOUT=40
-```
-
-The Laravel token must match the generated Render token exactly. Do not use `FARAST_VOICE_TOKEN`, `FARAST_AI_GATEWAY_URL`, `GEMINI_API_KEY`, or any secret from the existing AI/voice service for this connection. After changing Laravel environment values, clear/rebuild the Laravel configuration cache using the hosting provider's supported terminal/deploy workflow.
-
-The authenticated readiness probe can be checked without sending a product file:
-
-```bash
-curl -i https://farast-product-supervisor-dhp5.onrender.com/v1/ready \
-  -H "Authorization: Bearer <SUPERVISOR_API_TOKEN>"
-```
-
-A successful response confirms the Render token is accepted and reports whether Gemini product review and ZDR-gated Groq file review are configured. It does not make a paid provider request.
-
-Never paste API keys or the supervisor token into this chat. Enter them only in the corresponding hosting Environment pages.
+The service never needs a frontend key. Keep all provider keys and the dedicated supervisor token in the worker's secret environment only. Do not commit keys, put them in frontend code, or send them through chat.
 
 ## API
 
@@ -83,18 +71,21 @@ Both review endpoints require `Authorization: Bearer <SUPERVISOR_API_TOKEN>`. Fi
 
 ## Local run
 
-Render and local deployments use Python 3.12.11, pinned in `.python-version` to ensure prebuilt Pydantic Core wheels are available.
+The Docker image and local development use Python 3.12; `.python-version` pins the local interpreter for prebuilt Pydantic Core wheels.
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 export SUPERVISOR_API_TOKEN='local-only-secret'
-export GEMINI_API_KEY='your-own-key'
-export GROQ_API_KEY='your-own-key'
+export CLOUDFLARE_ACCOUNT_ID='your-account-id'
+export CLOUDFLARE_API_TOKEN='your-workers-ai-token'
+# Optional fallbacks:
+# export GEMINI_API_KEY='your-own-key'
+# export GROQ_API_KEY='your-own-key'
 # Set only after enabling account-level Groq ZDR:
 # export GROQ_ZDR_CONFIRMED=true
 uvicorn main:app --reload --port 8091
 ```
 
-Run unit tests with `python -m unittest discover -s tests`.
+Run unit tests with `pytest -q`.
