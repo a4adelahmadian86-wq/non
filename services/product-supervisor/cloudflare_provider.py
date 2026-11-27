@@ -53,15 +53,22 @@ def cloudflare_provider_ready(task: str | None = None) -> bool:
     return True
 
 
-def cloudflare_auth_headers() -> dict[str, str]:
+def cloudflare_auth_headers(*, include_gateway: bool = False) -> dict[str, str]:
     token = cloudflare_api_token()
     if not token:
         raise RuntimeError("cloudflare_api_token_not_configured")
-    return {
+    headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
+    if include_gateway:
+        headers.update({
+            "cf-aig-gateway-id": os.getenv("CLOUDFLARE_AI_GATEWAY_ID", "default").strip() or "default",
+            "cf-aig-collect-log": "false",
+            "cf-aig-collect-log-payload": "false",
+        })
+    return headers
 
 
 def cloudflare_chat_completions_url() -> str:
@@ -112,7 +119,7 @@ async def cloudflare_chat_completion(
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             cloudflare_chat_completions_url(),
-            headers=cloudflare_auth_headers(),
+            headers=cloudflare_auth_headers(include_gateway=True),
             json=payload,
         )
         response.raise_for_status()
