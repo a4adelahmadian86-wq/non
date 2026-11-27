@@ -67,10 +67,11 @@
 
 ## ۳) پردازش مدل‌های قوی و APIها
 
-در کد موجود، سرویس `services/product-supervisor` از قبل FastAPI و Dockerfile دارد و provider Cloudflare Workers AI را برای متن، تصویر و صوت فراخوانی می‌کند. مدل‌های فعلی کد:
-- `@cf/openai/gpt-oss-20b`
-- `@cf/moondream/moondream3.1-9B-A2B`
-- `@cf/openai/whisper-large-v3-turbo`
+در کد موجود، سرویس `services/product-supervisor` از قبل FastAPI و Dockerfile دارد و provider Cloudflare Workers AI را برای متن، تصویر و صوت فراخوانی می‌کند. تفکیک مدل‌ها در تغییرات در حال بررسی PR اجرایی چنین است:
+- `@cf/openai/gpt-oss-120b` برای بررسی نهایی و کوتاه متادیتای محصول
+- `@cf/openai/gpt-oss-20b` برای تحلیل حجیم متن فایل
+- `@cf/moondream/moondream3.1-9B-A2B` برای تصویر
+- `@cf/openai/whisper-large-v3-turbo` برای صوت
 
 AI Gateway برای درخواست‌های این سرویس، جمع‌آوری لاگ و payload را خاموش می‌کند. Gemini فقط مسیر محدود بررسی متادیتای محصول است و Groq برای فایل تنها با فعال‌سازی صریح شرط ZDR مجاز می‌شود. این محدودیت‌ها باید حفظ شوند؛ هیچ پروفایل خصوصی یا استنباط رفتاری کاربر به provider عمومی ارسال نشود.
 
@@ -90,7 +91,7 @@ AI Gateway برای درخواست‌های این سرویس، جمع‌آور�
 
 Render در مرحلهٔ رایگان نامزد اصلی خارجی است، چون:
 - ساخت سرویس رایگان به کارت نیاز ندارد.
-- ۰٫۱ CPU و ۰٫۱ CPU و ۵۱۲ MiB RAM و ۷۵۰ ساعت اجرای رایگان در هر workspace در ماه دارد.
+- ۰٫۱ CPU و ۵۱۲ MiB RAM و ۷۵۰ ساعت اجرای رایگان در هر workspace در ماه دارد.
 - از Docker و Python پشتیبانی می‌کند و URL HTTPS می‌دهد.
 - بعد از ۱۵ دقیقه بی‌درخواستی sleep می‌شود و cold start ممکن است حدود یک دقیقه طول بکشد.
 - دیسک پایدار ندارد و خود Render پلن رایگان را برای Production توصیه نمی‌کند.

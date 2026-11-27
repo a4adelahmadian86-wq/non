@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class ProductSupervisorClient
 {
@@ -15,6 +17,37 @@ class ProductSupervisorClient
     public function configured(): bool
     {
         return $this->endpoints() !== [];
+    }
+
+    public function primaryReadyForAi(): bool
+    {
+        try {
+            $endpoint = $this->endpoints()[0] ?? null;
+            if (! $endpoint) {
+                return false;
+            }
+
+            $response = Http::acceptJson()
+                ->withToken($endpoint['token'])
+                // Render's free instance may need roughly a minute to wake from sleep.
+                ->connectTimeout(8)
+                ->timeout(120)
+                ->get($endpoint['url'].'/v1/ready');
+
+            if (! $response->successful()) {
+                return false;
+            }
+
+            $payload = $response->json();
+            if (! is_array($payload) || data_get($payload, 'processing_mode') !== 'provider_assisted') {
+                return false;
+            }
+
+            return data_get($payload, 'providers.cloudflare_workers_ai.ready_for_file_text') === true
+                || data_get($payload, 'providers.groq.ready_for_file_review') === true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public function review(array $snapshot): array
@@ -33,7 +66,7 @@ class ProductSupervisorClient
                     ->timeout((int) config('services.product_supervisor.timeout', 40))
                     ->post($endpoint['url'].'/v1/reviews/products', $snapshot);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -100,7 +133,7 @@ class ProductSupervisorClient
 
                 $response = $request->post($endpoint['url'].'/v1/reviews/files', $metadata);
 
-                if ($response->serverError() && isset($endpoints[$index + 1])) {
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
                     continue;
                 }
                 if (! $response->successful()) {
@@ -127,6 +160,11 @@ class ProductSupervisorClient
         }
 
         throw new RuntimeException('product_supervisor_unavailable');
+    }
+
+    private function shouldFailover(Response $response): bool
+    {
+        return $response->serverError() || in_array($response->status(), [403, 408, 425, 429], true);
     }
 
     private function isPrivateServiceUrl(string $url): bool

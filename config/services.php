@@ -24,7 +24,7 @@ return [
         'token' => env('FARAST_PRODUCT_SUPERVISOR_TOKEN', ''),
         'fallback_url' => env('FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL', ''),
         'fallback_token' => env('FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN', ''),
-        'timeout' => max(10, min(180, (int) env('FARAST_PRODUCT_SUPERVISOR_TIMEOUT', 40))),
+        'timeout' => max(10, min(180, (int) env('FARAST_PRODUCT_SUPERVISOR_TIMEOUT', 180))),
         'file_timeout' => max(300, min(540, (int) env('FARAST_PRODUCT_SUPERVISOR_FILE_TIMEOUT', 540))),
     ],
 

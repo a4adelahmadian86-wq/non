@@ -11,8 +11,24 @@ services:
     envVars:
       - key: SUPERVISOR_API_TOKEN
         generateValue: true
+      - key: SUPERVISOR_OFFLINE_MODE
+        value: "false"
       - key: PYTHON_VERSION
         value: "3.12.11"
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_AI_GATEWAY_ID
+        value: default
+      - key: CLOUDFLARE_TEXT_MODEL
+        value: "@cf/openai/gpt-oss-20b"
+      - key: CLOUDFLARE_PRODUCT_MODEL
+        value: "@cf/openai/gpt-oss-120b"
+      - key: CLOUDFLARE_VISION_MODEL
+        value: "@cf/moondream/moondream3.1-9B-A2B"
+      - key: CLOUDFLARE_AUDIO_MODEL
+        value: "@cf/openai/whisper-large-v3-turbo"
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
@@ -21,8 +37,6 @@ services:
         sync: false
       - key: GROQ_TEXT_MODEL
         value: openai/gpt-oss-20b
-      - key: GROQ_VISION_MODEL
-        value: qwen/qwen3.8-27b
       - key: GROQ_AUDIO_MODEL
         value: whisper-large-v3-turbo
 

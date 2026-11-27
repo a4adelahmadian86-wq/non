@@ -47,6 +47,12 @@ Schedule::command('farast:recover-product-documents --limit=50')
     ->everyFiveMinutes()
     ->withoutOverlapping(30);
 
+ // Re-run only documents that were extracted by the domestic offline node,
+ // and only when the primary model provider is ready again.
+ Schedule::command('farast:retry-offline-product-documents --limit=25')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(20);
+
 // Process document ingestion and the default queue on cron-only/shared hosting.
 // The worker exits when idle and is protected from overlapping scheduler launches.
 Schedule::command('queue:work --queue=documents,documents-audio,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')

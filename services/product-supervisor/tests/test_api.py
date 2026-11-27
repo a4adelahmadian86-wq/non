@@ -201,9 +201,10 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             "sample_pages": [],
         }
         with patch.dict(os.environ, {
-            "GROQ_API_KEY": "test-groq-key",
-            "GROQ_ZDR_CONFIRMED": "true",
-        }, clear=False), patch("file_pipeline.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
+            "CLOUDFLARE_ACCOUNT_ID": "test-cloudflare-account",
+            "CLOUDFLARE_API_TOKEN": "test-cloudflare-token",
+            "CLOUDFLARE_VISION_MODEL": "@cf/moondream/moondream3.1-9B-A2B",
+        }, clear=False), patch("file_pipeline.analyze_image_with_cloudflare", new_callable=AsyncMock) as vision, patch(
             "file_pipeline.analyze_extracted_content", new_callable=AsyncMock, return_value=review
         ):
             vision.return_value = "روی تصویر شماره تماس 09121234567 درج شده است."
@@ -370,6 +371,103 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         response = self.client.get("/v1/ready")
         self.assertEqual(response.status_code, 401)
 
+
+
+    def test_offline_mode_product_review_returns_manual_review_without_calling_models(self):
+        snapshot = {
+            "product_id": "p-offline",
+            "product_type": "digital_file",
+            "title": "محصول در حالت آفلاین",
+            "price_rials": 100000,
+            "category_name": "آموزشی",
+            "has_clean_primary_file": True,
+            "checks": ["content", "pricing"],
+        }
+        with patch.dict(os.environ, {
+            "SUPERVISOR_OFFLINE_MODE": "true",
+            "CLOUDFLARE_ACCOUNT_ID": "",
+            "CLOUDFLARE_API_TOKEN": "",
+            "GEMINI_API_KEY": "",
+        }, clear=False), patch("main.cloudflare_chat_completion", new_callable=AsyncMock) as model:
+            response = self.client.post(
+                "/v1/reviews/products",
+                headers={"Authorization": "Bearer test-token"},
+                json=snapshot,
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["verdict"], "needs_changes")
+        self.assertEqual(body["score"], 0)
+        self.assertEqual(body["model"], "offline-structural-only")
+        self.assertFalse(body["automated_publication"])
+        self.assertIn("حالت آفلاین", body["summary"])
+        model.assert_not_awaited()
+
+    def test_offline_mode_file_review_extracts_without_calling_external_models(self):
+        with patch.dict(os.environ, {
+            "SUPERVISOR_OFFLINE_MODE": "true",
+            "CLOUDFLARE_ACCOUNT_ID": "account-test",
+            "CLOUDFLARE_API_TOKEN": "token-test",
+            "GROQ_API_KEY": "groq-test",
+            "GROQ_ZDR_CONFIRMED": "true",
+        }, clear=False), patch(
+            "file_pipeline.analyze_extracted_content", new_callable=AsyncMock
+        ) as text_review, patch(
+            "file_pipeline.analyze_image_with_cloudflare", new_callable=AsyncMock
+        ) as vision:
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-offline-file",
+                    "product_title": "سند آفلاین",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("offline.txt", "متن قابل استخراج".encode(), "text/plain")},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processing_mode"], "offline_structural_only")
+        self.assertFalse(body["publication_authorized"])
+        self.assertEqual(body["analysis_batch_count"], 0)
+        self.assertIn("حالت آفلاین", " ".join(body["warnings"]))
+        self.assertIn("متن قابل استخراج", str(body["content_chunks"]))
+        text_review.assert_not_awaited()
+        vision.assert_not_awaited()
+
+    def test_file_review_provider_forbidden_returns_service_unavailable_for_fallback(self):
+        import httpx
+
+        request = httpx.Request("POST", "https://api.cloudflare.com/test")
+        response_error = httpx.Response(403, request=request)
+        forbidden = httpx.HTTPStatusError("forbidden", request=request, response=response_error)
+        with patch.dict(os.environ, {
+            "SUPERVISOR_OFFLINE_MODE": "",
+            "CLOUDFLARE_ACCOUNT_ID": "account-test",
+            "CLOUDFLARE_API_TOKEN": "token-test",
+            "GEMINI_API_KEY": "",
+            "GROQ_API_KEY": "",
+        }, clear=False), patch(
+            "main.cloudflare_provider_ready", side_effect=lambda task=None: task == "text"
+        ), patch(
+            "file_pipeline.analyze_extracted_content", new_callable=AsyncMock, side_effect=forbidden
+        ):
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-forbidden",
+                    "product_title": "سند محدودشده",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("blocked.txt", "متن آزمایشی".encode(), "text/plain")},
+            )
+
+        self.assertEqual(response.status_code, 503, response.text)
 
 if __name__ == "__main__":
     unittest.main()
