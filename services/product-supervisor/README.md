@@ -91,7 +91,11 @@ The Laravel `ProductSupervisorClient` now fails over to the next configured endp
 4. Verify public `/health` reports `offline_mode: true` and authenticated `/v1/ready` reports `processing_mode: offline_structural_only`.
 5. Set the new URL and its separate token as Laravel's Product Supervisor fallback endpoint only after the health/readiness test.
 
-When the free service expires and is deleted, the new project and Docker service must first be recreated in the Runflare panel. The included `runflare-deploy.cmd` then deploys the existing Docker item from Windows CMD. Runflare's CLI documentation currently requires a project/service item to exist before `runflare deploy`; it does not document fully automatic creation of a deleted project. No data recovery is needed from Runflare because it stores no source-of-truth data.
+When the free service expires and is deleted, run `runflare-recreate.cmd` from Windows CMD. It opens the Runflare portal, creates a private local `runflare.env` from the example if needed, copies its contents to the clipboard without printing the token, and then invokes `runflare deploy`. In the portal, create a new Docker item, paste the copied values into Environment Variables → Bulk Edit, save, and return to the CMD window.
+ 
+Keep `runflare.env` private; it is ignored by Git. Its `SUPERVISOR_API_TOKEN` must match Laravel's `FARAST_PRODUCT_SUPERVISOR_FALLBACK_TOKEN`. For an already-existing Docker item, use the simpler `runflare-deploy.cmd`.
+ 
+Runflare's documented CLI deploy command targets an existing project and Docker item; it does not create the new item automatically. The portal creation step cannot be removed without an officially supported project-creation API. No data recovery is needed from Runflare because it stores no source-of-truth data.
 
 Official Runflare documentation:
 - https://runflare.com/free-cloud-hosting/
