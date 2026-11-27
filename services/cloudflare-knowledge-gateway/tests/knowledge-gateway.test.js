@@ -297,6 +297,27 @@ test("approved experiences must be anonymized and pass a privacy review", async 
   assert.equal((await response.json()).error, "experience_requires_privacy_review");
 });
 
+test("approved experiences containing email or Iranian mobile details are rejected", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "experience-3",
+      knowledge_type: "approved_experience",
+      visibility: "public",
+      language: "fa",
+      approval_status: "approved",
+      privacy_review_status: "approved",
+      anonymized: true,
+      content: "برای تماس با من user@example.com یا 09123456789 را استفاده کنید.",
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "experience_contains_contact_details");
+});
+
 test("private profile and behavior fields are rejected before indexing", async () => {
   const { env } = makeEnvironment();
   const response = await handleRequest(request("/v1/knowledge/upsert", {
