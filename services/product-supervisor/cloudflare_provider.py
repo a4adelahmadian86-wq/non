@@ -152,7 +152,7 @@ async def cloudflare_run_model(
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             cloudflare_run_url(cloudflare_model(task)),
-            headers=cloudflare_auth_headers(),
+            headers=cloudflare_auth_headers(include_gateway=True),
             json=payload,
         )
         response.raise_for_status()
