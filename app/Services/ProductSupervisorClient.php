@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -129,7 +130,7 @@ class ProductSupervisorClient
         throw new RuntimeException('product_supervisor_unavailable');
     }
 
-    private function shouldFailover(\\Illuminate\\Http\\Client\\Response $response): bool
+    private function shouldFailover(Response $response): bool
     {
         return $response->serverError() || in_array($response->status(), [408, 425, 429], true);
     }
