@@ -134,7 +134,7 @@ class StorageManager
         string $sourceType,
         ?int $sourceId = null,
         ?int $productId = null,
-        string $classification = self::NON_CRITICAL
+        string $classification = self::CRITICAL
     ): array {
         $disk = Storage::disk('private');
         if (! $disk->exists($path)) throw new RuntimeException('فایل موقت برای انتقال وجود ندارد.');
