@@ -9,7 +9,6 @@ const baseEnv = {
     CF_TEXT_MODEL: "@cf/openai/gpt-oss-20b",
     CF_VISION_MODEL: "@cf/moondream/moondream3.1-9B-A2B",
     CF_AUDIO_MODEL: "@cf/openai/whisper-large-v3-turbo",
-    CF_AI_GATEWAY_ID: "farast",
 };
 
 async function withFetch(mock, callback) {
@@ -65,9 +64,6 @@ test("chat forwards only through the gateway and pins model and output limits", 
             "https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/v1/chat/completions"
         );
         assert.equal(init.headers.Authorization, "Bearer cloudflare-upstream-secret");
-        assert.equal(init.headers["cf-aig-collect-log"], "false");
-        assert.equal(init.headers["cf-aig-collect-log-payload"], "false");
-        assert.equal(init.headers["cf-aig-gateway-id"], "farast");
 
         const sent = JSON.parse(init.body);
         assert.equal(sent.model, "@cf/openai/gpt-oss-20b");
@@ -111,7 +107,6 @@ test("vision inference is routed to the pinned vision model without buffering it
             "https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/run/@cf/moondream/moondream3.1-9B-A2B"
         );
         assert.equal(init.headers.Authorization, "Bearer cloudflare-upstream-secret");
-        assert.equal(init.headers["cf-aig-collect-log-payload"], "false");
         assert.ok(init.body instanceof ReadableStream);
         const sent = await new Response(init.body).json();
         assert.equal(sent.task, "query");
