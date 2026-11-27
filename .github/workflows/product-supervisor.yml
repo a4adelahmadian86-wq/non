@@ -53,6 +53,53 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run service tests
         run: pytest -q
+      - name: Build stateless Product Supervisor container
+        run: docker build -t farast-product-supervisor .
+      - name: Smoke-test container at Back4App free resource limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name farast-product-supervisor-ci \
+            --memory=256m --memory-swap=256m --cpus=0.25 \
+            -e SUPERVISOR_API_TOKEN=ci-only-token \
+            -p 8099:8000 farast-product-supervisor
+          cleanup() {
+            docker logs farast-product-supervisor-ci || true
+            docker rm -f farast-product-supervisor-ci >/dev/null 2>&1 || true
+            rm -f /tmp/farast-supervisor-smoke.txt /tmp/farast-supervisor-response.json
+          }
+          trap cleanup EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --silent --show-error --fail http://127.0.0.1:8099/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          python - <<'PY'
+          from pathlib import Path
+          line = "FARAST memory-limited upload smoke test. "
+          target = Path("/tmp/farast-supervisor-smoke.txt")
+          target.write_text(line * ((24 * 1024 * 1024) // len(line)), encoding="utf-8")
+          PY
+          curl --silent --show-error --fail \
+            -H "Authorization: Bearer ci-only-token" \
+            -F "file=@/tmp/farast-supervisor-smoke.txt;type=text/plain" \
+            -F "product_id=ci-smoke" \
+            -F "product_title=FARAST CI smoke test" \
+            -F "product_type=digital_file" \
+            -F "primary_scan_status=clean" \
+            http://127.0.0.1:8099/v1/reviews/files \
+            -o /tmp/farast-supervisor-response.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path("/tmp/farast-supervisor-response.json").read_text(encoding="utf-8"))
+          assert isinstance(result, dict), "Product Supervisor did not return a JSON object"
+          assert result.get("inspection", {}).get("detected_type") == "text", "24 MiB text upload was not inspected"
+          PY
       - name: Set up PHP for Laravel integration checks
         uses: shivammathur/setup-php@v2
         with:
