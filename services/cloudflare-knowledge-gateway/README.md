@@ -29,7 +29,11 @@ One built-in-storage instance named `farast-knowledge` is created automatically 
 - `visibility`
 - `language`
 
-Allowed knowledge types are `product_document`, `product_metadata` and `approved_experience`. All indexed records must have `visibility=public`. Experiences additionally require `approval_status=approved`.
+Allowed knowledge types are `product_document`, `product_metadata` and `approved_experience`. All indexed records must have `visibility=public`.
+
+- `product_document` requires `access_scope=public_sample_only`, `review_status=approved` and `product_status=published`. Purchased/full document content is rejected.
+- `product_metadata` requires `review_status=approved` and `product_status=published`.
+- `approved_experience` requires `approval_status=approved`, `privacy_review_status=approved` and `anonymized=true`.
 
 No `user_id`, email, phone, profile, behavior, personality, audience-profile or private-memory fields are accepted at the request's top level. The Laravel indexer must sanitize experience content before sending it; the gateway cannot infer whether arbitrary text contains personal data.
 
@@ -56,6 +60,9 @@ All routes except `GET /health` require `Authorization: Bearer <service-token>`.
   "knowledge_type": "product_document",
   "visibility": "public",
   "language": "fa",
+  "access_scope": "public_sample_only",
+  "review_status": "approved",
+  "product_status": "published",
   "content": "# خلاصه دانش محصول\n\nمتن پالایش‌شده و تأییدشده..."
 }
 ```
