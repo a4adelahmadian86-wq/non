@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from file_pipeline import analyze_extracted_content, analyze_image_with_groq, groq_provider_ready, transcribe_audio_with_groq
+from file_pipeline import analyze_extracted_content, analyze_image_with_cloudflare, analyze_image_with_groq, groq_provider_ready, transcribe_audio_with_groq
 
 
 class _FakeResponse:
@@ -101,18 +101,24 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(_FakeAsyncClient.calls, [])
 
     async def test_image_context_is_redacted_before_provider_submission(self):
-        _FakeAsyncClient.responses = [
-            _FakeResponse(200, {"choices": [{"message": {"content": "تصویر آزمایشی"}}]})
-        ]
         context = {
             "product_title": "محصول آزمایشی با تماس 09121234567",
             "category": "person@example.com",
         }
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
-            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
-                await analyze_image_with_groq(b"fake-image-bytes", "image/png", context)
+        with patch.dict(os.environ, {
+            "CLOUDFLARE_ACCOUNT_ID": "test-account",
+            "CLOUDFLARE_API_TOKEN": "test-token",
+            "CLOUDFLARE_VISION_MODEL": "@cf/moondream/moondream3.1-9B-A2B",
+        }, clear=False):
+            with patch(
+                "file_pipeline.cloudflare_run_model",
+                new_callable=AsyncMock,
+                return_value={"answer": "تصویر آزمایشی"},
+            ) as provider:
+                await analyze_image_with_cloudflare(b"fake-image-bytes", "image/png", context)
 
-        provider_text = _FakeAsyncClient.calls[0]["json"]["messages"][0]["content"][0]["text"]
+        provider.assert_awaited_once()
+        provider_text = provider.await_args.args[1]["question"]
         self.assertNotIn("09121234567", provider_text)
         self.assertNotIn("person@example.com", provider_text)
         self.assertIn("[REDACTED]", provider_text)
