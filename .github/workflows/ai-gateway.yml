@@ -1,0 +1,24 @@
+name: farast-ai-gateway-tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/ai-gateway/**"
+      - ".github/workflows/ai-gateway.yml"
+  pull_request:
+    paths:
+      - "services/ai-gateway/**"
+      - ".github/workflows/ai-gateway.yml"
+
+jobs:
+  gateway-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run gateway contract tests
+        working-directory: services/ai-gateway
+        run: npm test
