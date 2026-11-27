@@ -339,6 +339,28 @@ test("approved experiences containing email or Iranian mobile details are reject
   assert.equal((await response.json()).error, "experience_contains_contact_details");
 });
 
+test("nested camelCase private profile fields are rejected before indexing", async () => {
+  const { env } = makeEnvironment();
+  const response = await handleRequest(request("/v1/knowledge/upsert", {
+    method: "POST",
+    token: env.FARAST_KB_LARAVEL_TOKEN,
+    body: {
+      product_id: "42",
+      document_id: "doc-private",
+      knowledge_type: "product_document",
+      visibility: "public",
+      language: "fa",
+      access_scope: "public_sample_only",
+      review_status: "approved",
+      product_status: "published",
+      metadata: { userId: 99, privateMemory: "این نباید وارد شاخص شود" },
+      content: "متن عمومی",
+    },
+  }), env);
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "private_fields_not_allowed");
+});
+
 test("private profile and behavior fields are rejected before indexing", async () => {
   const { env } = makeEnvironment();
   const response = await handleRequest(request("/v1/knowledge/upsert", {
