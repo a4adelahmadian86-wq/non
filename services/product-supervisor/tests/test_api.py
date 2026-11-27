@@ -371,6 +371,26 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertTrue(response.json()["authenticated"])
         self.assertFalse(response.json()["providers"]["gemini"]["ready_for_product_review"])
         self.assertFalse(response.json()["providers"]["groq"]["ready_for_file_review"])
+        self.assertFalse(response.json()["providers"]["cloudflare_workers_ai"]["ready_for_product_review"])
+
+    def test_authenticated_readiness_reports_product_and_bulk_models_separately(self):
+        with patch.dict(os.environ, {
+            "CLOUDFLARE_ACCOUNT_ID": "account-test",
+            "CLOUDFLARE_API_TOKEN": "token-test",
+            "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
+            "CLOUDFLARE_PRODUCT_MODEL": "@cf/openai/gpt-oss-120b",
+        }, clear=False):
+            response = self.client.get(
+                "/v1/ready",
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        cloudflare = response.json()["providers"]["cloudflare_workers_ai"]
+        self.assertTrue(cloudflare["ready_for_product_review"])
+        self.assertTrue(cloudflare["ready_for_file_text"])
+        self.assertEqual(cloudflare["product_model"], "@cf/openai/gpt-oss-120b")
+        self.assertEqual(cloudflare["text_model"], "@cf/openai/gpt-oss-20b")
 
     def test_authenticated_readiness_rejects_missing_token(self):
         response = self.client.get("/v1/ready")
