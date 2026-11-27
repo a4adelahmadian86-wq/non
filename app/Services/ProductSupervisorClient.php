@@ -164,7 +164,7 @@ class ProductSupervisorClient
 
     private function shouldFailover(Response $response): bool
     {
-        return $response->serverError() || in_array($response->status(), [408, 425, 429], true);
+        return $response->serverError() || in_array($response->status(), [403, 408, 425, 429], true);
     }
 
     private function isPrivateServiceUrl(string $url): bool
