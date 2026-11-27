@@ -213,6 +213,59 @@ class ProductDocumentProcessingStateTest extends TestCase
         $this->assertFalse($unknown['completeness']['extraction_complete']);
     }
 
+    public function test_cloudflare_text_and_vision_reviews_complete_the_same_pipeline_as_groq(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            [
+                'detected_type' => 'docx',
+                'extraction_truncated' => false,
+                'transcription_truncated' => false,
+                'extracted_characters' => 2400,
+                'embedded_image_count' => 1,
+                'visual_inventory_complete' => true,
+                'visual_review_truncated' => false,
+            ],
+            [
+                'cloudflare_text' => 'completed',
+                'cloudflare_vision' => 'completed',
+                'cloudflare_transcription' => 'not_requested',
+            ],
+            1,
+            1,
+            true,
+            2,
+        );
+
+        $this->assertSame('completed', $state['status']);
+        $this->assertTrue($state['completeness']['semantic_review_complete']);
+        $this->assertTrue($state['reader_ready']);
+    }
+
+    public function test_cloudflare_whisper_transcription_must_complete_before_audio_is_accepted(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            [
+                'detected_type' => 'audio',
+                'extraction_truncated' => false,
+                'transcription_truncated' => false,
+                'visual_inventory_complete' => true,
+                'extracted_characters' => 1200,
+            ],
+            [
+                'cloudflare_text' => 'completed',
+                'cloudflare_transcription' => 'completed',
+            ],
+            1,
+            1,
+            true,
+            1,
+        );
+
+        $this->assertSame('completed', $state['status']);
+        $this->assertTrue($state['completeness']['transcription_complete']);
+        $this->assertTrue($state['completeness']['semantic_review_complete']);
+    }
+
     public function test_visual_review_alone_does_not_complete_a_document_with_unreviewed_text(): void
     {
         $state = app(ProductDocumentProcessingState::class)->derive(
