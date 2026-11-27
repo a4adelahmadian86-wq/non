@@ -129,6 +129,71 @@ class ProductSupervisorClient
         throw new RuntimeException('product_supervisor_unavailable');
     }
 
+
+    public function ocr(string $mime, string $base64, array $context = []): array
+    {
+        $raw = base64_decode($base64, true);
+        if ($raw === false) {
+            throw new RuntimeException('product_supervisor_ocr_invalid_base64');
+        }
+        if (strlen($raw) > 25 * 1024 * 1024) {
+            throw new RuntimeException('product_supervisor_ocr_file_too_large');
+        }
+
+        $endpoints = $this->endpoints();
+        if ($endpoints === []) {
+            throw new RuntimeException('product_supervisor_not_configured');
+        }
+
+        $filename = basename((string) ($context['source_name'] ?? 'document'));
+        if ($filename === '' || $filename === '.') {
+            $filename = 'document';
+        }
+        $processingMode = in_array(($context['processing_mode'] ?? 'editor'), ['editor', 'shared_tool'], true)
+            ? (string) ($context['processing_mode'] ?? 'editor')
+            : 'editor';
+
+        foreach ($endpoints as $index => $endpoint) {
+            try {
+                $response = Http::acceptJson()
+                    ->withToken($endpoint['token'])
+                    ->connectTimeout($index === 0 ? 8 : 12)
+                    ->timeout(max(180, (int) config('services.product_supervisor.file_timeout', 540)))
+                    ->attach('file', $raw, $filename, ['Content-Type' => $mime])
+                    ->post($endpoint['url'].'/v1/ocr', [
+                        'source_name' => $filename,
+                        'processing_mode' => $processingMode,
+                    ]);
+
+                if ($this->shouldFailover($response) && isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                if (! $response->successful()) {
+                    throw new RuntimeException('product_supervisor_ocr_failed');
+                }
+
+                $payload = $response->json();
+                if (! is_array($payload)
+                    || ! array_key_exists('rejected', $payload)
+                    || ! is_bool($payload['rejected'])
+                    || ! isset($payload['reason'], $payload['page_count'], $payload['blocks'])
+                    || ! is_array($payload['blocks'])) {
+                    throw new RuntimeException('product_supervisor_invalid_ocr_response');
+                }
+
+                $payload['engine'] = 'farast-ai-gateway';
+                return $payload;
+            } catch (ConnectionException $exception) {
+                if (isset($endpoints[$index + 1])) {
+                    continue;
+                }
+                throw new RuntimeException('product_supervisor_unavailable', 0, $exception);
+            }
+        }
+
+        throw new RuntimeException('product_supervisor_unavailable');
+    }
+
     /**
      * Retry on transient capacity/network gateway responses using the next
      * explicitly configured endpoint. Authentication and validation errors
