@@ -113,7 +113,7 @@ test("review endpoint pins the higher-capability GPT-OSS 120B model", async () =
         return new Response(JSON.stringify({
             id: "review-123",
             model: "@cf/openai/gpt-oss-120b",
-            choices: [{ message: { role: "assistant", content: "{\\"verdict\\":\\"approved\\"}" } }],
+            choices: [{ message: { role: "assistant", content: "{\"verdict\":\"approved\"}" } }],
         }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
