@@ -13,12 +13,14 @@ import httpx
 
 DEFAULT_MODELS = {
     "text": "@cf/openai/gpt-oss-20b",
+    "product": "@cf/openai/gpt-oss-120b",
     "vision": "@cf/moondream/moondream3.1-9B-A2B",
     "audio": "@cf/openai/whisper-large-v3-turbo",
 }
 
 MODEL_ENV = {
     "text": "CLOUDFLARE_TEXT_MODEL",
+    "product": "CLOUDFLARE_PRODUCT_MODEL",
     "vision": "CLOUDFLARE_VISION_MODEL",
     "audio": "CLOUDFLARE_AUDIO_MODEL",
 }
