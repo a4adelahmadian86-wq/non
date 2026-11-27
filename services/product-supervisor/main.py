@@ -587,6 +587,7 @@ async def health():
     cloudflare_configured = cloudflare_provider_ready()
     cloudflare_ready = {
         "text": cloudflare_provider_ready("text"),
+        "review": cloudflare_provider_ready("review"),
         "vision": cloudflare_provider_ready("vision"),
         "audio": cloudflare_provider_ready("audio"),
     }
@@ -601,9 +602,10 @@ async def health():
                 "vision": cloudflare_ready["vision"],
                 "audio_transcription": cloudflare_ready["audio"],
                 "models": {
-                    "text": os.getenv("CLOUDFLARE_TEXT_MODEL", "@cf/openai/gpt-oss-20b"),
-                    "vision": os.getenv("CLOUDFLARE_VISION_MODEL", "@cf/moondream/moondream3.1-9B-A2B"),
-                    "audio": os.getenv("CLOUDFLARE_AUDIO_MODEL", "@cf/openai/whisper-large-v3-turbo"),
+                    "text": cloudflare_model("text"),
+                    "review": cloudflare_model("review"),
+                    "vision": cloudflare_model("vision"),
+                    "audio": cloudflare_model("audio"),
                 },
             },
             "gemini": {"configured": gemini_configured, "role": "product_snapshot_and_database_report_review"},
@@ -622,7 +624,7 @@ async def health():
 
 @app.get("/v1/ready", dependencies=[Depends(authenticate)])
 async def authenticated_readiness():
-    gemini_configured = _gemini_api_key_is_configured()
+    gemini_configured = _gemini_metadata_fallback_enabled() and _gemini_api_key_is_configured()
     groq_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
     groq_ready = groq_configured and _groq_zdr_is_confirmed()
     cloudflare_configured = cloudflare_provider_ready()
@@ -637,9 +639,10 @@ async def authenticated_readiness():
                 "ready_for_file_text": cloudflare_provider_ready("text"),
                 "ready_for_file_vision": cloudflare_provider_ready("vision"),
                 "ready_for_audio_transcription": cloudflare_provider_ready("audio"),
-                "text_model": os.getenv("CLOUDFLARE_TEXT_MODEL", "@cf/openai/gpt-oss-20b"),
-                "vision_model": os.getenv("CLOUDFLARE_VISION_MODEL", "@cf/moondream/moondream3.1-9B-A2B"),
-                "audio_model": os.getenv("CLOUDFLARE_AUDIO_MODEL", "@cf/openai/whisper-large-v3-turbo"),
+                "text_model": cloudflare_model("text"),
+                "review_model": cloudflare_model("review"),
+                "vision_model": cloudflare_model("vision"),
+                "audio_model": cloudflare_model("audio"),
             },
             "gemini": {"configured": gemini_configured, "ready_for_product_review": gemini_configured},
             "groq": {
