@@ -95,7 +95,7 @@ class EditorAssetTest extends TestCase
             'status' => 'healthy', 'is_active' => true, 'priority' => 100,
         ]);
 
-        [$user, , $resource, $object] = $this->makeAsset();
+        [, , , $object] = $this->makeAsset();
         $managed = StorageManagedFile::query()
             ->where('source_type', FarastStorageObject::class)
             ->where('source_id', $object->id)
@@ -104,7 +104,8 @@ class EditorAssetTest extends TestCase
         $this->assertSame($iran->id, $managed->storage_volume_id);
         $this->assertSame('iran_primary', $managed->drive_key);
         $this->assertSame(StorageManager::CRITICAL, $managed->classification);
-        $this->actingAs($user)->get($resource['url'])->assertOk();
+        $contents = app(StorageManager::class)->get($object->disk, $object->path);
+        $this->assertSame($object->checksum, hash('sha256', $contents));
     }
 
     public function test_newly_uploaded_quarantined_asset_is_not_delivered_until_approved(): void
