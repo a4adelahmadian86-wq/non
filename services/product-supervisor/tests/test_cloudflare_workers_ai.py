@@ -114,6 +114,9 @@ class CloudflareWorkersAiTests(unittest.TestCase):
             "https://api.cloudflare.com/client/v4/accounts/account-test/ai/v1/chat/completions",
         )
         self.assertEqual(request["headers"]["Authorization"], "Bearer token-test-only")
+        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
+        self.assertEqual(request["headers"]["cf-aig-collect-log"], "false")
+        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
         self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-20b")
         self.assertEqual(request["json"]["response_format"], {"type": "json_object"})
 
