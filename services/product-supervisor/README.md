@@ -26,52 +26,35 @@ Gemini never receives the original file, extracted full text, or raw document ch
 - Gemini is restricted to product metadata and compact database reports. Groq file processing is disabled unless the operator has independently enabled account-level ZDR and then explicitly sets `GROQ_ZDR_CONFIRMED=true`. That variable is only an operator assertion, not proof supplied by Groq. Never assume a free tier is confidential.
 - Gladia remains disabled because its free tier/data-retention terms are not appropriate as a default path for sensitive product uploads.
 
-## Deploy
+## Deployment model
 
-The repository root `render.yaml` defines a separate Render web service named `farast-product-supervisor`. Render generates `SUPERVISOR_API_TOKEN`. Configure these secrets only in the Render service's Environment page:
+The service is stateless. Uploaded files are inspected in request-scoped temporary storage and removed after processing; no product files or customer data are kept on the container filesystem. The Laravel queue remains the durable source of truth and retries when this worker is unavailable.
 
-- `GEMINI_API_KEY` — required only for product metadata and compact persisted-report review; never used for file text.
-- `GROQ_API_KEY` — optional; enables file text, image and audio review only after the ZDR gate is satisfied.
-- `GROQ_ZDR_CONFIRMED` — leave unset until account-level ZDR is actually enabled in Groq; then set to `true`.
-- `GROQ_TEXT_MODEL` — non-secret text model selection.
+A Dockerfile is provided for a no-card free-container pilot on Back4App:
 
-Non-secret model settings are `GROQ_TEXT_MODEL`, `GROQ_VISION_MODEL` and `GROQ_AUDIO_MODEL`. The Gemini model is pinned in code. Do not commit keys, put them in frontend code, or send them through chat.
+- Published free limits: 0.25 vCPU, 256 MiB RAM and 100 GB outbound transfer.
+- The free tier is intended for testing and learning, not a production SLA.
+- CI builds the image and has successfully inspected a synthetic 24 MiB text upload with Docker constrained to 256 MiB RAM and 0.25 vCPU.
+- This test does not prove every file format will fit those limits. The service's existing 25 MiB upload ceiling remains; 2 GiB processing is not claimed or enabled.
+- File-review requests are serialized to reduce memory spikes. A busy worker returns HTTP 429 so Laravel can retry instead of losing the job.
 
-Free Render instances may sleep when idle and have usage/availability limits. A timeout or provider outage is a failed/incomplete review, never an approval.
+### Back4App pilot deployment
 
-## Activate the dedicated Render service
+1. Create a Back4App Containers application and connect the public repository `a4adelahmadian86-wq/non`.
+2. Select the `main` branch, set the application directory/build context to `services/product-supervisor`, and use its `Dockerfile`.
+3. Expose port `8000`. Do not attach a persistent disk; this service must remain stateless.
+4. Add secrets only in the Back4App environment settings:
+   - `SUPERVISOR_API_TOKEN`: a new, dedicated random secret.
+   - `GEMINI_API_KEY`: optional; used only for product metadata and compact persisted-report review, never raw file text.
+   - `GROQ_API_KEY`: optional; file text, image and audio review stay disabled unless account-level ZDR is enabled and `GROQ_ZDR_CONFIRMED=true` is explicitly set.
+5. Deploy and verify `/health`, then verify authenticated `/v1/ready`.
+6. In the Laravel hosting environment, set `FARAST_PRODUCT_SUPERVISOR_URL` to the Back4App HTTPS service URL and `FARAST_PRODUCT_SUPERVISOR_TOKEN` to the exact dedicated token. Rebuild Laravel's configuration cache through the hosting provider's supported workflow.
 
-This service is intentionally separate from the site's existing AI and voice gateway.
+Do not change the site's existing production endpoint until the Back4App deployment has passed the live health/readiness checks and a real test product has completed successfully. No service is deployed by this repository change.
 
-1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
-2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. It is used only for product metadata and compact persisted database reports, never raw file text or chunks.
-3. Optionally add `GROQ_API_KEY` for file text, image understanding and audio transcription. First enable account-level ZDR in Groq; only then set `GROQ_ZDR_CONFIRMED=true`. Without both, all Groq file/media calls remain disabled.
-4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
-5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
-6. Confirm `/health` identifies Gemini's role as product metadata/database-report review and shows Groq's privacy gate. Then use the authenticated `/v1/ready` endpoint to verify the service token.
+## Provider secrets
 
-### Connect Laravel to this exact service
-
-Set these values in the Laravel application's hosting environment (not in frontend JavaScript and not in Git):
-
-```dotenv
-FARAST_PRODUCT_SUPERVISOR_URL=https://farast-product-supervisor-dhp5.onrender.com
-FARAST_PRODUCT_SUPERVISOR_TOKEN=<the exact SUPERVISOR_API_TOKEN from this Render service>
-FARAST_PRODUCT_SUPERVISOR_TIMEOUT=40
-```
-
-The Laravel token must match the generated Render token exactly. Do not use `FARAST_VOICE_TOKEN`, `FARAST_AI_GATEWAY_URL`, `GEMINI_API_KEY`, or any secret from the existing AI/voice service for this connection. After changing Laravel environment values, clear/rebuild the Laravel configuration cache using the hosting provider's supported terminal/deploy workflow.
-
-The authenticated readiness probe can be checked without sending a product file:
-
-```bash
-curl -i https://farast-product-supervisor-dhp5.onrender.com/v1/ready \
-  -H "Authorization: Bearer <SUPERVISOR_API_TOKEN>"
-```
-
-A successful response confirms the Render token is accepted and reports whether Gemini product review and ZDR-gated Groq file review are configured. It does not make a paid provider request.
-
-Never paste API keys or the supervisor token into this chat. Enter them only in the corresponding hosting Environment pages.
+The service never needs a frontend key. Keep all provider keys and the dedicated supervisor token in the worker's secret environment only. Do not commit keys, put them in frontend code, or send them through chat.
 
 ## API
 
