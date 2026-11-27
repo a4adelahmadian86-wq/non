@@ -49,7 +49,7 @@ class FakeAsyncClient:
         self.calls.append({"url": url, "headers": headers or {}, "json": json or {}})
         if type(self).response_factory:
             return type(self).response_factory(url, headers or {}, json or {})
-        if url.endswith("/ai/v1/chat/completions"):
+        if url.endswith("/v1/chat/completions"):
             body = {
                 "choices": [{
                     "message": {
@@ -64,9 +64,9 @@ class FakeAsyncClient:
                 }]
             }
             return FakeResponse(body, url=url)
-        if "moondream" in url:
+        if url.endswith("/v1/ai/run/vision"):
             return FakeResponse({"result": {"answer": "تصویر شامل یک محصول است."}}, url=url)
-        if "whisper" in url:
+        if url.endswith("/v1/ai/run/audio"):
             return FakeResponse({"result": {"text": "متن صوت فارسی"}}, url=url)
         return FakeResponse({"result": {"response": "ok"}}, url=url)
 
@@ -80,11 +80,8 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         FakeAsyncClient.calls = []
         FakeAsyncClient.response_factory = None
         self.env = patch.dict(os.environ, {
-            "CLOUDFLARE_ACCOUNT_ID": "account-test",
-            "CLOUDFLARE_API_TOKEN": "token-test-only",
-            "CLOUDFLARE_TEXT_MODEL": "@cf/openai/gpt-oss-20b",
-            "CLOUDFLARE_VISION_MODEL": "@cf/moondream/moondream3.1-9B-A2B",
-            "CLOUDFLARE_AUDIO_MODEL": "@cf/openai/whisper-large-v3-turbo",
+            "FARAST_AI_GATEWAY_URL": "https://farast-ai-gateway.example.workers.dev",
+            "FARAST_AI_GATEWAY_TOKEN": "token-test-only",
             "GROQ_API_KEY": "",
             "GROQ_ZDR_CONFIRMED": "",
         }, clear=False)
@@ -98,10 +95,10 @@ class CloudflareWorkersAiTests(unittest.TestCase):
 
     def test_cloudflare_provider_requires_account_and_scoped_token(self):
         self.assertTrue(cloudflare_provider.cloudflare_provider_ready("text"))
-        with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": ""}, clear=False):
+        with patch.dict(os.environ, {"FARAST_AI_GATEWAY_TOKEN": ""}, clear=False):
             self.assertFalse(cloudflare_provider.cloudflare_provider_ready("text"))
 
-    def test_gpt_oss_20b_uses_account_scoped_openai_compatible_endpoint(self):
+    def test_gpt_oss_20b_uses_the_authenticated_farast_worker_gateway(self):
         answer = asyncio.run(cloudflare_provider.cloudflare_chat_completion(
             [{"role": "user", "content": "سلام"}],
             response_format={"type": "json_object"},
@@ -111,12 +108,10 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         request = FakeAsyncClient.calls[-1]
         self.assertEqual(
             request["url"],
-            "https://api.cloudflare.com/client/v4/accounts/account-test/ai/v1/chat/completions",
+            "https://farast-ai-gateway.example.workers.dev/v1/chat/completions",
         )
         self.assertEqual(request["headers"]["Authorization"], "Bearer token-test-only")
-        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
-        self.assertEqual(request["headers"]["cf-aig-collect-log"], "false")
-        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
+        self.assertNotIn("cf-aig-gateway-id", request["headers"])
         self.assertEqual(request["json"]["model"], "@cf/openai/gpt-oss-20b")
         self.assertEqual(request["json"]["response_format"], {"type": "json_object"})
 
@@ -144,9 +139,7 @@ class CloudflareWorkersAiTests(unittest.TestCase):
 
         self.assertIn("تصویر شامل", result)
         request = FakeAsyncClient.calls[-1]
-        self.assertIn("/ai/run/@cf/moondream/moondream3.1-9B-A2B", request["url"])
-        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
-        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
+        self.assertEqual(request["url"], "https://farast-ai-gateway.example.workers.dev/v1/ai/run/vision")
         self.assertTrue(request["json"]["image"].startswith("data:image/jpeg;base64,"))
         self.assertEqual(request["json"]["task"], "query")
 
@@ -160,9 +153,7 @@ class CloudflareWorkersAiTests(unittest.TestCase):
         self.assertEqual(text, "متن صوت فارسی")
         self.assertFalse(truncated)
         request = FakeAsyncClient.calls[-1]
-        self.assertIn("/ai/run/@cf/openai/whisper-large-v3-turbo", request["url"])
-        self.assertEqual(request["headers"]["cf-aig-gateway-id"], "default")
-        self.assertEqual(request["headers"]["cf-aig-collect-log-payload"], "false")
+        self.assertEqual(request["url"], "https://farast-ai-gateway.example.workers.dev/v1/ai/run/audio")
         self.assertEqual(request["json"]["audio"], base64.b64encode(audio).decode("ascii"))
         self.assertNotIn("private-original-name", json.dumps(request["json"]))
 
