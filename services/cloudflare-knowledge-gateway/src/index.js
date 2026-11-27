@@ -378,15 +378,6 @@ async function deleteKnowledge(request, env) {
   return { status: "deleted", product_id: productId, document_id: documentId, knowledge_type: knowledgeType, deleted };
 }
 
-async function deleteItem(request, env) {
-  const body = await readJson(request, 16_384);
-  const itemId = String(body.item_id || "");
-  if (!validIdentifier(itemId)) throw new RequestError(400, "invalid_item_id");
-  const instance = await ensureInstance(env);
-  await instance.items.delete(itemId);
-  return { deleted: true, item_id: itemId };
-}
-
 async function stats(env) {
   const instance = await ensureInstance(env);
   const [info, current] = await Promise.all([instance.info(), instance.stats()]);
