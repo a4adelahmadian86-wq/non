@@ -6,6 +6,7 @@ import json
 import threading
 import os
 import unittest
+import httpx
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -140,6 +141,50 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
 
+
+
+    def test_text_provider_rate_limit_returns_extracted_chunks_for_later_review(self):
+        request = httpx.Request(
+            "POST",
+            "https://farast-ai-gateway.example.workers.dev/v1/chat/completions",
+        )
+        provider_error = httpx.HTTPStatusError(
+            "rate limited",
+            request=request,
+            response=httpx.Response(429, request=request),
+        )
+
+        with patch.dict(os.environ, {
+            "FARAST_AI_GATEWAY_URL": "https://farast-ai-gateway.example.workers.dev",
+            "FARAST_AI_GATEWAY_TOKEN": "gateway-test-token",
+            "GROQ_API_KEY": "",
+            "GROQ_ZDR_CONFIRMED": "",
+            "GEMINI_API_KEY": "",
+        }, clear=False), patch(
+            "file_pipeline.analyze_extracted_content",
+            new_callable=AsyncMock,
+            side_effect=provider_error,
+        ):
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-offline-extraction",
+                    "product_title": "محصول برای پردازش آفلاین",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("offline.txt", "این متن باید حتی بدون مدل ذخیره شود.".encode(), "text/plain")},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertGreater(len(body["content_chunks"]), 0)
+        self.assertEqual(body["provider_status"]["cloudflare_text"], "unavailable")
+        self.assertEqual(body["provider_status"]["cloudflare"], "unavailable")
+        self.assertFalse(body["publication_authorized"])
+        self.assertFalse(body["automated_publication"])
+        self.assertTrue(any("بعداً تکرار می‌شود" in warning for warning in body["warnings"]))
 
     def test_mixed_document_images_fail_closed_without_groq_zdr_and_never_use_gemini(self):
         image_stream = io.BytesIO()
