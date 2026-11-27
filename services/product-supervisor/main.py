@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 import httpx
+from cloudflare_provider import cloudflare_chat_completion, cloudflare_model, cloudflare_provider_ready
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
@@ -195,10 +196,12 @@ async def review_product_file(
         MAX_EXTRACTED_CHARS,
         MAX_VISUAL_ASSETS,
         analyze_extracted_content,
+        analyze_image_with_cloudflare,
         analyze_image_with_groq,
         build_pdf_sample,
         inspect_file,
         redact_sensitive_content,
+        transcribe_audio_with_cloudflare,
         transcribe_audio_with_groq,
         groq_provider_ready,
     )
@@ -247,6 +250,10 @@ async def review_product_file(
     transcription_truncated = False
     provider_status = {
         "gemini": "not_requested",
+        "cloudflare": "not_requested",
+        "cloudflare_text": "not_requested",
+        "cloudflare_vision": "not_requested",
+        "cloudflare_transcription": "not_requested",
         "groq": "not_requested",
         "groq_text": "not_requested",
         "groq_vision": "not_requested",
@@ -263,16 +270,22 @@ async def review_product_file(
         }]
         inspection.embedded_image_count = max(1, inspection.embedded_image_count)
 
+    vision_provider = (
+        "cloudflare" if cloudflare_provider_ready("vision")
+        else "groq" if groq_provider_ready()
+        else None
+    )
     if inspection.embedded_image_count > 0:
-        if groq_provider_ready():
+        if vision_provider:
             visual_parts = []
             successful_images = 0
+            analyze_image = analyze_image_with_cloudflare if vision_provider == "cloudflare" else analyze_image_with_groq
             for index, asset in enumerate(image_assets[:MAX_VISUAL_ASSETS]):
                 image_data = asset.get("image_bytes")
                 if not isinstance(image_data, bytes) or not image_data:
                     continue
                 try:
-                    report = await analyze_image_with_groq(
+                    report = await analyze_image(
                         image_data,
                         str(asset.get("mime") or "image/jpeg"),
                         {
@@ -288,55 +301,56 @@ async def review_product_file(
                         label = f"تصویر {index + 1}" + (f" صفحه {page_number}" if page_number else "")
                         visual_parts.append(f"{label}: {report}")
                         successful_images += 1
-                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
                     warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
             visual_report = "\n".join(visual_parts)
+            status_key = f"{vision_provider}_vision"
             if (
                 successful_images == inspection.embedded_image_count
                 and not inspection.visual_review_truncated
                 and inspection.visual_inventory_complete
             ):
-                provider_status["groq_vision"] = "completed"
+                provider_status[status_key] = "completed"
             elif successful_images > 0:
-                provider_status["groq_vision"] = "partial"
+                provider_status[status_key] = "partial"
                 warnings.append("فقط بخشی از تصاویر فایل بررسی شد؛ تحلیل تصویری کامل نیست.")
             else:
-                provider_status["groq_vision"] = "unavailable"
+                provider_status[status_key] = "unavailable"
                 warnings.append("تصاویر فایل به‌طور کامل بررسی نشدند.")
         else:
+            provider_status["cloudflare_vision"] = "not_configured"
             provider_status["groq_vision"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ تصویر محصولی به سرویس خارجی ارسال نشد.")
+            warnings.append("سرویس بینایی امن تنظیم نشده است؛ هیچ تصویر محصولی برای تحلیل ارسال نشد.")
 
     if not inspection.visual_inventory_complete:
         warnings.append("فهرست‌برداری از تصاویر جاسازی‌شده کامل نشد؛ تولید محتوای هوشمند تا بررسی کامل غیرفعال می‌ماند.")
     if inspection.visual_review_truncated:
         warnings.append("تعداد یا قالب تصاویر از سقف بررسی کامل بیشتر است؛ سند به‌عنوان بررسی‌نشده علامت می‌خورد.")
 
+    audio_provider = (
+        "cloudflare" if cloudflare_provider_ready("audio")
+        else "groq" if groq_provider_ready()
+        else None
+    )
     if inspection.audio_bytes:
-        if groq_provider_ready():
+        if audio_provider:
             try:
-                transcription, transcription_truncated = await transcribe_audio_with_groq(
+                transcribe_audio = transcribe_audio_with_cloudflare if audio_provider == "cloudflare" else transcribe_audio_with_groq
+                transcription, transcription_truncated = await transcribe_audio(
                     inspection.audio_bytes,
                     "upload.audio",  # Never transmit the user's original filename to the provider.
                 )
                 inspection.transcription_truncated = transcription_truncated
                 if transcription_truncated:
                     warnings.append("رونویسی صوت از سقف استخراج عبور کرده و ناقص است؛ تولید محتوا غیرفعال می‌ماند.")
-                provider_status["groq_transcription"] = "partial" if transcription_truncated else "completed"
-            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
-                provider_status["groq_transcription"] = "unavailable"
+                provider_status[f"{audio_provider}_transcription"] = "partial" if transcription_truncated else "completed"
+            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
+                provider_status[f"{audio_provider}_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
         else:
+            provider_status["cloudflare_transcription"] = "not_configured"
             provider_status["groq_transcription"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ صوتی به سرویس خارجی ارسال نشد.")
-
-    groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
-    if "completed" in groq_statuses:
-        provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_statuses) else "completed"
-    elif "unavailable" in groq_statuses:
-        provider_status["groq"] = "unavailable"
-    elif "not_configured" in groq_statuses:
-        provider_status["groq"] = "not_configured"
+            warnings.append("سرویس رونویسی امن تنظیم نشده است؛ هیچ صوتی برای پردازش ارسال نشد.")
 
     combined_extracted = "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
     if len(combined_extracted) > MAX_EXTRACTED_CHARS:
@@ -345,36 +359,63 @@ async def review_product_file(
         combined_extracted = combined_extracted[:MAX_EXTRACTED_CHARS]
     extracted, redaction_count = redact_sensitive_content(combined_extracted)
     model_review: dict[str, Any] = {}
-    if extracted.strip() and groq_provider_ready():
+    if extracted.strip():
         try:
-            model_review = await analyze_extracted_content(extracted, {"product_type": product_type, "detected_file_type": inspection.detected_type, "page_count": inspection.page_count, "extraction_truncated": inspection.extraction_truncated})
+            model_review = await analyze_extracted_content(
+                extracted,
+                {
+                    "product_type": product_type,
+                    "detected_file_type": inspection.detected_type,
+                    "page_count": inspection.page_count,
+                    "extraction_truncated": inspection.extraction_truncated,
+                },
+            )
             analysis_status = model_review.get("analysis_status")
-            if analysis_status == "completed":
-                provider_status["groq_text"] = "completed"
-            elif analysis_status == "partial":
-                provider_status["groq_text"] = "partial"
-                warnings.append("تحلیل متنی Groq ناقص است.")
-            elif analysis_status in {"not_configured", "privacy_not_confirmed"}:
+            analysis_provider = model_review.get("analysis_provider")
+            if analysis_provider in {"cloudflare", "groq"}:
+                provider_status[f"{analysis_provider}_text"] = (
+                    "completed" if analysis_status == "completed"
+                    else "partial" if analysis_status == "partial"
+                    else "unavailable"
+                )
+            elif analysis_status == "privacy_not_confirmed":
                 provider_status["groq_text"] = "not_configured"
-                warnings.append("تا تأیید ZDR هیچ متن فایلی به سرویس خارجی ارسال نمی‌شود.")
+                warnings.append("Groq به دلیل تأیید نشدن Zero Data Retention استفاده نشد.")
             else:
-                provider_status["groq_text"] = "unavailable"
-                warnings.append("تحلیل متنی Groq قابل اتکا نبود.")
-        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
-            provider_status["groq_text"] = "unavailable"
-            warnings.append("تحلیل محتوای فایل توسط Groq انجام نشد.")
-    elif extracted.strip():
-        provider_status["groq_text"] = "not_configured"
-        warnings.append("تا تأیید ZDR هیچ متن فایلی به Groq ارسال نمی‌شود.")
+                provider_status["cloudflare_text"] = "not_configured"
+                provider_status["groq_text"] = "not_configured"
+                warnings.append("مدل تحلیل متن امن تنظیم نشده است؛ متن فایل به سرویس مدل ارسال نشد.")
+            if analysis_status == "partial":
+                warnings.append("تحلیل متنی فایل ناقص است.")
+            elif analysis_status not in {"completed", "partial"}:
+                warnings.append("تحلیل متنی فایل کامل نشد؛ نتیجه برای تأیید نهایی قابل استفاده نیست.")
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, RuntimeError):
+            provider_status["cloudflare_text"] = "unavailable"
+            warnings.append("تحلیل محتوای فایل توسط مدل امن انجام نشد.")
     else:
         warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
-    groq_statuses = [provider_status["groq_text"], provider_status["groq_vision"], provider_status["groq_transcription"]]
-    if any(status in {"completed", "partial"} for status in groq_statuses):
-        provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_statuses) else "completed"
-    elif "unavailable" in groq_statuses:
-        provider_status["groq"] = "unavailable"
-    elif "not_configured" in groq_statuses:
-        provider_status["groq"] = "not_configured"
+
+    def summarize_provider_status(statuses: list[str]) -> str:
+        if any(status in {"completed", "partial"} for status in statuses):
+            return "partial" if any(status not in {"completed", "not_requested"} for status in statuses) else "completed"
+        if "unavailable" in statuses:
+            return "unavailable"
+        if "not_configured" in statuses:
+            return "not_configured"
+        return "not_requested"
+
+    cloudflare_statuses = [
+        provider_status["cloudflare_text"],
+        provider_status["cloudflare_vision"],
+        provider_status["cloudflare_transcription"],
+    ]
+    groq_statuses = [
+        provider_status["groq_text"],
+        provider_status["groq_vision"],
+        provider_status["groq_transcription"],
+    ]
+    provider_status["cloudflare"] = summarize_provider_status(cloudflare_statuses)
+    provider_status["groq"] = summarize_provider_status(groq_statuses)
 
     safe_findings = []
     raw_findings = model_review.get("findings", [])
@@ -426,7 +467,7 @@ async def review_product_file(
 
     sample_page_numbers: list[int] = []
     sample_pdf_base64 = None
-    if allow_sample_generation and pdf_inspection.detected_type == "pdf" and provider_status.get("groq_text") == "completed":
+    if allow_sample_generation and pdf_inspection.detected_type == "pdf" and model_review.get("analysis_status") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
         available_pdf_pages: set[int] = set()
         for chunk in (pdf_inspection.content_chunks or []):
