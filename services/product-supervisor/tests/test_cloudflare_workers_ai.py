@@ -47,8 +47,8 @@ class FakeAsyncClient:
 
     async def post(self, url, headers=None, json=None, **kwargs):
         self.calls.append({"url": url, "headers": headers or {}, "json": json or {}})
-        if self.response_factory:
-            return self.response_factory(url, headers or {}, json or {})
+        if type(self).response_factory:
+            return type(self).response_factory(url, headers or {}, json or {})
         if url.endswith("/ai/v1/chat/completions"):
             body = {
                 "choices": [{
