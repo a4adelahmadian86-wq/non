@@ -25,7 +25,7 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-Then set secrets for the Worker (never commit them):
+Create a Cloudflare API token scoped to the FARAST account with at least **Account → Workers AI → Read** permission, then set the Worker secrets (never commit them):
 
 ```bash
 npx wrangler secret put FARAST_AI_GATEWAY_TOKEN
