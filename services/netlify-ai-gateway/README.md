@@ -8,7 +8,8 @@ This is a small, authenticated application gateway for FARAST. It is not a VPN, 
 - Secondary network path: this Netlify Function forwards only the two fixed FARAST chat endpoints to that same Worker.
 - It exists for the case where the Iranian website host cannot reach the Worker hostname directly, while Netlify's server can reach it.
 - It does not bypass a provider's account, country, sanctions, or product eligibility rules. If Cloudflare rejects the account or request with 401/403, that response is passed through. If the model quota is exhausted (429), that response is also passed through; retrying the same provider through another gateway will not create more quota.
-- It stores no prompts, files, user profiles, or durable state. Request bodies are not logged.
+- It stores no prompts, files, user profiles, or durable state. Request bodies are not logged by this code; Netlify still processes the request in transit under its own service terms.
+- Send only the minimum task-specific text needed for the request. Never include behavioral/personality profiles, private user-memory records, account identifiers, credentials, or confidential data in this fallback path. Keep private user memory in the existing protected FARAST database and Iranian backup path; do not export it to external gateways.
 
 The gateway accepts only the fixed text and review endpoints, validates JSON messages, applies strict request/output limits, and forwards to a fixed HTTPS Worker URL held in server-side environment variables. It never accepts a client-supplied URL or arbitrary upstream path.
 
