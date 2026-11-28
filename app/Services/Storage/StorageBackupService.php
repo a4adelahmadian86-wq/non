@@ -1025,11 +1025,17 @@ class StorageBackupService
     {
         $endpoint = (string) ($volume->endpoint ?: data_get($volume->credentials, 'endpoint', ''));
         $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($endpoint, PHP_URL_SCHEME));
+        $port = parse_url($endpoint, PHP_URL_PORT);
+        $endpointPath = (string) parse_url($endpoint, PHP_URL_PATH);
         $region = strtolower((string) ($volume->region ?: data_get($volume->credentials, 'region', '')));
         $pathStyle = (bool) data_get($volume->credentials, 'use_path_style_endpoint', true);
 
         return $volume->driver === 's3'
+            && $scheme === 'https'
             && $host === 't3.storage.dev'
+            && ($port === null || $port === 443)
+            && in_array($endpointPath, ['', '/'], true)
             && $region === 'auto'
             && ! $pathStyle
             && ! $this->isArvanEndpoint($volume);
