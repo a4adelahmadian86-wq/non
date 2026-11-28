@@ -112,7 +112,7 @@ Items below were refreshed against GitHub on 2026-11-28. PRs #761, #762 and #766
 |---|---|---|---|
 | #757 | Route private user files to `iran_primary` | Open; all three observed workflows passed (FARAST CI #7716, Phase 3 #4427, Phase 4 #6898). Branch base is older commit `d938dffd...`, not current main. | Keep open; rebase/update and re-review against current main before merge. Does not migrate already-active foreign objects. |
 | #760 | Safer Runflare recreation command | Open; FARAST CI #7730, Product Supervisor #1350, Phase 4 #6912 passed. | Keep separate; no Runflare provisioning or deployment performed. |
-| #761 | Internal storage quota caps and health interval | **Merged into main** after all required checks passed. | Adds configurable caps, skips automatic inventory on routine checks, and applies retry backoff. Still does not provide atomic byte reservations, remove the 3-operation S3 probe, avoid full-object upload verification, or meter all application traffic. Not a no-overage guarantee. |
+| #761 | Internal storage quota caps and health interval | **Merged into main** after all required checks passed. | Adds configurable caps, skips automatic inventory on routine checks, and applies retry backoff. Still does not provide atomic byte reservations, remove the 3-operation S3 probe, or meter all application traffic. PR #767 adds Content-MD5 + SHA-256 metadata + HEAD verification for routine S3 uploads, avoiding a full-object readback. Not a no-overage guarantee. |
 | #762 | Arvan free-tier documentation | **Merged into main** after all required checks passed. | Documents the private-bucket policy, endpoint readiness, free-tier limits, irreversible settings and the no-Arvan-backup decision. |
 | #759 | Netlify AI gateway fallback | Open; FARAST CI #7726, Netlify contract tests #9, Phase 4 #6908 passed. | Not deployed; it does not establish a domestic fallback or bypass provider eligibility restrictions. |
 | #763 | Reader toolbar icon regression | Open; FARAST CI #7741 and Phase 3 #4431 passed; an earlier duplicate FARAST CI run #7740 was cancelled; Phase 4 #6922 passed. | Unrelated to storage; leave untouched. |
@@ -127,7 +127,8 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 - Review and correct PR #761's guard and use the daily 24-hour interval for Arvan Base; even an hourly probe would consume about 2,160 operations/month at three operations per check.
 - Add atomic storage reservations and a failure-safe release path.
 - Change default S3 health checks to a non-mutating, bounded check; move inventory and write/read/delete capability tests to explicit manual operations.
-- Add tests for concurrent reservations, failed PUT cleanup, unhealthy-volume backoff, no automatic inventory, and no routine full-object GET after upload.
+- PR #767 adds tests for S3 HEAD metadata verification without full readback, backup byte/operation budgets, missing-blob fail-closed behavior, and retention.
+- Still required: atomic reservations for ordinary concurrent StorageManager writes and failure-injection tests for metadata/Content-MD5 provider behavior.
 - Validate the chosen checksum/metadata behavior against the exact Arvan S3 endpoint only after the user confirms it is active. Until then, use mocked S3 adapter tests only.
 
 ### Gate B — knowledge bundle implementation
@@ -250,11 +251,11 @@ The existing quota-guard PR was extended in place on its original branch; no par
 PR #761 was merged after all required checks completed successfully. Scheduled checks skip full inventory, use retry backoff, and default the Arvan primary check interval to 24 hours. The three-operation probe remains, so the daily interval is intentional.
 
 Still open before Arvan Base:
-- S3 probe remains PUT+GET+DELETE (three operations).
-- Routine upload verification still downloads the full object.
-- Capacity caps are not atomic reservations.
-- Monthly traffic and operation consumption are not metered.
-- Weekly full backup can read every managed object from the Arvan volume.
+- S3 health probe remains PUT+GET+DELETE (three operations); routine checks are daily and skip inventory.
+- Atomic reservations for ordinary StorageManager writes are still not implemented; concurrent application uploads can race local counters.
+- Monthly traffic/operation accounting for all ordinary application traffic is not complete. PR #767 only meters the backup workflow.
+- PR #767's incremental writer is still disabled by default until full CI and restore round-trip tests pass.
+- The Arvan Standard/Simin endpoint must be confirmed active before creating a bucket or sending any S3 request.
 
 
 ## 9. Knowledge bundle data contract — implementation proposal
@@ -370,12 +371,12 @@ Further request-path findings:
 - If a transfer attempt fails after a remote write, cleanup can issue DELETE as well.
 
 A simplified per-file cost model for an S3 target is therefore:
-- ordinary upload: PUT + full-object GET for verification;
+- ordinary S3 upload: PUT with provider-validated Content-MD5 + SHA-256 metadata, followed by one HEAD (no full-object GET);
 - scheduled health check: PUT + GET + DELETE;
 - manual full verification: the three probe operations plus one or more LIST operations for inventory;
-- staging transfer: destination PUT + full-object destination GET for verification;
+- staging transfer: destination PUT with Content-MD5/SHA-256 metadata + one HEAD (no full-object destination GET);
 - ordinary object access: one or more HEAD metadata requests plus actual GET/Range GET bytes;
-- weekly backup: source GET for every managed object, then backup-target PUT and full backup-target GET for verification.
+- v3 incremental backup (currently disabled): source GET only for new/changed Iran-primary objects within 1 GiB/run and 5 GiB/month; Tigris PUT + HEAD + authenticated GET readback for each new blob/manifest; unchanged blobs are reused.
 
 These paths must all be included in the monthly operation/egress budget. Counting only application user downloads or only the scheduled health-check interval will substantially understate consumption.
 
