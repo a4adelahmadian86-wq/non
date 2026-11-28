@@ -814,8 +814,23 @@ class StorageBackupService
                 ->get());
         }
 
-        // The project explicitly forbids Arvan as a backup destination.
-        return $targets->reject(fn (StorageVolume $volume): bool => $this->isArvanEndpoint($volume))->values();
+        // Only the approved no-card Tigris Standard endpoint is eligible by default.
+        // This prevents a misconfigured foreign_backup volume from silently enabling a billable provider.
+        return $targets->filter(fn (StorageVolume $volume): bool => $this->isApprovedTigrisTarget($volume))->values();
+    }
+
+    private function isApprovedTigrisTarget(StorageVolume $volume): bool
+    {
+        $endpoint = (string) ($volume->endpoint ?: data_get($volume->credentials, 'endpoint', ''));
+        $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        $region = strtolower((string) ($volume->region ?: data_get($volume->credentials, 'region', '')));
+        $pathStyle = (bool) data_get($volume->credentials, 'use_path_style_endpoint', true);
+
+        return $volume->driver === 's3'
+            && $host === 't3.storage.dev'
+            && $region === 'auto'
+            && ! $pathStyle
+            && ! $this->isArvanEndpoint($volume);
     }
 
     private function isArvanEndpoint(StorageVolume $volume): bool
