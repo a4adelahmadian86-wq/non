@@ -224,13 +224,12 @@ class StorageBackupService
             $entries = [];
             $sourceReadBytes = 0;
             $perRunSourceReadLimit = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_run', 536870912));
-            $monthlySourceReadLimit = max($perRunSourceReadLimit, (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120));
 
             StorageManagedFile::query()
                 ->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])
                 ->whereNull('storage_volume_id')
                 ->orderBy('id')
-                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit, $monthlySourceReadLimit): void {
+                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit): void {
                     foreach ($files as $file) {
                         $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
                         $temporary = $work.'/staged-'.$file->id;
@@ -520,9 +519,15 @@ class StorageBackupService
         $configuredLimit = max(1, (int) config('storage_management.backup.max_target_storage_bytes', 4294967296));
         $providerLimit = $target->capacity_bytes !== null ? (int) $target->capacity_bytes : $configuredLimit;
         $hardLimit = min($configuredLimit, $providerLimit);
-        $current = (int) $target->fresh()->used_bytes;
-        if ($additionalBytes < 0 || $current + $additionalBytes > $hardLimit) {
-            throw new RuntimeException('سقف امن فضای بکاپ رایگان تکمیل شده است؛ برای جلوگیری از هزینه، آپلود جدید متوقف شد.');
+        $freshTarget = $target->fresh();
+        $current = (int) $freshTarget->used_bytes;
+        $maxObjectBytes = $freshTarget->max_file_bytes !== null
+            ? min($hardLimit, (int) $freshTarget->max_file_bytes)
+            : $hardLimit;
+        if ($additionalBytes < 0 || $additionalBytes > $maxObjectBytes
+            || $current + $additionalBytes > $hardLimit
+            || ($freshTarget->file_limit !== null && (int) $freshTarget->object_count >= (int) $freshTarget->file_limit)) {
+            throw new RuntimeException('سقف امن فضای بکاپ رایگان یا محدودیت تعداد فایل تکمیل شده است؛ برای جلوگیری از هزینه، آپلود جدید متوقف شد.');
         }
     }
 
