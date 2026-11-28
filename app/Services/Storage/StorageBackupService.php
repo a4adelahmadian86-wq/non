@@ -375,6 +375,9 @@ class StorageBackupService
         if (! function_exists('sodium_crypto_secretstream_xchacha20poly1305_init_push')) {
             throw new RuntimeException('افزونه Sodium برای بکاپ افزایشی امن در دسترس نیست.');
         }
+        if (! class_exists(ZipArchive::class)) {
+            throw new RuntimeException('افزونه ZipArchive برای ساخت هسته بکاپ افزایشی لازم است.');
+        }
 
         $target = $targets->first();
         if (! $target) {
@@ -408,7 +411,7 @@ class StorageBackupService
 
             $entries = [];
             $sourceReadBytes = 0;
-            $perRunSourceReadLimit = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_run', 536870912));
+            $perRunSourceReadLimit = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_run', 1073741824));
 
             StorageManagedFile::query()
                 ->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])
