@@ -427,6 +427,7 @@ The user requirement is zero recurring spend, no foreign payment card, and maxim
 | ArvanCloud Object Storage Base | 5 GB storage, 20 GB traffic, 10,000 requests | Existing account; Base quota is the local-Iran option | PAYG excess; traffic and requests are finite | Iranian primary only, keep conservative budget |
 | Cloudflare R2 Standard | 10 GB-month, 1M Class A, 10M Class B, free egress | Official pricing says start free with no credit card required | Only Standard class receives free allowance; above free quotas published rates apply | Best external free backup candidate |
 | Tigris Standard | 5 GB-month, 10,000 Class A, 100,000 Class B, free egress | Official pricing says no card to start | Monthly request quotas are much smaller than R2; above allowance is metered | Secondary external backup candidate, cold/low-operation use |
+| Upload.am Free | 25 GB total, 5 GB max per file | Official signup says free forever, no credit card | REST API with presigned S3 uploads, multipart, 429 rate limits; free-plan API downloads have a 10-second anti-bot wait; account inactivity and global storage locations need care; no SLA/no warranty | Strong high-capacity encrypted cold-backup candidate after support/API verification; not primary storage |
 | Backblaze B2 | First 10 GB storage free; egress up to 3x average stored data free | Official pricing confirms free 10 GB; no-card signup/overage blocking was not verified | Paid storage starts beyond free; do not assume requests or overage cannot bill | Not selected until no-card and hard-overage behavior are confirmed |
 | Oracle Cloud Always Free Object Storage | 20 GB combined Standard, Infrequent Access and Archive; 50,000 API requests/month after trial | Official page explicitly accepts credit/debit cards that function like credit cards | Requires supported card; non-Iran region and account/capacity constraints | Excluded because no foreign card is available |
 | Google Drive | 15 GB shared across Drive/Gmail/Photos | Personal account quota, not an app storage plan | Google Drive API prohibits app/project-content backups without express written permission | Do not use for FARAST backups |
@@ -441,6 +442,11 @@ Official evidence:
 - Oracle accepted payment methods: https://www.oracle.com/cloud/free/
 - Google Drive API prohibited use cases: https://developers.google.com/drive/api/terms
 - Storj pricing/trial: https://www.storj.io/pricing/
+- Upload.am free plan: https://upload.am/en/register
+- Upload.am API: https://upload.am/docs/api
+- Upload.am Terms: https://upload.am/en/terms
+- Upload.am Privacy: https://upload.am/en/privacy
+- Upload.am DPA / infrastructure subprocessors: https://upload.am/en/dpa
 
 ### 12.2 Recommended placement
 
@@ -450,7 +456,7 @@ Official evidence:
 4. Do not treat these as one transparent disk. Keep provider-specific volumes and an explicit placement policy; external volumes are unavailable during international connectivity failures.
 5. Never split data across multiple accounts to bypass quotas. Use one legitimate account per provider and enforce each provider's published monthly free allowance with a safety margin.
 
-Nominal total free capacity across these distinct providers is 20 GB (5 GB Arvan + 10 GB R2 + 5 GB Tigris), but only 5 GB is the currently selected Iran-resident tier. This is not 20 GB of interchangeable, always-available storage and must not be represented as such.
+Nominal free capacity across these distinct providers can reach 45 GB (5 GB Arvan + 10 GB R2 + 5 GB Tigris + 25 GB Upload.am), but only 5 GB is the currently selected Iran-resident tier. Upload.am is a file-hosting REST API rather than a native S3 bucket; it has a 5 GB per-file limit and undisclosed global storage locations. This is not 45 GB of interchangeable, always-available storage and must not be represented as such.
 
 ### 12.3 Backup policy and algorithm
 
@@ -480,3 +486,12 @@ To maximize effective capacity without paying for extra raw storage, the knowled
 8. **Graceful tiering:** when the Iran-resident free tier reaches its internal ceiling, do not silently send critical data abroad. Keep critical processing queued/staged locally and route only explicitly noncritical/approved classes to external tiers. Record the storage tier in the manifest so readers do not assume every object is domestic.
 
 These are implementation requirements, not claims that the current application already follows them. Existing SQL knowledge remains authoritative until all readers and restore tests are migrated.
+### 12.5 Upload.am — larger free backup candidate, with material caveats
+
+Upload.am is worth keeping in the candidate set because its official Free plan advertises 25 GB total storage, up to 5 GB per file, free forever and no credit card. Its public developer API supports Bearer tokens, presigned S3 uploads, multipart uploads, file listing/details, download URLs, trash/restore and quota reporting through GET /me. The Free plan's API download flow includes a 10-second anti-bot wait and the API rate-limits each endpoint with HTTP 429 / Retry-After.
+
+However, it is not a native S3 endpoint for the application: it requires a dedicated REST adapter and per-file UUID/object mapping. Its DPA says infrastructure subprocessors and their locations are not published; its privacy policy says files may be stored in several locations worldwide. Its Terms disclaim uninterrupted availability and warranties, cap most liability at the greater of USD 20 or amounts paid in the previous 12 months, and recommend keeping another copy. Free-account inactivity rules also need to be handled: the FAQ describes warning before deletion after 180 days without sign-in; Terms separately describe deletion of accounts that never uploaded a file and remain unused for 90 days.
+
+Decision: do not use Upload.am for primary data or the only copy. It may be the largest free encrypted cold-backup target after (a) written confirmation that automated app/business backups are permitted on Free, (b) exact per-token API rate limits and inactivity behavior are confirmed, (c) a dedicated adapter is implemented and tested, and (d) client-side encryption is used before upload. The 5 GB per-file limit means larger backups must be split into independently checksummed encrypted parts under a lower safe ceiling (e.g. 4 GB). Keep an independent second copy elsewhere if the data is important.
+
+Official evidence: https://upload.am/en/register ; https://upload.am/docs/api ; https://upload.am/en/terms ; https://upload.am/en/privacy ; https://upload.am/en/dpa
