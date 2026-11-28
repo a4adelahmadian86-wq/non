@@ -461,7 +461,7 @@ class StorageBackupService
                                 $sourceReadBytes += $size;
                             }
 
-                            $this->reserveBackupUsage($file->volume, 'class_b', 1, $file->volume->drive_key === 'iran_primary' ? $size : 0);
+                            $this->reserveBackupUsage($target, 'source_read', 1, $size);
                             $temporary = $work.'/managed-source-'.$file->id;
                             $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
                             $actualSize = @filesize($temporary);
@@ -762,7 +762,7 @@ class StorageBackupService
         int $operationCount = 1,
         int $sourceReadBytes = 0
     ): void {
-        if (! in_array($operationClass, ['class_a', 'class_b'], true) || $operationCount < 0 || $sourceReadBytes < 0) {
+        if (! in_array($operationClass, ['class_a', 'class_b', 'source_read'], true) || $operationCount < 0 || $sourceReadBytes < 0) {
             throw new RuntimeException('رزرو مصرف بکاپ نامعتبر است.');
         }
 
@@ -792,12 +792,18 @@ class StorageBackupService
             $nextA = (int) $usage->class_a_operations + ($operationClass === 'class_a' ? $operationCount : 0);
             $nextB = (int) $usage->class_b_operations + ($operationClass === 'class_b' ? $operationCount : 0);
             $nextSourceBytes = (int) $usage->source_read_bytes + $sourceReadBytes;
+            $nextSourceOperations = (int) $usage->source_read_operations + ($operationClass === 'source_read' ? $operationCount : 0);
 
             if ($volume->drive_key === 'foreign_backup') {
                 $maxA = max(1, (int) config('storage_management.backup.max_class_a_ops_per_month', 8000));
                 $maxB = max(1, (int) config('storage_management.backup.max_class_b_ops_per_month', 80000));
                 if ($nextA > $maxA || $nextB > $maxB) {
                     throw new RuntimeException('سقف امن عملیات ماهانه فضای بکاپ خارجی تکمیل شده است؛ عملیات متوقف شد.');
+                }
+                $maxIranOps = max(1, (int) config('storage_management.backup.max_iran_ops_per_month', 7000));
+                $maxIranBytes = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120));
+                if ($nextSourceOperations > $maxIranOps || $nextSourceBytes > $maxIranBytes) {
+                    throw new RuntimeException('سقف امن عملیات یا ترافیک خواندن ماهانه از مبدأ ایران تکمیل شده است؛ عملیات متوقف شد.');
                 }
             } elseif ($volume->drive_key === 'iran_primary') {
                 $maxOps = max(1, (int) config('storage_management.backup.max_iran_ops_per_month', 7000));
@@ -815,6 +821,7 @@ class StorageBackupService
                 ->update([
                     'class_a_operations' => $nextA,
                     'class_b_operations' => $nextB,
+                    'source_read_operations' => $nextSourceOperations,
                     'source_read_bytes' => $nextSourceBytes,
                     'updated_at' => now(),
                 ]);
