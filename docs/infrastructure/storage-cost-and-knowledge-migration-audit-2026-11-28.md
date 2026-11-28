@@ -117,7 +117,7 @@ All items below were checked against GitHub on 2026-11-28. None was merged by th
 | #759 | Netlify AI gateway fallback | Open; FARAST CI #7726, Netlify contract tests #9, Phase 4 #6908 passed. | Not deployed; it does not establish a domestic fallback or bypass provider eligibility restrictions. |
 | #763 | Reader toolbar icon regression | Open; FARAST CI #7741 and Phase 3 #4431 passed; an earlier duplicate FARAST CI run #7740 was cancelled; Phase 4 #6922 passed. | Unrelated to storage; leave untouched. |
 | #753 | Broad AI gateway/infrastructure change | Open; deployment prerequisites are documented in that PR. | Do not merge wholesale; its gateway deployment/configuration prerequisite remains a separate decision. |
-| #766 | Guard free-tier backups and bound external retention | Open; latest head `5a0c0e25...`; Phase 3 passed 1,005 tests (5 skipped, 5,727 assertions), including preflight, recovery and retention tests. MySQL integrity, admin E2E, agent and contract tests passed; Laravel/Playwright is still running at this refresh. | Rejects Arvan endpoints as backup destinations, skips archive creation without a healthy external target, blocks full snapshots from reading iran_primary by default, and retains only the latest verified backup by default. Incremental replication and actual external backup copy remain unimplemented. |
+| #766 | Guard free-tier backups and bound external retention | Open; head `5a0c0e25...`; all required checks passed. Phase 3: 1,005 passed, 5 skipped, 5,727 assertions; Laravel, reader-browser regression, admin E2E, MySQL integrity, agent, contract and document-audio checks passed; voice-model smoke skipped by branch condition. | Rejects Arvan endpoints as backup destinations, skips archive creation without a healthy external target, blocks full snapshots from reading iran_primary by default, and retains only the latest verified backup by default. Incremental replication and actual external backup copy remain unimplemented. |
 Workflow observations are based on the workflow runs returned for each exact PR head SHA. Empty combined-status arrays are not interpreted as success. A workflow still marked `in_progress` is not a pass.
 
 ## 4. Safe implementation sequence
@@ -150,6 +150,11 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 - Do not provision either service until the user creates the account and the no-card / no-overage behavior is confirmed. Never save credentials in Git.
 - The current weekly full backup is not acceptable for Arvan Base: 5 GB read weekly is about 20 GB/month source egress. Implement an encrypted baseline plus content-addressed incrementals, bounded retention and restore verification before enabling any target.
 - The current retention config says keep_all but the service does not enforce it; fix this before any external backup is activated.
+
+
+
+### Gate E — backup safety code status
+PR #766 has all required CI checks green. It adds destination preflight, rejects Arvan endpoints as backup destinations, blocks full snapshots that would read iran_primary by default, and keeps only the latest verified backup by default. This is not an incremental backup implementation and no external target has been configured. Keep PR unmerged pending user approval and the next incremental-backup design phase.
 
 ## 5. Explicit non-actions
 
