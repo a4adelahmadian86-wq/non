@@ -75,6 +75,11 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
                 return strlen($remoteObjects[$key] ?? '');
             }
         );
+        $storage->shouldReceive('downloadTo')->once()->andReturnUsing(
+            function (string $disk, string $key, string $targetPath) use (&$remoteObjects): void {
+                file_put_contents($targetPath, $remoteObjects[$key] ?? '');
+            }
+        );
 
         $service = new StorageBackupService($storage);
         $method = new ReflectionMethod($service, 'storeBackupObject');
