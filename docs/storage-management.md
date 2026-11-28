@@ -41,6 +41,30 @@ Uploads that need security inspection may briefly enter the private local quaran
 
 Use a separate API credential with only the required bucket permissions. The endpoint must use HTTPS and certificate verification remains enabled. FARAST sends S3-compatible API requests directly to this exact administrator-supplied endpoint; it does not proxy through a storage SaaS, external gateway, hosted file-management service, or another intermediary. The HTTP client is a PHP library running inside FARAST, not a remote service. The current built-in remote protocol is S3-compatible API; a host exposing a different proprietary API needs a first-party adapter implemented inside FARAST against that host's published API contract. Do not enter arbitrary API credentials and assume protocol compatibility.
 
+## Provider quota safety
+
+S3-compatible APIs generally do not expose the provider's commercial plan limits. The storage-volume connection JSON therefore accepts optional administrator-configured safety values:
+
+- `capacity_bytes`: an internal upper bound used by FARAST when selecting a volume. It is not a provider-reported quota.
+- `file_limit` and `max_file_bytes`: optional internal object-count and per-file limits.
+- `health_check_interval_minutes`: 5–1440 minutes. The scheduled checker still runs every five minutes, but skips a healthy volume until its configured interval has elapsed. Failed checks use exponential backoff based on this interval, capped at 24 hours; a successful check clears the failure state.
+
+For ArvanCloud's currently published free Object Storage plan (5 GB, 20 GB monthly traffic, and 10,000 read/write requests), use a conservative internal storage cap such as `4500000000` bytes and set `health_check_interval_minutes` to `1440`. Scheduled checks skip full bucket inventory listing, and a failed check is retried with exponential backoff rather than every five-minute scheduler tick. At a 60-minute interval, three probe operations per check would use about 2,160 operations in a 30-day month. At 1,440 minutes (24 hours), this falls to about 90 operations/month. The probe itself still performs multiple API operations (PUT/GET/DELETE); the interval reduces frequency but does not make the probe free. Explicit admin verification can still perform a full inventory listing and must be used sparingly. These settings do not account for all application reads/writes, backup egress or monthly traffic; provider usage must still be monitored. Do not treat this application-side cap as a guarantee against every possible provider charge.
+
+Example connection fields:
+
+```json
+{
+  "capacity_bytes": 4500000000,
+  "health_check_interval_minutes": 1440,
+  "credentials": {
+    "key": "ACCESS_KEY",
+    "secret": "SECRET_KEY",
+    "use_path_style_endpoint": true
+  }
+}
+```
+
 ## Required environment
 
 - `FARAST_BACKUP_ENCRYPTION_KEY`: a dedicated high-entropy secret, kept outside the database and backup files.
@@ -68,3 +92,6 @@ Iranian file storage protects file reads and writes only when the application ca
 ## Safety notes
 
 Do not delete source files until the destination upload, checksum validation, and database reference update have succeeded. Do not route critical files to foreign storage as a fallback. Provider capacity and object-count limits are enforced when the provider reports them.
+
+
+**Important:** registering a new S3 volume now checks connectivity without listing its objects. This is intentional to avoid a potentially expensive full inventory scan. Use this path only for a new/empty bucket. If the bucket already contains objects, run the explicit admin verification/inventory action before enabling it for uploads; otherwise the internal `used_bytes` and `object_count` estimates will not include those pre-existing objects.
