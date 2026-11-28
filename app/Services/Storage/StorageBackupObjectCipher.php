@@ -95,7 +95,7 @@ class StorageBackupObjectCipher
             throw new RuntimeException('فایل موقت رمزگشایی بکاپ قابل ایجاد نیست.');
         }
 
-        $key = $this->deriveKey($masterKey);
+        $key = $this->deriveKey($masterKey, $purpose);
         $completed = false;
         $hash = hash_init('sha256');
         $bytesWritten = 0;
