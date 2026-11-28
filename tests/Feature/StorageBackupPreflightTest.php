@@ -232,4 +232,46 @@ class StorageBackupPreflightTest extends TestCase
         ]);
     }
 
+
+    public function test_billable_or_unapproved_s3_provider_is_not_a_backup_target(): void
+    {
+        config([
+            'storage_management.backup.encryption_key' => str_repeat('backup-key-', 8),
+            'storage_management.backup.enable_iran_replica' => false,
+        ]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'R2 must not be selected under no-card policy',
+            'provider' => 'cloudflare-r2',
+            'driver' => 's3',
+            'endpoint' => 'https://account.r2.cloudflarestorage.com',
+            'region' => 'auto',
+            'bucket' => 'farast-backups',
+            'credentials' => ['key' => 'test', 'secret' => 'test', 'region' => 'auto', 'use_path_style_endpoint' => true],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldNotReceive('downloadTo');
+        $storage->shouldNotReceive('uploadBackup');
+
+        try {
+            (new StorageBackupService($storage))->runWeekly('weekly');
+            $this->fail('Unapproved or billable providers must never be selected for free-tier backup.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('هیچ مقصد سالمی', $exception->getMessage());
+        }
+
+        $run = StorageBackupRun::query()
+            ->where('backup_type', 'weekly')
+            ->where('source_name', 'application')
+            ->sole();
+
+        $this->assertTrue((bool) data_get($run->metadata, 'archive_skipped'));
+        $this->assertSame('no_healthy_destination', data_get($run->metadata, 'reason'));
+    }
+
 }
