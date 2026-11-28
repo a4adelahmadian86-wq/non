@@ -25,7 +25,7 @@ class CheckStorageVolumes extends Command
                 $interval = $interval === false ? 5 : max(5, min(1440, $interval));
                 $nextCheckAt = data_get($volume->metadata, 'health_check_next_at');
 
-                if (is_string($nextCheckAt) && $nextCheckAt !== '' && now()->lt($nextCheckAt)) {
+                if (is_string($nextCheckAt) && $nextCheckAt !== '' && now()->lt(Carbon::parse($nextCheckAt))) {
                     $skipped++;
                     return;
                 }
