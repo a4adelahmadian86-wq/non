@@ -401,3 +401,8 @@ References discovered:
 **Verification status:** the official OpenAPI YAML URL could not be opened in this inspection, and no Machine User API key was available or used. These endpoints and their Base-plan availability are therefore **not yet confirmed**. Do not create a new API key, call these endpoints, or add a third-party exporter based only on the community reference.
 
 **Next research step before implementing usage metering:** obtain the official OpenAPI schema or written confirmation from Arvan support for the read-only report endpoints, authentication scope, bucket-level filtering, update delay, and Base-plan availability. If confirmed, prefer a small first-party read-only usage-report client inside FARAST (separate from the S3 adapter) and display provider-reported storage/traffic/operations alongside local estimates. This may materially improve cost visibility, but it must never become a dependency for core file reads/writes or block the application when the report API is unavailable.
+
+
+### 11.1 Initial inventory behavior and empty-bucket requirement
+
+The updated PR #761 intentionally skips full inventory during new volume registration. This means a newly registered volume starts with the administrator-configured local counters (normally zero) until an explicit inventory is run. It is safe for the planned new empty Arvan bucket, but **not safe to attach a pre-populated bucket and immediately start uploading**: the local capacity guard would undercount existing objects. The admin UI and storage documentation now state that existing buckets require explicit full inventory before they are used for uploads.
