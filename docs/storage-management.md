@@ -49,14 +49,14 @@ S3-compatible APIs generally do not expose the provider's commercial plan limits
 - `file_limit` and `max_file_bytes`: optional internal object-count and per-file limits.
 - `health_check_interval_minutes`: 5–1440 minutes. The scheduled checker still runs every five minutes, but skips a healthy volume until its configured interval has elapsed. Failed checks use exponential backoff based on this interval, capped at 24 hours; a successful check clears the failure state.
 
-For ArvanCloud's currently published free Object Storage plan (5 GB, 20 GB monthly traffic, and 10,000 read/write requests), use a conservative internal storage cap such as `4500000000` bytes and set `health_check_interval_minutes` to `60`. Scheduled checks skip full bucket inventory listing, and a failed check is retried with exponential backoff rather than every five-minute scheduler tick. The probe itself still performs multiple API operations (PUT/GET/DELETE); the interval reduces frequency but does not make the probe free. Explicit admin verification can still perform a full inventory listing and must be used sparingly. These settings do not account for all application reads/writes, backup egress or monthly traffic; provider usage must still be monitored. Do not treat this application-side cap as a guarantee against every possible provider charge.
+For ArvanCloud's currently published free Object Storage plan (5 GB, 20 GB monthly traffic, and 10,000 read/write requests), use a conservative internal storage cap such as `4500000000` bytes and set `health_check_interval_minutes` to `1440`. Scheduled checks skip full bucket inventory listing, and a failed check is retried with exponential backoff rather than every five-minute scheduler tick. At a 60-minute interval, three probe operations per check would use about 2,160 operations in a 30-day month. At 1,440 minutes (24 hours), this falls to about 90 operations/month. The probe itself still performs multiple API operations (PUT/GET/DELETE); the interval reduces frequency but does not make the probe free. Explicit admin verification can still perform a full inventory listing and must be used sparingly. These settings do not account for all application reads/writes, backup egress or monthly traffic; provider usage must still be monitored. Do not treat this application-side cap as a guarantee against every possible provider charge.
 
 Example connection fields:
 
 ```json
 {
   "capacity_bytes": 4500000000,
-  "health_check_interval_minutes": 60,
+  "health_check_interval_minutes": 1440,
   "credentials": {
     "key": "ACCESS_KEY",
     "secret": "SECRET_KEY",
