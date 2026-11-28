@@ -136,6 +136,7 @@ class StorageBackupRetentionTest extends TestCase
         $this->assertSame('completed', $old->fresh()->status);
         $this->assertSame('weekly/old.zip', $old->fresh()->object_key);
         $this->assertTrue((bool) data_get($old->fresh()->metadata, 'retention_cleanup_pending'));
+        $this->assertSame('completed', $current->fresh()->status);
         $this->assertSame(2000, (int) $volume->fresh()->used_bytes);
         $this->assertSame(2, (int) $volume->fresh()->object_count);
     }
