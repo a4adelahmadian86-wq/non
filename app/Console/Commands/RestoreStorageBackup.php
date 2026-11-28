@@ -201,6 +201,87 @@ class RestoreStorageBackup extends Command
                     'completed_at' => $run->completed_at,
                     'metadata' => $runMetadata,
                 ])->save();
+
+                if (is_array($incrementalManifest)) {
+                    $volume = StorageVolume::query()->findOrFail($run->storage_volume_id);
+                    $references = [(array) $incrementalManifest['core']];
+                    foreach ((array) $incrementalManifest['managed_entries'] as $entry) {
+                        $references[] = (array) $entry;
+                    }
+                    $references = collect($references)->keyBy('id')->values();
+
+                    DB::transaction(function () use ($volume, $references, $restoredRun): void {
+                        $objectIds = [];
+                        foreach ($references as $reference) {
+                            $object = StorageBackupObject::query()
+                                ->where('storage_volume_id', $volume->id)
+                                ->where('sha256', $reference['sha256'])
+                                ->lockForUpdate()
+                                ->first();
+
+                            if (! $object) {
+                                $object = StorageBackupObject::create([
+                                    'storage_volume_id' => $volume->id,
+                                    'sha256' => $reference['sha256'],
+                                    'size_bytes' => $reference['size_bytes'],
+                                    'object_key' => $reference['object_key'],
+                                    'encrypted_size_bytes' => $reference['encrypted_size_bytes'],
+                                    'status' => 'verified',
+                                    'verified_at' => now(),
+                                    'metadata' => ['restored_from_manifest' => true],
+                                ]);
+                                $volume->update([
+                                    'used_bytes' => (int) $volume->used_bytes + (int) $reference['encrypted_size_bytes'],
+                                    'object_count' => (int) $volume->object_count + 1,
+                                ]);
+                            } else {
+                                $oldSize = (int) $object->encrypted_size_bytes;
+                                $object->update([
+                                    'size_bytes' => $reference['size_bytes'],
+                                    'object_key' => $reference['object_key'],
+                                    'encrypted_size_bytes' => $reference['encrypted_size_bytes'],
+                                    'status' => 'verified',
+                                    'verified_at' => now(),
+                                    'metadata' => array_merge((array) $object->metadata, ['restored_from_manifest' => true]),
+                                ]);
+                                $volume->update([
+                                    'used_bytes' => max(0, (int) $volume->used_bytes - $oldSize) + (int) $reference['encrypted_size_bytes'],
+                                ]);
+                            }
+
+                            $objectIds[] = (int) $object->id;
+                        }
+
+                        $restoredRun->backupObjects()->sync($objectIds);
+                    });
+
+                    // A restore is an exceptional operation. Conservatively exhaust this
+                    // month's free GET allowance so the next scheduled run cannot overrun it.
+                    DB::table('storage_backup_usage_periods')->insertOrIgnore([
+                        'storage_volume_id' => $volume->id,
+                        'period_start' => now()->startOfMonth()->toDateString(),
+                        'class_a_operations' => 0,
+                        'class_b_operations' => 0,
+                        'source_read_bytes' => 0,
+                        'uploaded_bytes' => 0,
+                        'downloaded_bytes' => 0,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('storage_backup_usage_periods')
+                        ->where('storage_volume_id', $volume->id)
+                        ->where('period_start', now()->startOfMonth()->toDateString())
+                        ->update([
+                            'class_b_operations' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('class_b_operations'),
+                                (int) config('storage_management.backup.max_class_b_ops_per_month', 80000)
+                            ),
+                            'updated_at' => now(),
+                        ]);
+                }
             } else {
                 // Bootstrap recovery has no surviving storage_backup_runs row.
                 // Record the restore itself without pretending the archive remains
