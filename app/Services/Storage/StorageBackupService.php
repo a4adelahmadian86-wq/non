@@ -79,7 +79,7 @@ class StorageBackupService
                 || ! is_int($object['id'] ?? null)
                 || $object['id'] < 1
                 || ! is_string($object['object_key'] ?? null)
-                || ! preg_match('#^objects/[a-f0-9]{2}/[a-f0-9-]{20,64}\.enc$#i', $object['object_key'])
+                || ! preg_match('#^objects/[a-f0-9]{2}/[a-f0-9]{64}\.enc$#i', $object['object_key'])
                 || ! is_int($object['size_bytes'] ?? null)
                 || $object['size_bytes'] < 0
                 || ! is_int($object['encrypted_size_bytes'] ?? null)
