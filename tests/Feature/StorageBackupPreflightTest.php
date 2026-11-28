@@ -124,4 +124,44 @@ class StorageBackupPreflightTest extends TestCase
         $this->assertSame('iran_primary_full_read_disabled', data_get($run->metadata, 'reason'));
     }
 
+
+    public function test_arvan_endpoint_is_never_accepted_as_a_backup_destination(): void
+    {
+        config([
+            'storage_management.backup.encryption_key' => '',
+            'storage_management.backup.enable_iran_replica' => false,
+        ]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Misconfigured Arvan backup',
+            'driver' => 's3',
+            'endpoint' => 'https://s3.ir-thr-at1.arvanstorage.ir',
+            'bucket' => 'farast-backup',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldNotReceive('downloadTo');
+        $storage->shouldNotReceive('uploadBackup');
+
+        try {
+            (new StorageBackupService($storage))->runWeekly('manual');
+            $this->fail('Arvan endpoints must never be accepted as backup destinations.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('هیچ مقصد سالمی', $exception->getMessage());
+        }
+
+        $run = StorageBackupRun::query()
+            ->where('backup_type', 'manual')
+            ->where('source_name', 'application')
+            ->sole();
+
+        $this->assertTrue((bool) data_get($run->metadata, 'archive_skipped'));
+        $this->assertSame('no_healthy_destination', data_get($run->metadata, 'reason'));
+    }
+
 }
