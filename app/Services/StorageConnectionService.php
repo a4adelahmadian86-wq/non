@@ -11,13 +11,21 @@ class StorageConnectionService
 {
     public function __construct(private readonly S3CompatibleAdapter $s3) {}
 
-    public function verify(StorageVolume $volume, bool $refreshInventory = false): array
+    /**
+     * Verify a volume. Scheduled callers can set $skipInventory to avoid a
+     * potentially expensive full ListObjectsV2 scan on small provider plans.
+     */
+    public function verify(StorageVolume $volume, bool $refreshInventory = false, bool $skipInventory = false): array
     {
         $inventory = null;
         $inventoryError = null;
         $lastInventoryAttempt = data_get($volume->metadata, 'inventory_attempted_at');
-        $shouldRefreshInventory = $refreshInventory || ! $lastInventoryAttempt
-            || Carbon::parse($lastInventoryAttempt)->lt(now()->subHours(6));
+        $shouldRefreshInventory = ! $skipInventory && (
+            $refreshInventory
+            || ! $lastInventoryAttempt
+            || Carbon::parse($lastInventoryAttempt)->lt(now()->subHours(6))
+        );
+
         if ($volume->driver === 's3') {
             $result = $this->s3->probe($volume);
             if ($shouldRefreshInventory) {
