@@ -379,3 +379,42 @@ When the user opens **فضای ابری → صندوقچه‌ها → ایجاد
 
 Important: user's earlier panel list showed both zone-specific S3 endpoints `s3.ir-thr-at1.arvanstorage.ir` and `s3.ir-tbz-sh1.arvanstorage.ir` as "درحال جمع‌آوری" at that time, while generic region endpoints showed "فعال". Do not infer that the region selector's availability equals the zone-specific S3 API endpoint's readiness. Before connecting, confirm the exact bucket endpoint/region from the bucket details and the Access Management page. Do not make an S3 request until the code-side no-overage guard is implemented.
 
+
+
+## 13. User's actual bucket-creation form screenshot reviewed (2026-11-28)
+
+The screenshot supplied by the user shows the live create-bucket form, not merely the documentation illustration.
+
+Observed state in the user's current form:
+- Bucket name: empty (required).
+- Storage class: Standard selected.
+- Region: **ایران مرکز / Simin**, region code shown as `ir-thr-at1`.
+- Multi-zone: appears enabled (the toggle is teal and the left summary explicitly reports `زون: مالتی‌زون`). The form text says enabling Multi-zone calculates bucket size per zone.
+- Object Lock: disabled in the left summary and its toggle appears off.
+- Versioning: disabled in the left summary and its toggle appears off.
+- Public access: disabled in the left summary and its toggle appears off.
+- Tags: zero; optional section has a **مدیریت برچسب‌ها** button.
+- The lower part of the form is obscured by the browser/overlay in the supplied screenshot, so do not infer any unseen options.
+
+**User action before creation:** turn Multi-zone OFF before creating the bucket. This is a pre-creation setting and must be OFF at creation because the official guide says it cannot be disabled after activation. The user's screenshot summary is authoritative evidence that it is currently selected in the draft form.
+
+The selected region is Iran Central / Simin with code `ir-thr-at1`. The user's previously reported endpoint status for the zone-specific endpoint `s3.ir-thr-at1.arvanstorage.ir` was "درحال جمع‌آوری", while the generic endpoint `s3.ir-central1.arvanstorage.ir` was "فعال". Do not silently substitute one endpoint for the other. After bucket creation, the exact API endpoint and region must be taken from the bucket details / Access Management and checked against the current endpoint status before configuring FARAST.
+
+The screenshot's side summary shows the form currently has:
+- Type: Standard
+- Region: Iran Central
+- Zone: Multi-zone
+- Object Lock: inactive
+- Versioning: inactive
+- Public access: inactive
+- Tags: 0
+
+No bucket has been created; no S3 request has been made.
+
+## 14. CI refresh for the prior infrastructure fixes
+
+On 2026-11-28, the GitHub Actions runs associated with the latest PR #760 and PR #761 head commits were fetched again:
+- PR #760 head `0b5a96f3100af66b154c761b47c8ea0bb73f3fdf`: FARAST CI, Product Supervisor Service, FARAST Phase 4 Agent all completed successfully.
+- PR #761 head `a4b07ecdfa833b7031ce235b81e2089ea4965e76`: FARAST CI, FARAST Phase 3 Commerce Tests, FARAST Phase 4 Agent all completed successfully.
+
+Both PRs remain open and unmerged. This is evidence of green runs for the listed workflows only; it does not establish a live Arvan connection or production deployment.
