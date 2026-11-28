@@ -433,7 +433,7 @@ The user requirement is zero recurring spend, no foreign payment card, and maxim
 | Provider | Published free allowance | Card / duration evidence | Important limits | Decision |
 |---|---:|---|---|---|
 | ArvanCloud Object Storage Base | 5 GB storage, 20 GB traffic, 10,000 requests | Existing account; Base quota is the local-Iran option | PAYG excess; traffic and requests are finite | Iranian primary only, keep conservative budget |
-| Cloudflare R2 Standard | 10 GB-month, 1M Class A, 10M Class B, free egress | Official pricing says start free with no credit card required | Only Standard class receives free allowance; above free quotas published rates apply | Best external free backup candidate |
+| Cloudflare R2 Standard | 10 GB-month, 1M Class A, 10M Class B, free egress | R2 setup requires subscription checkout; Cloudflare billing requires a payment method to purchase products | Above free quotas are metered; incompatible with the no-foreign-card constraint | Excluded for now |
 | Tigris Standard | 5 GB-month, 10,000 Class A, 100,000 Class B, free egress | Official pricing says no card to start | Monthly request quotas are much smaller than R2; above allowance is metered | Secondary external backup candidate, cold/low-operation use |
 | Upload.am Free | 25 GB total, 5 GB max per file | Official signup says free forever, no credit card | REST API with presigned S3 uploads, multipart, 429 rate limits; free-plan API downloads have a 10-second anti-bot wait; account inactivity and global storage locations need care; no SLA/no warranty | Strong high-capacity encrypted cold-backup candidate after support/API verification; not primary storage |
 | Backblaze B2 | First 10 GB storage free; egress up to 3x average stored data free | Official pricing confirms free 10 GB; no-card signup/overage blocking was not verified | Paid storage starts beyond free; do not assume requests or overage cannot bill | Not selected until no-card and hard-overage behavior are confirmed |
@@ -443,7 +443,8 @@ The user requirement is zero recurring spend, no foreign payment card, and maxim
 
 Official evidence:
 - Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
-- Cloudflare no-card signup claim: https://www.cloudflare.com/products/r2/
+- Cloudflare R2 activation checkout: https://developers.cloudflare.com/r2/get-started/
+- Cloudflare billing profile/payment method requirement: https://developers.cloudflare.com/billing/get-started/create-billing-profile/
 - Tigris pricing: https://www.tigrisdata.com/pricing/
 - Backblaze B2 pricing: https://www.backblaze.com/cloud-storage/pricing
 - Oracle Always Free resources: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
@@ -459,27 +460,27 @@ Official evidence:
 ### 12.2 Recommended placement
 
 1. Keep Arvan Base (5 GB) as the Iran-resident primary for the subset of critical knowledge/source data that must remain available domestically.
-2. Use Cloudflare R2 Standard (up to 10 GB-month free) as the first external backup target, only after a no-card account is successfully created and billing/overage controls are verified. Keep the bucket private and client-side encryption enabled.
-3. Tigris Standard (up to 5 GB-month free) is a possible second independent copy or separately classified overflow tier. Its 10,000 Class A requests/month make it a poor target for frequent full snapshots or inventory scans.
+2. Use Tigris Standard (up to 5 GB-month free) as the first external backup target. It is S3-compatible, explicitly no-card to start, and has free egress. Keep the bucket private, client-side encryption enabled, and enforce lower local storage/operation caps.
+3. Upload.am Free (up to 25 GB total, 5 GB per file) is a possible second cold encrypted copy only after confirming retention and API reliability. It requires a custom adapter and is not a primary live object store.
 4. Do not treat these as one transparent disk. Keep provider-specific volumes and an explicit placement policy; external volumes are unavailable during international connectivity failures.
 5. Never split data across multiple accounts to bypass quotas. Use one legitimate account per provider and enforce each provider's published monthly free allowance with a safety margin.
 
-Nominal free capacity across these distinct providers can reach 45 GB (5 GB Arvan + 10 GB R2 + 5 GB Tigris + 25 GB Upload.am), but only 5 GB is the currently selected Iran-resident tier. Upload.am is a file-hosting REST API rather than a native S3 bucket; it has a 5 GB per-file limit and undisclosed global storage locations. This is not 45 GB of interchangeable, always-available storage and must not be represented as such.
+Nominal free capacity across these distinct providers can reach 35 GB (5 GB Arvan + 5 GB Tigris + 25 GB Upload.am), but only 5 GB is the currently selected Iran-resident tier. Upload.am is a file-hosting REST API rather than a native S3 bucket; it has a 5 GB per-file limit and undisclosed global storage locations. This is not 35 GB of interchangeable, always-available storage and must not be represented as such.
 
 ### 12.3 Backup policy and algorithm
 
 - Do not store backup archives in Arvan. The iran_backup role must remain disabled for this project.
-- A backup target must be a separately configured external volume (foreign_backup), preferably R2 Standard.
+- A backup target must be a separately configured external volume (foreign_backup), currently restricted to Tigris Standard only.
 - The current weekly backup is a full snapshot: it reads every managed object from its source volume, writes a single encrypted ZIP, uploads it, then downloads the complete archive again for checksum and decryption verification. If 5 GB of managed data is read every week, source egress alone approaches 20 GB per 30-day month — the entire Arvan Base traffic allowance, before user downloads, normal reads, or other verification.
-- PR #766 adds bounded retention with FARAST_BACKUP_KEEP_LATEST (default 1, maximum 10): after a new archive is uploaded and fully verified, older completed archives of the same type/destination are deleted. If remote deletion fails, the old row and usage counters remain intact and cleanup is marked pending. This limits archive accumulation, but requires enough temporary capacity for the old and new archive to coexist. CI must pass before relying on it.
-- Preferred future design: one verified encrypted baseline plus content-addressed immutable objects and incremental manifests/deltas. Transfer only new/changed objects to the external target; record tombstones for deleted objects; maintain a compact database snapshot and restore manifest. Verify every uploaded object by size/provider checksum where supported; reserve full readback verification for initial baseline, restore drills and periodic sampled audits.
+- PR #766 is merged and adds bounded retention with FARAST_BACKUP_KEEP_LATEST (default 1, maximum 10): after a new archive is uploaded and fully verified, older completed archives of the same type/destination are deleted. If remote deletion fails, the old row and usage counters remain intact and cleanup is marked pending. This limits archive accumulation, but requires enough temporary capacity for the old and new archive to coexist.
+- PR #767 now implements the first version of the preferred design on a draft branch: one encrypted core database/local-files snapshot plus content-addressed immutable encrypted managed-object blobs and an authenticated manifest. Only new/changed Iran-primary objects are read, with 1 GiB/run and 5 GiB/month source-read caps. Each new blob and manifest is read back and authenticated; unchanged objects are reused. The feature remains disabled until full CI and restore round-trip tests pass.
 - Retain one latest verified full backup plus a bounded incremental chain, and periodically compact into a new baseline. Delete old backup objects only after the newer baseline and all required deltas are verified and restore-tested.
 - If incremental backup is not implemented and tested, do not run weekly full backup against Arvan. At most, an explicitly approved monthly full backup could be considered after measuring actual source egress and ensuring normal application traffic still fits the 20 GB limit.
 - Keep database recovery independent of object-store recovery: store backup manifests/checksums and schema version; never store encryption keys in the archive or in the same bucket.
 
 ### 12.4 New implementation safeguard
 
-The current StorageBackupService::runWeeklyLocked() previously created the full archive before checking whether any healthy backup destination existed. PR #766 now preflights eligible external destinations before archive creation and, by default, blocks any full snapshot that would read managed objects from iran_primary (unless the explicit FARAST_BACKUP_ALLOW_IRAN_PRIMARY_FULL_READS override is deliberately enabled). This prevents wasted reads when no target exists and prevents the existing weekly full snapshot from silently consuming the Arvan traffic allowance. It is only a safety gate: it does not yet provide incremental replication, bounded retention or an external backup copy. Keep the override false until incremental backup and restore tests are complete.
+The current StorageBackupService::runWeeklyLocked() previously created the full archive before checking whether any healthy backup destination existed. PR #766 is merged: it preflights eligible external destinations, rejects Arvan as a backup target, blocks full snapshots that would read managed objects from iran_primary by default, and applies bounded retention. PR #767 adds the v3 incremental manifest writer/reader, content-addressed encrypted blobs and monthly free-tier budgets. The v3 path remains disabled by default until full CI and restore round-trip tests are complete. Keep FARAST_BACKUP_ALLOW_IRAN_PRIMARY_FULL_READS false.
 ## 13. Data-efficiency policy for the knowledge store
 
 To maximize effective capacity without paying for extra raw storage, the knowledge migration should follow these rules:
@@ -518,26 +519,27 @@ Additional retention caveat: the API's normal DELETE moves a file to Trash; the 
 - SakooCloud plans and bucket limits are not a permanent free storage entitlement; excluded under the user's constraint.
 
 References: https://www.persiangig.com/ ; https://www.persiangig.com/cloud-computing/file-hosting/ ; https://www.persiangig.com/terms-conditions/ ; https://skystorage.ir/ ; https://t.me/s/liara_cloud?after=84 ; https://sakoocloud.ir/object-storage/
-### 12.8 R2 compatibility and bucket location choice
+### 12.8 Tigris endpoint and S3 compatibility
 
-Cloudflare's official S3 setup uses endpoint https://<ACCOUNT_ID>.r2.cloudflarestorage.com and region auto. Its compatibility matrix supports the ordinary object operations needed by FARAST's current adapter (PUT/GET/HEAD/LIST/DELETE and multipart), but does not implement S3 ACL or Object Lock APIs. The inspected FARAST S3CompatibleAdapter does not send ACL or Object Lock headers, so it appears compatible for the planned private backup workload; this still requires a controlled small-object integration test after the user creates a bucket.
+Tigris' current global S3 endpoint is \`https://t3.storage.dev\`; the SigV4 signing region must be \`auto\`. Use virtual-hosted-style addressing (FARAST \`use_path_style_endpoint=false\`). The legacy \`fly.storage.tigris.dev\` endpoint should not be used for this deployment. Tigris pricing confirms Standard free tier of 5 GB, 10,000 Class A, 100,000 Class B and zero egress; the free tier is metered beyond those allowances, so FARAST's local caps are intentionally lower.
 
-R2 location hints include Eastern Europe (eeur), Western Europe (weur), and Asia-Pacific (apac). For a backup used from Iran/Azerbaijan, eeur is the closest reasonable hint among the listed options, but Cloudflare explicitly says location hints are best-effort, not a data-residency guarantee. Bucket location is selected at creation and should be decided before creating the bucket. R2 is an external backup only, so it does not replace the domestic Arvan primary.
+Sources: https://www.tigrisdata.com/pricing/ ; https://pkg.go.dev/github.com/tigrisdata/storage-go
 
-Official docs: https://developers.cloudflare.com/r2/get-started/s3/ ; https://developers.cloudflare.com/r2/api/s3/api/ ; https://developers.cloudflare.com/r2/reference/data-location/
-### 12.9 Proposed R2 backup-volume preset (not yet configured)
+### 12.9 Approved Tigris backup-volume preset (not yet configured)
 
-When the user has created the R2 account and a private bucket, the intended FARAST volume preset is:
+When the user has created a Tigris account and private bucket, the intended FARAST volume preset is:
 
-- role/drive_key: foreign_backup
+- role/drive_key: \`foreign_backup\`
+- provider: \`tigris\`
 - driver: S3-compatible
-- endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-- region: auto
-- use_path_style_endpoint: true (the current FARAST adapter defaults to path-style)
+- endpoint: \`https://t3.storage.dev\`
+- region: \`auto\`
+- \`use_path_style_endpoint\`: \`false\` (virtual-hosted style)
 - credentials: bucket-scoped Access Key ID + Secret Access Key, stored only in the server-side encrypted credential field
-- bucket ACL/public access: private; no public domain, CORS or object ACL header
-- R2 bucket location hint: eeur, best-effort only; decide before bucket creation
-- internal application safety ceiling: 9 GiB storage (90% of the 10 GB-month allowance), with a second-copy/temporary-write ceiling and provider-operation ledger still to be implemented
-- backup object size target: below 4.5 GiB if the rotation design needs old+new objects to coexist during verified replacement
+- bucket ACL/public access: private; no public domain or CORS
+- local storage ceiling: 4 GiB (below the 5 GB free allowance)
+- monthly local operation ceilings: 8,000 Class A and 80,000 Class B (below 10,000 / 100,000 free)
+- monthly Iran-primary source-read ceiling: 5 GiB; per-run ceiling: 1 GiB
+- no Infrequent Access or Archive tier; Standard only
 
-This is a proposed preset only. No R2 account, bucket, token or network request has been created. Do not enter credentials until the backup preflight, incremental strategy, retention and operation budget are implemented and tested.
+This preset is not configured. No Tigris account, bucket, token or network request has been created. Do not enter credentials until PR #767 passes all required checks and restore tests.
