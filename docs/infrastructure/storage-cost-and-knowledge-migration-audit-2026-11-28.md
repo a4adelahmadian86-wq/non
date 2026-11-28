@@ -371,3 +371,15 @@ The quota race is not confined to `StorageManager::storeUploadedFile()`:
 - `StorageBackupService` independently selects backup targets using the same pre-upload capacity check, writes the archive through `uploadBackup()`, then increments the counters after the remote write.
 
 A correct reservation primitive must be shared by the primary upload, pending transfer and backup-target write paths. Fixing only `StorageManager` would leave two concurrent write paths able to overrun the same configured internal cap. Reservation recovery must be conservative: a crashed request must not release capacity for an object that may already exist remotely. Failed cleanup must retain or reconcile the reservation rather than silently undercounting storage.
+
+
+### 10.2 Recommended Arvan Base health interval
+
+For the current three-operation S3 probe:
+- 5-minute interval: about 25,920 probe operations per 30-day month — more than the documented 10,000-request allowance.
+- 60-minute interval: about 2,160 operations/month — about 21.6% of the 10,000-request allowance.
+- 1,440-minute (24-hour) interval: about 90 operations/month — about 0.9% of the allowance.
+
+These are estimates assuming every PUT, GET and DELETE is counted and the volume remains active/healthy for the full month. They exclude initial/manual verification, inventory LIST requests, normal HEAD/GET/PUT operations, transfers and backups.
+
+**Recommended Arvan Base configuration: `health_check_interval_minutes=1440` (24 hours), not 60.** The default for generic volumes remains unchanged; this is an explicit setting for a very limited free-tier bucket. A manual full verification remains an intentional operator action and should be used only when needed.
