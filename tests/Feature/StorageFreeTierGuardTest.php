@@ -227,4 +227,68 @@ class StorageFreeTierGuardTest extends TestCase
         $this->assertTrue(now()->addMinutes(119)->lt(\Illuminate\Support\Carbon::parse($metadata['health_check_next_at'])));
         $this->assertTrue(now()->addMinutes(121)->gt(\Illuminate\Support\Carbon::parse($metadata['health_check_next_at'])));
     }
+
+    public function test_scheduled_s3_verification_skips_probe_inventory_even_when_no_inventory_exists(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Inventory-protected volume',
+            'driver' => 's3',
+            'endpoint' => 'https://s3.example.com',
+            'bucket' => 'farast-private',
+            'credentials' => ['key' => 'key', 'secret' => 'secret'],
+            'capacity_bytes' => 4500000000,
+            'used_bytes' => 1234,
+            'object_count' => 7,
+            'status' => 'unverified',
+            'is_active' => true,
+            'metadata' => [],
+        ]);
+
+        $adapter = Mockery::mock(S3CompatibleAdapter::class);
+        $adapter->shouldReceive('probe')->once()->with(Mockery::on(fn ($candidate) => $candidate->is($volume)))
+            ->andReturn(['read' => true, 'write' => true, 'delete' => true]);
+        $adapter->shouldNotReceive('inventory');
+
+        $service = new StorageConnectionService($adapter);
+        $result = $service->verify($volume, false, true);
+
+        $this->assertSame(['read' => true, 'write' => true, 'delete' => true], $result);
+        $this->assertSame('healthy', $volume->fresh()->status);
+        $this->assertSame(1234, (int) $volume->fresh()->used_bytes);
+        $this->assertSame(7, (int) $volume->fresh()->object_count);
+        $this->assertNull(data_get($volume->fresh()->metadata, 'inventory_attempted_at'));
+    }
+
+    public function test_explicit_s3_verification_can_refresh_inventory(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Manual inventory volume',
+            'driver' => 's3',
+            'endpoint' => 'https://s3.example.com',
+            'bucket' => 'farast-private',
+            'credentials' => ['key' => 'key', 'secret' => 'secret'],
+            'capacity_bytes' => 4500000000,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'unverified',
+            'is_active' => true,
+            'metadata' => [],
+        ]);
+
+        $adapter = Mockery::mock(S3CompatibleAdapter::class);
+        $adapter->shouldReceive('probe')->once()->andReturn(['read' => true, 'write' => true, 'delete' => true]);
+        $adapter->shouldReceive('inventory')->once()->with(Mockery::on(fn ($candidate) => $candidate->is($volume)))
+            ->andReturn(['used_bytes' => 9876, 'object_count' => 11]);
+
+        $service = new StorageConnectionService($adapter);
+        $service->verify($volume, true);
+
+        $fresh = $volume->fresh();
+        $this->assertSame(9876, (int) $fresh->used_bytes);
+        $this->assertSame(11, (int) $fresh->object_count);
+        $this->assertNotNull(data_get($fresh->metadata, 'inventory_attempted_at'));
+    }
+
 }
