@@ -668,3 +668,12 @@ The documentation home page describes Object Storage as "نامحدود" (unlimi
 
 Among the additional Arvan products reviewed, none was established as an always-free, fixed physical Iranian compute server or as a larger always-free durable store. The only confirmed always-free entitlement for this account remains the Base Object Storage plan. The other Arvan products should not be provisioned without a separately verified zero-cost allowance and explicit user approval.
 
+
+
+## 18. Arvan public status page cross-check (2026-11-28)
+
+Official status page: https://arvancloudstatus.ir/
+
+The page lists Object Storage as Operational for Simin, Shahriar and Bamdad. However, the timestamps displayed for Simin and Shahriar Object Storage are old (Simin 2026-04-04; Shahriar 2026-03-17 in the retrieved page), while the page itself reports some systems experiencing issues and has more recent incidents in other products. These old component timestamps cannot resolve the user's live endpoint state ("درحال جمع‌آوری") and must not be treated as a current health check for the exact S3 hostname.
+
+Decision: the user's account panel's exact endpoint readiness and bucket-specific Access Management details remain authoritative for this account. Public status page is only a secondary, stale signal. Do not send an unauthenticated or authenticated S3 probe merely to test reachability before the no-overage safeguards are in place.
