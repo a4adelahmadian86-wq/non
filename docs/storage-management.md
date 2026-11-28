@@ -92,3 +92,6 @@ Iranian file storage protects file reads and writes only when the application ca
 ## Safety notes
 
 Do not delete source files until the destination upload, checksum validation, and database reference update have succeeded. Do not route critical files to foreign storage as a fallback. Provider capacity and object-count limits are enforced when the provider reports them.
+
+
+**Important:** registering a new S3 volume now checks connectivity without listing its objects. This is intentional to avoid a potentially expensive full inventory scan. Use this path only for a new/empty bucket. If the bucket already contains objects, run the explicit admin verification/inventory action before enabling it for uploads; otherwise the internal `used_bytes` and `object_count` estimates will not include those pre-existing objects.
