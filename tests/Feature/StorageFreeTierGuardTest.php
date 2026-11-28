@@ -6,6 +6,7 @@ use App\Console\Commands\CheckStorageVolumes;
 use App\Http\Controllers\AdminStorageController;
 use App\Models\StorageVolume;
 use App\Services\StorageConnectionService;
+use App\Services\Storage\S3CompatibleAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Mockery;
