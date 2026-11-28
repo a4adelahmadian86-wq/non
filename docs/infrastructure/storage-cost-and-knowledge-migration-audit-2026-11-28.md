@@ -38,7 +38,7 @@ Files:
 - Inventory is attempted at least once and then at six-hour intervals; creating a volume forces verification and inventory.
 - On main, the scheduled command has no per-volume interval guard. An unsuccessful volume is retried on every scheduled run.
 
-The open PR #761 adds a configurable 5–1,440 minute interval for healthy volumes, with a documented 60-minute Arvan value. That reduces routine checks but does not remove the 3-operation probe, the initial forced probe/inventory, or repeated retries while a volume is unhealthy/unverified.
+The open PR #761 adds a configurable 5–1,440 minute interval for healthy volumes, with a documented 24-hour Arvan value. That reduces routine checks but does not remove the 3-operation probe, the initial forced probe/inventory, or repeated retries while a volume is unhealthy/unverified.
 
 **Required correction before Arvan use:** split connectivity/authentication checks from write/read/delete capability tests; default scheduled checks must be non-mutating and low-operation. Make inventory an explicit, separately throttled/manual action for small free-tier buckets. Add bounded exponential retry/circuit-breaker behavior for unhealthy volumes instead of retrying every scheduler tick. Preserve an explicit admin-only full capability test for providers where write/read/delete validation is needed.
 
