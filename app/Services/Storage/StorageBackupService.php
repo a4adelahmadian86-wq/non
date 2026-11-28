@@ -246,7 +246,7 @@ class StorageBackupService
                         'metadata' => $metadata,
                     ]);
                 });
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 report($exception);
                 $metadata = (array) $oldRun->metadata;
                 $metadata['retention_cleanup_pending'] = true;
