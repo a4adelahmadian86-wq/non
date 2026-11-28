@@ -418,3 +418,142 @@ On 2026-11-28, the GitHub Actions runs associated with the latest PR #760 and PR
 - PR #761 head `a4b07ecdfa833b7031ce235b81e2089ea4965e76`: FARAST CI, FARAST Phase 3 Commerce Tests, FARAST Phase 4 Agent all completed successfully.
 
 Both PRs remain open and unmerged. This is evidence of green runs for the listed workflows only; it does not establish a live Arvan connection or production deployment.
+
+
+## 15. Final verification pass against the priority guides (2026-11-28)
+
+This section supersedes any earlier shorthand that conflated a free feature toggle with free storage/traffic, and records the details verified from the official text and linked screenshots.
+
+### 15.1 Bucket creation screenshot and the live user form are different evidence
+
+The official image `/arvandocs/object/bucket/newbucket.png` shows these fields:
+- Required bucket name.
+- Region radio buttons: Simin and Shahriar.
+- Multi-zone toggle under Simin.
+- Versioning toggle.
+- Bucket public-display toggle.
+- Tags section/button.
+- Create and Cancel buttons.
+
+The official guide text establishes private display as the default and Versioning as disabled by default. Do not infer live account state from the illustration.
+
+The user's actual live form screenshot (captured earlier in this conversation) showed:
+- Standard class selected.
+- Iran Central / Simin selected; displayed region code `ir-thr-at1`.
+- Multi-zone toggle appeared ON; the summary explicitly showed `زون: مالتی‌زون`.
+- Object Lock OFF, Versioning OFF, Public access OFF, no tags.
+- Bucket name empty.
+
+This actual form state is stronger evidence than the generic illustration. Multi-zone must be switched OFF before Create. The official guide says it cannot be disabled once activated; no Base-plan zero-cost guarantee was found.
+
+### 15.2 Multi-zone semantics and pricing
+
+Official bucket guide: Multi-zone is available for Simin; it stores data automatically across multiple data centers/zones and is intended to preserve service continuity during a zone outage. Once activated it cannot be disabled. The guide says it may also be activated after creation through bucket operations.
+
+No official Base-plan pricing statement confirming Multi-zone is included at no additional cost was found in the reviewed material. The user account screenshot / plan comparison also did not establish a free Multi-zone entitlement. Therefore keep it OFF. Do not make a claim that it is necessarily billed by zone; simply state that its zero-cost status is unverified and it is irreversible.
+
+### 15.3 Versioning correction
+
+Official Versioning guide explicitly states Versioning can be enabled free of charge, is OFF by default, and can be switched OFF again later. When enabled:
+- overwrites create new versions and retain previous versions;
+- API deletion creates a Delete Marker; previous versions can be restored via API;
+- panel deletion removes all versions permanently;
+- disabling Versioning does not delete already retained non-current versions; Lifecycle rules may still apply to them.
+
+This is a free feature toggle, not free storage for old versions. Retained versions count against the account's 5 GB storage allowance and can cause overage if they push the bucket above quota.
+
+Decision: keep Versioning OFF for initial free-tier creation because this bucket needs strict storage-capacity control and FARAST will use its own versioned immutable knowledge bundles/manifest/checksum strategy. Reconsider enabling provider Versioning only after actual storage metering, non-current-version lifecycle policy and restore tests are in place. Do not state that Versioning is irreversible; the official guide says it can be disabled.
+
+### 15.4 Object Lock correction and exact fields
+
+Official Object Lock guide:
+- Must be selected at bucket creation.
+- Requires Versioning.
+- Cannot be disabled after creation.
+- Retention Period is a numeric duration (the guide screenshot illustrates 30 days; this is not a recommendation).
+- Retention can be increased but not reduced/removed.
+- Locked object versions cannot be deleted/overwritten before expiry.
+
+Decision: OFF; leave Retention Period untouched/blank. No WORM retention policy has been defined for FARAST and this is irreversible.
+
+### 15.5 Permission semantics — critical security correction
+
+Official Permission guide and Limits guide agree:
+- Private bucket display blocks unauthenticated bucket listing and hides object listing metadata.
+- Bucket-level privacy does NOT automatically change each object's ACL; objects do not inherit bucket ACL.
+- Public object URLs can be fetched without authentication.
+- Private objects require authenticated requests or a signed URL with expiry.
+- Bucket privacy alone must never be treated as proof that all existing objects are private.
+
+FARAST must set private object ACL on every upload, never use public ACL for knowledge or user files, and issue short-lived signed URLs only when browser download is required. S3 credentials must stay server-side.
+
+### 15.6 Bucket name rules: use the safe intersection
+
+The bucket creation guide says lowercase English letters and digits, no special characters such as dot/question mark, and globally unique. The Limits guide says 3–63 chars, lowercase letters, digits, dot and hyphen, starts/ends with letter or digit, no consecutive dots, not IP-shaped. To avoid the documentation inconsistency, proposed `farast-knowledge-ir` uses only lowercase letters and hyphens, is within 3–63 chars, and starts/ends alphanumeric. It remains unreserved and must be accepted by the panel before creation.
+
+### 15.7 Region and endpoint readiness
+
+The official bucket guide says buckets are created in Simin or Shahriar and are accessible only in the region where they were created; bucket region/name cannot be changed after creation. The Limits guide uses the region-specific virtual-host form `[bucket].s3.[region].arvanstorage.ir`.
+
+The user reported these endpoint statuses from their own account panel:
+- `s3.ir-central1.arvanstorage.ir`: Active.
+- `s3.ir-thr-at1.arvanstorage.ir`: Collecting/provisioning.
+- `s3.ir-northwest1.arvanstorage.ir`: Active.
+- `s3.ir-tbz-sh1.arvanstorage.ir`: Collecting/provisioning.
+- `hot.ir-central1.arvanstorage.ir` (HiOps): Active.
+- `s3.eu-west1.arvanstorage.ir`: Active.
+
+The official docs retrieved do not resolve whether the generic `ir-central1` endpoint is a valid endpoint for a Simin bucket whose form code is `ir-thr-at1`. Do not substitute endpoints. After creation, use the bucket details and Access Management's endpoint/region fields as the source of truth; if they conflict with status, request Arvan support confirmation before any API call. Do not use Europe or HiOps.
+
+### 15.8 Tags and exact tag-modal fields
+
+The official Manage Tags image shows two text fields per row: **عنوان** (key) and **مقدار** (value), with controls to add another tag, remove a row, Apply and Cancel. Tags are optional and only for management/classification; no security boundary or free-tier discount is documented.
+
+If using tags:
+- title `project`, value `farast`
+- title `purpose`, value `knowledge-base`
+- title `data-class`, value `private`
+
+Otherwise leave them empty. Do not enter user/customer personal information.
+
+### 15.9 Additional official limits affecting implementation
+
+The Limits page confirms:
+- Up to 50 buckets by default per account.
+- Default per-bucket object count limit 3,700,000.
+- Single PUT upload request up to 5 GB.
+- Multipart parts: 5 MB minimum, 400 MB maximum; up to 10,000 parts; final object up to 5 TB.
+- Multipart is recommended above 500 MB.
+- Incomplete multipart parts should only be cleaned after confirming the upload is no longer active.
+- Object Storage has no real folders; directory-like views are key prefixes.
+- Retry transient 5xx errors with bounded retry/backoff.
+- Buckets are region-bound and region/name cannot be changed.
+- The docs state no hard technical limit on request count or traffic; the Base plan's included allowance and PAYG billing are a separate commercial limit. Do not mistake the technical service limits for unlimited free usage.
+
+### 15.10 Lifecycle / Replication / application tools
+
+Lifecycle can automatically delete current versions, non-current versions, and incomplete multipart uploads. Do not add any deletion rule until data retention and restore are tested.
+
+Replication is explicitly available only on Growth, Professional and Enterprise plans, not Base. It is not part of the user's free plan and must not be enabled.
+
+The official ArvanCloudS3 desktop app supports bucket management, ACL editing, multi-file upload/download, search, pagination and copy/sync between buckets/regions. Its guide requires an account profile, region, Access Key and Secret Key. It is an optional management tool, not required for FARAST's backend connection; do not install or run bulk Sync for this task because it can transfer large amounts of data.
+
+### 15.11 Video and image inspection limits
+
+The official bucket creation guide embeds an Arvan VOD player and links the actual `newbucket.png` screenshot. The player configuration was identifiable, but the player page returned no extractable text and the origin config/HLS media could not be decoded by the available browser extraction. No transcript/caption track was exposed. Thus the screenshots and written guides were inspected, but the video frames/audio have not been independently reviewed. This limitation must remain explicit; do not claim full video review.
+
+### 15.12 Final creation decision — do not submit yet
+
+Recommended values:
+- Bucket name: `farast-knowledge-ir` (only if accepted as globally unique).
+- Region: Simin / Iran Central only after endpoint ambiguity is resolved.
+- Storage class: Standard.
+- Multi-zone: OFF.
+- Object Lock: OFF; no Retention Period.
+- Versioning: OFF initially (free toggle but old versions consume storage).
+- Public bucket access: OFF/private.
+- Tags: optional key/value pairs above.
+- Do not enable static website, CDN/custom-domain publishing, replication, lifecycle deletion or any paid add-on.
+
+Because the region endpoint is currently ambiguous and multi-zone was ON in the user's draft, do not click Create yet. User does not need to send more screenshots; existing written endpoint statuses and screenshot evidence are already recorded. We should resolve the endpoint mapping from Arvan's own Access Management/region documentation or written support confirmation before asking for bucket creation.
+
