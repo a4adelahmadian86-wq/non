@@ -510,3 +510,10 @@ Additional retention caveat: the API's normal DELETE moves a file to Trash; the 
 - SakooCloud plans and bucket limits are not a permanent free storage entitlement; excluded under the user's constraint.
 
 References: https://www.persiangig.com/ ; https://www.persiangig.com/cloud-computing/file-hosting/ ; https://www.persiangig.com/terms-conditions/ ; https://skystorage.ir/ ; https://t.me/s/liara_cloud?after=84 ; https://sakoocloud.ir/object-storage/
+### 12.8 R2 compatibility and bucket location choice
+
+Cloudflare's official S3 setup uses endpoint https://<ACCOUNT_ID>.r2.cloudflarestorage.com and region auto. Its compatibility matrix supports the ordinary object operations needed by FARAST's current adapter (PUT/GET/HEAD/LIST/DELETE and multipart), but does not implement S3 ACL or Object Lock APIs. The inspected FARAST S3CompatibleAdapter does not send ACL or Object Lock headers, so it appears compatible for the planned private backup workload; this still requires a controlled small-object integration test after the user creates a bucket.
+
+R2 location hints include Eastern Europe (eeur), Western Europe (weur), and Asia-Pacific (apac). For a backup used from Iran/Azerbaijan, eeur is the closest reasonable hint among the listed options, but Cloudflare explicitly says location hints are best-effort, not a data-residency guarantee. Bucket location is selected at creation and should be decided before creating the bucket. R2 is an external backup only, so it does not replace the domestic Arvan primary.
+
+Official docs: https://developers.cloudflare.com/r2/get-started/s3/ ; https://developers.cloudflare.com/r2/api/s3/api/ ; https://developers.cloudflare.com/r2/reference/data-location/
