@@ -68,6 +68,10 @@ echo Then return here and press a key. The clipboard will be cleared before depl
 pause
 echo. | clip
 
+echo.
+echo Runflare deploy handles account sign-in and asks you to select an existing project and Docker service.
+echo Create the replacement project and Docker service in the portal first if the old free service was deleted.
+echo.
 runflare deploy
 if errorlevel 1 (
     echo.
@@ -77,5 +81,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Deployment command completed. Verify /health and authenticated /v1/ready.
+echo Deployment command completed.
+echo Verify /health and authenticated /v1/ready.
+echo If Runflare issued a new public URL, update FARAST_PRODUCT_SUPERVISOR_FALLBACK_URL on the Laravel host.
+echo Keep runflare.env private; it contains the shared supervisor token.
 pause
