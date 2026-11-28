@@ -34,8 +34,16 @@ class StorageBackupService
             ->get();
 
         foreach ($olderRuns as $olderRun) {
-            $this->reserveBackupUsage($target, 'class_b');
-            if ($this->storage->exists($disk, $olderRun->object_key)) {
+            try {
+                $this->reserveBackupUsage($target, 'class_b');
+                $exists = $this->storage->exists($disk, $olderRun->object_key);
+            } catch (\Throwable $exception) {
+                // Reconciliation is best-effort after a successful restore. Do not
+                // turn a transient HEAD failure into a failed database recovery.
+                report($exception);
+                continue;
+            }
+            if ($exists) {
                 continue;
             }
 
