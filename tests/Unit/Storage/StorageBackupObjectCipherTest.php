@@ -63,7 +63,7 @@ class StorageBackupObjectCipherTest extends TestCase
             $cipher->decryptFile($encrypted, $restored, str_repeat('B', 64), strlen($contents), hash('sha256', $contents));
             $this->fail('A wrong encryption key must never decrypt a backup object.');
         } catch (RuntimeException) {
-            $this->assertSame('', file_get_contents($restored));
+            $this->assertFileDoesNotExist($restored);
         }
 
         $bytes = file_get_contents($encrypted);
