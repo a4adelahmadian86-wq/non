@@ -290,3 +290,92 @@ Therefore the prior proposed 4 GB / 15 GB / 7,000-operation values are not live 
 - provider dashboard reconciliation and tests, including concurrent uploads.
 
 Until this work is implemented and verified, no S3 probe, upload, bulk migration, inventory refresh or connection test should be run against the user's paid-wallet-linked account.
+
+
+## 12. Focused re-review of the four priority official pages and their screenshots (2026-11-28)
+
+The exact four priority URLs were reopened directly:
+- https://docs.arvancloud.ir/fa/object-storage/buckets/#مدیریت-برچسب
+- https://docs.arvancloud.ir/fa/object-storage/buckets/object-lock/
+- https://docs.arvancloud.ir/fa/object-storage/buckets/versioning
+- https://docs.arvancloud.ir/fa/object-storage/permission
+
+### 12.1 Bucket creation form — exact fields visible in official screenshot
+
+The official screenshot at `/arvandocs/object/bucket/newbucket.png` shows the following controls:
+1. **نام صندوقچه** (required text field).
+2. **انتخاب منطقه** with radio options **سیمین** and **شهریار**.
+3. **مالتی‌زون** toggle displayed under Simin.
+4. **آبجکت لاک (Object Lock)** toggle, with a retention period input shown when relevant.
+5. **نسخه‌نگاری (Versioning)** toggle.
+6. **دسترسی عمومی صندوقچه** toggle.
+7. **برچسب‌ها** section with a **برچسب‌ها** button.
+8. Bottom actions **ساخت** and **انصراف**.
+
+The screenshot is a documentation illustration and may show some toggles in a selected visual state; do not infer a user's actual default setting from the illustration. Use the accompanying text: bucket public display is private by default; Versioning is disabled by default. Object Lock is a separately selected irreversible option and requires Versioning.
+
+### 12.2 Exact label/tag modal fields
+
+The official image `/arvandocs/object/bucket/tag.png` shows a **مدیریت برچسب** modal with:
+- **عنوان** (label key) text input.
+- **مقدار** (label value) text input.
+- row number and a delete/trash control.
+- **اضافه کردن برچسب جدید** button.
+- **اعمال** and **انصراف** actions.
+
+The bucket guide text says one or more labels can be added during creation; after creation use bucket row **عملیات → مدیریت برچسب**, enter title and value, add further rows if needed, then press **اعمال برچسب**. Labels are for classification/management; no cost reduction or security enforcement is documented.
+
+For FARAST, labels are optional. If the creation form requires or the user chooses to add them, enter exactly:
+- عنوان: `project` — مقدار: `farast`
+- عنوان: `purpose` — مقدار: `knowledge-base`
+- عنوان: `data-class` — مقدار: `private`
+
+Do not enter personal/user data. If labels are optional and the UI makes them awkward, leave them empty; they do not affect the bucket's storage behavior.
+
+### 12.3 Exact Object Lock screenshot and implications
+
+The official Object Lock screenshot shows:
+- Toggle **آبجکت لاک (Object Lock)**.
+- **مدت زمان نگه‌داری پیش‌فرض (Retention Period)** field with a numeric value and unit **روز** (days); the illustration shows 30 days.
+
+The official text says Object Lock must be enabled at bucket creation, requires Versioning, and cannot be disabled later. Once an object version is locked, it cannot be deleted or overwritten until retention expires. Retention can be increased but cannot be reduced or removed. The guide also states Object Lock is available only for buckets in Simin.
+
+FARAST decision: leave this toggle OFF and do not fill Retention Period. The illustrated 30 days is an example, not a recommended value for this use case. We have no need for irreversible WORM retention on a small free-tier knowledge bucket.
+
+### 12.4 Exact Versioning screen and consequences
+
+The official Versioning activation image shows a dialog titled **نسخه‌نگاری**, with radio choices:
+- **فعال**
+- **غیرفعال**
+and buttons **انتخاب** / **انصراف**.
+
+The accompanying text says Versioning is disabled by default and can be enabled free of charge. When enabled, every new write to an object creates a new version; overwrites retain previous versions as non-current; API deletion creates a Delete Marker and previous versions may be restored through API. The official text also says deleting an object from the panel deletes all its versions and cannot be recovered. Objects that existed before activation have Version ID `null`; subsequent writes receive unique version IDs.
+
+FARAST decision at initial setup: leave Versioning OFF. Although the feature itself is described as free, every retained old version consumes storage quota. On a 5 GB Base plan, accidental repeated overwrites could cause unexpected storage growth. We can revisit after a controlled application-level revision and quota cleanup process is implemented. Do not confuse the no-cost feature toggle with free storage capacity for retained versions.
+
+### 12.5 Permission page — bucket access and individual object access
+
+The official Permission page shows:
+- Public bucket listing reveals bucket information, object names, sizes and last-modified times to unauthenticated visitors.
+- Private bucket access prevents this public listing.
+- Public objects can be fetched through the bucket/object URL without authentication.
+- Private objects are accessed through authenticated requests or a signed URL with an expiry time.
+- Turning bucket public display off does not automatically change the public/private state of objects already stored in the bucket.
+- If an object was made public and later made private, a previously issued private signed URL remains valid only until its expiry. If an object is switched from private to public, its public URL works while an earlier signed URL remains valid until expiry.
+
+FARAST decision: create the bucket with **دسترسی عمومی صندوقچه OFF** (private). Ensure the application also uploads each object with private ACL; do not rely on the bucket-level setting alone. Serve private files through server-side authenticated reads or short-lived signed URLs. Never place Access Key/Secret Key in client-side JavaScript or send them to a browser.
+
+### 12.6 User-facing creation instructions — authoritative exact form values
+
+When the user opens **فضای ابری → صندوقچه‌ها → ایجاد صندوقچه / + صندوقچه**, use:
+- **نام صندوقچه:** `farast-knowledge-ir` (only if the globally unique name is accepted; otherwise stop and report the validation message before trying a different name).
+- **منطقه:** **سیمین** only if its panel status is actually **فعال**; otherwise select **شهریار** only if its corresponding Standard endpoint is active. Never choose Europe or HiOps for this Iranian data store.
+- **مالتی‌زون:** OFF; its activation cannot be reversed and no Base-plan zero-price guarantee has been verified.
+- **آبجکت لاک:** OFF; leave Retention Period blank/untouched.
+- **نسخه‌نگاری:** OFF at initial creation.
+- **دسترسی عمومی صندوقچه:** OFF (private).
+- **برچسب‌ها:** optional; if adding, use the exact key/value pairs above.
+- Press **ساخت** only after verifying all values and confirming no additional paid option is selected.
+
+Important: user's earlier panel list showed both zone-specific S3 endpoints `s3.ir-thr-at1.arvanstorage.ir` and `s3.ir-tbz-sh1.arvanstorage.ir` as "درحال جمع‌آوری" at that time, while generic region endpoints showed "فعال". Do not infer that the region selector's availability equals the zone-specific S3 API endpoint's readiness. Before connecting, confirm the exact bucket endpoint/region from the bucket details and the Access Management page. Do not make an S3 request until the code-side no-overage guard is implemented.
+
