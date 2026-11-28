@@ -336,3 +336,28 @@ A bundle is not `ready` until the object has been written, read back/verified un
 - any access token, provider credential, signed URL or environment value.
 
 Approved user reviews/experiences, if ever included in a separate recommendation corpus, need their own approval/provenance state and must not be mixed into the immutable source-file extraction bundle.
+
+
+## 10. Additional per-object API costs and transfer verification
+
+Files:
+- `app/Services/Storage/StorageManager.php`
+- `app/Services/Storage/S3CompatibleAdapter.php`
+- `app/Services/Storage/StorageTransferService.php`
+- `app/Http/Controllers/StoreController.php`
+
+Further request-path findings:
+- `StorageManager::exists()` delegates to S3 `HEAD`; `size()` also uses `HEAD`. These are small-response requests, but they still consume provider operations when called for remote objects.
+- Reader and preview paths call `exists()` before serving some managed objects, so a page view can generate metadata requests in addition to the actual range/full GET.
+- `StorageTransferService::transferPending()` uploads each staged file to the target and then downloads the complete destination object again to calculate/compare SHA-256. This is another full-object egress read from the target volume for every transferred object.
+- If a transfer attempt fails after a remote write, cleanup can issue DELETE as well.
+
+A simplified per-file cost model for an S3 target is therefore:
+- ordinary upload: PUT + full-object GET for verification;
+- scheduled health check: PUT + GET + DELETE;
+- manual full verification: the three probe operations plus one or more LIST operations for inventory;
+- staging transfer: destination PUT + full-object destination GET for verification;
+- ordinary object access: one or more HEAD metadata requests plus actual GET/Range GET bytes;
+- weekly backup: source GET for every managed object, then backup-target PUT and full backup-target GET for verification.
+
+These paths must all be included in the monthly operation/egress budget. Counting only application user downloads or only the scheduled health-check interval will substantially understate consumption.
