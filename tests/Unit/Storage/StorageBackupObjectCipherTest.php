@@ -121,7 +121,7 @@ class StorageBackupObjectCipherTest extends TestCase
         try {
             $cipher->decryptFile($encrypted, $wrongPurposePlain, $key, $metadata['size_bytes'], $metadata['sha256'], 'knowledge');
             $this->fail('Backup and knowledge encryption purposes must derive different keys.');
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->assertFileDoesNotExist($wrongPurposePlain);
         }
 
