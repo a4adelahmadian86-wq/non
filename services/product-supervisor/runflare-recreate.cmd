@@ -69,24 +69,9 @@ pause
 echo. | clip
 
 echo.
-echo Checking Runflare login...
-runflare login
-if errorlevel 1 (
-    echo Runflare login failed. Sign in, then run this script again.
-    pause
-    exit /b 1
-)
-
-echo Clearing the old project/service selection so a deleted 3-month service is not reused...
-runflare reset
-if errorlevel 1 (
-    echo Could not reset the cached Runflare selection. Check the CLI message above.
-    pause
-    exit /b 1
-)
-
+echo Runflare deploy handles account sign-in and asks you to select an existing project and Docker service.
+echo Create the replacement project and Docker service in the portal first if the old free service was deleted.
 echo.
-echo Select the newly created project and Docker service when the CLI asks.
 runflare deploy
 if errorlevel 1 (
     echo.
