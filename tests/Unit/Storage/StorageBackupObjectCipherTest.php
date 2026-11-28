@@ -111,11 +111,9 @@ class StorageBackupObjectCipherTest extends TestCase
             $this->markTestSkipped('Sodium secretstream is not available in this PHP runtime.');
         }
 
-        $directory = $this->temporaryDirectory();
-        $source = $directory.'/source.txt';
-        $encrypted = $directory.'/encrypted.bin';
-        $wrongPurposePlain = $directory.'/wrong-purpose.txt';
-        file_put_contents($source, 'purpose-separated payload');
+        $source = $this->temporaryFile('purpose-separated payload');
+        $encrypted = $this->temporaryFile('');
+        $wrongPurposePlain = $this->temporaryFile('');
         $key = str_repeat('purpose-key-', 8);
         $cipher = new StorageBackupObjectCipher();
         $metadata = $cipher->encryptFile($source, $encrypted, $key, 'backup');
@@ -127,7 +125,7 @@ class StorageBackupObjectCipherTest extends TestCase
             $this->assertFileDoesNotExist($wrongPurposePlain);
         }
 
-        $restored = $directory.'/restored.txt';
+        $restored = $this->temporaryFile('');
         $cipher->decryptFile($encrypted, $restored, $key, $metadata['size_bytes'], $metadata['sha256'], 'backup');
         $this->assertSame('purpose-separated payload', file_get_contents($restored));
     }
