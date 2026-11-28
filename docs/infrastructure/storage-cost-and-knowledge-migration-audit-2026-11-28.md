@@ -192,3 +192,30 @@ The targeted pass also found these SQL dependencies that must be included in the
 - `app/Console/Commands/VerifyStorageBackup.php` and `RestoreStorageBackup.php`: backup verification/restore use the current storage manager and encrypted archive; preserve these paths and test a knowledge bundle round-trip as part of backup/restore verification.
 
 The knowledge bundle should not remove the SQL document row or its status machine. Publication readiness and admin monitoring should gain explicit bundle state fields (e.g. pending, verified, unavailable, schema_mismatch) without treating a missing/corrupt bundle as complete. A bundle read failure must preserve the legacy fallback when the SQL payload is still present; after any future SQL-retention change, it must fail closed rather than publishing partial knowledge.
+
+
+## 8. Critical backup traffic finding — weekly full-volume reads
+
+Files:
+- `routes/console.php`
+- `app/Services/Storage/StorageBackupService.php`
+- `app/Console/Commands/RunStorageBackup.php`
+
+A further audit of the backup path found a significant recurring egress cost:
+
+- Laravel schedules `storage:backup-weekly` every Sunday at 02:00.
+- `StorageBackupService::createArchive()` iterates all managed files in `active` or `delete_pending` state with a `storage_volume_id`.
+- It downloads each remote object from its storage volume into a local temporary workspace and adds it to the encrypted backup archive.
+- The archive is then uploaded to each configured backup target.
+- After upload, the service downloads the entire backup archive again, recalculates SHA-256 and fully opens/verifies its encrypted entries.
+
+Therefore, if Arvan is configured as `iran_primary`, a weekly backup can read approximately the entire stored Arvan object set each week. At 5 GB of stored objects, four weekly full backups could read roughly 20 GB/month from Arvan before counting routine user reads, upload verification GETs, health probes, inventory listings or transfer verification. Compression may reduce backup upload size, but it does not reduce the initial source-object GET bytes because the files are read before archive creation. This can consume the full published 20 GB monthly traffic allowance by itself.
+
+**Required correction before Arvan use:**
+1. Do not assume the current weekly full backup is affordable for the Arvan Base volume.
+2. Add an explicit per-volume backup policy. Arvan Base should not silently enter the full weekly backup source set.
+3. Design incremental/version-aware backup or a separate encrypted knowledge-bundle replication strategy with known traffic bounds; retain a tested full restore path.
+4. Before enabling any backup to/from Arvan, calculate worst-case monthly source reads, backup upload, archive verification download, routine upload verification, scheduled probes and application reads against the provider's actual traffic meter.
+5. Do not simply disable backups globally: keep the existing backup path for other volumes. The Arvan-specific exclusion/policy must be explicit, visible in admin status, and accompanied by a documented recovery/retention plan.
+
+The current weekly backup job's presence does not prove that an Arvan volume has been configured as a backup target. This finding concerns the behavior if an Arvan volume is configured as a managed source volume.
