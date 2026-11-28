@@ -435,7 +435,8 @@ The user requirement is zero recurring spend, no foreign payment card, and maxim
 |---|---:|---|---|---|
 | ArvanCloud Object Storage Base | 5 GB storage, 20 GB traffic, 10,000 requests | Existing account; Base quota is the local-Iran option | PAYG excess; traffic and requests are finite | Iranian primary only, keep conservative budget |
 | Cloudflare R2 Standard | 10 GB-month, 1M Class A, 10M Class B, free egress | R2 setup requires subscription checkout; Cloudflare billing requires a payment method to purchase products | Above free quotas are metered; incompatible with the no-foreign-card constraint | Excluded for now |
-| Tigris Standard | 5 GB-month, 10,000 Class A, 100,000 Class B, free egress | Official pricing says no card to start | Above allowance is metered; FARAST enforces lower local caps | Selected external backup candidate |
+| Google Drive Personal | 15 GB shared across Drive, Gmail and Photos | Standard Drive API tier is free and requires no billing account/card; drive.file is a non-sensitive recommended scope | 15 GB is shared with Gmail/Photos; dedicated Google account recommended; OAuth and API quotas apply | **Preferred backup candidate after a dedicated account and OAuth flow are implemented** |
+| Tigris Standard | 5 GB-month, 10,000 Class A, 100,000 Class B, free egress | Official pricing says no card to start | Above allowance is metered; FARAST enforces lower local caps | S3-compatible fallback candidate |
 | Upload.am Free | 25 GB total, 5 GB max per file | Official signup says free forever, no credit card | REST API with presigned S3 uploads, multipart, 429 rate limits; free-plan API downloads have a 10-second anti-bot wait; account inactivity and global storage locations need care; no SLA/no warranty | Strong high-capacity encrypted cold-backup candidate after support/API verification; not primary storage |
 | Backblaze B2 | First 10 GB storage free; egress up to 3x average stored data free | Official pricing confirms free 10 GB; no-card signup/overage blocking was not verified | Paid storage starts beyond free; do not assume requests or overage cannot bill | Not selected until no-card and hard-overage behavior are confirmed |
 | Oracle Cloud Always Free Object Storage | 20 GB combined Standard, Infrequent Access and Archive; 50,000 API requests/month after trial | Official page explicitly accepts credit/debit cards that function like credit cards | Requires supported card; non-Iran region and account/capacity constraints | Excluded because no foreign card is available |
@@ -461,17 +462,18 @@ Official evidence:
 ### 12.2 Recommended placement
 
 1. Keep Arvan Base (5 GB) as the Iran-resident primary for the subset of critical knowledge/source data that must remain available domestically.
-2. Use Tigris Standard (up to 5 GB-month free) as the first external backup target. It is S3-compatible, explicitly no-card to start, and has free egress. Keep the bucket private, client-side encryption enabled, and enforce lower local storage/operation caps.
-3. Upload.am Free (up to 25 GB total, 5 GB per file) is a possible second cold encrypted copy only after confirming retention and API reliability. It requires a custom adapter and is not a primary live object store.
+2. Prefer Google Drive Personal as the first external backup target after implementing its OAuth/Drive API adapter. A dedicated account provides the full 15 GB free quota without sharing it with personal Gmail/Photos; use the non-sensitive drive.file scope, a user-visible FARAST-Backups folder, encrypted files, and resumable uploads. Do not use appDataFolder because uninstalling the app deletes it. Official sources: https://support.google.com/accounts/answer/6374270 ; https://developers.google.com/workspace/guides/quota-usage-tiers ; https://developers.google.com/workspace/drive/api/guides/api-specific-auth ; https://developers.google.com/workspace/drive/api/guides/manage-uploads.
+3. Tigris Standard (up to 5 GB-month free) remains the S3-compatible fallback. It has no-card signup and free egress, but its 10,000 Class A / 100,000 Class B monthly allowances are tighter. Keep the bucket private and enforce lower local caps.
+4. Upload.am Free (up to 25 GB total, 5 GB per file) remains only a possible cold encrypted copy after confirming retention and API reliability; it requires a custom adapter and is not a primary live object store.
 4. Do not treat these as one transparent disk. Keep provider-specific volumes and an explicit placement policy; external volumes are unavailable during international connectivity failures.
 5. Never split data across multiple accounts to bypass quotas. Use one legitimate account per provider and enforce each provider's published monthly free allowance with a safety margin.
 
-Nominal free capacity across these distinct providers can reach 35 GB (5 GB Arvan + 5 GB Tigris + 25 GB Upload.am), but only 5 GB is the currently selected Iran-resident tier. Upload.am is a file-hosting REST API rather than a native S3 bucket; it has a 5 GB per-file limit and undisclosed global storage locations. This is not 35 GB of interchangeable, always-available storage and must not be represented as such.
+Nominal free capacity across distinct providers can reach 50 GB (5 GB Arvan + 15 GB dedicated Google Drive + 5 GB Tigris + 25 GB Upload.am), but only 5 GB is the selected Iran-resident primary tier. Google Drive's 15 GB is normally shared with Gmail and Photos, so the full amount requires a dedicated account. Upload.am remains less reliable for automated retention. This is not 50 GB of interchangeable, always-available storage and must not be represented as such.
 
 ### 12.3 Backup policy and algorithm
 
 - Do not store backup archives in Arvan. The iran_backup role must remain disabled for this project.
-- A backup target must be a separately configured external volume (foreign_backup), currently restricted to Tigris Standard only.
+- A backup target must be a separately configured external volume. PR #767 currently implements only the Tigris S3-compatible fallback; a Google Drive OAuth/resumable-upload adapter is a separate required implementation before Drive can be used.
 - The legacy weekly backup was a full snapshot: it read every managed object from its source volume, wrote a single encrypted ZIP, uploaded it, then downloaded the complete archive again for checksum and decryption verification. PR #766 blocks this path in production by default; PR #767 keeps it blocked until the v3 format is enabled after CI/restore validation.
 - PR #766 is merged and adds bounded retention with FARAST_BACKUP_KEEP_LATEST (default 1, maximum 10): after a new archive is uploaded and fully verified, older completed archives of the same type/destination are deleted. If remote deletion fails, the old row and usage counters remain intact and cleanup is marked pending. This limits archive accumulation, but requires enough temporary capacity for the old and new archive to coexist.
 - PR #767 now implements the first version of the preferred design on a draft branch: one encrypted core database/local-files snapshot plus content-addressed immutable encrypted managed-object blobs and an authenticated manifest. Only new/changed Iran-primary objects are read, with 1 GiB/run and 5 GiB/month source-read caps. Each new blob and manifest is read back and authenticated; unchanged objects are reused. The feature remains disabled until full CI and restore round-trip tests pass.
@@ -529,7 +531,7 @@ Tigris' current global S3 endpoint is \`https://t3.storage.dev\`; the SigV4 sign
 
 Sources: https://www.tigrisdata.com/pricing/ ; https://pkg.go.dev/github.com/tigrisdata/storage-go
 
-### 12.9 Approved Tigris backup-volume preset (not yet configured)
+### 12.9 Tigris fallback backup-volume preset (not yet configured)
 
 When the user has created a Tigris account and private bucket, the intended FARAST volume preset is:
 
@@ -546,7 +548,7 @@ When the user has created a Tigris account and private bucket, the intended FARA
 - monthly Iran-primary source-read ceiling: 5 GiB; per-run ceiling: 1 GiB
 - no Infrequent Access or Archive tier; Standard only
 
-This preset is not configured. No Tigris account, bucket, token or network request has been created. Do not enter credentials until PR #767 passes all required checks and restore tests.
+This preset is not configured. No Tigris account, bucket, token or network request has been created. Do not enter credentials until PR #767 passes all required checks and restore tests. Google Drive remains the preferred capacity candidate, but its dedicated OAuth adapter has not yet been implemented.
 
 ### 13.1 Existing code touchpoints audited for the knowledge-bundle migration
 
