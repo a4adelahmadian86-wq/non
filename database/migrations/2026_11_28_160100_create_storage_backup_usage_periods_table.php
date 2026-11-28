@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('storage_backup_usage_periods', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('storage_volume_id')->constrained('storage_volumes')->cascadeOnDelete();
+            $table->foreignId('storage_volume_id')->constrained('storage_volumes')->restrictOnDelete();
             $table->date('period_start');
             $table->unsignedBigInteger('class_a_operations')->default(0);
             $table->unsignedBigInteger('class_b_operations')->default(0);
