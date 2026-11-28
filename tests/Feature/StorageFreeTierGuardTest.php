@@ -100,7 +100,16 @@ class StorageFreeTierGuardTest extends TestCase
         $connections->shouldReceive('verify')
             ->once()
             ->with(Mockery::on(fn ($candidate) => $candidate->is($volume)))
-            ->andReturnNull();
+            ->andReturnUsing(function (StorageVolume $candidate): array {
+                // Mirror the state transition performed by StorageConnectionService::verify().
+                $candidate->forceFill([
+                    'status' => 'healthy',
+                    'last_checked_at' => now(),
+                    'last_success_at' => now(),
+                ])->save();
+
+                return ['read' => true, 'write' => true, 'delete' => true];
+            });
         $this->app->instance(StorageConnectionService::class, $connections);
 
         $this->artisan('storage:check-volumes')
