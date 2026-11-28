@@ -529,6 +529,21 @@ class StorageBackupService
             if ($this->storage->size($this->storage->volumeDisk($target), $uploadedManifestKey) !== $manifestMeta['encrypted_size_bytes']) {
                 throw new RuntimeException('اندازه Manifest پس از انتقال با فایل محلی مطابقت ندارد.');
             }
+            $remoteManifestPath = $work.'/manifest-remote.enc';
+            $remoteManifestPlainPath = $work.'/manifest-remote.json';
+            $this->reserveBackupUsage($target, 'class_b');
+            $this->storage->downloadTo($this->storage->volumeDisk($target), $uploadedManifestKey, $remoteManifestPath);
+            if (! is_string(hash_file('sha256', $remoteManifestPath))
+                || ! hash_equals($manifestChecksum, (string) hash_file('sha256', $remoteManifestPath))) {
+                throw new RuntimeException('Checksum Manifest پس از دریافت مجدد از مقصد بکاپ مطابقت ندارد.');
+            }
+            app(StorageBackupObjectCipher::class)->decryptFile(
+                $remoteManifestPath,
+                $remoteManifestPlainPath,
+                $backupKey,
+                $manifestMeta['size_bytes'],
+                $manifestMeta['sha256']
+            );
 
             $run = DB::transaction(function () use ($target, $backupType, $startedAt, $uploadedManifestKey, $manifestMeta, $manifestChecksum, $objectIds, $manifest): StorageBackupRun {
                 $run = StorageBackupRun::create([
@@ -651,6 +666,24 @@ class StorageBackupService
             if ($remoteSize !== $encryptedMeta['encrypted_size_bytes']) {
                 throw new RuntimeException('اندازه Blob بکاپ پس از انتقال با نسخه محلی مطابقت ندارد.');
             }
+            $remoteEncryptedPath = $work.'/blob-remote-'.Str::uuid().'.enc';
+            $remotePlainPath = $work.'/blob-remote-'.Str::uuid().'.plain';
+            $this->reserveBackupUsage($target, 'class_b');
+            $this->storage->downloadTo($this->storage->volumeDisk($target), $objectKey, $remoteEncryptedPath);
+            $localCipherSha = hash_file('sha256', $encryptedPath);
+            $remoteCipherSha = hash_file('sha256', $remoteEncryptedPath);
+            if (! is_string($localCipherSha) || ! is_string($remoteCipherSha) || ! hash_equals($localCipherSha, $remoteCipherSha)) {
+                throw new RuntimeException('Checksum Blob پس از دریافت مجدد از مقصد بکاپ مطابقت ندارد.');
+            }
+            app(StorageBackupObjectCipher::class)->decryptFile(
+                $remoteEncryptedPath,
+                $remotePlainPath,
+                $backupKey,
+                $encryptedMeta['size_bytes'],
+                $checksum
+            );
+            @unlink($remoteEncryptedPath);
+            @unlink($remotePlainPath);
         } catch (\Throwable $uploadException) {
             try {
                 $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
