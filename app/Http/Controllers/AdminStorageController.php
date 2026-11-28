@@ -160,6 +160,8 @@ class AdminStorageController extends Controller
                     'connection_json' => 'برای جلوگیری از هزینه ناخواسته، مقصد بکاپ رایگان فعلاً فقط Tigris Standard است: endpoint برابر https://t3.storage.dev، region برابر auto، provider برابر tigris و use_path_style_endpoint برابر false.',
                 ])->withInput($request->except('connection_json'));
             }
+            $credentials['region'] = 'auto';
+            $credentials['use_path_style_endpoint'] = false;
         }
         $name = trim((string) ($connection['name'] ?? (($bucket !== '' ? $bucket.' · ' : '').($provider ?: 'فضای ذخیره‌سازی جدید'))));
         if ($name === '') $name = 'فضای ذخیره‌سازی جدید';
