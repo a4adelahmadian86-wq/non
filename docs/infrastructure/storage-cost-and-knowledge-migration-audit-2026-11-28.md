@@ -406,3 +406,54 @@ References discovered:
 ### 11.1 Initial inventory behavior and empty-bucket requirement
 
 The updated PR #761 intentionally skips full inventory during new volume registration. This means a newly registered volume starts with the administrator-configured local counters (normally zero) until an explicit inventory is run. It is safe for the planned new empty Arvan bucket, but **not safe to attach a pre-populated bucket and immediately start uploading**: the local capacity guard would undercount existing objects. The admin UI and storage documentation now state that existing buckets require explicit full inventory before they are used for uploads.
+
+## 12. Free-tier storage and external backup provider comparison (2026-11-28)
+
+The user requirement is zero recurring spend, no foreign payment card, and maximum genuinely free storage. Free allowances are monthly quotas, not unlimited storage. Do not design around overage billing or create multiple accounts to evade provider limits.
+
+### 12.1 Verified candidates
+
+| Provider | Published free allowance | Card / duration evidence | Important limits | Decision |
+|---|---:|---|---|---|
+| ArvanCloud Object Storage Base | 5 GB storage, 20 GB traffic, 10,000 requests | Existing account; Base quota is the local-Iran option | PAYG excess; traffic and requests are finite | Iranian primary only, keep conservative budget |
+| Cloudflare R2 Standard | 10 GB-month, 1M Class A, 10M Class B, free egress | Official pricing says start free with no credit card required | Only Standard class receives free allowance; above free quotas published rates apply | Best external free backup candidate |
+| Tigris Standard | 5 GB-month, 10,000 Class A, 100,000 Class B, free egress | Official pricing says no card to start | Monthly request quotas are much smaller than R2; above allowance is metered | Secondary external backup candidate, cold/low-operation use |
+| Backblaze B2 | First 10 GB storage free; egress up to 3x average stored data free | Official pricing confirms free 10 GB; no-card signup/overage blocking was not verified | Paid storage starts beyond free; do not assume requests or overage cannot bill | Not selected until no-card and hard-overage behavior are confirmed |
+| Oracle Cloud Always Free Object Storage | 20 GB combined Standard, Infrequent Access and Archive; 50,000 API requests/month after trial | Official page explicitly accepts credit/debit cards that function like credit cards | Requires supported card; non-Iran region and account/capacity constraints | Excluded because no foreign card is available |
+| Google Drive | 15 GB shared across Drive/Gmail/Photos | Personal account quota, not an app storage plan | Google Drive API prohibits app/project-content backups without express written permission | Do not use for FARAST backups |
+| Storj | 25 GB | Official signup offers 30-day trial, no card | Trial expires; paid plan has a $5 monthly minimum under standard billing | Not a permanent free option |
+
+Official evidence:
+- Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
+- Cloudflare no-card signup claim: https://www.cloudflare.com/products/r2/
+- Tigris pricing: https://www.tigrisdata.com/pricing/
+- Backblaze B2 pricing: https://www.backblaze.com/cloud-storage/pricing
+- Oracle Always Free resources: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
+- Oracle accepted payment methods: https://www.oracle.com/cloud/free/
+- Google Drive API prohibited use cases: https://developers.google.com/drive/api/terms
+- Storj pricing/trial: https://www.storj.io/pricing/
+
+### 12.2 Recommended placement
+
+1. Keep Arvan Base (5 GB) as the Iran-resident primary for the subset of critical knowledge/source data that must remain available domestically.
+2. Use Cloudflare R2 Standard (up to 10 GB-month free) as the first external backup target, only after a no-card account is successfully created and billing/overage controls are verified. Keep the bucket private and client-side encryption enabled.
+3. Tigris Standard (up to 5 GB-month free) is a possible second independent copy or separately classified overflow tier. Its 10,000 Class A requests/month make it a poor target for frequent full snapshots or inventory scans.
+4. Do not treat these as one transparent disk. Keep provider-specific volumes and an explicit placement policy; external volumes are unavailable during international connectivity failures.
+5. Never split data across multiple accounts to bypass quotas. Use one legitimate account per provider and enforce each provider's published monthly free allowance with a safety margin.
+
+Nominal total free capacity across these distinct providers is 20 GB (5 GB Arvan + 10 GB R2 + 5 GB Tigris), but only 5 GB is the currently selected Iran-resident tier. This is not 20 GB of interchangeable, always-available storage and must not be represented as such.
+
+### 12.3 Backup policy and algorithm
+
+- Do not store backup archives in Arvan. The iran_backup role must remain disabled for this project.
+- A backup target must be a separately configured external volume (foreign_backup), preferably R2 Standard.
+- The current weekly backup is a full snapshot: it reads every managed object from its source volume, writes a single encrypted ZIP, uploads it, then downloads the complete archive again for checksum and decryption verification. If 5 GB of managed data is read every week, source egress alone approaches 20 GB per 30-day month — the entire Arvan Base traffic allowance, before user downloads, normal reads, or other verification.
+- The current retention setting defaults to keep_all, but the inspected backup service does not apply that setting or prune old remote archives. Do not configure a backup target until bounded retention is implemented and tested; otherwise every weekly archive accumulates and eventually exceeds a free tier.
+- Preferred future design: one verified encrypted baseline plus content-addressed immutable objects and incremental manifests/deltas. Transfer only new/changed objects to the external target; record tombstones for deleted objects; maintain a compact database snapshot and restore manifest. Verify every uploaded object by size/provider checksum where supported; reserve full readback verification for initial baseline, restore drills and periodic sampled audits.
+- Retain one latest verified full backup plus a bounded incremental chain, and periodically compact into a new baseline. Delete old backup objects only after the newer baseline and all required deltas are verified and restore-tested.
+- If incremental backup is not implemented and tested, do not run weekly full backup against Arvan. At most, an explicitly approved monthly full backup could be considered after measuring actual source egress and ensuring normal application traffic still fits the 20 GB limit.
+- Keep database recovery independent of object-store recovery: store backup manifests/checksums and schema version; never store encryption keys in the archive or in the same bucket.
+
+### 12.4 New implementation safeguard
+
+The current StorageBackupService::runWeeklyLocked() creates the full archive before checking whether any healthy backup destination exists. That means a scheduled backup with no destination can still read every managed object from Arvan and then fail. A separate fix is being developed to preflight backup destinations before archive creation. This prevents waste when no target exists; it does not yet solve weekly full-source egress or retention.
