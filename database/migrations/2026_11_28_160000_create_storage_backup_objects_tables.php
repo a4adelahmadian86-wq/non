@@ -12,7 +12,7 @@ return new class extends Migration {
             $table->foreignId('storage_volume_id')->constrained('storage_volumes')->restrictOnDelete();
             $table->char('sha256', 64);
             $table->unsignedBigInteger('size_bytes');
-            $table->string('object_key', 1024)->unique();
+            $table->string('object_key', 255)->unique();
             $table->unsignedBigInteger('encrypted_size_bytes')->default(0);
             $table->string('status', 24)->default('pending')->index();
             $table->timestamp('verified_at')->nullable();
