@@ -578,3 +578,93 @@ Decision:
 5. Do not ask the user for another screenshot; existing endpoint text and form screenshot provide the evidence. The next required human action, only after endpoint readiness is confirmed, is to turn off Multi-zone and create the bucket with the previously documented safe settings.
 
 No user credentials, no bucket, and no S3 requests were created or used during this research.
+
+
+## 17. Review of the user's additional Arvan documentation links (2026-11-28)
+
+The following linked product guides were opened and reviewed for whether they offer a free, Iran-hosted component suitable for FARAST. This is a documentation-level review, not a claim that any paid product is active in the user's account.
+
+### 17.1 Cloud Server
+
+Official guide: https://docs.arvancloud.ir/fa/cloud-server/
+
+- Cloud Server creation requires selecting an available physical data center, OS, VM size (CPU/RAM/disk with displayed price), disk type/size, and networking/security settings.
+- The guide explicitly shows a price for the chosen compute and disk resources before creation.
+- It documents real Iranian datacenter selection, but the reviewed guide does not establish a permanently free VM allocation.
+
+Decision: do not create an Arvan VM for this project. It is not a verified always-free option. The existing Runflare domestic emergency compute remains separate and ephemeral; do not move persistent knowledge onto a short-lived VM disk.
+
+### 17.2 CDN
+
+Official guide: https://docs.arvancloud.ir/fa/cdn/
+
+- CDN onboarding requires adding a domain and choosing NS Delegation or CNAME Setup, with DNS changes.
+- It is a delivery/security/cache layer, not a durable private object repository or an AI knowledge database.
+- The docs home page describes free DNS/SSL-related features, but does not establish a no-cost private Object Storage egress arrangement for this user's account.
+
+Decision: do not add CDN to the knowledge-store path. Private knowledge reads must not be made public or cached by a CDN without a separate security and billing review.
+
+### 17.3 Cloud Container
+
+Official guide: https://docs.arvancloud.ir/fa/cloud-container/
+
+- App deployment can come from ready-made apps, Git, Docker image or manifest.
+- Resource configuration includes Persistent Storage, CPU cores, RAM and ephemeral storage.
+- The console presents an invoice/cost for the configured application before deployment.
+
+Decision: no free permanent container entitlement was confirmed. Do not create or deploy a container as part of the current task.
+
+### 17.4 Managed Databases
+
+Official guides:
+- https://docs.arvancloud.ir/fa/databases
+- https://docs.arvancloud.ir/fa/databases/datacenter-plans/
+
+- Managed database supports MySQL and PostgreSQL.
+- The plan guide lists Starter, Basic, Standard, Premium and Local Storage. Starter is a low-resource test/development plan, not a free plan; no permanent zero-price allocation is documented.
+- Datacenter guide identifies Simin as west Tehran, Forough as east Tehran, Shahriar as Tabriz and Bamdad as west Tehran.
+- Managed DB includes automated daily backups/PITR and failover features according to plan, but those do not establish a free entitlement.
+
+Decision: do not create a managed database. The user already has a Laravel/MySQL database; the Object Storage task is for durable file/knowledge artifacts, not a parallel managed SQL database.
+
+### 17.5 Edge Computing
+
+Official guide: https://docs.arvancloud.ir/fa/edge-computing
+
+- Edge Computing is serverless execution distributed across Arvan's global network (the guide states 40 PoPs worldwide).
+- It is not a fixed physical VM in one Iranian datacenter; execution is distributed and nearest-edge oriented.
+- The guide explains deployment from panel or CLI but does not establish a permanent free quota for this account.
+
+Decision: not suitable as the persistent Iranian knowledge repository or as a guaranteed domestic-only processing server. Do not provision it.
+
+### 17.6 ArvanDrive
+
+Official guide: https://docs.arvancloud.ir/fa/drive
+
+- ArvanDrive is a collaborative file management product integrated with Object Storage.
+- It supports versions, activity history, sharing links, upload boxes and workspaces.
+- The onboarding guide says users may select a free trial, while Growth/Professional/Organization plans require monthly payment.
+
+Decision: a trial is not an always-free production storage entitlement. ArvanDrive is not a substitute for S3 Object Storage with a stable API and no-expiry free tier.
+
+### 17.7 Developer tools and changelog
+
+Official pages:
+- https://docs.arvancloud.ir/fa/developer-tools/
+- https://docs.arvancloud.ir/fa/developer-tools/cli/
+- https://docs.arvancloud.ir/fa/developer-tools/sdk/
+- https://docs.arvancloud.ir/fa/changelog/
+
+- Arvan lists CLI, API, SDK and Terraform Provider as developer interfaces.
+- The SDK page enumerates Object Storage management operations including bucket creation/listing, access policy, ACL, Versioning, tags, object upload/download/list/delete, multipart, pre-signed URLs and Lifecycle.
+- The reviewed SDK landing page does not establish a Laravel/PHP SDK requirement. FARAST should continue using its existing S3 SigV4 adapter for object I/O, and use the provider panel/API only where management functionality is needed.
+- The changelog page extraction currently presents entries under 2024 and does not provide a reliable current release date for the features being considered. Do not use that page alone as evidence that an endpoint or feature is currently operational.
+
+### 17.8 Important interpretation of the documentation home page
+
+The documentation home page describes Object Storage as "نامحدود" (unlimited) in its product overview. This is a service capability/marketing description and must not be interpreted as unlimited free capacity. The user's account panel confirms the actual Base allowance is 5 GB storage + 20 GB traffic + 10,000 read/write operations; excess is PAYG. The account's plan terms, not the broad product overview, govern the no-cost constraint.
+
+### 17.9 Result of the wider product review
+
+Among the additional Arvan products reviewed, none was established as an always-free, fixed physical Iranian compute server or as a larger always-free durable store. The only confirmed always-free entitlement for this account remains the Base Object Storage plan. The other Arvan products should not be provisioned without a separately verified zero-cost allowance and explicit user approval.
+
