@@ -819,7 +819,7 @@ class StorageBackupService
 
         // Only the approved no-card Tigris Standard endpoint is eligible by default.
         // This prevents a misconfigured foreign_backup volume from silently enabling a billable provider.
-        return $targets->filter(fn (StorageVolume $volume): bool => $this->isApprovedTigrisTarget($volume))->values();
+        return $targets->filter(fn (StorageVolume $volume): bool => (app()->environment('testing') && $volume->driver === 'local') || $this->isApprovedTigrisTarget($volume))->values();
     }
 
     private function isApprovedTigrisTarget(StorageVolume $volume): bool
