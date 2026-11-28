@@ -8,7 +8,7 @@ Status: implementation plan; no provider account, bucket, credentials, or produc
 
 1. **Do not use Arvan as a backup destination.** It remains the proposed Iran-resident primary only. PR #766 is merged and the service rejects Arvan endpoints for backup targets.
 2. **Cloudflare R2 is not the current choice.** Its 10 GB-month Standard allowance, 1M Class A, 10M Class B, and free egress are attractive, but the current R2 activation guide requires completing a subscription checkout, and Cloudflare's billing guide says a primary payment method is required to purchase Cloudflare products. This conflicts with the no-foreign-card constraint. Sources: https://developers.cloudflare.com/r2/get-started/ and https://developers.cloudflare.com/billing/get-started/create-billing-profile/
-3. **Tigris Standard is the leading external backup target** because it is S3-compatible, explicitly says no card to start, includes 5 GB Standard storage, 10,000 Class A (PUT/COPY/POST/LIST), 100,000 Class B (GET/SELECT/other), and zero egress. It is not unlimited: storage and operations beyond the free allowance are metered at published rates. FARAST must enforce lower local ceilings and stop before any overage. Source: https://www.tigrisdata.com/pricing/
+3. **Tigris Standard is the selected external backup target** because it is S3-compatible, explicitly says no card to start, includes 5 GB Standard storage, 10,000 Class A (PUT/COPY/POST/LIST), 100,000 Class B (GET/SELECT/other), and zero egress. It is not unlimited: storage and operations beyond the free allowance are metered at published rates. FARAST must enforce lower local ceilings and stop before any overage. Source: https://www.tigrisdata.com/pricing/
 4. **Upload.am is a possible secondary cold-copy option, not the primary object store.** It advertises 25 GB free, 5 GB per file, no card, and a public REST API with presigned upload, download, delete, and quota endpoints. It is not S3-compatible; a separate adapter is required. Its retention wording differs across current pricing/FAQ pages, and it has API rate limits. It must not be treated as durable backup until retention behavior is confirmed. Sources: https://www.upload.am/en/price, https://upload.am/en/faq, https://upload.am/docs/api
 5. No provider account or API key is created by this code change. No credentials go into Git.
 
@@ -26,7 +26,7 @@ Status: implementation plan; no provider account, bucket, credentials, or produc
 - `storage_backup_objects`: one row per immutable encrypted blob per destination volume; fields include destination volume, plaintext SHA-256, plaintext size, encrypted object key, encrypted size, status, verified timestamp, and metadata. Unique key: (destination volume, plaintext SHA-256).
 - `storage_backup_run_objects`: pivot linking each completed snapshot run to the exact set of blobs referenced by its manifest.
 - Existing `storage_backup_runs` remains the run/audit record. Its `object_key` points to the encrypted manifest, not a full ZIP, for format v3.
-- Never infer that a blob exists solely because a row exists. Reconcile with a cheap remote HEAD; if the object is missing, scheduled jobs fail closed rather than unexpectedly downloading all Iran-primary sources.
+- Never infer that a blob exists solely because a row exists. New blobs are read back and authenticated before publication; retained blobs are reconciled by HEAD at least every 30 days. If a required object is missing, scheduled jobs fail closed rather than unexpectedly downloading Iran-primary sources.
 
 ### Snapshot algorithm
 
@@ -44,30 +44,30 @@ Status: implementation plan; no provider account, bucket, credentials, or produc
 - Use PHP Sodium `secretstream_xchacha20poly1305` for bounded-memory streaming encryption/decryption. Never read a multi-GB file into a PHP string.
 - Derive separate encryption/authentication keys from `FARAST_BACKUP_ENCRYPTION_KEY` using domain-separated HMAC-SHA-256 derivation.
 - Each new blob uses a fresh secretstream header. Reused content reuses the already encrypted blob; no deterministic nonce reuse.
-- The manifest is authenticated and encrypted independently. Object keys must be random opaque identifiers, not plaintext paths or user IDs.
+- The manifest is authenticated and encrypted independently. Object keys are HMAC-derived opaque identifiers, not plaintext paths, user IDs, or raw SHA-256 hashes.
 - Fail closed if sodium is unavailable or the backup key is missing/weak. Do not introduce a plaintext fallback.
 
 ### Cost and traffic controls
 
 - Tigris local caps must be below its published free tier, with reserved headroom: default maximum 4 GiB stored, 8,000 Class A and 80,000 Class B operations per monthly period. These are conservative application limits, not provider-enforced guarantees.
-- Maintain per-destination monthly operation counters and stored-byte reservations transactionally. Count failed/uncertain requests conservatively. If counters are missing, stale, or cannot be reconciled, pause uploads.
+- Maintain one active Tigris target per account and per-destination monthly operation counters transactionally. Count failed/uncertain requests conservatively. Local limits are 4 GiB storage, 8,000 Class A, and 80,000 Class B; a separate account-wide source ledger caps Iran-primary reads at 1 GiB per run, 5 GiB per month, and 7,000 source GETs/month. If counters are missing, stale, or cannot be reconciled, pause uploads.
 - Do not enable Infrequent Access or Archive tiers; retrieval/minimum-retention charges and restore delay are unnecessary for the free Standard tier.
-- Do not run periodic full-object source verification. Verify every new blob once before publication; verify manifest every run; use bounded sample integrity checks only when explicitly requested.
+- Do not run periodic full-object source verification. Verify every new blob once by remote readback and authenticated decryption; verify the manifest every run; HEAD-reconcile reused blobs at most once per 30 days; full restore drills remain explicit.
 - Initial baseline is a one-time read of current source objects. Make it resumable, byte-budgeted, and explicitly initiated after the user has configured the provider. Subsequent runs read only changed/new objects.
 - A changed file is a new blob; unchanged files are not downloaded from Iran again. Removed files disappear from the next manifest and their old blobs are garbage-collected only after all retained snapshots stop referencing them.
 - The current 5 GB Arvan storage allowance does not imply the entire 5 GB can be used for a one-shot baseline: preserve traffic headroom for normal site use and stop at the configured daily/monthly budget.
 
-## Implementation sequence
+## Implementation sequence and current status
 
-1. Add schema/models/repositories for content-addressed backup blobs and run references; no provider calls.
-2. Add streaming authenticated encryption/decryption with deterministic test vectors, large-file bounded-memory tests, corruption/tamper tests, and key separation.
-3. Add a new format-v3 manifest writer alongside the current v1/v2 ZIP writer. Do not remove the old path.
-4. Add a destination quota/operation ledger with atomic reservations and fail-closed behavior.
-5. Add v3 restore materialization to the existing safe staging layout; retain old ZIP restore compatibility.
-6. Add reference-aware retention and garbage collection; deletion must occur only after a new snapshot has been verified and all retained-run references are reconciled.
-7. Add integration tests: baseline, unchanged second run (zero source reads), one changed object (exactly one source read), new file, removed file, missing blob, missing checksum, corrupted blob, interrupted upload, manifest tampering, retention failure, restore after DB recreation, old ZIP restore.
-8. Run all required CI. Keep this feature branch unmerged until all checks pass.
-9. Only after the user has created a Tigris account and supplied credentials through the protected admin configuration, perform one tiny non-sensitive test, verify quota/operation counters, then ask for the one unavoidable user action before the initial baseline. Never enable production backup automatically merely because a volume exists.
+1. **Implemented on PR #767:** schema/models for content-addressed blobs, run references, and monthly usage ledger; no provider calls.
+2. **Implemented on PR #767:** streaming Sodium secretstream encryption/decryption, authenticated chunks, partial-file cleanup, and tamper/wrong-key tests. Large-file memory is bounded to 1 MiB chunks.
+3. **Implemented on PR #767:** format-v3 manifest writer alongside legacy ZIP v1/v2; feature remains disabled by default.
+4. **Implemented on PR #767:** atomic monthly operation/source-read reservations, Tigris-only target validation, one-active-target guard, and 4 GiB storage ceiling.
+5. **Implemented on PR #767:** v3 restore materialization into existing safe staging paths; legacy ZIP restore remains supported.
+6. **Implemented on PR #767:** reference-aware retention, orphan cleanup, and monthly HEAD reconciliation. Further failure-injection tests are still required.
+7. **Still required before enablement:** integration tests for baseline, unchanged second run (zero Iran source reads), one changed object (exactly one source read), new/removed file, missing blob, missing checksum, interrupted upload, manifest tampering, retention failure, restore after DB recreation, and legacy ZIP restore.
+8. Run all required CI and fix every failure. Keep PR #767 draft and `FARAST_BACKUP_INCREMENTAL=false` until all checks pass.
+9. Only after the user has created a Tigris account and supplied credentials through the protected admin configuration, perform one tiny non-sensitive test and verify quotas. The initial baseline is resumable and capped at 1 GiB/run and 5 GiB/month; never enable production backup automatically merely because a volume exists.
 
 ## Non-actions
 
