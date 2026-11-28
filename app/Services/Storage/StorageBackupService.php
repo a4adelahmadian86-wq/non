@@ -623,6 +623,12 @@ class StorageBackupService
             throw new RuntimeException('وضعیت Blob ثبت‌شده برای این محتوا قابل اعتماد نیست؛ بکاپ بدون خواندن مجدد مبدأ متوقف شد.');
         }
 
+        // Reconcile every retained blob at least monthly, not on every weekly run.
+        // Newly uploaded blobs are fully read back and authenticated before status=verified.
+        if ($object->verified_at && $object->verified_at->greaterThan(now()->subDays(30))) {
+            return $object;
+        }
+
         $this->reserveBackupUsage($target, 'class_b');
         if (! $this->storage->exists($this->storage->volumeDisk($target), $object->object_key)) {
             $metadata = (array) $object->metadata;
@@ -630,6 +636,7 @@ class StorageBackupService
             $object->update(['status' => 'missing', 'metadata' => $metadata]);
             throw new RuntimeException('یک Blob موردنیاز در مقصد بکاپ پیدا نشد؛ برای جلوگیری از خواندن پرهزینه مبدأ ایران، بکاپ متوقف شد و به تعمیر دستی نیاز دارد.');
         }
+        $object->update(['verified_at' => now()]);
 
         return $object;
     }
