@@ -238,3 +238,101 @@ Still open before Arvan Base:
 - Capacity caps are not atomic reservations.
 - Monthly traffic and operation consumption are not metered.
 - Weekly full backup can read every managed object from the Arvan volume.
+
+
+## 9. Knowledge bundle data contract — implementation proposal
+
+The schema below is a proposal for the future implementation, not an existing deployed format. It reflects the current model fields that were inspected.
+
+### 9.1 Bundle envelope
+
+```json
+{
+  "schema": "farast.product-knowledge",
+  "schema_version": 1,
+  "document_id": 123,
+  "product_id": 45,
+  "product_file_id": 678,
+  "source_sha256": "<64-char-source-sha256>",
+  "extraction_version": 1,
+  "generated_at": "ISO-8601",
+  "processing": {
+    "status": "completed",
+    "detected_type": "pdf",
+    "page_count": 12,
+    "word_count": 4200,
+    "character_count": 26000,
+    "completeness": {},
+    "inspection": {},
+    "ai_review": {}
+  },
+  "chunks": [
+    {
+      "id": 1001,
+      "index": 0,
+      "type": "paragraph",
+      "locator": {},
+      "content": "source-grounded text",
+      "sha256": "<chunk-sha256>",
+      "metadata": {}
+    }
+  ],
+  "facts": [
+    {
+      "id": 2001,
+      "source_sha256": "<64-char-source-sha256>",
+      "type": "definition",
+      "key": "example",
+      "value": "example",
+      "evidence": "verbatim evidence",
+      "locator": {},
+      "verification_status": "evidence_backed"
+    }
+  ],
+  "reader_pages": [
+    {
+      "page_number": 1,
+      "page_kind": "pdf_page",
+      "locator_key": "page:1",
+      "locator": {},
+      "content_text": "page text",
+      "content_html": "sanitized server-generated HTML",
+      "content_sha256": "<page-sha256>",
+      "has_extracted_text": true
+    }
+  ]
+}
+```
+
+The envelope must include stable original SQL IDs for facts/chunks if any consumer, provenance report or generated-content citation refers to those IDs. IDs must not be regenerated during retries or re-serialization.
+
+### 9.2 SQL manifest proposal
+
+The SQL document row remains the stable relational identity and state machine. A separate manifest record or carefully versioned columns should record:
+- bundle status: `pending`, `ready`, `unavailable`, `checksum_mismatch`, `schema_unsupported`;
+- bundle schema version;
+- storage managed-file ID and storage disk/path;
+- compressed and uncompressed byte sizes;
+- bundle SHA-256 and source SHA-256;
+- chunk/fact/page counts;
+- created/verified timestamps and last error code.
+
+A bundle is not `ready` until the object has been written, read back/verified under the approved verification policy, and the manifest is committed. The manifest must never point at an unverified object.
+
+### 9.3 Compression and identity
+
+- Use deterministic JSON serialization (stable key ordering, UTF-8, unescaped Unicode/slashes) followed by gzip.
+- Hash the exact compressed bytes for the stored-object checksum; separately preserve each source/chunk/page hash.
+- Make retries idempotent by locking the document row and comparing source SHA-256 + extraction version + bundle schema version before creating a new object.
+- Keep application-level immutable versions. Do not enable provider Versioning just to simulate application versioning on the 5 GB Base plan.
+- Do not assume an ETag is SHA-256. Use the approved storage verification policy and keep explicit strict readback for migration/restore.
+- Keep private ACL and `critical` classification.
+
+### 9.4 Data that must remain outside this bundle
+
+- `user_knowledge` rows and inferred behavior/personality/audience profiles;
+- private conversation contents and per-user interaction history;
+- unpublished/rejected customer reviews or unverified user experiences;
+- any access token, provider credential, signed URL or environment value.
+
+Approved user reviews/experiences, if ever included in a separate recommendation corpus, need their own approval/provenance state and must not be mixed into the immutable source-file extraction bundle.
