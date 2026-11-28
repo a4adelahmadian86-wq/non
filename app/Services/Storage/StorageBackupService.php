@@ -6,6 +6,7 @@ use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use RuntimeException;
 use ZipArchive;
@@ -153,6 +154,7 @@ class StorageBackupService
                     ]);
                     $target->increment('used_bytes', (int) filesize($archivePath));
                     $target->increment('object_count');
+                    $this->pruneOldBackups($target, $run);
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
                     try {
@@ -197,6 +199,60 @@ class StorageBackupService
         }
 
         return $targets;
+    }
+
+    private function pruneOldBackups(StorageVolume $target, StorageBackupRun $currentRun): void
+    {
+        $keepLatest = max(1, min(10, (int) config('storage_management.backup.keep_latest', 1)));
+        $oldRuns = StorageBackupRun::query()
+            ->where('storage_volume_id', $target->id)
+            ->where('source_name', 'application')
+            ->where('backup_type', $currentRun->backup_type)
+            ->where('status', 'completed')
+            ->where('id', '!=', $currentRun->id)
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->skip($keepLatest - 1)
+            ->get();
+
+        foreach ($oldRuns as $oldRun) {
+            if (! $oldRun->object_key) {
+                continue;
+            }
+
+            try {
+                // Delete remotely first. If that fails, keep the DB row and byte counters intact.
+                $this->storage->delete($this->storage->volumeDisk($target), $oldRun->object_key);
+
+                DB::transaction(function () use ($target, $oldRun): void {
+                    $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                    $lockedRun = StorageBackupRun::query()->lockForUpdate()->find($oldRun->id);
+
+                    if (! $lockedVolume || ! $lockedRun || $lockedRun->status !== 'completed') {
+                        return;
+                    }
+
+                    $metadata = (array) $lockedRun->metadata;
+                    $metadata['pruned_object_key'] = $lockedRun->object_key;
+                    $metadata['pruned_at'] = now()->toIso8601String();
+
+                    $lockedVolume->update([
+                        'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedRun->size_bytes),
+                        'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                    ]);
+                    $lockedRun->update([
+                        'status' => 'pruned',
+                        'object_key' => null,
+                        'metadata' => $metadata,
+                    ]);
+                });
+            } catch (\\Throwable $exception) {
+                report($exception);
+                $metadata = (array) $oldRun->metadata;
+                $metadata['retention_cleanup_pending'] = true;
+                $oldRun->update(['metadata' => $metadata]);
+            }
+        }
     }
 
     private function assertArchiveReadable(string $archivePath, string $password): void
