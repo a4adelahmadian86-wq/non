@@ -126,7 +126,7 @@ class StorageBackupRetentionTest extends TestCase
 
         $storage = Mockery::mock(StorageManager::class);
         $storage->shouldReceive('volumeDisk')->once()->andReturn('storage_volume:'.$volume->id);
-        $storage->shouldReceive('delete')->once()->andThrow(new \\RuntimeException('temporary delete failure'));
+        $storage->shouldReceive('delete')->once()->andThrow(new \RuntimeException('temporary delete failure'));
 
         $service = new StorageBackupService($storage);
         $method = new ReflectionMethod(StorageBackupService::class, 'pruneOldBackups');
