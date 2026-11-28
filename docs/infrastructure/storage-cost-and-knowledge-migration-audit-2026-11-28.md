@@ -1,7 +1,7 @@
 # FARAST storage cost and knowledge migration audit
 
 Date: 2026-11-28  
-Audited base: `main` at `89a3c956cee6e15c121ddaf2c2c895d86af760dd`  
+Audited base: `main` at `19871c971388f337e3363532271d76dbcf69f5ff`  
 Scope: read-only audit of existing Laravel storage, product-document knowledge, and the open infrastructure pull requests. No Arvan credentials or bucket were used.
 
 ## Executive decision
@@ -106,18 +106,19 @@ The exact Simin endpoint `s3.ir-thr-at1.arvanstorage.ir` was reported as provisi
 
 ## 3. Open pull requests — refreshed status
 
-All items below were checked against GitHub on 2026-11-28. None was merged by this audit.
+Items below were refreshed against GitHub on 2026-11-28. PRs #761, #762 and #766 were subsequently merged into main; the new incremental-backup implementation remains an unmerged draft.
 
 | PR | Scope | Current state / CI | Decision |
 |---|---|---|---|
 | #757 | Route private user files to `iran_primary` | Open; all three observed workflows passed (FARAST CI #7716, Phase 3 #4427, Phase 4 #6898). Branch base is older commit `d938dffd...`, not current main. | Keep open; rebase/update and re-review against current main before merge. Does not migrate already-active foreign objects. |
 | #760 | Safer Runflare recreation command | Open; FARAST CI #7730, Product Supervisor #1350, Phase 4 #6912 passed. | Keep separate; no Runflare provisioning or deployment performed. |
-| #761 | Internal storage quota caps and health interval | Open; latest head `946789da...`; all required checks completed successfully (test 1,009 passed / 5 skipped / 5,729 assertions, Laravel, admin E2E, MySQL integrity, reader regression, contract tests and agent). Voice-model smoke skipped by branch condition. | Useful partial guard only. Does not solve atomic reservation, routine full-download checksum cost, the 3-operation probe, monthly egress or operation metering. Not a no-overage guarantee. |
-| #762 | Arvan free-tier documentation | Open; all required checks on head `35f9154c...` completed successfully; voice-model smoke skipped by branch condition. | Keep open; documentation-only. |
+| #761 | Internal storage quota caps and health interval | **Merged into main** after all required checks passed. | Adds configurable caps, skips automatic inventory on routine checks, and applies retry backoff. Still does not provide atomic byte reservations, remove the 3-operation S3 probe, avoid full-object upload verification, or meter all application traffic. Not a no-overage guarantee. |
+| #762 | Arvan free-tier documentation | **Merged into main** after all required checks passed. | Documents the private-bucket policy, endpoint readiness, free-tier limits, irreversible settings and the no-Arvan-backup decision. |
 | #759 | Netlify AI gateway fallback | Open; FARAST CI #7726, Netlify contract tests #9, Phase 4 #6908 passed. | Not deployed; it does not establish a domestic fallback or bypass provider eligibility restrictions. |
 | #763 | Reader toolbar icon regression | Open; FARAST CI #7741 and Phase 3 #4431 passed; an earlier duplicate FARAST CI run #7740 was cancelled; Phase 4 #6922 passed. | Unrelated to storage; leave untouched. |
 | #753 | Broad AI gateway/infrastructure change | Open; deployment prerequisites are documented in that PR. | Do not merge wholesale; its gateway deployment/configuration prerequisite remains a separate decision. |
-| #766 | Guard free-tier backups and bound external retention | Open; head `5a0c0e25...`; all required checks passed. Phase 3: 1,005 passed, 5 skipped, 5,727 assertions; Laravel, reader-browser regression, admin E2E, MySQL integrity, agent, contract and document-audio checks passed; voice-model smoke skipped by branch condition. | Rejects Arvan endpoints as backup destinations, skips archive creation without a healthy external target, blocks full snapshots from reading iran_primary by default, and retains only the latest verified backup by default. Incremental replication and actual external backup copy remain unimplemented. |
+| #766 | Guard free-tier backups and bound external retention | **Merged into main** after all required checks passed. Phase 3: 1,005 passed, 5 skipped, 5,727 assertions; Laravel, reader-browser regression, admin E2E, MySQL integrity, agent, contract and document-audio checks passed; voice-model smoke skipped by branch condition. | Rejects Arvan endpoints as backup destinations, skips archive creation without a healthy external target, blocks full snapshots from reading iran_primary by default, and retains only the latest verified backup by default. It does not itself create an external backup or implement incrementals. |
+| #767 | Incremental encrypted backup manifests and free-tier guards | Open draft; implementation head and CI are being validated. | Adds content-addressed encrypted objects, streaming authenticated encryption, monthly operation/source-read budgets, Tigris-only destination validation and v3 restore while retaining ZIP v1/v2 support. `FARAST_BACKUP_INCREMENTAL` remains disabled by default until full restore tests pass. |
 Workflow observations are based on the workflow runs returned for each exact PR head SHA. Empty combined-status arrays are not interpreted as success. A workflow still marked `in_progress` is not a pass.
 
 ## 4. Safe implementation sequence
@@ -145,24 +146,26 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 
 ### Gate D — zero-cost external backup and storage tiers
 - Keep the Arvan Iran-resident primary as the domestic anchor; do not use Arvan as a backup destination.
-- Cloudflare R2 Standard is the leading external candidate (10 GB-month, 1M Class A, 10M Class B, free egress, no card to start). Tigris Standard is a secondary candidate (5 GB-month, 10k Class A, 100k Class B, free egress, no card to start).
-- These are distinct external providers, not a unified local disk. The nominal 20 GB across Arvan/R2/Tigris is not fully available inside Iran during an international outage.
-- Do not provision either service until the user creates the account and the no-card / no-overage behavior is confirmed. Never save credentials in Git.
-- The current weekly full backup is not acceptable for Arvan Base: 5 GB read weekly is about 20 GB/month source egress. Implement an encrypted baseline plus content-addressed incrementals, bounded retention and restore verification before enabling any target.
-- The current retention config says keep_all but the service does not enforce it; fix this before any external backup is activated.
+- Cloudflare R2 Standard is **not eligible for the current no-card constraint**: its official setup requires an R2 subscription checkout, and Cloudflare requires a primary payment method to purchase products. Exclude it unless the payment constraint changes. Official sources: https://developers.cloudflare.com/r2/get-started/ and https://developers.cloudflare.com/billing/get-started/create-billing-profile/.
+- Tigris Standard is the selected external candidate: 5 GB storage, 10,000 Class A, 100,000 Class B requests per month, free egress, and explicitly no card to start. It is metered beyond the free allowance; therefore FARAST must stop at lower local limits (4 GiB, 8,000 Class A, 80,000 Class B). Official source: https://www.tigrisdata.com/pricing/.
+- Upload.am offers 25 GB and an API, but it is not S3-compatible; retention language and API limits need a separate reliability review. It is not the primary backup target. Sources: https://upload.am/docs/api and https://upload.am/fa/faq.
+- The nominal 14 GB across Arvan/Tigris is not a unified disk and Tigris is not reachable from Iran during an international outage. Local Iran-resident primary remains independent.
+- The weekly full backup remains unacceptable for Arvan Base: 5 GB read weekly is about 20 GB/month source egress. Use encrypted content-addressed incrementals, bounded source-read budgets, operation caps, and restore verification before enabling any external target.
+- PR #766 is merged and blocks the old full backup from reading iran_primary by default. PR #767 is implementing the incremental format but remains disabled until CI and round-trip tests pass.
 
 
 
 ### Gate E — backup safety code status
-PR #766 has all required CI checks green. It adds destination preflight, rejects Arvan endpoints as backup destinations, blocks full snapshots that would read iran_primary by default, and keeps only the latest verified backup by default. This is not an incremental backup implementation and no external target has been configured. Keep PR unmerged pending user approval and the next incremental-backup design phase.
+PR #766 is merged into main with all required CI checks green. It adds destination preflight, rejects Arvan endpoints as backup destinations, blocks full snapshots that would read iran_primary by default, and keeps only the latest verified backup by default. No external target has been configured.
 
 ## 5. Explicit non-actions
 
-- No changes to `main`, Production, the live Laravel database, .env files, or service environment variables.
+- PRs #761, #762 and #766 were merged into `main`; no Production deployment or live database mutation was performed by this audit.
 - No bucket was created; no Arvan Access Key/Secret Key was used or stored.
-- No S3 API operation was sent.
+- No S3 API operation was sent to Arvan or Tigris.
 - No user/product knowledge rows or existing remote objects were migrated, overwritten or deleted.
-- No PR was merged, no infrastructure provisioned and no paid service enabled.
+- No external provider account, bucket, paid service or credentials were provisioned.
+- PR #767 remains a draft and its incremental format is disabled by default until full CI and restore tests pass.
 - No test suite was executed in a local runtime by this audit. CI states above are the observed GitHub Actions results only.
 
 ## 6. Re-audit triggers
@@ -244,7 +247,7 @@ The existing quota-guard PR was extended in place on its original branch; no par
 - Failed health checks now persist a retry timestamp and exponential backoff based on the configured interval, capped at 24 hours; a successful scheduled check clears the retry state.
 - The UI/docs explain that a full manual verification may use additional API operations and inventory listing.
 
-Exact updated head at this refresh: `946789dac85c251af478ddee9148a85725195aaf`. The Phase 3 test job passed (1,009 passed, 5 skipped, 5,729 assertions) and the Phase 4 agent job passed; the remaining required checks were queued. Do not call the PR fully green until every required check completes.
+PR #761 was merged after all required checks completed successfully. Scheduled checks skip full inventory, use retry backoff, and default the Arvan primary check interval to 24 hours. The three-operation probe remains, so the daily interval is intentional.
 
 Still open before Arvan Base:
 - S3 probe remains PUT+GET+DELETE (three operations).
