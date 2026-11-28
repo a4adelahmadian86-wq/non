@@ -82,9 +82,10 @@ The existing product knowledge pipeline still persists chunks, facts, and extrac
 - [ ] Confirm whether a bucket was auto-created; do not assume it was.
 - [ ] Confirm bucket is private.
 - [ ] Confirm PAYG/overage can be disabled or establish a verified hard stop.
-- [ ] Create a least-privilege access key only after the above checks.
+- [x] User confirms an access key is available. The actual key/secret are intentionally not stored in Git or chat.
+- [ ] Confirm the key has least-privilege permissions limited to the intended private bucket.
 - [ ] Add endpoint, region, bucket and credentials to the protected FARAST runtime configuration (secrets never enter Git).
 - [ ] Test one tiny private object upload/download/delete and verify checksum.
 - [ ] Verify provider usage counters and that the test did not trigger paid consumption.
 
-**Current state:** Plan appears active in the screenshot. No evidence yet that an Object Storage bucket or S3 credentials exist, no real connection has been tested, no user data has been uploaded, and no application-level free-tier traffic/request hard-stop has been implemented.
+**Current state (updated 2026-11-28):** User confirms an access key is available. The actual credential values are not recorded. The bucket name, region, exact S3 endpoint, and whether the key includes a matching secret are not yet verified from the account panel. No real connection has been tested, no user data has been uploaded, and no application-level free-tier traffic/request hard-stop has been implemented.
