@@ -29,7 +29,7 @@ class CheckStorageVolumes extends Command
                 if (is_string($nextCheckAt) && $nextCheckAt !== '') {
                     try {
                         $retryNotBefore = Carbon::parse($nextCheckAt);
-                    } catch (\\Throwable) {
+                    } catch (\Throwable) {
                         // Ignore malformed retry metadata and perform a fresh health check.
                     }
                 }
