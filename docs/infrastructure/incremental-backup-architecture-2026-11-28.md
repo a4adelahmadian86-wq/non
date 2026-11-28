@@ -51,6 +51,7 @@ Status: implementation plan; no provider account, bucket, credentials, or produc
 
 - Tigris local caps must be below its published free tier, with reserved headroom: default maximum 4 GiB stored, 8,000 Class A and 80,000 Class B operations per monthly period. These are conservative application limits, not provider-enforced guarantees.
 - Maintain one active Tigris target per account and per-destination monthly operation counters transactionally. Count failed/uncertain requests conservatively. Local limits are 4 GiB storage, 8,000 Class A, and 80,000 Class B; a separate account-wide source ledger caps Iran-primary reads at 1 GiB per run, 5 GiB per month, and 7,000 source GETs/month. If counters are missing, stale, or cannot be reconciled, pause uploads.
+- Ordinary S3 uploads must not perform a full-object readback after PUT. Send Content-MD5 so the provider validates transport integrity, attach SHA-256 object metadata, and verify with a single HEAD. Full authenticated readback remains mandatory for newly written incremental backup blobs/manifests on the free-egress Tigris target.
 - Do not enable Infrequent Access or Archive tiers; retrieval/minimum-retention charges and restore delay are unnecessary for the free Standard tier.
 - Do not run periodic full-object source verification. Verify every new blob once by remote readback and authenticated decryption; verify the manifest every run; HEAD-reconcile reused blobs at most once per 30 days; full restore drills remain explicit.
 - Initial baseline is a one-time read of current source objects. Make it resumable, byte-budgeted, and explicitly initiated after the user has configured the provider. Subsequent runs read only changed/new objects.
@@ -62,7 +63,7 @@ Status: implementation plan; no provider account, bucket, credentials, or produc
 1. **Implemented on PR #767:** schema/models for content-addressed blobs, run references, and monthly usage ledger; no provider calls.
 2. **Implemented on PR #767:** streaming Sodium secretstream encryption/decryption, authenticated chunks, partial-file cleanup, and tamper/wrong-key tests. Large-file memory is bounded to 1 MiB chunks.
 3. **Implemented on PR #767:** format-v3 manifest writer alongside legacy ZIP v1/v2; feature remains disabled by default.
-4. **Implemented on PR #767:** atomic monthly operation/source-read reservations, Tigris-only target validation, one-active-target guard, and 4 GiB storage ceiling.
+4. **Implemented on PR #767:** atomic monthly operation/source-read reservations, Tigris-only target validation, one-active-target guard, 4 GiB storage ceiling, and no-full-readback S3 upload verification.
 5. **Implemented on PR #767:** v3 restore materialization into existing safe staging paths; legacy ZIP restore remains supported.
 6. **Implemented on PR #767:** reference-aware retention, orphan cleanup, and monthly HEAD reconciliation. Further failure-injection tests are still required.
 7. **Still required before enablement:** integration tests for baseline, unchanged second run (zero Iran source reads), one changed object (exactly one source read), new/removed file, missing blob, missing checksum, interrupted upload, manifest tampering, retention failure, restore after DB recreation, and legacy ZIP restore.
