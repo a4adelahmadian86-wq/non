@@ -148,8 +148,19 @@ class AdminStorageController extends Controller
             }
         }
         $bucket = (string) ($connection['bucket'] ?? ($credentials['bucket'] ?? ''));
-        $host = (string) parse_url($endpoint, PHP_URL_HOST);
-        $provider = trim((string) ($connection['provider'] ?? $host));
+        $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        $provider = trim((string) ($connection['provider'] ?? ($data['drive_key'] === 'foreign_backup' ? 'tigris' : $host)));
+        if ($data['drive_key'] === 'foreign_backup') {
+            $region = strtolower((string) ($connection['region'] ?? ($credentials['region'] ?? '')));
+            $pathStyleValue = $connection['use_path_style_endpoint'] ?? ($credentials['use_path_style_endpoint'] ?? true);
+            $pathStyle = filter_var($pathStyleValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($driver !== 's3' || $host !== 't3.storage.dev' || $region !== 'auto' || $pathStyle !== false
+                || strtolower($provider) !== 'tigris') {
+                return back()->withErrors([
+                    'connection_json' => 'برای جلوگیری از هزینه ناخواسته، مقصد بکاپ رایگان فعلاً فقط Tigris Standard است: endpoint برابر https://t3.storage.dev، region برابر auto، provider برابر tigris و use_path_style_endpoint برابر false.',
+                ])->withInput($request->except('connection_json'));
+            }
+        }
         $name = trim((string) ($connection['name'] ?? (($bucket !== '' ? $bucket.' · ' : '').($provider ?: 'فضای ذخیره‌سازی جدید'))));
         if ($name === '') $name = 'فضای ذخیره‌سازی جدید';
         foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint'] as $key) {
