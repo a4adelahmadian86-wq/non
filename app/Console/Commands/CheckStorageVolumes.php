@@ -25,8 +25,16 @@ class CheckStorageVolumes extends Command
                 $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
                 $interval = $interval === false ? 5 : max(5, min(1440, $interval));
                 $nextCheckAt = data_get($volume->metadata, 'health_check_next_at');
+                $retryNotBefore = null;
+                if (is_string($nextCheckAt) && $nextCheckAt !== '') {
+                    try {
+                        $retryNotBefore = Carbon::parse($nextCheckAt);
+                    } catch (\\Throwable) {
+                        // Ignore malformed retry metadata and perform a fresh health check.
+                    }
+                }
 
-                if (is_string($nextCheckAt) && $nextCheckAt !== '' && now()->lt(Carbon::parse($nextCheckAt))) {
+                if ($retryNotBefore && now()->lt($retryNotBefore)) {
                     $skipped++;
                     return;
                 }
