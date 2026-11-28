@@ -75,7 +75,7 @@ class StorageBackupObjectCipherTest extends TestCase
             $cipher->decryptFile($encrypted, $restored, str_repeat('A', 64), strlen($contents), hash('sha256', $contents));
             $this->fail('Modified ciphertext must never be accepted.');
         } catch (RuntimeException) {
-            $this->assertSame('', file_get_contents($restored));
+            $this->assertFileDoesNotExist($restored);
         }
     }
 
