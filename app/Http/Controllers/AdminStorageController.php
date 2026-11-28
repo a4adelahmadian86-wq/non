@@ -151,6 +151,11 @@ class AdminStorageController extends Controller
         $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
         $provider = trim((string) ($connection['provider'] ?? ($data['drive_key'] === 'foreign_backup' ? 'tigris' : $host)));
         if ($data['drive_key'] === 'foreign_backup') {
+            if (StorageVolume::query()->where('drive_key', 'foreign_backup')->where('provider', 'tigris')->where('is_active', true)->exists()) {
+                return back()->withErrors([
+                    'drive_key' => 'برای رعایت سقف‌های حساب رایگان، فقط یک مقصد فعال Tigris برای FARAST مجاز است.',
+                ])->withInput($request->except('connection_json'));
+            }
             $region = strtolower((string) ($connection['region'] ?? ($credentials['region'] ?? '')));
             $pathStyleValue = $connection['use_path_style_endpoint'] ?? ($credentials['use_path_style_endpoint'] ?? true);
             $pathStyle = filter_var($pathStyleValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
