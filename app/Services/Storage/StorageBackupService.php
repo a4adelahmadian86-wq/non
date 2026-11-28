@@ -433,7 +433,7 @@ class StorageBackupService
                 ->whereNotNull('storage_volume_id')
                 ->with('volume')
                 ->orderBy('id')
-                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit, $monthlySourceReadLimit): void {
+                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit): void {
                     foreach ($files as $file) {
                         if (! $file->volume) {
                             throw new RuntimeException('فایل مدیریت‌شده به فضای ذخیره‌سازی معتبر متصل نیست: '.$file->id);
