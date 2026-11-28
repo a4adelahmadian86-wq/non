@@ -17,6 +17,82 @@ class StorageBackupService
 {
     public function __construct(private readonly StorageManager $storage) {}
 
+    public function reconcileRestoredRun(StorageBackupRun $run): void
+    {
+        $target = StorageVolume::query()->findOrFail($run->storage_volume_id);
+        $disk = $this->storage->volumeDisk($target);
+
+        // A database snapshot is taken before retention runs. Reconcile any older
+        // run rows whose remote manifests were pruned after that snapshot.
+        $olderRuns = StorageBackupRun::query()
+            ->where('storage_volume_id', $target->id)
+            ->where('source_name', 'application')
+            ->where('status', 'completed')
+            ->whereNotNull('object_key')
+            ->where('id', '!=', $run->id)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($olderRuns as $olderRun) {
+            $this->reserveBackupUsage($target, 'class_b');
+            if ($this->storage->exists($disk, $olderRun->object_key)) {
+                continue;
+            }
+
+            $oldObjects = $olderRun->backupObjects()->get();
+            DB::transaction(function () use ($target, $olderRun): void {
+                $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                $lockedRun = StorageBackupRun::query()->lockForUpdate()->find($olderRun->id);
+                if (! $lockedVolume || ! $lockedRun || $lockedRun->status !== 'completed') {
+                    return;
+                }
+
+                $metadata = (array) $lockedRun->metadata;
+                $metadata['pruned_after_restore_reconciliation'] = now()->toIso8601String();
+                $lockedRun->backupObjects()->detach();
+                $lockedVolume->update([
+                    'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedRun->size_bytes),
+                    'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                ]);
+                $lockedRun->update([
+                    'status' => 'pruned',
+                    'object_key' => null,
+                    'metadata' => $metadata,
+                ]);
+            });
+
+            foreach ($oldObjects as $oldObject) {
+                if ($oldObject->runs()->exists()) {
+                    continue;
+                }
+                try {
+                    $this->storage->delete($disk, $oldObject->object_key);
+                    DB::transaction(function () use ($target, $oldObject): void {
+                        $lockedObject = StorageBackupObject::query()->lockForUpdate()->find($oldObject->id);
+                        if (! $lockedObject || $lockedObject->runs()->exists()) {
+                            return;
+                        }
+                        $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                        if ($lockedVolume) {
+                            $lockedVolume->update([
+                                'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedObject->encrypted_size_bytes),
+                                'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                            ]);
+                        }
+                        $lockedObject->delete();
+                    });
+                } catch (\Throwable $exception) {
+                    report($exception);
+                }
+            }
+        }
+
+        // Enforce the configured retention for this restored run and remove
+        // unreferenced objects left by interrupted snapshots.
+        $this->pruneOldBackups($target, $run->fresh());
+        $this->pruneOrphanBackupObjects($target);
+    }
+
     public function materializeIncrementalManifest(
         StorageBackupRun $run,
         string $encryptedManifestPath,
