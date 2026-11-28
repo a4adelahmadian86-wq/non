@@ -361,3 +361,13 @@ A simplified per-file cost model for an S3 target is therefore:
 - weekly backup: source GET for every managed object, then backup-target PUT and full backup-target GET for verification.
 
 These paths must all be included in the monthly operation/egress budget. Counting only application user downloads or only the scheduled health-check interval will substantially understate consumption.
+
+
+### 10.1 Atomic reservation must cover every S3 writer
+
+The quota race is not confined to `StorageManager::storeUploadedFile()`:
+
+- `StorageTransferService::transferPending()` independently selects a target using `capacity_bytes - used_bytes`, uploads directly through `S3CompatibleAdapter::putFile()`, then updates the counters after transfer.
+- `StorageBackupService` independently selects backup targets using the same pre-upload capacity check, writes the archive through `uploadBackup()`, then increments the counters after the remote write.
+
+A correct reservation primitive must be shared by the primary upload, pending transfer and backup-target write paths. Fixing only `StorageManager` would leave two concurrent write paths able to overrun the same configured internal cap. Reservation recovery must be conservative: a crashed request must not release capacity for an object that may already exist remotely. Failed cleanup must retain or reconcile the reservation rather than silently undercounting storage.
