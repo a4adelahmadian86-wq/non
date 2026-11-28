@@ -182,11 +182,7 @@ class AdminStorageController extends Controller
             $connections->verify($volume, false, true);
             return redirect()->route('admin.storage.index')->with('status', 'اتصال با موفقیت بررسی و ثبت شد؛ موجودی کامل اشیا عمداً در این مرحله خوانده نشد.');
         } catch (Throwable $e) {
-            $volume->update([
-                'status' => 'error',
-                'last_checked_at' => now(),
-                'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($e->getMessage(), 0, 500)]),
-            ]);
+            $this->recordVerificationFailure($volume, $e);
             return redirect()->route('admin.storage.index')->with('warning', 'اتصال ثبت شد اما آزمون سلامت ناموفق بود: '.$e->getMessage());
         }
     }
@@ -225,9 +221,28 @@ class AdminStorageController extends Controller
             $connections->verify($volume, true);
             return back()->with('status', 'آزمون خواندن، نوشتن و حذف موفق بود.');
         } catch (Throwable $e) {
-            $volume->update(['status' => 'error', 'last_checked_at' => now()]);
+            $this->recordVerificationFailure($volume, $e);
             return back()->with('warning', 'آزمون اتصال ناموفق بود: '.$e->getMessage());
         }
+    }
+
+    private function recordVerificationFailure(StorageVolume $volume, Throwable $exception): void
+    {
+        $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
+        $interval = $interval === false ? 5 : max(5, min(1440, $interval));
+        $failureCount = max(0, (int) data_get($volume->metadata, 'health_check_failures', 0)) + 1;
+        $backoffMinutes = min(1440, $interval * (2 ** min(5, $failureCount - 1)));
+        $metadata = array_merge((array) $volume->metadata, [
+            'last_error' => mb_substr($exception->getMessage(), 0, 500),
+            'health_check_failures' => $failureCount,
+            'health_check_next_at' => now()->addMinutes($backoffMinutes)->toIso8601String(),
+        ]);
+
+        $volume->update([
+            'status' => 'error',
+            'last_checked_at' => now(),
+            'metadata' => $metadata,
+        ]);
     }
 
     public function toggle(StorageVolume $volume)
