@@ -265,20 +265,13 @@ class StorageBackupService
                         if (! $object) {
                             $size = max(0, (int) $file->size_bytes);
                             if ($file->volume->drive_key === 'iran_primary') {
-                                $monthlyUsed = StorageBackupObject::query()
-                                    ->where('storage_volume_id', $target->id)
-                                    ->where('created_at', '>=', now()->startOfMonth())
-                                    ->where('metadata->source_drive_key', 'iran_primary')
-                                    ->get()
-                                    ->sum(fn (StorageBackupObject $item): int => (int) data_get($item->metadata, 'source_read_bytes', 0));
-
-                                if ($sourceReadBytes + $size > $perRunSourceReadLimit
-                                    || $monthlyUsed + $sourceReadBytes + $size > $monthlySourceReadLimit) {
+                                if ($sourceReadBytes + $size > $perRunSourceReadLimit) {
                                     throw new RuntimeException('سقف امن خواندن مبدأ ایران برای این نوبت یا ماه تکمیل شده است؛ ادامه بکاپ به اجرای بعدی موکول شد.');
                                 }
                                 $sourceReadBytes += $size;
                             }
 
+                            $this->reserveBackupUsage($file->volume, 'class_b', 1, $file->volume->drive_key === 'iran_primary' ? $size : 0);
                             $temporary = $work.'/managed-source-'.$file->id;
                             $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
                             $actualSize = @filesize($temporary);
@@ -294,7 +287,7 @@ class StorageBackupService
                                 'source_drive_key' => (string) $file->volume->drive_key,
                                 'source_volume_id' => (int) $file->storage_volume_id,
                                 'source_read_bytes' => $file->volume->drive_key === 'iran_primary' ? $size : 0,
-                            ]);
+                            ], false);
                             @unlink($temporary);
                         }
 
@@ -342,7 +335,10 @@ class StorageBackupService
             }
 
             $uploadedManifestKey = 'manifests/'.$backupType.'/'.now()->format('Y/m/d').'/'.Str::uuid().'.enc';
+            $this->assertBackupTargetCapacity($target, $manifestMeta['encrypted_size_bytes']);
+            $this->reserveBackupUsage($target, 'class_a');
             $this->storage->uploadBackup($target, $uploadedManifestKey, $manifestEncryptedPath);
+            $this->reserveBackupUsage($target, 'class_b');
             if ($this->storage->size($this->storage->volumeDisk($target), $uploadedManifestKey) !== $manifestMeta['encrypted_size_bytes']) {
                 throw new RuntimeException('اندازه Manifest پس از انتقال با فایل محلی مطابقت ندارد.');
             }
@@ -420,6 +416,7 @@ class StorageBackupService
             return null;
         }
 
+        $this->reserveBackupUsage($target, 'class_b');
         if (! $this->storage->exists($this->storage->volumeDisk($target), $object->object_key)) {
             $metadata = (array) $object->metadata;
             $metadata['remote_object_missing_at'] = now()->toIso8601String();
@@ -436,7 +433,8 @@ class StorageBackupService
         string $sourcePath,
         string $backupKey,
         string $work,
-        array $metadata
+        array $metadata,
+        bool $allowReuse = true
     ): StorageBackupObject {
         $checksum = @hash_file('sha256', $sourcePath);
         $size = @filesize($sourcePath);
@@ -444,7 +442,7 @@ class StorageBackupService
             throw new RuntimeException('محاسبه هویت فایل برای بکاپ افزایشی ناموفق بود.');
         }
 
-        $existing = $this->findReusableBackupObject($target, $checksum);
+        $existing = $allowReuse ? $this->findReusableBackupObject($target, $checksum) : null;
         if ($existing) {
             if ((int) $existing->size_bytes !== $size) {
                 throw new RuntimeException('یک SHA-256 با اندازه متفاوت در مخزن بکاپ ثبت شده است.');
@@ -456,15 +454,22 @@ class StorageBackupService
         $encryptedPath = $work.'/blob-'.Str::uuid().'.enc';
         $encryptedMeta = app(StorageBackupObjectCipher::class)->encryptFile($sourcePath, $encryptedPath, $backupKey);
         $objectKey = 'objects/'.substr($checksum, 0, 2).'/'.Str::uuid().'.enc';
-        $this->storage->uploadBackup($target, $objectKey, $encryptedPath);
-        $remoteSize = $this->storage->size($this->storage->volumeDisk($target), $objectKey);
-        if ($remoteSize !== $encryptedMeta['encrypted_size_bytes']) {
+        $this->assertBackupTargetCapacity($target, $encryptedMeta['encrypted_size_bytes']);
+        try {
+            $this->reserveBackupUsage($target, 'class_a');
+            $this->storage->uploadBackup($target, $objectKey, $encryptedPath);
+            $this->reserveBackupUsage($target, 'class_b');
+            $remoteSize = $this->storage->size($this->storage->volumeDisk($target), $objectKey);
+            if ($remoteSize !== $encryptedMeta['encrypted_size_bytes']) {
+                throw new RuntimeException('اندازه Blob بکاپ پس از انتقال با نسخه محلی مطابقت ندارد.');
+            }
+        } catch (\Throwable $uploadException) {
             try {
                 $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
             } catch (\Throwable $cleanupException) {
                 report($cleanupException);
             }
-            throw new RuntimeException('اندازه Blob بکاپ پس از انتقال با نسخه محلی مطابقت ندارد.');
+            throw $uploadException;
         }
 
         try {
@@ -508,6 +513,82 @@ class StorageBackupService
         } finally {
             @unlink($encryptedPath);
         }
+    }
+
+    private function assertBackupTargetCapacity(StorageVolume $target, int $additionalBytes): void
+    {
+        $configuredLimit = max(1, (int) config('storage_management.backup.max_target_storage_bytes', 4294967296));
+        $providerLimit = $target->capacity_bytes !== null ? (int) $target->capacity_bytes : $configuredLimit;
+        $hardLimit = min($configuredLimit, $providerLimit);
+        $current = (int) $target->fresh()->used_bytes;
+        if ($additionalBytes < 0 || $current + $additionalBytes > $hardLimit) {
+            throw new RuntimeException('سقف امن فضای بکاپ رایگان تکمیل شده است؛ برای جلوگیری از هزینه، آپلود جدید متوقف شد.');
+        }
+    }
+
+    private function reserveBackupUsage(
+        StorageVolume $volume,
+        string $operationClass,
+        int $operationCount = 1,
+        int $sourceReadBytes = 0
+    ): void {
+        if (! in_array($operationClass, ['class_a', 'class_b'], true) || $operationCount < 0 || $sourceReadBytes < 0) {
+            throw new RuntimeException('رزرو مصرف بکاپ نامعتبر است.');
+        }
+
+        $periodStart = now()->startOfMonth()->toDateString();
+        DB::transaction(function () use ($volume, $operationClass, $operationCount, $sourceReadBytes, $periodStart): void {
+            DB::table('storage_backup_usage_periods')->insertOrIgnore([
+                'storage_volume_id' => $volume->id,
+                'period_start' => $periodStart,
+                'class_a_operations' => 0,
+                'class_b_operations' => 0,
+                'source_read_bytes' => 0,
+                'uploaded_bytes' => 0,
+                'downloaded_bytes' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $usage = DB::table('storage_backup_usage_periods')
+                ->where('storage_volume_id', $volume->id)
+                ->where('period_start', $periodStart)
+                ->lockForUpdate()
+                ->first();
+            if (! $usage) {
+                throw new RuntimeException('دفتر ثبت مصرف ماهانه بکاپ در دسترس نیست.');
+            }
+
+            $nextA = (int) $usage->class_a_operations + ($operationClass === 'class_a' ? $operationCount : 0);
+            $nextB = (int) $usage->class_b_operations + ($operationClass === 'class_b' ? $operationCount : 0);
+            $nextSourceBytes = (int) $usage->source_read_bytes + $sourceReadBytes;
+
+            if ($volume->drive_key === 'foreign_backup') {
+                $maxA = max(1, (int) config('storage_management.backup.max_class_a_ops_per_month', 8000));
+                $maxB = max(1, (int) config('storage_management.backup.max_class_b_ops_per_month', 80000));
+                if ($nextA > $maxA || $nextB > $maxB) {
+                    throw new RuntimeException('سقف امن عملیات ماهانه فضای بکاپ خارجی تکمیل شده است؛ عملیات متوقف شد.');
+                }
+            } elseif ($volume->drive_key === 'iran_primary') {
+                $maxOps = max(1, (int) config('storage_management.backup.max_iran_ops_per_month', 7000));
+                if ($nextA + $nextB > $maxOps) {
+                    throw new RuntimeException('سقف امن عملیات ماهانه فضای اصلی ایران تکمیل شده است؛ عملیات متوقف شد.');
+                }
+                $maxSourceBytes = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120));
+                if ($nextSourceBytes > $maxSourceBytes) {
+                    throw new RuntimeException('سقف امن ترافیک خواندن ماهانه از فضای اصلی ایران تکمیل شده است؛ عملیات متوقف شد.');
+                }
+            }
+
+            DB::table('storage_backup_usage_periods')
+                ->where('id', $usage->id)
+                ->update([
+                    'class_a_operations' => $nextA,
+                    'class_b_operations' => $nextB,
+                    'source_read_bytes' => $nextSourceBytes,
+                    'updated_at' => now(),
+                ]);
+        });
     }
 
     private function backupObjectManifestEntry(StorageBackupObject $object): array
