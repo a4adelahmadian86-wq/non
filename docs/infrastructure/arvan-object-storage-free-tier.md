@@ -557,3 +557,24 @@ Recommended values:
 
 Because the region endpoint is currently ambiguous and multi-zone was ON in the user's draft, do not click Create yet. User does not need to send more screenshots; existing written endpoint statuses and screenshot evidence are already recorded. We should resolve the endpoint mapping from Arvan's own Access Management/region documentation or written support confirmation before asking for bucket creation.
 
+
+
+## 16. Endpoint mapping cross-check and decision (2026-11-28)
+
+A further cross-check was made against the maintained rclone ArvanCloud S3 provider configuration. It explicitly maps:
+- Standard / Tehran / Simin: endpoint `s3.ir-thr-at1.arvanstorage.ir`, S3 location constraint `ir-thr-at1`.
+- Standard / Tabriz / Shahriar: endpoint `s3.ir-tbz-sh1.arvanstorage.ir`, S3 location constraint `ir-tbz-sh1`.
+- HiOps / Bamdad: endpoint `hot.ir-central1.arvanstorage.ir` (not suitable for the user's Standard free-tier bucket).
+
+Source: https://github.com/rclone/rclone/blob/master/backend/s3/provider/ArvanCloud.yaml
+
+This independently corroborates the zone-specific endpoint mapping already noted in the user's endpoint list. It does **not** establish that the endpoint is currently ready for this particular account: the user panel showed the zone-specific endpoints as "درحال جمع‌آوری" at the time of the report. The generic endpoint `s3.ir-central1.arvanstorage.ir` shown as Active in the user's panel is not the endpoint listed by the S3 provider configuration for Standard/Simin. Do not substitute it for the Simin endpoint based only on the shared region-family name.
+
+Decision:
+1. The correct S3 endpoint/region pair for a Standard/Simin bucket is `https://s3.ir-thr-at1.arvanstorage.ir` / `ir-thr-at1`.
+2. Do not use `s3.ir-central1.arvanstorage.ir` as a substitute for this Standard/Simin endpoint.
+3. Because the account panel reported the exact Simin endpoint as "collecting/provisioning", wait until that exact endpoint is Active or obtain written confirmation from Arvan support. This is a read-only research conclusion; no endpoint probe was sent.
+4. The user's draft bucket currently has Multi-zone ON according to the screenshot already recorded. Switch it OFF before Create.
+5. Do not ask the user for another screenshot; existing endpoint text and form screenshot provide the evidence. The next required human action, only after endpoint readiness is confirmed, is to turn off Multi-zone and create the bucket with the previously documented safe settings.
+
+No user credentials, no bucket, and no S3 requests were created or used during this research.
