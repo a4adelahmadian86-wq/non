@@ -656,8 +656,9 @@ class StorageBackupService
             }
 
             try {
-                // Delete remotely first. If that fails, keep the DB row and byte counters intact.
+                // Delete the old manifest first. Its referenced blobs remain protected by pivot rows.
                 $this->storage->delete($this->storage->volumeDisk($target), $oldRun->object_key);
+                $oldObjects = $oldRun->backupObjects()->get();
 
                 DB::transaction(function () use ($target, $oldRun): void {
                     $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
@@ -671,6 +672,7 @@ class StorageBackupService
                     $metadata['pruned_object_key'] = $lockedRun->object_key;
                     $metadata['pruned_at'] = now()->toIso8601String();
 
+                    $lockedRun->backupObjects()->detach();
                     $lockedVolume->update([
                         'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedRun->size_bytes),
                         'object_count' => max(0, (int) $lockedVolume->object_count - 1),
@@ -681,6 +683,41 @@ class StorageBackupService
                         'metadata' => $metadata,
                     ]);
                 });
+
+                foreach ($oldObjects as $oldObject) {
+                    if ($oldObject->runs()->exists()) {
+                        continue;
+                    }
+
+                    try {
+                        $this->storage->delete($this->storage->volumeDisk($target), $oldObject->object_key);
+                        DB::transaction(function () use ($target, $oldObject): void {
+                            $lockedObject = StorageBackupObject::query()->lockForUpdate()->find($oldObject->id);
+                            if (! $lockedObject || $lockedObject->runs()->exists()) {
+                                return;
+                            }
+
+                            $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                            if ($lockedVolume) {
+                                $lockedVolume->update([
+                                    'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedObject->encrypted_size_bytes),
+                                    'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                                ]);
+                            }
+                            $lockedObject->delete();
+                        });
+                    } catch (\Throwable $blobException) {
+                        report($blobException);
+                        try {
+                            $metadata = (array) $oldObject->metadata;
+                            $metadata['cleanup_pending'] = true;
+                            $oldObject->update(['metadata' => $metadata]);
+                        } catch (\Throwable $recordException) {
+                            report($recordException);
+                        }
+                        $this->markRetentionCleanupPending($currentRun);
+                    }
+                }
             } catch (\Throwable $exception) {
                 report($exception);
                 try {
@@ -688,21 +725,25 @@ class StorageBackupService
                     $metadata['retention_cleanup_pending'] = true;
                     $oldRun->update(['metadata' => $metadata]);
                 } catch (\Throwable $recordException) {
-                    // Cleanup is best-effort; never invalidate the newly verified backup.
                     report($recordException);
                 }
 
-                try {
-                    $currentMetadata = (array) $currentRun->fresh()->metadata;
-                    $currentMetadata['retention_cleanup_pending'] = true;
-                    $currentRun->update([
-                        'metadata' => $currentMetadata,
-                        'error_message' => 'نسخه جدید بکاپ تأیید شد، اما پاک‌سازی نسخه قدیمی نیازمند بررسی است.',
-                    ]);
-                } catch (\Throwable $recordCurrentException) {
-                    report($recordCurrentException);
-                }
+                $this->markRetentionCleanupPending($currentRun);
             }
+        }
+    }
+
+    private function markRetentionCleanupPending(StorageBackupRun $currentRun): void
+    {
+        try {
+            $currentMetadata = (array) $currentRun->fresh()->metadata;
+            $currentMetadata['retention_cleanup_pending'] = true;
+            $currentRun->update([
+                'metadata' => $currentMetadata,
+                'error_message' => 'نسخه جدید بکاپ تأیید شد، اما پاک‌سازی داده‌های قدیمی نیازمند بررسی است.',
+            ]);
+        } catch (\Throwable $recordException) {
+            report($recordException);
         }
     }
 
