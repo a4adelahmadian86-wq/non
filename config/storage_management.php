@@ -11,7 +11,7 @@ return [
         // Keep only the newest verified full snapshot per destination/type by default.
         'keep_latest' => max(1, min(10, (int) env('FARAST_BACKUP_KEEP_LATEST', 1))),
         'use_incremental_format' => filter_var(env('FARAST_BACKUP_INCREMENTAL', false), FILTER_VALIDATE_BOOLEAN),
-        'max_iran_source_read_bytes_per_run' => max(1, (int) env('FARAST_BACKUP_IRAN_READ_PER_RUN', 536870912)),
+        'max_iran_source_read_bytes_per_run' => max(1, (int) env('FARAST_BACKUP_IRAN_READ_PER_RUN', 1073741824)),
         'max_iran_source_read_bytes_per_month' => max(536870912, (int) env('FARAST_BACKUP_IRAN_READ_PER_MONTH', 5368709120)),
         'max_target_storage_bytes' => max(1, (int) env('FARAST_BACKUP_TARGET_MAX_BYTES', 4294967296)),
         'max_class_a_ops_per_month' => max(1, (int) env('FARAST_BACKUP_MAX_CLASS_A_OPS', 8000)),
