@@ -135,8 +135,8 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         ]);
 
         $volume = StorageVolume::forceCreate([
-            'drive_key' => 'iran_primary',
-            'name' => 'Iran source budget fixture',
+            'drive_key' => 'foreign_backup',
+            'name' => 'Tigris source budget fixture',
             'driver' => 'local',
             'is_active' => true,
             'status' => 'healthy',
@@ -146,10 +146,10 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         $service = new StorageBackupService(Mockery::mock(StorageManager::class));
         $method = new ReflectionMethod($service, 'reserveBackupUsage');
         $method->setAccessible(true);
-        $method->invoke($service, $volume, 'class_b', 1, 1024);
+        $method->invoke($service, $volume, 'source_read', 1, 1024);
 
         try {
-            $method->invoke($service, $volume, 'class_b', 1, 1);
+            $method->invoke($service, $volume, 'source_read', 1, 1);
             $this->fail('Iran source bytes must be blocked before exceeding the monthly budget.');
         } catch (\ReflectionException $exception) {
             throw $exception;
@@ -160,6 +160,7 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         $this->assertDatabaseHas('storage_backup_usage_periods', [
             'storage_volume_id' => $volume->id,
             'source_read_bytes' => 1024,
+            'source_read_operations' => 1,
         ]);
     }
 
