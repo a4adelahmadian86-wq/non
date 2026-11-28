@@ -677,3 +677,169 @@ Official status page: https://arvancloudstatus.ir/
 The page lists Object Storage as Operational for Simin, Shahriar and Bamdad. However, the timestamps displayed for Simin and Shahriar Object Storage are old (Simin 2026-04-04; Shahriar 2026-03-17 in the retrieved page), while the page itself reports some systems experiencing issues and has more recent incidents in other products. These old component timestamps cannot resolve the user's live endpoint state ("درحال جمع‌آوری") and must not be treated as a current health check for the exact S3 hostname.
 
 Decision: the user's account panel's exact endpoint readiness and bucket-specific Access Management details remain authoritative for this account. Public status page is only a secondary, stale signal. Do not send an unauthenticated or authenticated S3 probe merely to test reachability before the no-overage safeguards are in place.
+
+
+## 19. Second-pass inspection: full priority guides, screenshots, players, and supporting Object Storage docs (2026-11-28)
+
+This section is the detailed inspection record. It supersedes any earlier claim that the embedded videos were fully reviewed.
+
+### 19.1 Bucket guide — complete extracted text and form screenshot
+
+Official page: https://docs.arvancloud.ir/fa/object-storage/buckets/
+
+The full page text was extracted, including create bucket, bucket management, tags, static website, deletion, object upload, upload-from-URL, object ACL, object tags, quick share, download and delete.
+
+The linked creation screenshot was opened and visually inspected:
+https://s3.ir-thr-at1.arvanstorage.ir/arvandocs/object/bucket/newbucket.png
+
+Visible fields/controls in that screenshot:
+- required bucket name;
+- region cards: Simin (Iran/Tehran) and Shahriar (Iran/Tabriz);
+- Multi-zone toggle under Simin;
+- Versioning toggle;
+- bucket public-display toggle;
+- Tags button;
+- Create and Cancel controls.
+
+The screenshot itself depicts the Multi-zone toggle in the ON position as an instructional illustration, not as a default recommendation. It must not be copied blindly. User's own earlier live form screenshot also showed Multi-zone ON; turn it OFF before creating this bucket.
+
+The written guide confirms:
+- bucket name is globally unique; lowercase English letters and digits; no special chars such as dot or question mark; minimum >3 characters;
+- only Simin and Shahriar are offered as bucket regions;
+- Multi-zone is only offered for Simin; it stores data across multiple data centers/zones; once activated it cannot be disabled; it may be activated after bucket creation;
+- bucket display defaults private;
+- bucket display and object ACL are distinct: changing bucket public/private after creation does not change the existing objects' ACL;
+- tags have a title/key and value, multiple tags can be added, then applied; tags can be edited or removed;
+- static website hosting is separate and not needed for a private knowledge store;
+- bucket deletion requires removing all objects first;
+- upload supports local file/folder and URL upload; object display ACL is selected on upload;
+- quick-share URLs respect the object's ACL.
+
+### 19.2 Tag screenshot extraction limitation
+
+The guide's tag-management image link is:
+https://s3.ir-thr-at1.arvanstorage.ir/arvandocs/object/bucket/tag.png
+
+The documentation text confirms exact semantic fields: title/key and value, with controls to add a new tag and apply tags. The image asset returned a cache miss during this pass, so the visual layout of that specific modal could not be independently re-opened. Do not claim that every pixel of this screenshot was inspected. The form's tag control in the bucket creation screenshot was visible.
+
+### 19.3 Object Lock guide — complete text and all relevant screenshots
+
+Official page: https://docs.arvancloud.ir/fa/object-storage/buckets/object-lock/
+
+The guide defines Object Lock as WORM (Write Once Read Many) protection against deletion/overwrite for a specified or indefinite period. It must be enabled during bucket creation, requires Versioning, and cannot be disabled afterwards. Once a version is locked it cannot be deleted/overwritten until expiry. Retention can be increased but not reduced or removed.
+
+Screenshots visually inspected:
+- bucket list/empty bucket creation entry;
+- bucket create form with Object Lock enabled and a Retention Period field;
+- retention period illustration showing a numeric field and unit "روز" (days), with 30 as an example only.
+
+Do not use the illustrated 30 days as a recommendation. For FARAST initial free-tier bucket, leave Object Lock OFF and do not fill Retention Period. It is irreversible and no retention requirement has been specified.
+
+### 19.4 Versioning guide — complete text and screenshots
+
+Official page: https://docs.arvancloud.ir/fa/object-storage/buckets/versioning
+
+The guide explicitly states Versioning can be enabled free of charge, is OFF by default, and can be disabled later. It retains prior versions on overwrite; deleting an object through API creates a Delete Marker; old versions can be restored via API. Important deletion distinction:
+- API delete with Versioning adds a Delete Marker, preserving prior versions;
+- deleting through the panel permanently deletes all versions and they cannot be restored;
+- if no prior version exists, permanent deletion may occur;
+- disabling Versioning does not remove already-retained old versions; Lifecycle may still apply to them.
+
+Screenshots visually inspected:
+- bucket details / Operations tab showing Versioning disabled and Edit button;
+- bucket create/Versioning setting screenshot already linked from the guide;
+- player UI was inspected separately (see video subsection below).
+
+Decision: Versioning OFF initially for the 5 GB Base quota, not because the feature toggle itself is paid. FARAST will implement application-level immutable/versioned knowledge manifests and controlled retention. Revisit provider Versioning only when storage usage accounting and Lifecycle cleanup/restore are tested.
+
+### 19.5 Permission guide — complete text and screenshots
+
+Official page: https://docs.arvancloud.ir/fa/object-storage/permission
+
+Screenshots visually inspected:
+- private bucket browser response is AccessDenied;
+- public bucket browser response exposes bucket listing/object metadata;
+- guide's public/private object examples establish the direct object URL versus signed URL distinction.
+
+Important exact semantics:
+- private bucket blocks unauthenticated bucket listing;
+- public bucket exposes listing information including object names, sizes and modification times;
+- object ACL is independent of bucket ACL;
+- private objects require authenticated access or a time-limited signed URL;
+- public objects can be fetched by unauthenticated URL;
+- toggling a file from public to private does not invalidate already-issued signed URLs until their expiry; toggling private to public makes the public URL work while prior signed URLs remain usable until expiry.
+
+FARAST rule: bucket private, every knowledge/user object private on upload, server-side S3 credentials only, and short-lived presigned URLs only when browser delivery is necessary. Never put Access Key/Secret Key in browser JavaScript or Git.
+
+### 19.6 Embedded video playback test — verified failure, not watched content
+
+The Bucket guide's player config was identified:
+https://player.arvancloud.ir/index.html?config=https://dm.arvanvod.ir/nBxJnD81PL/7NQjWqZ3go/origin_config.json&skin=shaka
+
+The live browser loaded the player and attempted playback. It identifies the media as "Bucket.mov" / "شیوه ساخت صندوقچه و آپلود فایل", but playback fails with "This Media/Stream is not available." Duration remains 0:00, no captions/transcript track is available, and no frames of the tutorial can be viewed. Thus its actual video instructions/form details remain unverified; the written guide and screenshot were inspected instead.
+
+The Versioning guide's player config was also identified:
+https://player.arvancloud.ir/index.html?config=https://dm.arvanvod.ir/nBxJnD81PL/XJkGOeomYW/origin_config.json&skin=shaka
+
+The live browser identifies it as "استفاده از Versioning در فضای ابری آروان کلاود". Playback fails with the same "This Media/Stream is not available" message; duration is 0:00, captions are off/no transcript, chapters empty, and no video frames can be inspected. The player controls (play, ±10s, volume, seek, speed, captions, chapters, audio/video tracks, fullscreen, PiP, download, cast) are present but do not provide tutorial content.
+
+No video content has been invented or inferred from the title.
+
+### 19.7 Supporting Object Storage guides inspected
+
+#### Limits
+https://docs.arvancloud.ir/fa/object-storage/limits/
+
+Extracted constraints:
+- each bucket is region-bound and has its own URL; bucket name and region cannot be changed after creation;
+- virtual-host endpoint form is recommended for CDN cache integration: `[bucket].s3.[region].arvanstorage.ir`;
+- service documentation says no hard technical request-count/traffic cap, but account plan allowances and PAYG billing remain separate commercial limits;
+- default account limit 50 buckets;
+- default per-bucket object limit 3,700,000;
+- retry transient HTTP 5xx errors with bounded retry/backoff;
+- object storage has no true folders; slash-delimited key prefixes are folder-like views;
+- single PUT up to 5 GB; multipart parts 5 MB minimum and 400 MB maximum, up to 10,000 parts, final multipart object up to 5 TB;
+- multipart recommended above 500 MB;
+- do not delete incomplete multipart parts until the upload is confirmed inactive.
+
+Important: technical service ability to accept high traffic is NOT a free-tier promise. The 5 GB storage / 20 GB traffic / 10,000 operations Base allowance and PAYG overage are what matter for this account.
+
+#### Lifecycle
+https://docs.arvancloud.ir/fa/object-storage/buckets/lifecycle/
+
+Lifecycle can delete current versions, non-current versions, and incomplete multipart uploads based on age, prefix/tags/size filters. This is destructive and must not be configured until retention and restore policy are tested. For FARAST, do not create an auto-delete Lifecycle rule on the knowledge bucket now.
+
+#### Replication
+https://docs.arvancloud.ir/fa/object-storage/buckets/replication/
+
+Replication copies new object uploads from a source bucket to a destination bucket, is one-way per rule, and does not replicate deletions. The guide explicitly limits it to Growth, Professional and Enterprise plans. It is not part of the user's Base/free tier; do not configure it.
+
+#### CORS
+https://docs.arvancloud.ir/fa/object-storage/buckets/cors-setting/
+
+CORS only governs browser-origin cross-domain requests; it does not apply to server-to-server API calls and does not grant access to a private bucket. For FARAST, server-side Laravel S3 calls do not require CORS. If direct browser upload is ever introduced, use exact allowed origins, required methods/headers only; never wildcard origins for sensitive data. Initial configuration: leave CORS unset.
+
+#### ArvanCloudS3 desktop client
+https://docs.arvancloud.ir/fa/object-storage/s3/
+
+The app can create/manage buckets, mount buckets, upload/download batches, edit ACLs, and copy/sync between buckets and regions. The profile needs provider type, region, Access Key and Secret Key. Sync makes destination content equal to source and may transfer large amounts of data. It is optional and not needed for FARAST backend integration; do not use bulk Sync for this task.
+
+### 19.8 Final revised bucket settings
+
+- Name: `farast-knowledge-ir` (if globally unique).
+- Storage class: Standard (as shown in the user's account/form context).
+- Region: Simin/Tehran only after the exact S3 endpoint is Active and bucket details confirm the endpoint/region pair. The user's last reported status was `s3.ir-thr-at1.arvanstorage.ir` = collecting/provisioning; do not use the generic `s3.ir-central1.arvanstorage.ir` as an assumed substitute.
+- Multi-zone: OFF initially; it is irreversible once enabled and its inclusion at zero extra cost is not confirmed.
+- Object Lock: OFF; retention field left blank.
+- Versioning: OFF at creation; can be enabled later free of charge, but old versions consume quota and disabling does not purge them.
+- Public bucket display: OFF/private.
+- Object ACL: private on every upload.
+- Tags: optional; if used, use key/value fields: `project=farast`, `purpose=knowledge-base`, `data-class=private`. These tags are classification only, not a security control.
+- CORS: unset.
+- Lifecycle: no automatic deletion rules.
+- Replication: do not use (paid-plan-only).
+- Static website, custom domain, CDN acceleration, HiOps, and bulk sync: do not enable.
+
+### 19.9 Work not performed
+
+No bucket has been created. No credentials have been used. No S3 API request, upload, download, listing, deletion or endpoint health probe has been sent. No paid add-on has been enabled. No production or main-branch change has been made by this documentation pass.
