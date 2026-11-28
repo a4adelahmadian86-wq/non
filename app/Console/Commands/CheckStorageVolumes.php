@@ -15,7 +15,17 @@ class CheckStorageVolumes extends Command
     {
         $checked = 0;
         $failed = 0;
-        StorageVolume::query()->where('is_active', true)->orderBy('id')->limit(max(1, min(500, (int) $this->option('limit'))))->get()->each(function (StorageVolume $volume) use ($connections, &$checked, &$failed) {
+        $skipped = 0;
+        StorageVolume::query()->where('is_active', true)->orderBy('id')->limit(max(1, min(500, (int) $this->option('limit'))))->get()->each(function (StorageVolume $volume) use ($connections, &$checked, &$failed, &$skipped) {
+            $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
+            $interval = $interval === false ? 5 : max(5, min(1440, $interval));
+            if ($volume->status === 'healthy'
+                && $volume->last_checked_at
+                && $volume->last_checked_at->gt(now()->subMinutes($interval))) {
+                $skipped++;
+                return;
+            }
+
             try {
                 $connections->verify($volume);
                 $checked++;
@@ -29,7 +39,7 @@ class CheckStorageVolumes extends Command
                 report($exception);
             }
         });
-        $this->info("Healthy: {$checked}; failed: {$failed}");
+        $this->info("Healthy: {$checked}; failed: {$failed}; skipped: {$skipped}");
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
     }
 }
