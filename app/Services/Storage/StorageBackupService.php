@@ -3,10 +3,12 @@
 namespace App\Services\Storage;
 
 use App\Models\StorageBackupRun;
+use App\Models\StorageBackupObject;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use RuntimeException;
 use ZipArchive;
@@ -63,6 +65,10 @@ class StorageBackupService
             ]);
 
             throw new RuntimeException('هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
+        if ((bool) config('storage_management.backup.use_incremental_format', true)) {
+            return $this->runIncrementalLocked($backupType, $targets);
         }
 
         $hasIranPrimarySources = StorageManagedFile::query()
@@ -174,6 +180,345 @@ class StorageBackupService
         } finally {
             $this->removeDirectory($work);
         }
+    }
+
+    private function runIncrementalLocked(string $backupType, $targets): array
+    {
+        $backupKey = (string) config('storage_management.backup.encryption_key', '');
+        if (strlen($backupKey) < 32) {
+            throw new RuntimeException('کلید رمزنگاری بکاپ باید حداقل ۳۲ بایت باشد.');
+        }
+        if (! function_exists('sodium_crypto_secretstream_xchacha20poly1305_init_push')) {
+            throw new RuntimeException('افزونه Sodium برای بکاپ افزایشی امن در دسترس نیست.');
+        }
+
+        $target = $targets->first();
+        if (! $target) {
+            throw new RuntimeException('مقصد خارجی سالم برای بکاپ افزایشی وجود ندارد.');
+        }
+
+        $work = storage_path('app/backup-work/'.bin2hex(random_bytes(12)));
+        if (! mkdir($work, 0700, true) && ! is_dir($work)) {
+            throw new RuntimeException('ساخت فضای موقت بکاپ افزایشی ناموفق بود.');
+        }
+
+        $startedAt = now();
+        $snapshotLock = StorageBackupRun::create([
+            'backup_type' => $backupType,
+            'source_name' => 'snapshot_lock',
+            'status' => 'running',
+            'started_at' => $startedAt,
+            'metadata' => ['lock_only' => true, 'format_version' => 3],
+        ]);
+
+        $uploadedManifestKey = null;
+        try {
+            $corePath = $work.'/farast-core.zip';
+            $this->createArchive($corePath, $work, $backupKey, false);
+            $objectIds = [];
+            $coreObject = $this->storeBackupObject($target, $corePath, $backupKey, $work, [
+                'source_kind' => 'local_snapshot_core',
+            ]);
+            $objectIds[] = (int) $coreObject->id;
+
+            $entries = [];
+            $sourceReadBytes = 0;
+            $perRunSourceReadLimit = max(1, (int) config('storage_management.backup.max_iran_source_read_bytes_per_run', 536870912));
+            $monthlySourceReadLimit = max($perRunSourceReadLimit, (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120));
+
+            StorageManagedFile::query()
+                ->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])
+                ->whereNull('storage_volume_id')
+                ->orderBy('id')
+                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit, $monthlySourceReadLimit): void {
+                    foreach ($files as $file) {
+                        $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
+                        $temporary = $work.'/staged-'.$file->id;
+                        $this->storage->downloadTo($disk, $file->file_key, $temporary);
+                        $object = $this->storeBackupObject($target, $temporary, $backupKey, $work, [
+                            'source_kind' => 'local_staging',
+                        ]);
+                        $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
+                        $entries[$entry] = $this->backupObjectManifestEntry($object);
+                        $objectIds[] = (int) $object->id;
+                        @unlink($temporary);
+                    }
+                });
+
+            StorageManagedFile::query()
+                ->whereIn('status', ['active', 'delete_pending'])
+                ->whereNotNull('storage_volume_id')
+                ->with('volume')
+                ->orderBy('id')
+                ->chunkById(100, function ($files) use ($target, $backupKey, $work, &$entries, &$objectIds, &$sourceReadBytes, $perRunSourceReadLimit, $monthlySourceReadLimit): void {
+                    foreach ($files as $file) {
+                        if (! $file->volume) {
+                            throw new RuntimeException('فایل مدیریت‌شده به فضای ذخیره‌سازی معتبر متصل نیست: '.$file->id);
+                        }
+
+                        $checksum = strtolower((string) $file->checksum);
+                        if (! preg_match('/^[a-f0-9]{64}$/', $checksum)) {
+                            throw new RuntimeException('فایل مدیریت‌شده فاقد SHA-256 معتبر است؛ بکاپ بدون خواندن کامل مبدأ متوقف شد: '.$file->id);
+                        }
+
+                        $object = $this->findReusableBackupObject($target, $checksum);
+                        if (! $object) {
+                            $size = max(0, (int) $file->size_bytes);
+                            if ($file->volume->drive_key === 'iran_primary') {
+                                $monthlyUsed = StorageBackupObject::query()
+                                    ->where('storage_volume_id', $target->id)
+                                    ->where('created_at', '>=', now()->startOfMonth())
+                                    ->where('metadata->source_drive_key', 'iran_primary')
+                                    ->get()
+                                    ->sum(fn (StorageBackupObject $item): int => (int) data_get($item->metadata, 'source_read_bytes', 0));
+
+                                if ($sourceReadBytes + $size > $perRunSourceReadLimit
+                                    || $monthlyUsed + $sourceReadBytes + $size > $monthlySourceReadLimit) {
+                                    throw new RuntimeException('سقف امن خواندن مبدأ ایران برای این نوبت یا ماه تکمیل شده است؛ ادامه بکاپ به اجرای بعدی موکول شد.');
+                                }
+                                $sourceReadBytes += $size;
+                            }
+
+                            $temporary = $work.'/managed-source-'.$file->id;
+                            $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
+                            $actualSize = @filesize($temporary);
+                            $actualChecksum = @hash_file('sha256', $temporary);
+                            if (! is_int($actualSize) || $actualSize !== $size
+                                || ! is_string($actualChecksum) || ! hash_equals($checksum, $actualChecksum)) {
+                                @unlink($temporary);
+                                throw new RuntimeException('اندازه یا SHA-256 فایل مبدأ با رکورد پایگاه داده مطابقت ندارد: '.$file->id);
+                            }
+
+                            $object = $this->storeBackupObject($target, $temporary, $backupKey, $work, [
+                                'source_kind' => 'managed_remote',
+                                'source_drive_key' => (string) $file->volume->drive_key,
+                                'source_volume_id' => (int) $file->storage_volume_id,
+                                'source_read_bytes' => $file->volume->drive_key === 'iran_primary' ? $size : 0,
+                            ]);
+                            @unlink($temporary);
+                        }
+
+                        $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
+                        $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
+                        $entries[$entry] = $this->backupObjectManifestEntry($object);
+                        $objectIds[] = (int) $object->id;
+                    }
+                });
+
+            $objectIds = array_values(array_unique($objectIds));
+            ksort($entries, SORT_STRING);
+            $manifest = [
+                'format_version' => 3,
+                'created_at' => now()->toIso8601String(),
+                'application' => config('app.name'),
+                'database_driver' => config('database.connections.'.config('database.default').'.driver', config('database.default')),
+                'storage_policy' => 'farast-storage-core-v1',
+                'core' => $this->backupObjectManifestEntry($coreObject),
+                'managed_entries' => $entries,
+                'entry_count' => count($entries) + 1,
+                'source_read_bytes' => $sourceReadBytes,
+            ];
+            $inventory = [
+                'core' => $manifest['core'],
+                'managed_entries' => $entries,
+                'database_driver' => $manifest['database_driver'],
+            ];
+            $manifest['inventory_hmac'] = hash_hmac(
+                'sha256',
+                json_encode($inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                $backupKey
+            );
+
+            $manifestPlainPath = $work.'/manifest.json';
+            $manifestEncryptedPath = $work.'/manifest.enc';
+            $manifestJson = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            if (file_put_contents($manifestPlainPath, $manifestJson, LOCK_EX) !== strlen($manifestJson)) {
+                throw new RuntimeException('نوشتن Manifest بکاپ افزایشی ناموفق بود.');
+            }
+            $manifestMeta = app(StorageBackupObjectCipher::class)->encryptFile($manifestPlainPath, $manifestEncryptedPath, $backupKey);
+            $manifestChecksum = hash_file('sha256', $manifestEncryptedPath);
+            if (! is_string($manifestChecksum)) {
+                throw new RuntimeException('محاسبه Checksum Manifest بکاپ ناموفق بود.');
+            }
+
+            $uploadedManifestKey = 'manifests/'.$backupType.'/'.now()->format('Y/m/d').'/'.Str::uuid().'.enc';
+            $this->storage->uploadBackup($target, $uploadedManifestKey, $manifestEncryptedPath);
+            if ($this->storage->size($this->storage->volumeDisk($target), $uploadedManifestKey) !== $manifestMeta['encrypted_size_bytes']) {
+                throw new RuntimeException('اندازه Manifest پس از انتقال با فایل محلی مطابقت ندارد.');
+            }
+
+            $run = DB::transaction(function () use ($target, $backupType, $startedAt, $uploadedManifestKey, $manifestMeta, $manifestChecksum, $objectIds, $manifest): StorageBackupRun {
+                $run = StorageBackupRun::create([
+                    'storage_volume_id' => $target->id,
+                    'backup_type' => $backupType,
+                    'source_name' => 'application',
+                    'status' => 'completed',
+                    'object_key' => $uploadedManifestKey,
+                    'size_bytes' => $manifestMeta['encrypted_size_bytes'],
+                    'checksum' => $manifestChecksum,
+                    'started_at' => $startedAt,
+                    'completed_at' => now(),
+                    'metadata' => [
+                        'format_version' => 3,
+                        'manifest_plaintext_size' => $manifestMeta['size_bytes'],
+                        'manifest_plaintext_sha256' => $manifestMeta['sha256'],
+                        'encrypted' => true,
+                        'encryption' => 'Sodium secretstream XChaCha20-Poly1305',
+                        'object_count' => count($objectIds),
+                        'source_read_bytes' => $manifest['source_read_bytes'],
+                    ],
+                ]);
+                $run->backupObjects()->sync($objectIds);
+                $lockedTarget = StorageVolume::query()->lockForUpdate()->findOrFail($target->id);
+                $lockedTarget->update([
+                    'used_bytes' => (int) $lockedTarget->used_bytes + (int) $manifestMeta['encrypted_size_bytes'],
+                    'object_count' => (int) $lockedTarget->object_count + 1,
+                ]);
+
+                return $run;
+            });
+
+            $snapshotLock->update(['status' => 'completed', 'completed_at' => now()]);
+            $this->pruneOldBackups($target, $run);
+
+            return [[
+                'volume_id' => $target->id,
+                'status' => 'completed',
+                'object_key' => $uploadedManifestKey,
+                'format_version' => 3,
+                'object_count' => count($objectIds),
+                'source_read_bytes' => $sourceReadBytes,
+            ]];
+        } catch (\Throwable $exception) {
+            if (is_string($uploadedManifestKey)) {
+                try {
+                    $this->storage->delete($this->storage->volumeDisk($target), $uploadedManifestKey);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+            $snapshotLock->update([
+                'status' => 'failed',
+                'completed_at' => now(),
+                'error_message' => mb_substr($exception->getMessage(), 0, 1000),
+            ]);
+            throw $exception;
+        } finally {
+            $this->removeDirectory($work);
+        }
+    }
+
+    private function findReusableBackupObject(StorageVolume $target, string $checksum): ?StorageBackupObject
+    {
+        $object = StorageBackupObject::query()
+            ->where('storage_volume_id', $target->id)
+            ->where('sha256', $checksum)
+            ->where('status', 'verified')
+            ->first();
+
+        if (! $object) {
+            return null;
+        }
+
+        if (! $this->storage->exists($this->storage->volumeDisk($target), $object->object_key)) {
+            $metadata = (array) $object->metadata;
+            $metadata['remote_object_missing_at'] = now()->toIso8601String();
+            $object->update(['status' => 'missing', 'metadata' => $metadata]);
+
+            return null;
+        }
+
+        return $object;
+    }
+
+    private function storeBackupObject(
+        StorageVolume $target,
+        string $sourcePath,
+        string $backupKey,
+        string $work,
+        array $metadata
+    ): StorageBackupObject {
+        $checksum = @hash_file('sha256', $sourcePath);
+        $size = @filesize($sourcePath);
+        if (! is_string($checksum) || ! is_int($size) || $size < 0) {
+            throw new RuntimeException('محاسبه هویت فایل برای بکاپ افزایشی ناموفق بود.');
+        }
+
+        $existing = $this->findReusableBackupObject($target, $checksum);
+        if ($existing) {
+            if ((int) $existing->size_bytes !== $size) {
+                throw new RuntimeException('یک SHA-256 با اندازه متفاوت در مخزن بکاپ ثبت شده است.');
+            }
+
+            return $existing;
+        }
+
+        $encryptedPath = $work.'/blob-'.Str::uuid().'.enc';
+        $encryptedMeta = app(StorageBackupObjectCipher::class)->encryptFile($sourcePath, $encryptedPath, $backupKey);
+        $objectKey = 'objects/'.substr($checksum, 0, 2).'/'.Str::uuid().'.enc';
+        $this->storage->uploadBackup($target, $objectKey, $encryptedPath);
+        $remoteSize = $this->storage->size($this->storage->volumeDisk($target), $objectKey);
+        if ($remoteSize !== $encryptedMeta['encrypted_size_bytes']) {
+            try {
+                $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
+            } catch (\Throwable $cleanupException) {
+                report($cleanupException);
+            }
+            throw new RuntimeException('اندازه Blob بکاپ پس از انتقال با نسخه محلی مطابقت ندارد.');
+        }
+
+        try {
+            return DB::transaction(function () use ($target, $checksum, $size, $objectKey, $encryptedMeta, $metadata): StorageBackupObject {
+                $object = StorageBackupObject::query()
+                    ->lockForUpdate()
+                    ->where('storage_volume_id', $target->id)
+                    ->where('sha256', $checksum)
+                    ->first();
+                $oldEncryptedSize = $object ? (int) $object->encrypted_size_bytes : 0;
+                $isNew = ! $object;
+                $object ??= new StorageBackupObject();
+                $object->fill([
+                    'storage_volume_id' => $target->id,
+                    'sha256' => $checksum,
+                    'size_bytes' => $size,
+                    'object_key' => $objectKey,
+                    'encrypted_size_bytes' => $encryptedMeta['encrypted_size_bytes'],
+                    'status' => 'verified',
+                    'verified_at' => now(),
+                    'metadata' => array_merge($metadata, [
+                        'cipher' => 'sodium-secretstream-xchacha20poly1305-v1',
+                    ]),
+                ])->save();
+
+                $lockedTarget = StorageVolume::query()->lockForUpdate()->findOrFail($target->id);
+                $lockedTarget->update([
+                    'used_bytes' => max(0, (int) $lockedTarget->used_bytes - $oldEncryptedSize) + (int) $encryptedMeta['encrypted_size_bytes'],
+                    'object_count' => (int) $lockedTarget->object_count + ($isNew ? 1 : 0),
+                ]);
+
+                return $object;
+            });
+        } catch (\Throwable $exception) {
+            try {
+                $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
+            } catch (\Throwable $cleanupException) {
+                report($cleanupException);
+            }
+            throw $exception;
+        } finally {
+            @unlink($encryptedPath);
+        }
+    }
+
+    private function backupObjectManifestEntry(StorageBackupObject $object): array
+    {
+        return [
+            'id' => (int) $object->id,
+            'object_key' => (string) $object->object_key,
+            'sha256' => (string) $object->sha256,
+            'size_bytes' => (int) $object->size_bytes,
+            'encrypted_size_bytes' => (int) $object->encrypted_size_bytes,
+        ];
     }
 
     private function availableBackupTargets()
@@ -434,7 +779,7 @@ class StorageBackupService
         }
     }
 
-    private function createArchive(string $archivePath, string $work, string $password): void
+    private function createArchive(string $archivePath, string $work, string $password, bool $includeManaged = true): void
     {
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -459,30 +804,32 @@ class StorageBackupService
         $this->addDirectory($zip, storage_path('app/remote-archive'), 'legacy-remote-archive', $entries);
         $this->addDatabaseDump($zip, $work, $entries);
 
-        $managedCount = 0;
-        StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])->whereNull('storage_volume_id')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
-            foreach ($files as $file) {
-                $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
-                $temporary = $work.'/staged-'.$file->id;
-                $this->storage->downloadTo($disk, $file->file_key, $temporary);
-                $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
-                $this->addEncryptedFile($zip, $temporary, $entry, $entries);
-                $managedCount++;
-            }
-        });
-        StorageManagedFile::query()->whereIn('status', ['active', 'delete_pending'])->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
-            foreach ($files as $file) {
-                if (! $file->volume) continue;
-                $temporary = $work.'/managed-'.$file->id;
-                $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
-                $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
-                $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
-                $this->addEncryptedFile($zip, $temporary, $entry, $entries);
-                $managedCount++;
-            }
-        });
-
-        $manifest['managed_files_included'] = $managedCount;
+        if ($includeManaged) {
+            $managedCount = 0;
+            StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])->whereNull('storage_volume_id')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
+                foreach ($files as $file) {
+                    $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
+                    $temporary = $work.'/staged-'.$file->id;
+                    $this->storage->downloadTo($disk, $file->file_key, $temporary);
+                    $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
+                    $this->addEncryptedFile($zip, $temporary, $entry, $entries);
+                    $managedCount++;
+                }
+            });
+            StorageManagedFile::query()->whereIn('status', ['active', 'delete_pending'])->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount, &$entries) {
+                foreach ($files as $file) {
+                    if (! $file->volume) continue;
+                    $temporary = $work.'/managed-'.$file->id;
+                    $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
+                    $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
+                    $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
+                    $this->addEncryptedFile($zip, $temporary, $entry, $entries);
+                    $managedCount++;
+                }
+            });
+    
+            $manifest['managed_files_included'] = $managedCount;
+        }
         ksort($entries, SORT_STRING);
         $manifest['entries'] = $entries;
         $manifest['entry_count'] = count($entries);
