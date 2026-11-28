@@ -36,7 +36,7 @@ class VerifyStorageBackup extends Command
             if ((int) data_get($run->metadata, 'format_version', 0) === 3) {
                 $work = storage_path('app/backup-verify-work/'.bin2hex(random_bytes(12)));
                 if (! mkdir($work, 0700, true) && ! is_dir($work)) {
-                    throw new \\RuntimeException('ساخت فضای موقت بررسی بکاپ افزایشی ناموفق بود.');
+                    throw new \RuntimeException('ساخت فضای موقت بررسی بکاپ افزایشی ناموفق بود.');
                 }
                 try {
                     $backup->materializeIncrementalManifest($run, $temporary, $work, $work.'/extracted');
