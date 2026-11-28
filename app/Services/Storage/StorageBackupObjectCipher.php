@@ -80,7 +80,8 @@ class StorageBackupObjectCipher
         string $targetPath,
         string $masterKey,
         int $expectedSize,
-        string $expectedSha256
+        string $expectedSha256,
+        string $purpose = 'backup'
     ): void {
         $this->assertAvailable($masterKey);
         if ($expectedSize < 0 || ! preg_match('/^[a-f0-9]{64}$/i', $expectedSha256)) {
