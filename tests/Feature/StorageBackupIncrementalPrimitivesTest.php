@@ -71,7 +71,9 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
             }
         );
         $storage->shouldReceive('size')->once()->andReturnUsing(
-            fn (string $disk, string $key): int => strlen($remoteObjects[$key] ?? '')
+            function (string $disk, string $key) use (&$remoteObjects): int {
+                return strlen($remoteObjects[$key] ?? '');
+            }
         );
 
         $service = new StorageBackupService($storage);
