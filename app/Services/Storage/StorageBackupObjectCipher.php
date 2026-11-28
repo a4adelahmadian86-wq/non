@@ -26,6 +26,7 @@ class StorageBackupObjectCipher
         }
 
         $key = $this->deriveKey($masterKey);
+        $completed = false;
         try {
             [$state, $header] = sodium_crypto_secretstream_xchacha20poly1305_init_push($key);
             $this->writeAll($output, self::MAGIC.$header);
@@ -55,10 +56,12 @@ class StorageBackupObjectCipher
 
             fflush($output);
             if (function_exists('fsync')) @fsync($output);
+            $completed = true;
         } finally {
             sodium_memzero($key);
             fclose($input);
             fclose($output);
+            if (! $completed) @unlink($targetPath);
         }
 
         $encryptedSize = @filesize($targetPath);
@@ -93,6 +96,7 @@ class StorageBackupObjectCipher
         }
 
         $key = $this->deriveKey($masterKey);
+        $completed = false;
         $hash = hash_init('sha256');
         $bytesWritten = 0;
         try {
@@ -135,10 +139,12 @@ class StorageBackupObjectCipher
             }
             fflush($output);
             if (function_exists('fsync')) @fsync($output);
+            $completed = true;
         } finally {
             sodium_memzero($key);
             fclose($input);
             fclose($output);
+            if (! $completed) @unlink($targetPath);
         }
 
         @chmod($targetPath, 0600);
