@@ -16,7 +16,19 @@ class StorageBackupPreflightTest extends TestCase
 
     public function test_backup_does_not_read_source_files_when_no_healthy_destination_exists(): void
     {
-        config(['storage_management.backup.encryption_key' => '']);
+        config(['storage_management.backup.encryption_key' => '', 'storage_management.backup.enable_iran_replica' => false]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'iran_primary',
+            'name' => 'Iran primary only',
+            'driver' => 's3',
+            'endpoint' => 'https://iran.example.test',
+            'bucket' => 'farast-primary',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
 
         $storage = Mockery::mock(StorageManager::class);
         $storage->shouldNotReceive('downloadTo');
