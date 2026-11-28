@@ -149,6 +149,9 @@ class AdminStorageController extends Controller
         }
         $bucket = (string) ($connection['bucket'] ?? ($credentials['bucket'] ?? ''));
         $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($endpoint, PHP_URL_SCHEME));
+        $port = parse_url($endpoint, PHP_URL_PORT);
+        $endpointPath = (string) parse_url($endpoint, PHP_URL_PATH);
         $provider = trim((string) ($connection['provider'] ?? ($data['drive_key'] === 'foreign_backup' ? 'tigris' : $host)));
         if ($data['drive_key'] === 'foreign_backup') {
             if (StorageVolume::query()->where('drive_key', 'foreign_backup')->where('provider', 'tigris')->where('is_active', true)->exists()) {
@@ -159,8 +162,9 @@ class AdminStorageController extends Controller
             $region = strtolower((string) ($connection['region'] ?? ($credentials['region'] ?? '')));
             $pathStyleValue = $connection['use_path_style_endpoint'] ?? ($credentials['use_path_style_endpoint'] ?? true);
             $pathStyle = filter_var($pathStyleValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if ($driver !== 's3' || $host !== 't3.storage.dev' || $region !== 'auto' || $pathStyle !== false
-                || strtolower($provider) !== 'tigris') {
+            if ($driver !== 's3' || $scheme !== 'https' || $host !== 't3.storage.dev'
+                || ($port !== null && $port !== 443) || ! in_array($endpointPath, ['', '/'], true)
+                || $region !== 'auto' || $pathStyle !== false || strtolower($provider) !== 'tigris') {
                 return back()->withErrors([
                     'connection_json' => 'برای جلوگیری از هزینه ناخواسته، مقصد بکاپ رایگان فعلاً فقط Tigris Standard است: endpoint برابر https://t3.storage.dev، region برابر auto، provider برابر tigris و use_path_style_endpoint برابر false.',
                 ])->withInput($request->except('connection_json'));
