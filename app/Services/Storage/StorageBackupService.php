@@ -198,6 +198,16 @@ class StorageBackupService
         if ($zip->open($coreArchivePath) !== true || ! $zip->setPassword($backupKey)) {
             throw new RuntimeException('آرشیو اصلی بکاپ افزایشی قابل باز کردن یا رمزگشایی نیست.');
         }
+        $coreManifestJson = $zip->getFromName('manifest.json');
+        $coreManifest = is_string($coreManifestJson)
+            ? json_decode($coreManifestJson, true)
+            : null;
+        if (! is_array($coreManifest)
+            || (int) ($coreManifest['format_version'] ?? 0) !== 2
+            || (string) ($coreManifest['database_driver'] ?? '') !== (string) $manifest['database_driver']) {
+            $zip->close();
+            throw new RuntimeException('Manifest داخلی آرشیو اصلی با Manifest افزایشی هم‌خوانی ندارد.');
+        }
         $seen = [];
         try {
             for ($index = 0; $index < $zip->numFiles; $index++) {
