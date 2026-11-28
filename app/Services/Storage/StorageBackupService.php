@@ -152,7 +152,7 @@ class StorageBackupService
         $expectedHmac = hash_hmac(
             'sha256',
             json_encode($inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            $backupKey
+            $this->manifestHmacKey($backupKey)
         );
         if (! hash_equals($expectedHmac, (string) ($manifest['inventory_hmac'] ?? ''))) {
             throw new RuntimeException('امضای موجودی Manifest بکاپ افزایشی معتبر نیست.');
@@ -637,7 +637,7 @@ class StorageBackupService
             $manifest['inventory_hmac'] = hash_hmac(
                 'sha256',
                 json_encode($inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                $backupKey
+                $this->manifestHmacKey($backupKey)
             );
 
             $manifestPlainPath = $work.'/manifest.json';
@@ -962,6 +962,11 @@ class StorageBackupService
                     'updated_at' => now(),
                 ]);
         });
+    }
+
+    private function manifestHmacKey(string $backupKey): string
+    {
+        return hash_hmac('sha256', 'farast-backup-manifest-auth-v1', $backupKey, true);
     }
 
     private function backupObjectManifestEntry(StorageBackupObject $object): array
