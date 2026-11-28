@@ -123,7 +123,7 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 ## 4. Safe implementation sequence
 
 ### Gate A — before any Arvan connection
-- Review and correct PR #761's guard rather than treating its current hourly interval as sufficient.
+- Review and correct PR #761's guard and use the daily 24-hour interval for Arvan Base; even an hourly probe would consume about 2,160 operations/month at three operations per check.
 - Add atomic storage reservations and a failure-safe release path.
 - Change default S3 health checks to a non-mutating, bounded check; move inventory and write/read/delete capability tests to explicit manual operations.
 - Add tests for concurrent reservations, failed PUT cleanup, unhealthy-volume backoff, no automatic inventory, and no routine full-object GET after upload.
@@ -230,7 +230,7 @@ The existing quota-guard PR was extended in place on its original branch; no par
 - Failed health checks now persist a retry timestamp and exponential backoff based on the configured interval, capped at 24 hours; a successful scheduled check clears the retry state.
 - The UI/docs explain that a full manual verification may use additional API operations and inventory listing.
 
-Exact updated head at this refresh: `915bf00f05dcb9be4bc070171c20e71473e02dbb`. The latest workflow checks were queued/in progress; do not claim these follow-up changes have passed CI until their exact head runs complete.
+Exact updated head at this refresh: `5c33abf5418ce94dbdee6c0e5f264aa9d19f2e5d`. The latest workflow checks were queued/in progress; do not claim these follow-up changes have passed CI until their exact head runs complete.
 
 Still open before Arvan Base:
 - S3 probe remains PUT+GET+DELETE (three operations).
