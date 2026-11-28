@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
+use App\Models\StorageBackupObject;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use App\Services\Storage\StorageBackupService;
@@ -84,16 +85,82 @@ class RestoreStorageBackup extends Command
 
             $checksum = hash_file('sha256', $archive);
             if (! is_string($checksum) || ($run && ! hash_equals((string) $run->checksum, $checksum))) {
-                throw new RuntimeException('Checksum نسخه پشتیبان صحیح نیست.');
+                throw new RuntimeException('Checksum نسخه پشتیبان با مقدار ثبت‌شده مطابقت ندارد.');
             }
-            // For a local bootstrap restore, the encrypted manifest and per-entry
-            // AES authentication are the trust anchor; no database run row is needed.
-            $backup->verifyArchive($archive);
 
-            $zip = new ZipArchive();
-            if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
-            if (! $zip->setPassword($password)) {
+            $incrementalManifest = null;
+            if ($run && (int) data_get($run->metadata, 'format_version', 0) === 3) {
+                $incrementalManifest = $backup->materializeIncrementalManifest($run, $archive, $work, $extracted);
+                $manifest = $incrementalManifest;
+                $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+            } else {
+                // Legacy ZIP v1/v2 backups remain fully restorable.
+                $backup->verifyArchive($archive);
+
+                $zip = new ZipArchive();
+                if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
+                if (! $zip->setPassword($password)) {
+                    $zip->close();
+                    throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
+                }
+                $seenEntries = [];
+                for ($index = 0; $index < $zip->numFiles; $index++) {
+                    $name = $zip->getNameIndex($index);
+                    if (
+                        ! is_string($name)
+                        || $name === ''
+                        || strlen($name) > 4096
+                        || str_starts_with($name, '/')
+                        || preg_match('/^[A-Za-z]:/', $name)
+                        || str_contains($name, '\\')
+                        || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
+                        || str_contains($name, "\0")
+                        || isset($seenEntries[$name])
+                    ) {
+                        $zip->close();
+                        throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بازیابی شناسایی شد.');
+                    }
+                    $seenEntries[$name] = true;
+
+                    $operatingSystem = 0;
+                    $externalAttributes = 0;
+                    if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
+                        $unixFileType = ($externalAttributes >> 16) & 0170000;
+                        if (
+                            $operatingSystem === ZipArchive::OPSYS_UNIX
+                            && ! in_array($unixFileType, [0, 0100000, 0040000], true)
+                        ) {
+                            $zip->close();
+                            throw new RuntimeException('نوع فایل ویژه یا پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                        }
+                    }
+                }
+                $manifestJson = $zip->getFromName('manifest.json');
+                if (! is_string($manifestJson)) {
+                    $zip->close();
+                    throw new RuntimeException('Manifest رمزنگاری‌شده در بکاپ قابل خواندن نیست.');
+                }
+                $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
+                $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+                File::ensureDirectoryExists($extracted);
+                if ($zip->locateName('database/database.sql') === false) {
+                    $zip->close();
+                    throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
+                }
+                if (! $zip->extractTo($extracted)) {
+                    $zip->close();
+                    throw new RuntimeException('استخراج فایل‌های رمزنگاری‌شده بکاپ ناموفق بود.');
+                }
                 $zip->close();
+            }
+
+            $currentDriver = (string) config(
+                'database.connections.'.config('database.default').'.driver',
+                config('database.default')
+            );
+            if (! in_array($databaseDriver, ['sqlite', 'mysql', 'mariadb', 'pgsql'], true) || $databaseDriver !== $currentDriver) {
+                throw new RuntimeException('درایور پایگاه داده بکاپ با درایور پشتیبانی‌شده و محیط مقصد یکسان نیست.');
+            }
                 throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
             }
             $seenEntries = [];
