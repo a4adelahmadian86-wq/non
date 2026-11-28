@@ -272,6 +272,13 @@ class RestoreStorageBackup extends Command
                         ->where('storage_volume_id', $volume->id)
                         ->where('period_start', now()->startOfMonth()->toDateString())
                         ->update([
+                            'class_a_operations' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('class_a_operations'),
+                                (int) config('storage_management.backup.max_class_a_ops_per_month', 8000)
+                            ),
                             'class_b_operations' => max(
                                 (int) DB::table('storage_backup_usage_periods')
                                     ->where('storage_volume_id', $volume->id)
@@ -281,6 +288,42 @@ class RestoreStorageBackup extends Command
                             ),
                             'updated_at' => now(),
                         ]);
+
+                    // A restored database predates the source reads performed by this
+                    // backup. Block further Iran-primary backup reads for this month.
+                    StorageVolume::query()->where('drive_key', 'iran_primary')->get()->each(function (StorageVolume $source): void {
+                        DB::table('storage_backup_usage_periods')->insertOrIgnore([
+                            'storage_volume_id' => $source->id,
+                            'period_start' => now()->startOfMonth()->toDateString(),
+                            'class_a_operations' => 0,
+                            'class_b_operations' => 0,
+                            'source_read_bytes' => 0,
+                            'uploaded_bytes' => 0,
+                            'downloaded_bytes' => 0,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        DB::table('storage_backup_usage_periods')
+                            ->where('storage_volume_id', $source->id)
+                            ->where('period_start', now()->startOfMonth()->toDateString())
+                            ->update([
+                                'class_b_operations' => max(
+                                    (int) DB::table('storage_backup_usage_periods')
+                                        ->where('storage_volume_id', $source->id)
+                                        ->where('period_start', now()->startOfMonth()->toDateString())
+                                        ->value('class_b_operations'),
+                                    (int) config('storage_management.backup.max_iran_ops_per_month', 7000)
+                                ),
+                                'source_read_bytes' => max(
+                                    (int) DB::table('storage_backup_usage_periods')
+                                        ->where('storage_volume_id', $source->id)
+                                        ->where('period_start', now()->startOfMonth()->toDateString())
+                                        ->value('source_read_bytes'),
+                                    (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120)
+                                ),
+                                'updated_at' => now(),
+                            ]);
+                    });
                 }
             } else {
                 // Bootstrap recovery has no surviving storage_backup_runs row.
