@@ -46,6 +46,24 @@ class StorageBackupService
 
     private function runWeeklyLocked(string $backupType): array
     {
+        // Never read every source object unless at least one backup destination is configured.
+        // This preflight must happen before archive creation, because creating the archive downloads
+        // all managed objects (including objects stored on metered/free-tier primary volumes).
+        $targets = $this->availableBackupTargets();
+
+        if ($targets->isEmpty()) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ برای جلوگیری از مصرف ترافیک، آرشیو ساخته نشد.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'no_healthy_destination'],
+            ]);
+
+            throw new RuntimeException('هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');
@@ -66,25 +84,21 @@ class StorageBackupService
             $this->createArchive($archivePath, $work, $backupKey);
             $snapshotLock->update(['status' => 'completed', 'completed_at' => now()]);
             $archiveSize = (int) filesize($archivePath);
-            $targets = StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')
-                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
-                ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
-                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
-                ->orderBy('priority')->get();
-            if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
-                $targets = $targets->concat(StorageVolume::query()->where('drive_key', 'iran_backup')->where('is_active', true)->where('status', 'healthy')
-                    ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
-                    ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
-                    ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
-                    ->orderBy('priority')->get());
-            }
+            $targets = $targets->filter(function (StorageVolume $target) use ($archiveSize): bool {
+                return ($target->capacity_bytes === null || ((int) $target->capacity_bytes - (int) $target->used_bytes) >= $archiveSize)
+                    && ($target->max_file_bytes === null || (int) $target->max_file_bytes >= $archiveSize)
+                    && ($target->file_limit === null || (int) $target->object_count < (int) $target->file_limit);
+            })->values();
+
             if ($targets->isEmpty()) {
                 StorageBackupRun::create([
                     'backup_type' => $backupType, 'source_name' => 'application',
-                    'status' => 'failed', 'error_message' => 'هیچ مقصد سالمی برای بکاپ پیکربندی نشده است.',
+                    'status' => 'failed',
+                    'error_message' => 'فضای خالی یا محدودیت مقصد برای آرشیو کافی نیست؛ آرشیو ساخته شد اما به مقصدی ارسال نشد.',
                     'completed_at' => now(),
+                    'metadata' => ['reason' => 'insufficient_destination_capacity'],
                 ]);
-                throw new RuntimeException('هیچ هاست بکاپ سالمی پیکربندی نشده است.');
+                throw new RuntimeException('فضای خالی یا محدودیت هیچ مقصد بکاپی برای آرشیو کافی نیست.');
             }
 
             $checksum = hash_file('sha256', $archivePath);
@@ -139,6 +153,31 @@ class StorageBackupService
         } finally {
             $this->removeDirectory($work);
         }
+    }
+
+    private function availableBackupTargets()
+    {
+        $targets = StorageVolume::query()
+            ->where('drive_key', 'foreign_backup')
+            ->where('is_active', true)
+            ->where('status', 'healthy')
+            ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereColumn('capacity_bytes', '>', 'used_bytes'))
+            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereColumn('object_count', '<', 'file_limit'))
+            ->orderBy('priority')
+            ->get();
+
+        if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
+            $targets = $targets->concat(StorageVolume::query()
+                ->where('drive_key', 'iran_backup')
+                ->where('is_active', true)
+                ->where('status', 'healthy')
+                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereColumn('capacity_bytes', '>', 'used_bytes'))
+                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereColumn('object_count', '<', 'file_limit'))
+                ->orderBy('priority')
+                ->get());
+        }
+
+        return $targets;
     }
 
     private function assertArchiveReadable(string $archivePath, string $password): void
