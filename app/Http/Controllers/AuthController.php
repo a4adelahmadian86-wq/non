@@ -30,7 +30,7 @@ class AuthController extends Controller
     public function phoneContinue(Request $request)
     {
         $phone = $this->validatedPhone($request);
-        $request->session()->forget(['register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
+        $request->session()->forget(['register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at', 'register.staff_activation']);
         $user = User::where('mobile', $phone)->first();
 
         if ($user && $user->is_blocked) {
@@ -39,14 +39,17 @@ class AuthController extends Controller
 
         $request->session()->put('login.phone', $phone);
 
-        if ($user && $user->password) {
+        if ($user && $user->password && $user->is_verified) {
             return response()->json(['ok' => true, 'next' => route('login.password')]);
         }
 
-        $this->issueSmsOtp($phone, app(SmsService::class));
+        // A manager-created account already owns this unique mobile number.
+        // Verify that number in-place; never create a duplicate customer row.
         $request->session()->put('register.mobile', $phone);
+        $request->session()->put('register.staff_activation', (bool) $user);
+        $this->issueSmsOtp($phone, app(SmsService::class));
 
-        return response()->json(['ok' => true, 'next' => route('register'), 'mode' => 'register']);
+        return response()->json(['ok' => true, 'next' => route('register'), 'mode' => $user ? 'activate' : 'register']);
     }
 
     public function requestOtp(Request $request, SmsService $sms)
@@ -95,14 +98,17 @@ class AuthController extends Controller
         $phone = $request->session()->get('register.mobile');
         abort_unless($phone && $this->isPhoneVerified($request, 'register', (string) $phone), 403, 'ابتدا همین شماره موبایل را تأیید کنید.');
 
-        if (User::where('mobile', $phone)->exists()) {
+        $existingUser = User::where('mobile', $phone)->first();
+        $isStaffActivation = (bool) $request->session()->get('register.staff_activation', false);
+        if ($existingUser && ! $isStaffActivation) {
             return redirect()->route('login')->with('warning', 'این شماره قبلاً دارای حساب است.');
         }
+        abort_if($isStaffActivation && ! $existingUser, 409, 'حساب کارمندی برای این شماره پیدا نشد.');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', $existingUser ? 'unique:users,email,'.$existingUser->id : 'unique:users,email'],
         ], [
             'name.required' => 'نام و نام خانوادگی را وارد کنید.',
             'password.min' => 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
@@ -111,15 +117,39 @@ class AuthController extends Controller
             'email.unique' => 'این ایمیل قبلاً ثبت شده است.',
         ]);
 
-        $user = User::create([
-            'name' => $data['name'],
-            'mobile' => $phone,
-            'email' => $data['email'] ?? null,
-            'password' => $data['password'],
-            'role' => 'user',
-            'is_verified' => true,
-            'is_blocked' => false,
-        ]);
+        if ($existingUser) {
+            abort_if($existingUser->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
+            $user = DB::transaction(function () use ($existingUser, $data): User {
+                $user = User::query()->whereKey($existingUser->id)->lockForUpdate()->firstOrFail();
+                abort_if($user->password && $user->is_verified, 409, 'برای این حساب قبلاً رمز عبور تعیین شده است.');
+                $user->password = $data['password'];
+                $user->is_verified = true;
+                if (blank($user->name)) {
+                    $user->name = $data['name'];
+                }
+                if (blank($user->email) && ! empty($data['email'])) {
+                    $user->email = $data['email'];
+                }
+                $user->save();
+
+                return $user;
+            }, 3);
+        } else {
+            $user = DB::transaction(function () use ($data, $phone): User {
+                $user = User::create([
+                    'name' => $data['name'],
+                    'mobile' => $phone,
+                    'email' => $data['email'] ?? null,
+                    'password' => $data['password'],
+                    'role' => 'user',
+                    'is_verified' => true,
+                    'is_blocked' => false,
+                ]);
+                $this->assignCustomerPrimaryResponsibility($user);
+
+                return $user;
+            }, 3);
+        }
 
         try {
             $emailService->sendWelcome($user);
@@ -127,7 +157,7 @@ class AuthController extends Controller
             // ثبت‌نام نباید به خاطر ایمیل شکست بخورد
         }
 
-        $request->session()->forget(['login.phone', 'register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
+        $request->session()->forget(['login.phone', 'register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at', 'register.staff_activation']);
         Auth::login($user, false);
         $request->session()->regenerate();
         $request->session()->put('farast.explicit_login', now()->timestamp);
@@ -435,6 +465,24 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('home');
+    }
+
+    private function assignCustomerPrimaryResponsibility(User $user): void
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('roles')
+            || ! \Illuminate\Support\Facades\Schema::hasTable('role_assignments')
+            || ! \Illuminate\Support\Facades\Schema::hasColumn('role_assignments', 'active_primary_user_id')) {
+            return;
+        }
+        $roleId = DB::table('roles')->where('key', 'user')->where('is_active', true)->value('id');
+        if (! $roleId) {
+            return;
+        }
+        DB::table('role_assignments')->insert([
+            'user_id' => $user->id, 'role_id' => $roleId, 'scope' => 'own',
+            'is_primary' => true, 'active_primary_user_id' => $user->id,
+            'title' => 'مشتری عادی', 'starts_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
     private function validatedPhone(Request $request): string

@@ -1,0 +1,105 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Services\StaffLifecycleService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class StaffLifecycleServiceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_user_has_at_most_one_active_primary_responsibility_and_keeps_history(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => 'user']);
+        $departmentId = DB::table('departments')->insertGetId([
+            'name' => 'عملیات', 'key' => 'operations-primary', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $service = app(StaffLifecycleService::class);
+
+        $first = $service->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس', 'own', null, null, $departmentId);
+        $second = $service->setPrimaryResponsibility($actor, $subject, 'organization_manager', 'مدیر سازمان', 'own', null, null, $departmentId);
+        $secondary = $service->addSecondaryResponsibility($actor, $subject, 'employee', 'هماهنگ‌کننده', 'own', null, null, $departmentId);
+
+        $this->assertDatabaseHas('role_assignments', ['id' => $first->id, 'is_primary' => false]);
+        $this->assertNotNull(DB::table('role_assignments')->where('id', $first->id)->value('ended_at'));
+        $this->assertDatabaseHas('role_assignments', ['id' => $second->id, 'is_primary' => true, 'ended_at' => null]);
+        $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
+        $this->assertSame('organization_manager', $subject->fresh()->role);
+        $this->assertSame($departmentId, (int) DB::table('role_assignments')->where('id', $second->id)->value('department_id'));
+        $this->assertSame($departmentId, (int) DB::table('role_assignments')->where('id', $secondary->id)->value('department_id'));
+    }
+
+    public function test_department_membership_is_independent_and_dismissal_restores_customer_role_without_deleting_history(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $departmentId = DB::table('departments')->insertGetId([
+            'name' => 'عملیات', 'key' => 'operations', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $service = app(StaffLifecycleService::class);
+        $assignment = $service->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس');
+        $service->setDepartmentMembership($actor, $subject, $departmentId, true);
+        $service->dismissToCustomer($actor, $subject);
+
+        $this->assertSame('user', $subject->fresh()->role);
+        $this->assertDatabaseHas('role_assignments', ['id' => $assignment->id, 'is_primary' => false]);
+        $this->assertNotNull(DB::table('role_assignments')->where('id', $assignment->id)->value('ended_at'));
+        $this->assertNotNull(DB::table('department_user')->where('department_id', $departmentId)->where('user_id', $subject->id)->value('left_at'));
+        $this->assertDatabaseHas('role_assignments', [
+            'user_id' => $subject->id,
+            'is_primary' => true,
+            'active_primary_user_id' => $subject->id,
+            'title' => 'مشتری عادی',
+            'ended_at' => null,
+        ]);
+        $this->assertSame(1, DB::table('role_assignments')->where('user_id', $subject->id)->where('is_primary', true)->whereNull('ended_at')->count());
+    }
+
+    public function test_department_rejoining_preserves_previous_membership_periods(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => 'user']);
+        $departmentId = DB::table('departments')->insertGetId([
+            'name' => 'آموزش', 'key' => 'education-history', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $service = app(StaffLifecycleService::class);
+
+        $service->setDepartmentMembership($actor, $subject, $departmentId, true);
+        $service->setDepartmentMembership($actor, $subject, $departmentId, false);
+        $service->setDepartmentMembership($actor, $subject, $departmentId, true);
+
+        $periods = DB::table('department_user')->where('department_id', $departmentId)->where('user_id', $subject->id)->orderBy('id')->get();
+        $this->assertCount(2, $periods);
+        $this->assertNotNull($periods[0]->left_at);
+        $this->assertNull($periods[1]->left_at);
+    }
+
+    public function test_a_primary_responsibility_cannot_be_ended_without_replacement(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => 'user']);
+        $assignment = app(StaffLifecycleService::class)->setPrimaryResponsibility($actor, $subject, 'employee', 'کارشناس');
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(StaffLifecycleService::class)->endResponsibility($actor, $assignment->id);
+    }
+
+    public function test_a_user_cannot_hold_two_active_senior_manager_posts(): void
+    {
+        $actor = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $subject = User::factory()->create(['role' => 'user']);
+        $service = app(StaffLifecycleService::class);
+        $service->addSecondaryResponsibility($actor, $subject, 'organization_manager', 'مدیر ارشد');
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->setPrimaryResponsibility($actor, $subject, 'organization_manager', 'مدیر ارشد');
+    }
+}

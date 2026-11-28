@@ -1063,6 +1063,7 @@ class AuthorizationService
             ->join('roles', 'roles.id', '=', 'role_assignments.role_id')
             ->where('role_assignments.user_id', $user->id)
             ->where('roles.is_active', true)
+            ->whereNull('role_assignments.ended_at')
             ->where(fn ($query) => $query->whereNull('role_assignments.starts_at')->orWhere('role_assignments.starts_at', '<=', now()))
             ->where(fn ($query) => $query->whereNull('role_assignments.expires_at')->orWhere('role_assignments.expires_at', '>', now()))
             ->select('role_assignments.*', 'roles.key as role_key')

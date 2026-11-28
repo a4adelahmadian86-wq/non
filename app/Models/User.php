@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -56,6 +57,16 @@ class User extends Authenticatable
     public function organization(): \Illuminate\Database\Eloquent\Relations\BelongsTo { return $this->belongsTo(Organization::class); }
     public function teams(): \Illuminate\Database\Eloquent\Relations\BelongsToMany { return $this->belongsToMany(Team::class)->withPivot('team_role')->withTimestamps(); }
     public function canvaConnection(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(CanvaConnection::class); }
+
+    public function roleAssignments(): HasMany { return $this->hasMany(RoleAssignment::class); }
+    public function primaryResponsibility(): HasOne { return $this->hasOne(RoleAssignment::class)->where('is_primary', true)->whereNull('ended_at'); }
+    public function departments(): BelongsToMany
+    {
+        return $this->belongsToMany(Department::class, 'department_user')
+            ->withPivot(['added_by', 'joined_at', 'left_at'])
+            ->withTimestamps()
+            ->wherePivotNull('left_at');
+    }
 
     public function isAdmin(): bool
     {
