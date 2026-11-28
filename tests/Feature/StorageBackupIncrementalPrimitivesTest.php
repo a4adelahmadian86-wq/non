@@ -64,9 +64,7 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         $remoteObjects = [];
         $storage = Mockery::mock(StorageManager::class);
         $storage->shouldReceive('volumeDisk')->andReturn('storage_volume:'.$volume->id);
-        $storage->shouldReceive('exists')->once()->andReturnUsing(
-            fn (string $disk, string $key): bool => array_key_exists($key, $remoteObjects)
-        );
+        $storage->shouldNotReceive('exists');
         $storage->shouldReceive('uploadBackup')->once()->andReturnUsing(
             function (StorageVolume $target, string $key, string $localPath) use (&$remoteObjects): void {
                 $remoteObjects[$key] = file_get_contents($localPath);
