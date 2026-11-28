@@ -154,9 +154,9 @@ class AdminStorageController extends Controller
         $endpointPath = (string) parse_url($endpoint, PHP_URL_PATH);
         $provider = trim((string) ($connection['provider'] ?? ($data['drive_key'] === 'foreign_backup' ? 'tigris' : $host)));
         if ($data['drive_key'] === 'foreign_backup') {
-            if (StorageVolume::query()->where('drive_key', 'foreign_backup')->where('provider', 'tigris')->where('is_active', true)->exists()) {
+            if (StorageVolume::query()->where('drive_key', 'foreign_backup')->where('provider', 'tigris')->exists()) {
                 return back()->withErrors([
-                    'drive_key' => 'برای رعایت سقف‌های حساب رایگان، فقط یک مقصد فعال Tigris برای FARAST مجاز است.',
+                    'drive_key' => 'برای جلوگیری از دور زدن سقف ماهانه حساب رایگان، فقط یک Volume دائمی Tigris برای FARAST مجاز است؛ همان Volume را ویرایش یا دوباره فعال کنید و Volume جدید نسازید.',
                 ])->withInput($request->except('connection_json'));
             }
             $region = strtolower((string) ($connection['region'] ?? ($credentials['region'] ?? '')));
