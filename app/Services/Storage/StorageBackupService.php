@@ -374,6 +374,26 @@ class StorageBackupService
             throw new RuntimeException('بکاپ کامل از iran_primary غیرفعال است؛ هیچ فایل مبدأ خوانده نشد.');
         }
 
+        $hasUnbudgetedRemoteSources = StorageManagedFile::query()
+            ->whereIn('status', ['active', 'delete_pending'])
+            ->whereNotNull('storage_volume_id')
+            ->whereHas('volume', fn ($query) => $query->where('driver', 's3')->where('drive_key', '!=', 'iran_primary'))
+            ->exists();
+
+        if ($hasUnbudgetedRemoteSources
+            && ! (bool) config('storage_management.backup.allow_unbudgeted_remote_full_source_reads', false)) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'بکاپ کامل از مبدأهای S3 تأییدنشده به‌صورت پیش‌فرض غیرفعال است تا هزینه ترافیک خارجی ایجاد نشود.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'unbudgeted_remote_full_read_disabled'],
+            ]);
+
+            throw new RuntimeException('بکاپ کامل از مبدأ S3 تأییدنشده غیرفعال است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');
