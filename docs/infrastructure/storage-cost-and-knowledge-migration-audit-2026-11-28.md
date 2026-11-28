@@ -495,3 +495,8 @@ However, it is not a native S3 endpoint for the application: it requires a dedic
 Decision: do not use Upload.am for primary data or the only copy. It may be the largest free encrypted cold-backup target after (a) written confirmation that automated app/business backups are permitted on Free, (b) exact per-token API rate limits and inactivity behavior are confirmed, (c) a dedicated adapter is implemented and tested, and (d) client-side encryption is used before upload. The 5 GB per-file limit means larger backups must be split into independently checksummed encrypted parts under a lower safe ceiling (e.g. 4 GB). Keep an independent second copy elsewhere if the data is important.
 
 Official evidence: https://upload.am/en/register ; https://upload.am/docs/api ; https://upload.am/en/terms ; https://upload.am/en/privacy ; https://upload.am/en/dpa
+### 12.6 External connectivity and backup queue retries
+
+Current RunStorageBackupJob uses tries=1. A transient international network failure therefore does not automatically retry. The future external backup worker must use bounded exponential retry with Retry-After support for 429 and transient 5xx/network errors, stable idempotency keys, resumable multipart upload and persisted checkpoints. It must not rebuild the full archive or reread all source objects for every retry.
+
+Backup remains asynchronous and non-blocking for the domestic application. If international connectivity is unavailable, the backup job stays queued/retryable while all core reads and writes continue against the Iran-resident primary. Do not add an untrusted free VPN tunnel to the production server as a hidden dependency.
