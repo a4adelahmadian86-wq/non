@@ -64,6 +64,25 @@ class StorageBackupService
             throw new RuntimeException('هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ هیچ فایل مبدأ خوانده نشد.');
         }
 
+        $hasIranPrimarySources = StorageManagedFile::query()
+            ->whereIn('status', ['active', 'delete_pending'])
+            ->whereNotNull('storage_volume_id')
+            ->whereHas('volume', fn ($query) => $query->where('drive_key', 'iran_primary'))
+            ->exists();
+
+        if ($hasIranPrimarySources && ! (bool) config('storage_management.backup.allow_iran_primary_full_source_reads', false)) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'بکاپ کامل از iran_primary به‌صورت پیش‌فرض غیرفعال است تا ترافیک رایگان آروان مصرف نشود؛ ابتدا بکاپ افزایشی یا مجوز صریح لازم است.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'iran_primary_full_read_disabled'],
+            ]);
+
+            throw new RuntimeException('بکاپ کامل از iran_primary غیرفعال است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');
