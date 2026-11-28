@@ -636,7 +636,8 @@ class StorageBackupService
 
         $encryptedPath = $work.'/blob-'.Str::uuid().'.enc';
         $encryptedMeta = app(StorageBackupObjectCipher::class)->encryptFile($sourcePath, $encryptedPath, $backupKey);
-        $objectKey = 'objects/'.substr($checksum, 0, 2).'/'.Str::uuid().'.enc';
+        $opaqueId = hash_hmac('sha256', $checksum, $backupKey);
+        $objectKey = 'objects/'.substr($opaqueId, 0, 2).'/'.$opaqueId.'.enc';
         $this->assertBackupTargetCapacity($target, $encryptedMeta['encrypted_size_bytes']);
         try {
             $this->reserveBackupUsage($target, 'class_a');
