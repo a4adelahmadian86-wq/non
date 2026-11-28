@@ -112,12 +112,12 @@ All items below were checked against GitHub on 2026-11-28. None was merged by th
 |---|---|---|---|
 | #757 | Route private user files to `iran_primary` | Open; all three observed workflows passed (FARAST CI #7716, Phase 3 #4427, Phase 4 #6898). Branch base is older commit `d938dffd...`, not current main. | Keep open; rebase/update and re-review against current main before merge. Does not migrate already-active foreign objects. |
 | #760 | Safer Runflare recreation command | Open; FARAST CI #7730, Product Supervisor #1350, Phase 4 #6912 passed. | Keep separate; no Runflare provisioning or deployment performed. |
-| #761 | Internal storage quota caps and health interval | Open; earlier head CI passed (FARAST CI #7729, Phase 3 #4430, Phase 4 #6911). Follow-up head `915bf00f...` adds scheduled inventory suppression and exponential backoff; its new CI was queued at the last refresh. | Useful partial guard only. Follow-up reduces inventory/retry costs but does not solve atomic reservation, full-download checksum cost, the 3-operation probe, weekly backup egress, monthly egress or operation metering. Do not call it a no-overage guarantee. |
-| #762 | Arvan free-tier documentation | Open; all observed required jobs on head `35f9154c...` completed successfully (FARAST CI #7748 and Phase 4 #6929); voice-model smoke was skipped by its branch condition. | Keep open; documentation-only. |
+| #761 | Internal storage quota caps and health interval | Open; latest head `946789da...`; all required checks completed successfully (test 1,009 passed / 5 skipped / 5,729 assertions, Laravel, admin E2E, MySQL integrity, reader regression, contract tests and agent). Voice-model smoke skipped by branch condition. | Useful partial guard only. Does not solve atomic reservation, routine full-download checksum cost, the 3-operation probe, monthly egress or operation metering. Not a no-overage guarantee. |
+| #762 | Arvan free-tier documentation | Open; all required checks on head `35f9154c...` completed successfully; voice-model smoke skipped by branch condition. | Keep open; documentation-only. |
 | #759 | Netlify AI gateway fallback | Open; FARAST CI #7726, Netlify contract tests #9, Phase 4 #6908 passed. | Not deployed; it does not establish a domestic fallback or bypass provider eligibility restrictions. |
 | #763 | Reader toolbar icon regression | Open; FARAST CI #7741 and Phase 3 #4431 passed; an earlier duplicate FARAST CI run #7740 was cancelled; Phase 4 #6922 passed. | Unrelated to storage; leave untouched. |
 | #753 | Broad AI gateway/infrastructure change | Open; deployment prerequisites are documented in that PR. | Do not merge wholesale; its gateway deployment/configuration prerequisite remains a separate decision. |
-
+| #766 | Backup destination preflight | Open; latest head `d6a8f791...`; CI launched and is still running at this refresh. | Prevents reading every source object when no healthy external backup target exists; does not solve full weekly source reads, incremental backup, or retention. |
 Workflow observations are based on the workflow runs returned for each exact PR head SHA. Empty combined-status arrays are not interpreted as success. A workflow still marked `in_progress` is not a pass.
 
 ## 4. Safe implementation sequence
@@ -141,6 +141,15 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 - Perform one small, non-sensitive test object only after explicit confirmation, verify private ACL and readback, then stop and inspect actual usage/operation counters.
 - Do not run bulk migration until the test proves cost and restore behavior.
 - The user must perform the Arvan panel steps and provide the active endpoint/bucket details. No action is currently required from the user until the code-side gates are complete.
+
+
+### Gate D — zero-cost external backup and storage tiers
+- Keep the Arvan Iran-resident primary as the domestic anchor; do not use Arvan as a backup destination.
+- Cloudflare R2 Standard is the leading external candidate (10 GB-month, 1M Class A, 10M Class B, free egress, no card to start). Tigris Standard is a secondary candidate (5 GB-month, 10k Class A, 100k Class B, free egress, no card to start).
+- These are distinct external providers, not a unified local disk. The nominal 20 GB across Arvan/R2/Tigris is not fully available inside Iran during an international outage.
+- Do not provision either service until the user creates the account and the no-card / no-overage behavior is confirmed. Never save credentials in Git.
+- The current weekly full backup is not acceptable for Arvan Base: 5 GB read weekly is about 20 GB/month source egress. Implement an encrypted baseline plus content-addressed incrementals, bounded retention and restore verification before enabling any target.
+- The current retention config says keep_all but the service does not enforce it; fix this before any external backup is activated.
 
 ## 5. Explicit non-actions
 
