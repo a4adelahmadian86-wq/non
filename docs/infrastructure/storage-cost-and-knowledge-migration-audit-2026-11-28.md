@@ -154,3 +154,27 @@ Workflow observations are based on the workflow runs returned for each exact PR 
 ## 6. Re-audit triggers
 
 Repeat the audit against the then-current `main` before any implementation branch is merged. Re-check exact Arvan endpoint readiness, account quota/usage, PR base/head SHAs, CI runs and all consumers of product document chunks/facts/pages.
+
+
+## 7. Consumer audit: SQL knowledge dependencies confirmed
+
+A second read-only pass traced the current direct consumers that must be preserved during any bundle migration:
+
+- `app/Http/Controllers/StoreController.php`: the product reader loads document `pages`, `chunks` and `artifacts`; reader audio timing is joined to chunk indexes; the page endpoint reads a page row and returns `content_text`, content blocks, locator and content hash.
+- `app/Services/ProductContentGenerationService.php`: uses `ProductKnowledgeService::contentGenerationContext()`, consumes verified fact IDs/source IDs and includes them in its source-grounded content-generation workflow.
+- `app/Jobs/GenerateProductDocumentAudio.php`: loads SQL chunks and sends their text/locators to the dedicated document-audio service; its timing metadata maps back to chunk indexes.
+- `app/Services/StoreProductDocumentPageBuilder.php`: builds reader-ready page HTML/text and chunk-to-reader-page locator mappings from extracted chunks; the resulting page records are persisted by the ingestion job.
+- `app/Services/ProductKnowledgeService.php`: reads SQL chunks and facts for assistant context and content-generation readiness.
+
+This expands the migration surface beyond the assistant context service. A safe abstraction must preserve:
+1. reader page retrieval and private no-store response behavior;
+2. reader audio chunk-index/timing mapping;
+3. content-generation fact IDs, evidence and source fingerprints;
+4. page-builder output and reader-page locators;
+5. existing incomplete/partial document safeguards.
+
+Do not simply replace the Eloquent relation in `ProductKnowledgeService`. First introduce one verified document-knowledge repository/reader abstraction and route all five consumers through it with legacy SQL fallback. The ingestion writer must publish the immutable bundle and its manifest atomically from the application's perspective before the SQL status can advertise the new bundle as ready. The old SQL rows remain the rollback path until every reader/audio/content-generation regression test and production reconciliation is complete.
+
+### Additional audit boundary
+
+The repository tree was inspected for the named application services/jobs/controllers, and the files above were read. This was a targeted consumer trace, not a formal static-analysis proof that no other code path reads those tables. Before schema changes or SQL row deletion, run a repository-wide search against the exact table/model/relation names and review every result, including tests, admin tools and reporting queries.
