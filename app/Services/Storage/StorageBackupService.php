@@ -351,8 +351,22 @@ class StorageBackupService
             throw new RuntimeException('هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ هیچ فایل مبدأ خوانده نشد.');
         }
 
-        if ((bool) config('storage_management.backup.use_incremental_format', true)) {
+        if ((bool) config('storage_management.backup.use_incremental_format', false)) {
             return $this->runIncrementalLocked($backupType, $targets);
+        }
+
+        if (! app()->environment('testing')
+            && ! (bool) config('storage_management.backup.allow_legacy_full_external_backups', false)) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'بکاپ کامل خارجی تا زمان فعال‌شدن فرمت افزایشی و کنترل سهمیه غیرفعال است.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'incremental_format_required'],
+            ]);
+
+            throw new RuntimeException('برای جلوگیری از مصرف ناخواسته فضای رایگان، بکاپ کامل خارجی غیرفعال است؛ ابتدا فرمت افزایشی باید تأیید و فعال شود.');
         }
 
         $hasIranPrimarySources = StorageManagedFile::query()
