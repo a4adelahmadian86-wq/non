@@ -229,8 +229,9 @@ class AdminStorageController extends Controller
 
     private function recordVerificationFailure(StorageVolume $volume, Throwable $exception): void
     {
-        $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
-        $interval = $interval === false ? 5 : max(5, min(1440, $interval));
+        $defaultInterval = in_array($volume->drive_key, ['iran_primary', 'foreign_backup', 'iran_backup'], true) ? 1440 : 5;
+        $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', $defaultInterval), FILTER_VALIDATE_INT);
+        $interval = $interval === false ? $defaultInterval : max(5, min(1440, $interval));
         $failureCount = max(0, (int) data_get($volume->metadata, 'health_check_failures', 0)) + 1;
         $backoffMinutes = min(1440, $interval * (2 ** min(5, $failureCount - 1)));
         $metadata = array_merge((array) $volume->metadata, [
