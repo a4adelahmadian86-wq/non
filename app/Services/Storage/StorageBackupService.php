@@ -17,6 +17,190 @@ class StorageBackupService
 {
     public function __construct(private readonly StorageManager $storage) {}
 
+    public function materializeIncrementalManifest(
+        StorageBackupRun $run,
+        string $encryptedManifestPath,
+        string $work,
+        string $extracted
+    ): array {
+        $target = $run->volume;
+        if (! $target || ! $run->object_key) {
+            throw new RuntimeException('مقصد یا مسیر Manifest بکاپ افزایشی موجود نیست.');
+        }
+
+        $backupKey = (string) config('storage_management.backup.encryption_key', '');
+        $metadata = (array) $run->metadata;
+        $plainSize = (int) ($metadata['manifest_plaintext_size'] ?? -1);
+        $plainSha = (string) ($metadata['manifest_plaintext_sha256'] ?? '');
+        if ($plainSize < 1 || ! preg_match('/^[a-f0-9]{64}$/i', $plainSha)) {
+            throw new RuntimeException('مشخصات Manifest رمزنگاری‌شده بکاپ افزایشی ناقص است.');
+        }
+
+        $manifestPath = $work.'/incremental-manifest.json';
+        app(StorageBackupObjectCipher::class)->decryptFile(
+            $encryptedManifestPath,
+            $manifestPath,
+            $backupKey,
+            $plainSize,
+            $plainSha
+        );
+
+        try {
+            $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new RuntimeException('Manifest بکاپ افزایشی JSON معتبر نیست.', 0, $exception);
+        }
+
+        if (! is_array($manifest)
+            || (int) ($manifest['format_version'] ?? 0) !== 3
+            || ! in_array((string) ($manifest['database_driver'] ?? ''), ['sqlite', 'mysql', 'mariadb', 'pgsql'], true)
+            || ! is_array($manifest['core'] ?? null)
+            || ! is_array($manifest['managed_entries'] ?? null)
+            || (int) ($manifest['entry_count'] ?? -1) !== count($manifest['managed_entries']) + 1) {
+            throw new RuntimeException('ساختار Manifest بکاپ افزایشی ناقص یا ناسازگار است.');
+        }
+
+        $inventory = [
+            'core' => $manifest['core'],
+            'managed_entries' => $manifest['managed_entries'],
+            'database_driver' => $manifest['database_driver'],
+        ];
+        $expectedHmac = hash_hmac(
+            'sha256',
+            json_encode($inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $backupKey
+        );
+        if (! hash_equals($expectedHmac, (string) ($manifest['inventory_hmac'] ?? ''))) {
+            throw new RuntimeException('امضای موجودی Manifest بکاپ افزایشی معتبر نیست.');
+        }
+
+        $validateObject = function (mixed $object): array {
+            if (! is_array($object)
+                || ! is_int($object['id'] ?? null)
+                || $object['id'] < 1
+                || ! is_string($object['object_key'] ?? null)
+                || ! preg_match('#^objects/[a-f0-9]{2}/[a-f0-9-]{20,64}\.enc$#i', $object['object_key'])
+                || ! is_int($object['size_bytes'] ?? null)
+                || $object['size_bytes'] < 0
+                || ! is_int($object['encrypted_size_bytes'] ?? null)
+                || $object['encrypted_size_bytes'] < 1
+                || ! is_string($object['sha256'] ?? null)
+                || ! preg_match('/^[a-f0-9]{64}$/i', $object['sha256'])) {
+                throw new RuntimeException('مرجع یکی از Blobهای بکاپ افزایشی نامعتبر است.');
+            }
+
+            return $object;
+        };
+
+        $core = $validateObject($manifest['core']);
+        $targetDisk = $this->storage->volumeDisk($target);
+        $coreEncryptedPath = $work.'/core.zip.enc';
+        $coreArchivePath = $work.'/core.zip';
+        $this->reserveBackupUsage($target, 'class_b');
+        $this->storage->downloadTo($targetDisk, $core['object_key'], $coreEncryptedPath);
+        if (@filesize($coreEncryptedPath) !== $core['encrypted_size_bytes']) {
+            throw new RuntimeException('اندازه Blob اصلی بکاپ افزایشی با Manifest مطابقت ندارد.');
+        }
+        app(StorageBackupObjectCipher::class)->decryptFile(
+            $coreEncryptedPath,
+            $coreArchivePath,
+            $backupKey,
+            $core['size_bytes'],
+            $core['sha256']
+        );
+        $this->verifyArchive($coreArchivePath);
+
+        $zip = new ZipArchive();
+        if ($zip->open($coreArchivePath) !== true || ! $zip->setPassword($backupKey)) {
+            throw new RuntimeException('آرشیو اصلی بکاپ افزایشی قابل باز کردن یا رمزگشایی نیست.');
+        }
+        $seen = [];
+        try {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $name = $zip->getNameIndex($index);
+                $this->assertSafeBackupEntryPath($name);
+                if (isset($seen[$name])) {
+                    throw new RuntimeException('مسیر تکراری در آرشیو اصلی بکاپ افزایشی شناسایی شد.');
+                }
+                $seen[$name] = true;
+
+                $operatingSystem = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
+                    $unixFileType = ($externalAttributes >> 16) & 0170000;
+                    if ($operatingSystem === ZipArchive::OPSYS_UNIX
+                        && ! in_array($unixFileType, [0, 0100000, 0040000], true)) {
+                        throw new RuntimeException('نوع فایل ویژه یا پیوند نمادین در آرشیو اصلی بکاپ مجاز نیست.');
+                    }
+                }
+            }
+
+            if (! isset($seen['database/database.sql'])) {
+                throw new RuntimeException('خروجی دیتابیس در آرشیو اصلی بکاپ افزایشی موجود نیست.');
+            }
+            if (! is_dir($extracted) && ! mkdir($extracted, 0700, true) && ! is_dir($extracted)) {
+                throw new RuntimeException('ساخت مسیر استخراج بکاپ افزایشی ناموفق بود.');
+            }
+            if (! $zip->extractTo($extracted)) {
+                throw new RuntimeException('استخراج آرشیو اصلی بکاپ افزایشی ناموفق بود.');
+            }
+        } finally {
+            $zip->close();
+        }
+
+        $seenManaged = [];
+        foreach ($manifest['managed_entries'] as $entryPath => $objectData) {
+            if (! is_string($entryPath)) {
+                throw new RuntimeException('مسیر یکی از فایل‌های مدیریت‌شده در Manifest معتبر نیست.');
+            }
+            $this->assertSafeBackupEntryPath($entryPath);
+            if (! str_starts_with($entryPath, 'managed/') && ! str_starts_with($entryPath, 'managed-staging/')) {
+                throw new RuntimeException('Manifest بکاپ شامل مسیر مدیریت‌شده خارج از فضای مجاز است.');
+            }
+            if (isset($seenManaged[$entryPath]) || isset($seen[$entryPath])) {
+                throw new RuntimeException('مسیر تکراری در موجودی بکاپ افزایشی شناسایی شد.');
+            }
+            $seenManaged[$entryPath] = true;
+            $object = $validateObject($objectData);
+
+            $encryptedPath = $work.'/managed-'.$object['id'].'.enc';
+            $targetPath = $extracted.'/'.$entryPath;
+            $directory = dirname($targetPath);
+            if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
+                throw new RuntimeException('ساخت پوشه بازیابی فایل مدیریت‌شده ناموفق بود.');
+            }
+
+            $this->reserveBackupUsage($target, 'class_b');
+            $this->storage->downloadTo($targetDisk, $object['object_key'], $encryptedPath);
+            if (@filesize($encryptedPath) !== $object['encrypted_size_bytes']) {
+                throw new RuntimeException('اندازه یکی از Blobهای مدیریت‌شده با Manifest مطابقت ندارد.');
+            }
+            app(StorageBackupObjectCipher::class)->decryptFile(
+                $encryptedPath,
+                $targetPath,
+                $backupKey,
+                $object['size_bytes'],
+                $object['sha256']
+            );
+        }
+
+        return $manifest;
+    }
+
+    private function assertSafeBackupEntryPath(mixed $name): void
+    {
+        if (! is_string($name)
+            || $name === ''
+            || strlen($name) > 4096
+            || str_starts_with($name, '/')
+            || preg_match('/^[A-Za-z]:/', $name)
+            || str_contains($name, '\\')
+            || preg_match('#(^|/)\.\.?(/|$)#', $name)
+            || str_contains($name, "\0")) {
+            throw new RuntimeException('مسیر ناامن در Manifest یا آرشیو بکاپ شناسایی شد.');
+        }
+    }
+
     public function verifyArchive(string $archivePath): void
     {
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
