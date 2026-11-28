@@ -162,6 +162,49 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         ]);
     }
 
+
+    public function test_missing_referenced_blob_fails_closed_without_reading_the_source(): void
+    {
+        $volume = StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Tigris missing-object fixture',
+            'driver' => 'local',
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+        $object = StorageBackupObject::create([
+            'storage_volume_id' => $volume->id,
+            'sha256' => str_repeat('a', 64),
+            'size_bytes' => 128,
+            'object_key' => 'objects/aa/'.str_repeat('b', 64).'.enc',
+            'encrypted_size_bytes' => 160,
+            'status' => 'verified',
+            'verified_at' => now()->subDays(31),
+            'metadata' => [],
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldReceive('volumeDisk')->once()->andReturn('storage_volume:'.$volume->id);
+        $storage->shouldReceive('exists')->once()->andReturn(false);
+        $storage->shouldNotReceive('downloadTo');
+
+        $service = new StorageBackupService($storage);
+        $method = new ReflectionMethod($service, 'findReusableBackupObject');
+        $method->setAccessible(true);
+
+        try {
+            $method->invoke($service, $volume, str_repeat('a', 64));
+            $this->fail('A missing referenced blob must stop the run instead of silently rereading Iran primary.');
+        } catch (\ReflectionException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            $this->assertStringContainsString('برای جلوگیری از خواندن پرهزینه مبدأ ایران', $exception->getMessage());
+        }
+
+        $this->assertSame('missing', $object->fresh()->status);
+    }
+
     private function temporaryDirectory(): string
     {
         $path = sys_get_temp_dir().'/farast-backup-incremental-'.bin2hex(random_bytes(8));
