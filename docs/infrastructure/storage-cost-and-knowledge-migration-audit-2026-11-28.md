@@ -465,7 +465,7 @@ Nominal total free capacity across these distinct providers is 20 GB (5 GB Arvan
 
 ### 12.4 New implementation safeguard
 
-The current StorageBackupService::runWeeklyLocked() creates the full archive before checking whether any healthy backup destination exists. That means a scheduled backup with no destination can still read every managed object from Arvan and then fail. A separate fix is being developed to preflight backup destinations before archive creation. This prevents waste when no target exists; it does not yet solve weekly full-source egress or retention.
+The current StorageBackupService::runWeeklyLocked() previously created the full archive before checking whether any healthy backup destination existed. PR #766 now preflights eligible external destinations before archive creation and, by default, blocks any full snapshot that would read managed objects from iran_primary (unless the explicit FARAST_BACKUP_ALLOW_IRAN_PRIMARY_FULL_READS override is deliberately enabled). This prevents wasted reads when no target exists and prevents the existing weekly full snapshot from silently consuming the Arvan traffic allowance. It is only a safety gate: it does not yet provide incremental replication, bounded retention or an external backup copy. Keep the override false until incremental backup and restore tests are complete.
 ## 13. Data-efficiency policy for the knowledge store
 
 To maximize effective capacity without paying for extra raw storage, the knowledge migration should follow these rules:
