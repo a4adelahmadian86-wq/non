@@ -164,24 +164,30 @@ class StorageBackupService
             $object = $validateObject($objectData);
 
             $encryptedPath = $work.'/managed-'.$object['id'].'.enc';
+            $cachedPlainPath = $work.'/managed-plain-'.$object['id'];
             $targetPath = $extracted.'/'.$entryPath;
             $directory = dirname($targetPath);
             if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
                 throw new RuntimeException('ساخت پوشه بازیابی فایل مدیریت‌شده ناموفق بود.');
             }
 
-            $this->reserveBackupUsage($target, 'class_b');
-            $this->storage->downloadTo($targetDisk, $object['object_key'], $encryptedPath);
-            if (@filesize($encryptedPath) !== $object['encrypted_size_bytes']) {
-                throw new RuntimeException('اندازه یکی از Blobهای مدیریت‌شده با Manifest مطابقت ندارد.');
+            if (! is_file($cachedPlainPath)) {
+                $this->reserveBackupUsage($target, 'class_b');
+                $this->storage->downloadTo($targetDisk, $object['object_key'], $encryptedPath);
+                if (@filesize($encryptedPath) !== $object['encrypted_size_bytes']) {
+                    throw new RuntimeException('اندازه یکی از Blobهای مدیریت‌شده با Manifest مطابقت ندارد.');
+                }
+                app(StorageBackupObjectCipher::class)->decryptFile(
+                    $encryptedPath,
+                    $cachedPlainPath,
+                    $backupKey,
+                    $object['size_bytes'],
+                    $object['sha256']
+                );
             }
-            app(StorageBackupObjectCipher::class)->decryptFile(
-                $encryptedPath,
-                $targetPath,
-                $backupKey,
-                $object['size_bytes'],
-                $object['sha256']
-            );
+            if (! copy($cachedPlainPath, $targetPath)) {
+                throw new RuntimeException('کپی فایل مدیریت‌شده از Cache بازیابی ناموفق بود.');
+            }
         }
 
         return $manifest;
