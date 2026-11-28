@@ -397,6 +397,7 @@ class StorageBackupService
 
         $uploadedManifestKey = null;
         try {
+            $this->pruneOrphanBackupObjects($target);
             $corePath = $work.'/farast-core.zip';
             $this->createArchive($corePath, $work, $backupKey, false);
             $objectIds = [];
@@ -842,6 +843,44 @@ class StorageBackupService
         $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
 
         return $host === 'arvanstorage.ir' || str_ends_with($host, '.arvanstorage.ir');
+    }
+
+    private function pruneOrphanBackupObjects(StorageVolume $target): void
+    {
+        $orphans = StorageBackupObject::query()
+            ->where('storage_volume_id', $target->id)
+            ->whereDoesntHave('runs')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($orphans as $orphan) {
+            try {
+                $this->storage->delete($this->storage->volumeDisk($target), $orphan->object_key);
+                DB::transaction(function () use ($target, $orphan): void {
+                    $lockedObject = StorageBackupObject::query()->lockForUpdate()->find($orphan->id);
+                    if (! $lockedObject || $lockedObject->runs()->exists()) {
+                        return;
+                    }
+                    $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                    if ($lockedVolume) {
+                        $lockedVolume->update([
+                            'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedObject->encrypted_size_bytes),
+                            'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                        ]);
+                    }
+                    $lockedObject->delete();
+                });
+            } catch (\Throwable $exception) {
+                report($exception);
+                try {
+                    $metadata = (array) $orphan->metadata;
+                    $metadata['cleanup_pending'] = true;
+                    $orphan->update(['metadata' => $metadata]);
+                } catch (\Throwable $recordException) {
+                    report($recordException);
+                }
+            }
+        }
     }
 
     private function pruneOldBackups(StorageVolume $target, StorageBackupRun $currentRun): void
