@@ -383,3 +383,21 @@ For the current three-operation S3 probe:
 These are estimates assuming every PUT, GET and DELETE is counted and the volume remains active/healthy for the full month. They exclude initial/manual verification, inventory LIST requests, normal HEAD/GET/PUT operations, transfers and backups.
 
 **Recommended Arvan Base configuration: `health_check_interval_minutes=1440` (24 hours), not 60.** The default for generic volumes remains unchanged; this is an explicit setting for a very limited free-tier bucket. A manual full verification remains an intentional operator action and should be used only when needed.
+
+
+## 11. Potential provider-side usage reporting API — unverified lead
+
+A separate, potentially valuable lead surfaced during the cost audit:
+
+- A community-maintained ArvanCloud API reference describes a Management API at `https://storage.arvanapis.ir/v1`, authenticated with a Machine User API key distinct from the S3 Access Key/Secret Key.
+- It lists read-only usage-report paths `/v1/reports/storage`, `/v1/reports/traffic`, `/v1/reports/operations` and `/v1/reports/usage-rate`, with optional bucket/region/date filters.
+- A public Grafana community dashboard for ArvanCloud describes per-bucket object count, storage size, upload/download bytes and successful request counts, reportedly refreshed every five minutes.
+
+References discovered:
+- Community API reference (not an official Arvan document): https://github.com/erfnzdeh/arvancloud-agent-skill/blob/main/skills/arvancloud-api/references/object-storage.md
+- Arvan OpenAPI YAML linked by that reference: https://www.arvancloud.ir/api-docs/storage-1.0.0.yaml
+- Grafana community dashboard: https://grafana.com/grafana/dashboards/20105-arvancloud-cdn/
+
+**Verification status:** the official OpenAPI YAML URL could not be opened in this inspection, and no Machine User API key was available or used. These endpoints and their Base-plan availability are therefore **not yet confirmed**. Do not create a new API key, call these endpoints, or add a third-party exporter based only on the community reference.
+
+**Next research step before implementing usage metering:** obtain the official OpenAPI schema or written confirmation from Arvan support for the read-only report endpoints, authentication scope, bucket-level filtering, update delay, and Base-plan availability. If confirmed, prefer a small first-party read-only usage-report client inside FARAST (separate from the S3 adapter) and display provider-reported storage/traffic/operations alongside local estimates. This may materially improve cost visibility, but it must never become a dependency for core file reads/writes or block the application when the report API is unavailable.
