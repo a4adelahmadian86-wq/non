@@ -614,11 +614,13 @@ class StorageBackupService
         $object = StorageBackupObject::query()
             ->where('storage_volume_id', $target->id)
             ->where('sha256', $checksum)
-            ->where('status', 'verified')
             ->first();
 
         if (! $object) {
             return null;
+        }
+        if ($object->status !== 'verified') {
+            throw new RuntimeException('وضعیت Blob ثبت‌شده برای این محتوا قابل اعتماد نیست؛ بکاپ بدون خواندن مجدد مبدأ متوقف شد.');
         }
 
         $this->reserveBackupUsage($target, 'class_b');
@@ -626,8 +628,7 @@ class StorageBackupService
             $metadata = (array) $object->metadata;
             $metadata['remote_object_missing_at'] = now()->toIso8601String();
             $object->update(['status' => 'missing', 'metadata' => $metadata]);
-
-            return null;
+            throw new RuntimeException('یک Blob موردنیاز در مقصد بکاپ پیدا نشد؛ برای جلوگیری از خواندن پرهزینه مبدأ ایران، بکاپ متوقف شد و به تعمیر دستی نیاز دارد.');
         }
 
         return $object;
