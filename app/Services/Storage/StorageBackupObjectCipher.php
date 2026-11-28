@@ -9,7 +9,7 @@ class StorageBackupObjectCipher
     private const MAGIC = 'FARASTSS1';
     private const CHUNK_BYTES = 1024 * 1024;
 
-    public function encryptFile(string $sourcePath, string $targetPath, string $masterKey): array
+    public function encryptFile(string $sourcePath, string $targetPath, string $masterKey, string $purpose = 'backup'): array
     {
         $this->assertAvailable($masterKey);
         $size = @filesize($sourcePath);
@@ -25,7 +25,7 @@ class StorageBackupObjectCipher
             throw new RuntimeException('فایل موقت رمزنگاری بکاپ قابل ایجاد نیست.');
         }
 
-        $key = $this->deriveKey($masterKey);
+        $key = $this->deriveKey($masterKey, $purpose);
         $completed = false;
         try {
             [$state, $header] = sodium_crypto_secretstream_xchacha20poly1305_init_push($key);
@@ -187,9 +187,13 @@ class StorageBackupObjectCipher
         }
     }
 
-    private function deriveKey(string $masterKey): string
+    private function deriveKey(string $masterKey, string $purpose): string
     {
-        return hash_hmac('sha256', 'farast-backup-object-encryption-v1', $masterKey, true);
+        if (! in_array($purpose, ['backup', 'knowledge'], true)) {
+            throw new RuntimeException('دامنه کلید رمزنگاری ذخیره‌سازی نامعتبر است.');
+        }
+
+        return hash_hmac('sha256', 'farast-'.$purpose.'-object-encryption-v1', $masterKey, true);
     }
 
     private function readExact($stream, int $length): string
