@@ -127,7 +127,8 @@ class AdminStorageController extends Controller
             $limits[$field] = $value;
         }
 
-        $healthCheckInterval = filter_var($connection['health_check_interval_minutes'] ?? 5, FILTER_VALIDATE_INT);
+        $defaultHealthCheckInterval = $data['drive_key'] === 'iran_primary' ? 1440 : 5;
+        $healthCheckInterval = filter_var($connection['health_check_interval_minutes'] ?? $defaultHealthCheckInterval, FILTER_VALIDATE_INT);
         if ($healthCheckInterval === false || $healthCheckInterval < 5 || $healthCheckInterval > 1440) {
             return back()->withErrors(['connection_json' => 'فاصله بررسی سلامت باید عددی بین ۵ تا ۱۴۴۰ دقیقه باشد.'])->withInput($request->except('connection_json'));
         }
