@@ -265,6 +265,17 @@ class StorageBackupService
                     // Cleanup is best-effort; never invalidate the newly verified backup.
                     report($recordException);
                 }
+
+                try {
+                    $currentMetadata = (array) $currentRun->fresh()->metadata;
+                    $currentMetadata['retention_cleanup_pending'] = true;
+                    $currentRun->update([
+                        'metadata' => $currentMetadata,
+                        'error_message' => 'نسخه جدید بکاپ تأیید شد، اما پاک‌سازی نسخه قدیمی نیازمند بررسی است.',
+                    ]);
+                } catch (\Throwable $recordCurrentException) {
+                    report($recordCurrentException);
+                }
             }
         }
     }
