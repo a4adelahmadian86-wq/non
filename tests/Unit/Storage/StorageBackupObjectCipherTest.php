@@ -104,4 +104,32 @@ class StorageBackupObjectCipherTest extends TestCase
 
         return $path;
     }
+
+    public function test_encryption_purposes_derive_independent_keys(): void
+    {
+        if (! function_exists('sodium_crypto_secretstream_xchacha20poly1305_init_push')) {
+            $this->markTestSkipped('Sodium secretstream is not available in this PHP runtime.');
+        }
+
+        $directory = $this->temporaryDirectory();
+        $source = $directory.'/source.txt';
+        $encrypted = $directory.'/encrypted.bin';
+        $wrongPurposePlain = $directory.'/wrong-purpose.txt';
+        file_put_contents($source, 'purpose-separated payload');
+        $key = str_repeat('purpose-key-', 8);
+        $cipher = new StorageBackupObjectCipher();
+        $metadata = $cipher->encryptFile($source, $encrypted, $key, 'backup');
+
+        try {
+            $cipher->decryptFile($encrypted, $wrongPurposePlain, $key, $metadata['size_bytes'], $metadata['sha256'], 'knowledge');
+            $this->fail('Backup and knowledge encryption purposes must derive different keys.');
+        } catch (\\Throwable $exception) {
+            $this->assertFileDoesNotExist($wrongPurposePlain);
+        }
+
+        $restored = $directory.'/restored.txt';
+        $cipher->decryptFile($encrypted, $restored, $key, $metadata['size_bytes'], $metadata['sha256'], 'backup');
+        $this->assertSame('purpose-separated payload', file_get_contents($restored));
+    }
+
 }
