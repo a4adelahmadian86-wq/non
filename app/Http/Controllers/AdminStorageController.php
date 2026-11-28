@@ -112,6 +112,26 @@ class AdminStorageController extends Controller
             return back()->withErrors(['connection_json' => 'هاست‌های قابل افزودن باید API سازگار با S3 داشته باشند؛ فضای محلی فقط staging داخلی FARAST است و به‌عنوان هاست ثبت نمی‌شود.'])->withInput($request->except('connection_json'));
         }
 
+        $limits = [];
+        foreach (['capacity_bytes', 'file_limit', 'max_file_bytes'] as $field) {
+            if (! array_key_exists($field, $connection)) {
+                $limits[$field] = null;
+                continue;
+            }
+
+            $value = filter_var($connection[$field], FILTER_VALIDATE_INT);
+            if ($value === false || $value < 1) {
+                return back()->withErrors(['connection_json' => "مقدار {$field} باید عدد صحیح مثبت باشد."])->withInput($request->except('connection_json'));
+            }
+
+            $limits[$field] = $value;
+        }
+
+        $healthCheckInterval = filter_var($connection['health_check_interval_minutes'] ?? 5, FILTER_VALIDATE_INT);
+        if ($healthCheckInterval === false || $healthCheckInterval < 5 || $healthCheckInterval > 1440) {
+            return back()->withErrors(['connection_json' => 'فاصله بررسی سلامت باید عددی بین ۵ تا ۱۴۴۰ دقیقه باشد.'])->withInput($request->except('connection_json'));
+        }
+
         $credentials = (array) ($connection['credentials'] ?? []);
         $endpoint = (string) ($connection['endpoint'] ?? ($credentials['endpoint'] ?? ''));
         if ($driver === 's3') {
@@ -146,21 +166,27 @@ class AdminStorageController extends Controller
             'endpoint' => $endpoint ?: null,
             'bucket' => $bucket ?: null,
             'credentials' => $credentials,
-            // Generic S3 APIs report live object usage, but do not expose a bucket plan quota.
-            // Keep unknown provider limits null rather than accepting guessed/manual figures.
-            'capacity_bytes' => null,
-            'file_limit' => null,
-            'max_file_bytes' => null,
+            // Optional administrator-configured safety caps; S3 APIs do not expose plan quotas.
+            'capacity_bytes' => $limits['capacity_bytes'],
+            'file_limit' => $limits['file_limit'],
+            'max_file_bytes' => $limits['max_file_bytes'],
             'priority' => ((int) StorageVolume::query()->where('drive_key', $data['drive_key'])->max('priority')) + 100,
             'status' => 'unverified',
-            'metadata' => ['provider_metadata' => (array) ($connection['metadata'] ?? [])],
+            'metadata' => [
+                'provider_metadata' => (array) ($connection['metadata'] ?? []),
+                'health_check_interval_minutes' => $healthCheckInterval,
+            ],
         ]);
 
         try {
             $connections->verify($volume, true);
             return redirect()->route('admin.storage.index')->with('status', 'اتصال با موفقیت بررسی و ثبت شد.');
         } catch (Throwable $e) {
-            $volume->update(['status' => 'error', 'last_checked_at' => now(), 'metadata' => ['last_error' => mb_substr($e->getMessage(), 0, 500)]]);
+            $volume->update([
+                'status' => 'error',
+                'last_checked_at' => now(),
+                'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($e->getMessage(), 0, 500)]),
+            ]);
             return redirect()->route('admin.storage.index')->with('warning', 'اتصال ثبت شد اما آزمون سلامت ناموفق بود: '.$e->getMessage());
         }
     }
