@@ -22,8 +22,9 @@ class CheckStorageVolumes extends Command
             ->limit(max(1, min(500, (int) $this->option('limit'))))
             ->get()
             ->each(function (StorageVolume $volume) use ($connections, &$checked, &$failed, &$skipped): void {
-                $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
-                $interval = $interval === false ? 5 : max(5, min(1440, $interval));
+                $defaultInterval = in_array($volume->drive_key, ['iran_primary', 'foreign_backup', 'iran_backup'], true) ? 1440 : 5;
+                $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', $defaultInterval), FILTER_VALIDATE_INT);
+                $interval = $interval === false ? $defaultInterval : max(5, min(1440, $interval));
                 $nextCheckAt = data_get($volume->metadata, 'health_check_next_at');
                 $retryNotBefore = null;
                 if (is_string($nextCheckAt) && $nextCheckAt !== '') {
