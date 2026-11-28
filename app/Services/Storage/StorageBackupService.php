@@ -6,6 +6,7 @@ use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use RuntimeException;
 use ZipArchive;
@@ -46,6 +47,43 @@ class StorageBackupService
 
     private function runWeeklyLocked(string $backupType): array
     {
+        // Never read every source object unless at least one backup destination is configured.
+        // This preflight must happen before archive creation, because creating the archive downloads
+        // all managed objects (including objects stored on metered/free-tier primary volumes).
+        $targets = $this->availableBackupTargets();
+
+        if ($targets->isEmpty()) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ برای جلوگیری از مصرف ترافیک، آرشیو ساخته نشد.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'no_healthy_destination'],
+            ]);
+
+            throw new RuntimeException('هیچ مقصد سالمی برای بکاپ پیکربندی نشده است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
+        $hasIranPrimarySources = StorageManagedFile::query()
+            ->whereIn('status', ['active', 'delete_pending'])
+            ->whereNotNull('storage_volume_id')
+            ->whereHas('volume', fn ($query) => $query->where('drive_key', 'iran_primary'))
+            ->exists();
+
+        if ($hasIranPrimarySources && ! (bool) config('storage_management.backup.allow_iran_primary_full_source_reads', false)) {
+            StorageBackupRun::create([
+                'backup_type' => $backupType,
+                'source_name' => 'application',
+                'status' => 'failed',
+                'error_message' => 'بکاپ کامل از iran_primary به‌صورت پیش‌فرض غیرفعال است تا ترافیک رایگان آروان مصرف نشود؛ ابتدا بکاپ افزایشی یا مجوز صریح لازم است.',
+                'completed_at' => now(),
+                'metadata' => ['archive_skipped' => true, 'reason' => 'iran_primary_full_read_disabled'],
+            ]);
+
+            throw new RuntimeException('بکاپ کامل از iran_primary غیرفعال است؛ هیچ فایل مبدأ خوانده نشد.');
+        }
+
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');
@@ -66,25 +104,21 @@ class StorageBackupService
             $this->createArchive($archivePath, $work, $backupKey);
             $snapshotLock->update(['status' => 'completed', 'completed_at' => now()]);
             $archiveSize = (int) filesize($archivePath);
-            $targets = StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')
-                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
-                ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
-                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
-                ->orderBy('priority')->get();
-            if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
-                $targets = $targets->concat(StorageVolume::query()->where('drive_key', 'iran_backup')->where('is_active', true)->where('status', 'healthy')
-                    ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
-                    ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
-                    ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
-                    ->orderBy('priority')->get());
-            }
+            $targets = $targets->filter(function (StorageVolume $target) use ($archiveSize): bool {
+                return ($target->capacity_bytes === null || ((int) $target->capacity_bytes - (int) $target->used_bytes) >= $archiveSize)
+                    && ($target->max_file_bytes === null || (int) $target->max_file_bytes >= $archiveSize)
+                    && ($target->file_limit === null || (int) $target->object_count < (int) $target->file_limit);
+            })->values();
+
             if ($targets->isEmpty()) {
                 StorageBackupRun::create([
                     'backup_type' => $backupType, 'source_name' => 'application',
-                    'status' => 'failed', 'error_message' => 'هیچ مقصد سالمی برای بکاپ پیکربندی نشده است.',
+                    'status' => 'failed',
+                    'error_message' => 'فضای خالی یا محدودیت مقصد برای آرشیو کافی نیست؛ آرشیو ساخته شد اما به مقصدی ارسال نشد.',
                     'completed_at' => now(),
+                    'metadata' => ['reason' => 'insufficient_destination_capacity'],
                 ]);
-                throw new RuntimeException('هیچ هاست بکاپ سالمی پیکربندی نشده است.');
+                throw new RuntimeException('فضای خالی یا محدودیت هیچ مقصد بکاپی برای آرشیو کافی نیست.');
             }
 
             $checksum = hash_file('sha256', $archivePath);
@@ -120,6 +154,7 @@ class StorageBackupService
                     ]);
                     $target->increment('used_bytes', (int) filesize($archivePath));
                     $target->increment('object_count');
+                    $this->pruneOldBackups($target, $run);
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
                     try {
@@ -138,6 +173,110 @@ class StorageBackupService
             throw $exception;
         } finally {
             $this->removeDirectory($work);
+        }
+    }
+
+    private function availableBackupTargets()
+    {
+        $targets = StorageVolume::query()
+            ->where('drive_key', 'foreign_backup')
+            ->where('is_active', true)
+            ->where('status', 'healthy')
+            ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereColumn('capacity_bytes', '>', 'used_bytes'))
+            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereColumn('object_count', '<', 'file_limit'))
+            ->orderBy('priority')
+            ->get();
+
+        if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
+            $targets = $targets->concat(StorageVolume::query()
+                ->where('drive_key', 'iran_backup')
+                ->where('is_active', true)
+                ->where('status', 'healthy')
+                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereColumn('capacity_bytes', '>', 'used_bytes'))
+                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereColumn('object_count', '<', 'file_limit'))
+                ->orderBy('priority')
+                ->get());
+        }
+
+        // The project explicitly forbids Arvan as a backup destination.
+        return $targets->reject(fn (StorageVolume $volume): bool => $this->isArvanEndpoint($volume))->values();
+    }
+
+    private function isArvanEndpoint(StorageVolume $volume): bool
+    {
+        $endpoint = (string) ($volume->endpoint ?: data_get($volume->credentials, 'endpoint', ''));
+        $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+
+        return $host === 'arvanstorage.ir' || str_ends_with($host, '.arvanstorage.ir');
+    }
+
+    private function pruneOldBackups(StorageVolume $target, StorageBackupRun $currentRun): void
+    {
+        $keepLatest = max(1, min(10, (int) config('storage_management.backup.keep_latest', 1)));
+        $oldRuns = StorageBackupRun::query()
+            ->where('storage_volume_id', $target->id)
+            ->where('source_name', 'application')
+            ->where('backup_type', $currentRun->backup_type)
+            ->where('status', 'completed')
+            ->where('id', '!=', $currentRun->id)
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get()
+            ->slice($keepLatest - 1);
+
+        foreach ($oldRuns as $oldRun) {
+            if (! $oldRun->object_key) {
+                continue;
+            }
+
+            try {
+                // Delete remotely first. If that fails, keep the DB row and byte counters intact.
+                $this->storage->delete($this->storage->volumeDisk($target), $oldRun->object_key);
+
+                DB::transaction(function () use ($target, $oldRun): void {
+                    $lockedVolume = StorageVolume::query()->lockForUpdate()->find($target->id);
+                    $lockedRun = StorageBackupRun::query()->lockForUpdate()->find($oldRun->id);
+
+                    if (! $lockedVolume || ! $lockedRun || $lockedRun->status !== 'completed') {
+                        return;
+                    }
+
+                    $metadata = (array) $lockedRun->metadata;
+                    $metadata['pruned_object_key'] = $lockedRun->object_key;
+                    $metadata['pruned_at'] = now()->toIso8601String();
+
+                    $lockedVolume->update([
+                        'used_bytes' => max(0, (int) $lockedVolume->used_bytes - (int) $lockedRun->size_bytes),
+                        'object_count' => max(0, (int) $lockedVolume->object_count - 1),
+                    ]);
+                    $lockedRun->update([
+                        'status' => 'pruned',
+                        'object_key' => null,
+                        'metadata' => $metadata,
+                    ]);
+                });
+            } catch (\Throwable $exception) {
+                report($exception);
+                try {
+                    $metadata = (array) $oldRun->metadata;
+                    $metadata['retention_cleanup_pending'] = true;
+                    $oldRun->update(['metadata' => $metadata]);
+                } catch (\Throwable $recordException) {
+                    // Cleanup is best-effort; never invalidate the newly verified backup.
+                    report($recordException);
+                }
+
+                try {
+                    $currentMetadata = (array) $currentRun->fresh()->metadata;
+                    $currentMetadata['retention_cleanup_pending'] = true;
+                    $currentRun->update([
+                        'metadata' => $currentMetadata,
+                        'error_message' => 'نسخه جدید بکاپ تأیید شد، اما پاک‌سازی نسخه قدیمی نیازمند بررسی است.',
+                    ]);
+                } catch (\Throwable $recordCurrentException) {
+                    report($recordCurrentException);
+                }
+            }
         }
     }
 
