@@ -112,7 +112,7 @@ All items below were checked against GitHub on 2026-11-28. None was merged by th
 |---|---|---|---|
 | #757 | Route private user files to `iran_primary` | Open; all three observed workflows passed (FARAST CI #7716, Phase 3 #4427, Phase 4 #6898). Branch base is older commit `d938dffd...`, not current main. | Keep open; rebase/update and re-review against current main before merge. Does not migrate already-active foreign objects. |
 | #760 | Safer Runflare recreation command | Open; FARAST CI #7730, Product Supervisor #1350, Phase 4 #6912 passed. | Keep separate; no Runflare provisioning or deployment performed. |
-| #761 | Internal storage quota caps and health interval | Open; FARAST CI #7729, Phase 3 #4430, Phase 4 #6911 passed. | Useful partial guard only. It does not solve atomic reservation, full-download checksum cost, inventory cost, monthly egress or operation metering. Do not call it a no-overage guarantee. |
+| #761 | Internal storage quota caps and health interval | Open; earlier head CI passed (FARAST CI #7729, Phase 3 #4430, Phase 4 #6911). Follow-up head `915bf00f...` adds scheduled inventory suppression and exponential backoff; its new CI was queued at the last refresh. | Useful partial guard only. Follow-up reduces inventory/retry costs but does not solve atomic reservation, full-download checksum cost, the 3-operation probe, weekly backup egress, monthly egress or operation metering. Do not call it a no-overage guarantee. |
 | #762 | Arvan free-tier documentation | Open; all observed required jobs on head `35f9154c...` completed successfully (FARAST CI #7748 and Phase 4 #6929); voice-model smoke was skipped by its branch condition. | Keep open; documentation-only. |
 | #759 | Netlify AI gateway fallback | Open; FARAST CI #7726, Netlify contract tests #9, Phase 4 #6908 passed. | Not deployed; it does not establish a domestic fallback or bypass provider eligibility restrictions. |
 | #763 | Reader toolbar icon regression | Open; FARAST CI #7741 and Phase 3 #4431 passed; an earlier duplicate FARAST CI run #7740 was cancelled; Phase 4 #6922 passed. | Unrelated to storage; leave untouched. |
@@ -219,3 +219,22 @@ Therefore, if Arvan is configured as `iran_primary`, a weekly backup can read ap
 5. Do not simply disable backups globally: keep the existing backup path for other volumes. The Arvan-specific exclusion/policy must be explicit, visible in admin status, and accompanied by a documented recovery/retention plan.
 
 The current weekly backup job's presence does not prove that an Arvan volume has been configured as a backup target. This finding concerns the behavior if an Arvan volume is configured as a managed source volume.
+
+
+### 8.1 Follow-up PR #761 code change (CI pending at audit refresh)
+
+The existing quota-guard PR was extended in place on its original branch; no parallel storage implementation was created.
+
+- Scheduled checks now call `StorageConnectionService::verify(..., skipInventory: true)`, avoiding automatic S3 ListObjectsV2 inventory scans.
+- Initial volume registration also skips full inventory. A deliberate admin verification remains available and may enumerate the bucket.
+- Failed health checks now persist a retry timestamp and exponential backoff based on the configured interval, capped at 24 hours; a successful scheduled check clears the retry state.
+- The UI/docs explain that a full manual verification may use additional API operations and inventory listing.
+
+Exact updated head at this refresh: `915bf00f05dcb9be4bc070171c20e71473e02dbb`. The latest workflow checks were queued/in progress; do not claim these follow-up changes have passed CI until their exact head runs complete.
+
+Still open before Arvan Base:
+- S3 probe remains PUT+GET+DELETE (three operations).
+- Routine upload verification still downloads the full object.
+- Capacity caps are not atomic reservations.
+- Monthly traffic and operation consumption are not metered.
+- Weekly full backup can read every managed object from the Arvan volume.
