@@ -248,9 +248,14 @@ class StorageBackupService
                 });
             } catch (\Throwable $exception) {
                 report($exception);
-                $metadata = (array) $oldRun->metadata;
-                $metadata['retention_cleanup_pending'] = true;
-                $oldRun->update(['metadata' => $metadata]);
+                try {
+                    $metadata = (array) $oldRun->metadata;
+                    $metadata['retention_cleanup_pending'] = true;
+                    $oldRun->update(['metadata' => $metadata]);
+                } catch (\Throwable $recordException) {
+                    // Cleanup is best-effort; never invalidate the newly verified backup.
+                    report($recordException);
+                }
             }
         }
     }
