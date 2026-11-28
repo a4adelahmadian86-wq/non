@@ -292,4 +292,29 @@ class StorageFreeTierGuardTest extends TestCase
         $this->assertNotNull(data_get($fresh->metadata, 'inventory_attempted_at'));
     }
 
+
+    public function test_iran_primary_defaults_to_daily_health_checks_when_interval_is_omitted(): void
+    {
+        $connections = Mockery::mock(StorageConnectionService::class);
+        $connections->shouldReceive('verify')
+            ->once()
+            ->with(Mockery::type(StorageVolume::class), false, true)
+            ->andReturnNull();
+
+        $request = Request::create('/admin/storage', 'POST', [
+            'drive_key' => 'iran_primary',
+            'connection_json' => json_encode([
+                'driver' => 's3',
+                'endpoint' => 'https://s3.example.com',
+                'bucket' => 'farast-private',
+                'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        app(AdminStorageController::class)->store($request, $connections);
+
+        $volume = StorageVolume::query()->sole();
+        $this->assertSame(1440, (int) data_get($volume->metadata, 'health_check_interval_minutes'));
+    }
+
 }
