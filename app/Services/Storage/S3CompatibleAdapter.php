@@ -17,7 +17,7 @@ class S3CompatibleAdapter
             throw new RuntimeException('محاسبه SHA-256 فایل پیش از آپلود ناموفق بود.');
         }
         if ($size > 5 * 1024 * 1024 * 1024) {
-            $this->multipartUpload($volume, $key, $localPath, $size);
+            $this->multipartUpload($volume, $key, $localPath, $size, strtolower($sha256));
             return;
         }
 
@@ -34,9 +34,11 @@ class S3CompatibleAdapter
         }
     }
 
-    private function multipartUpload(StorageVolume $volume, string $key, string $localPath, int $size): void
+    private function multipartUpload(StorageVolume $volume, string $key, string $localPath, int $size, string $sha256): void
     {
-        $init = $this->request($volume, 'POST', $key, ['uploads' => '']);
+        $init = $this->request($volume, 'POST', $key, ['uploads' => ''], null, 'UNSIGNED-PAYLOAD', [
+            'x-amz-meta-farast-sha256' => $sha256,
+        ]);
         $xml = simplexml_load_string((string) $init->getBody(), \SimpleXMLElement::class, LIBXML_NONET);
         $uploadId = $xml ? (string) ($xml->UploadId ?? '') : '';
         if ($uploadId === '') throw new RuntimeException('شناسه آپلود چندبخشی از سرویس‌دهنده دریافت نشد.');
