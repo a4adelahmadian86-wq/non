@@ -517,3 +517,19 @@ Cloudflare's official S3 setup uses endpoint https://<ACCOUNT_ID>.r2.cloudflares
 R2 location hints include Eastern Europe (eeur), Western Europe (weur), and Asia-Pacific (apac). For a backup used from Iran/Azerbaijan, eeur is the closest reasonable hint among the listed options, but Cloudflare explicitly says location hints are best-effort, not a data-residency guarantee. Bucket location is selected at creation and should be decided before creating the bucket. R2 is an external backup only, so it does not replace the domestic Arvan primary.
 
 Official docs: https://developers.cloudflare.com/r2/get-started/s3/ ; https://developers.cloudflare.com/r2/api/s3/api/ ; https://developers.cloudflare.com/r2/reference/data-location/
+### 12.9 Proposed R2 backup-volume preset (not yet configured)
+
+When the user has created the R2 account and a private bucket, the intended FARAST volume preset is:
+
+- role/drive_key: foreign_backup
+- driver: S3-compatible
+- endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+- region: auto
+- use_path_style_endpoint: true (the current FARAST adapter defaults to path-style)
+- credentials: bucket-scoped Access Key ID + Secret Access Key, stored only in the server-side encrypted credential field
+- bucket ACL/public access: private; no public domain, CORS or object ACL header
+- R2 bucket location hint: eeur, best-effort only; decide before bucket creation
+- internal application safety ceiling: 9 GiB storage (90% of the 10 GB-month allowance), with a second-copy/temporary-write ceiling and provider-operation ledger still to be implemented
+- backup object size target: below 4.5 GiB if the rotation design needs old+new objects to coexist during verified replacement
+
+This is a proposed preset only. No R2 account, bucket, token or network request has been created. Do not enter credentials until the backup preflight, incremental strategy, retention and operation budget are implemented and tested.
