@@ -260,3 +260,33 @@ The HLS master playlists expose six video renditions. The retrieved configs/play
 - [ ] Proposed 4 GB stored / 15 GB monthly egress / 7,000 operations thresholds remain design requirements only.
 
 Next action: user opens Object Storage → Buckets and checks the create form. Do not submit until the selected region, Standard class, private access, and all irreversible options (Multi-zone/Object Lock/Versioning) have been inspected. Do not upload or run S3 probe operations until the no-overage stop mechanism is implemented and verified.
+
+
+## 11. FARAST code audit findings that affect free-tier cost (2026-11-28)
+
+The current main branch was inspected without modifying it.
+
+### 11.1 StorageManager full read-back after every upload
+
+In app/Services/Storage/StorageManager.php, verifyWrittenObject() downloads the complete newly uploaded object to a temporary file and calculates SHA-256 again. This means a successful upload currently incurs a full object download immediately after upload, in addition to the write request. On a 4 GB upload, that can consume roughly another 4 GB of egress traffic and additional requests. This is not suitable for the 20 GB free monthly traffic allowance.
+
+Before connecting Arvan, change this verification strategy to a provider-supported checksum/metadata verification that does not download the full object, after confirming Arvan's exact S3 checksum behavior. Until that is implemented and tested, do not run StorageManager upload tests against the user's account.
+
+### 11.2 StorageConnectionService verification is not a harmless check
+
+app/Services/StorageConnectionService.php calls S3CompatibleAdapter::probe(), which writes, reads and deletes a probe object. It also refreshes inventory on first verification and every six hours (unless configured otherwise). Inventory paginates through all objects with up to 1,000 keys per page. On a populated bucket this can create many API requests. Do not use the current verification action on the free account until request metering/guards are in place and the inventory behavior is changed to an explicitly controlled operation.
+
+### 11.3 Current S3 adapter and quota controls
+
+app/Services/Storage/S3CompatibleAdapter.php implements AWS Signature V4 and supports private credentials, endpoint, region and path-style addressing. The current StorageManager selectVolumes() checks configured capacity_bytes, used_bytes, max_file_bytes and object_count/file_limit, then increments internal used_bytes/object_count after registration. It does not implement a provider-account monthly traffic/request meter, nor an atomic free-tier reservation against concurrent uploads. The separate PR #761 branch's StorageManager still uses this same selectVolumes() and register() pattern; no quota/reservation implementation was found in that class.
+
+Therefore the prior proposed 4 GB / 15 GB / 7,000-operation values are not live safeguards. They must not be described as implemented. A reliable no-overage design needs:
+- atomic reservation of storage capacity before upload;
+- hard per-file and total-account cap;
+- explicit monthly egress and API operation accounting with a conservative safety margin;
+- no automatic full-object read-back after upload;
+- health checks that do not trigger full inventory scans;
+- a fail-closed switch to stop writes/reads when usage cannot be verified;
+- provider dashboard reconciliation and tests, including concurrent uploads.
+
+Until this work is implemented and verified, no S3 probe, upload, bulk migration, inventory refresh or connection test should be run against the user's paid-wallet-linked account.
