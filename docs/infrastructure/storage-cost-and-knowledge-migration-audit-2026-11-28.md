@@ -547,3 +547,22 @@ When the user has created a Tigris account and private bucket, the intended FARA
 - no Infrequent Access or Archive tier; Standard only
 
 This preset is not configured. No Tigris account, bucket, token or network request has been created. Do not enter credentials until PR #767 passes all required checks and restore tests.
+
+### 13.1 Existing code touchpoints audited for the knowledge-bundle migration
+
+The current SQL payload consumers/writers that must be switched together are:
+
+- app/Jobs/ProcessProductDocument.php: currently writes chunks, facts, and pages rows and later checks their existence to decide processing/audio state.
+- app/Services/ProductKnowledgeService.php: reads document chunks and facts for AI context and content-generation context.
+- app/Jobs/GenerateProductDocumentAudio.php: reads chunks in order to generate the audio timeline.
+- app/Http/Controllers/StoreController.php: reads page summaries and chunks for reader previews/timing, and fetches one page's HTML/text for the reader endpoint.
+- app/Models/StoreProductDocument.php: exposes the three Eloquent relationships; retain them for legacy fallback until migration is complete.
+- app/Models/StoreProductDocumentArtifact.php: existing artifact table can hold a versioned knowledge_bundle_manifest pointer and metadata; no parallel artifact subsystem is needed.
+- app/Models/StorageManagedFile.php / StorageManager: use managed-file IDs for shards so StorageTransferService can move staged files to the Iran-primary volume without stale paths in the manifest.
+
+Tests to update/extend include ProcessProductDocumentStorageTest, GenerateProductDocumentAudioStorageTest, StoreReaderAccessTest, RecoverStaleProductDocumentsTest, RetryOfflineProductDocumentsTest, ProductDocumentAudioServiceTest, and StoreProductDocumentPageBuilderTest.
+
+Rollout must be staged: add the bundle reader with SQL fallback first; test all consumer paths; add a dry-run migration command; publish and verify a manifest/shards on Iran-primary; only then delete the SQL payload rows. New ingestion must follow the same rule: keep SQL authoritative if bundle storage is only local-staged or incomplete. Never purge SQL rows while the manifest or any required shard is missing, unverified, or outside the Iran-primary volume.
+
+The manifest should contain only document/source/version metadata and shard references (managed-file IDs, content SHA-256, encrypted/compressed sizes, type and range). Each shard is compressed JSON encrypted with the knowledge key-purpose domain; page shards are addressable by page range, chunk shards by chunk-index range, and facts can be loaded separately. No user profiles, conversations, audience traits or unapproved user experiences are included.
+
