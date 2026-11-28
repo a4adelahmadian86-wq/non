@@ -526,7 +526,10 @@ class StorageBackupService
                             'source_kind' => 'local_staging',
                         ]);
                         $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
-                        $entries[$entry] = $this->backupObjectManifestEntry($object);
+                        $entryReference = $this->backupObjectManifestEntry($object);
+                        $entryReference['source_kind'] = 'local_staging';
+                        $entryReference['source_file_id'] = (int) $file->id;
+                        $entries[$entry] = $entryReference;
                         $objectIds[] = (int) $object->id;
                         @unlink($temporary);
                     }
@@ -583,7 +586,12 @@ class StorageBackupService
 
                         $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
                         $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
-                        $entries[$entry] = $this->backupObjectManifestEntry($object);
+                        $entryReference = $this->backupObjectManifestEntry($object);
+                        $entryReference['source_kind'] = 'managed_remote';
+                        $entryReference['source_file_id'] = (int) $file->id;
+                        $entryReference['source_drive_key'] = (string) $file->volume->drive_key;
+                        $entryReference['source_volume_id'] = (int) $file->storage_volume_id;
+                        $entries[$entry] = $entryReference;
                         $objectIds[] = (int) $object->id;
                     }
                 });
