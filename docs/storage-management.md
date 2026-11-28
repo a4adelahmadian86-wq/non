@@ -41,6 +41,30 @@ Uploads that need security inspection may briefly enter the private local quaran
 
 Use a separate API credential with only the required bucket permissions. The endpoint must use HTTPS and certificate verification remains enabled. FARAST sends S3-compatible API requests directly to this exact administrator-supplied endpoint; it does not proxy through a storage SaaS, external gateway, hosted file-management service, or another intermediary. The HTTP client is a PHP library running inside FARAST, not a remote service. The current built-in remote protocol is S3-compatible API; a host exposing a different proprietary API needs a first-party adapter implemented inside FARAST against that host's published API contract. Do not enter arbitrary API credentials and assume protocol compatibility.
 
+## Provider quota safety
+
+S3-compatible APIs generally do not expose the provider's commercial plan limits. The storage-volume connection JSON therefore accepts optional administrator-configured safety values:
+
+- `capacity_bytes`: an internal upper bound used by FARAST when selecting a volume. It is not a provider-reported quota.
+- `file_limit` and `max_file_bytes`: optional internal object-count and per-file limits.
+- `health_check_interval_minutes`: 5–1440 minutes. The scheduled checker still runs every five minutes, but skips a healthy volume until its configured interval has elapsed. Error and unverified volumes continue to be retried on the normal schedule.
+
+For ArvanCloud's currently published free Object Storage plan (5 GB, 20 GB monthly traffic, and 10,000 read/write requests), use a conservative internal storage cap such as `4500000000` bytes and set `health_check_interval_minutes` to `60`. The health probe performs multiple API operations, so retaining the five-minute default on a free plan would consume too much of its request allowance. The one-hour interval reduces routine probes but does not account for all application reads/writes or monthly traffic; provider usage must still be monitored. Do not treat this application-side cap as a guarantee against every possible provider charge.
+
+Example connection fields:
+
+```json
+{
+  "capacity_bytes": 4500000000,
+  "health_check_interval_minutes": 60,
+  "credentials": {
+    "key": "ACCESS_KEY",
+    "secret": "SECRET_KEY",
+    "use_path_style_endpoint": true
+  }
+}
+```
+
 ## Required environment
 
 - `FARAST_BACKUP_ENCRYPTION_KEY`: a dedicated high-entropy secret, kept outside the database and backup files.
