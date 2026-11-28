@@ -1,4 +1,6 @@
 /* FARAST PDF reader styles. Kept as a same-origin asset for browser caching and maintainability. */
+/* Reader routes skip the global icon stylesheet; use the bundled same-origin Font Awesome assets. */
+@import url('/css/fontawesome.css?v=20261115local1');
 html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,sans-serif}*,*::before,*::after{box-sizing:border-box}
 .farast-pdf-document{position:relative}.farast-pdf-annotation-layer.annotationLayer{position:absolute;inset:0;z-index:4}
 .farast-reader{--reader-bg:#0b1220;--reader-panel:#111d30;--reader-line:rgba(255,255,255,.09);--reader-text:#e8eef8;--reader-muted:#91a4c1;min-height:calc(100vh - 70px);background:var(--reader-bg);color:var(--reader-text);display:flex;flex-direction:column;font-family:inherit}
@@ -36,9 +38,6 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-pdf-loading p{margin:0 0 10px}
 
 .farast-reader{min-height:100vh;font-family:Tahoma,Arial,sans-serif}
-.farast-reader i.fa-solid,.farast-reader i.fa-regular{display:none!important}
-.farast-reader .reader-tool[aria-label]:not(.reader-tool-wide)::after{content:attr(aria-label);font-size:.62rem;line-height:1.25;white-space:nowrap}
-.farast-reader .reader-tool[aria-label]:not(.reader-tool-wide){width:auto;min-width:34px;padding-inline:8px}
 .farast-reader .farast-studio-action[aria-label]::after,.farast-reader .farast-audio-play[aria-label]::after,.farast-reader .farast-audio-collapse[aria-label]::after{content:attr(aria-label);font-size:.62rem;white-space:nowrap}
 .farast-reader .farast-audio-play,.farast-reader .farast-audio-collapse{width:auto;min-width:38px;padding-inline:8px;border-radius:9px}
 .farast-reader .farast-reader-heading span{font-family:Tahoma,Arial,sans-serif}
