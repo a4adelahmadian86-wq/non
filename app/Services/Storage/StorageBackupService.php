@@ -1001,6 +1001,9 @@ class StorageBackupService
         $orphans = StorageBackupObject::query()
             ->where('storage_volume_id', $target->id)
             ->whereDoesntHave('runs')
+            // Keep recent verified objects so a failed baseline resumes without
+            // rereading the Iran source on the next scheduled attempt.
+            ->where('created_at', '<', now()->subDays(14))
             ->orderBy('id')
             ->get();
 
