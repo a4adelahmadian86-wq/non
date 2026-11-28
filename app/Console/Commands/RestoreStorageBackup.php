@@ -255,7 +255,11 @@ class RestoreStorageBackup extends Command
                         $restoredRun->backupObjects()->sync($objectIds);
                     });
 
-                    $backup->reconcileRestoredRun($restoredRun);
+                    try {
+                        $backup->reconcileRestoredRun($restoredRun);
+                    } catch (Throwable $reconcileException) {
+                        report($reconcileException);
+                    }
 
                     // A restore is exceptional. Conservatively exhaust this month's
                     // external and Iran-source budgets so no automatic retry can overrun them.
