@@ -466,3 +466,17 @@ Nominal total free capacity across these distinct providers is 20 GB (5 GB Arvan
 ### 12.4 New implementation safeguard
 
 The current StorageBackupService::runWeeklyLocked() creates the full archive before checking whether any healthy backup destination exists. That means a scheduled backup with no destination can still read every managed object from Arvan and then fail. A separate fix is being developed to preflight backup destinations before archive creation. This prevents waste when no target exists; it does not yet solve weekly full-source egress or retention.
+## 13. Data-efficiency policy for the knowledge store
+
+To maximize effective capacity without paying for extra raw storage, the knowledge migration should follow these rules:
+
+1. **Canonical compressed bundles:** serialize a complete document knowledge record once as deterministic UTF-8 JSON, gzip it, and store one immutable bundle. Keep only a compact relational manifest and indexes in MySQL. Preserve all source locators, page numbers, chunk indexes, fact IDs, evidence and processing status.
+2. **Content-addressed identity:** use source SHA-256 + extraction version + bundle schema version as the stable identity. Reprocessing an unchanged source with unchanged extraction/schema versions must be idempotent and must not create another full copy.
+3. **Deduplicate only after authorization boundaries are proven:** do not globally deduplicate private source files or per-user data merely because hashes match. If deduplication is later implemented, use a scoped namespace and retain independent authorization/provenance records.
+4. **Separate data classes:** source files, product knowledge bundles, generated audio, product images, approved user experiences, and private user-context data must have separate prefixes, retention and access rules. Never mix user profiles or conversations into product knowledge bundles.
+5. **Avoid duplicate representations:** do not store the same extracted text repeatedly in multiple formats unless a consumer demonstrably needs each representation. Prefer a canonical text/page representation plus compact locators and derived indexes. Keep reader HTML only where the reader contract requires it.
+6. **No destructive lifecycle by default:** never delete source files, bundle versions, approved evidence or backup objects based only on age. Garbage collection must first prove there are no SQL references, no active job, no pending restore and no retained baseline dependency.
+7. **Budget before writing:** calculate compressed bundle size locally, reserve bytes/object count atomically, enforce a per-volume safety ceiling below each provider's free allowance, and refuse overflow before issuing a provider PUT.
+8. **Graceful tiering:** when the Iran-resident free tier reaches its internal ceiling, do not silently send critical data abroad. Keep critical processing queued/staged locally and route only explicitly noncritical/approved classes to external tiers. Record the storage tier in the manifest so readers do not assume every object is domestic.
+
+These are implementation requirements, not claims that the current application already follows them. Existing SQL knowledge remains authoritative until all readers and restore tests are migrated.
