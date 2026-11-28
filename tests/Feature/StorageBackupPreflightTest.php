@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\StorageBackupRun;
+use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use App\Services\Storage\StorageBackupService;
 use App\Services\Storage\StorageManager;
@@ -57,4 +58,70 @@ class StorageBackupPreflightTest extends TestCase
         $this->assertTrue((bool) data_get($run->metadata, 'archive_skipped'));
         $this->assertSame('no_healthy_destination', data_get($run->metadata, 'reason'));
     }
+
+    public function test_weekly_full_backup_skips_iran_primary_sources_by_default_even_with_external_target(): void
+    {
+        config([
+            'storage_management.backup.encryption_key' => '',
+            'storage_management.backup.enable_iran_replica' => false,
+            'storage_management.backup.allow_iran_primary_full_source_reads' => false,
+        ]);
+
+        $iran = StorageVolume::forceCreate([
+            'drive_key' => 'iran_primary',
+            'name' => 'Iran primary',
+            'driver' => 's3',
+            'endpoint' => 'https://iran.example.test',
+            'bucket' => 'farast-primary',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'External backup',
+            'driver' => 's3',
+            'endpoint' => 'https://backup.example.test',
+            'bucket' => 'farast-backups',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        StorageManagedFile::create([
+            'storage_volume_id' => $iran->id,
+            'drive_key' => 'iran_primary',
+            'file_key' => 'products/private/source.pdf',
+            'original_name' => 'source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 1024,
+            'checksum' => str_repeat('a', 64),
+            'classification' => 'critical',
+            'status' => 'active',
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldNotReceive('downloadTo');
+        $storage->shouldNotReceive('uploadBackup');
+
+        try {
+            (new StorageBackupService($storage))->runWeekly('weekly');
+            $this->fail('A full backup must not read Iran primary objects without explicit approval.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('بکاپ کامل از iran_primary غیرفعال است', $exception->getMessage());
+        }
+
+        $run = StorageBackupRun::query()
+            ->where('backup_type', 'weekly')
+            ->where('source_name', 'application')
+            ->sole();
+
+        $this->assertSame('failed', $run->status);
+        $this->assertTrue((bool) data_get($run->metadata, 'archive_skipped'));
+        $this->assertSame('iran_primary_full_read_disabled', data_get($run->metadata, 'reason'));
+    }
+
 }
