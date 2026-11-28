@@ -154,7 +154,7 @@ class StorageBackupIncrementalPrimitivesTest extends TestCase
         } catch (\ReflectionException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
-            $this->assertStringContainsString('سقف امن ترافیک خواندن ماهانه', $exception->getMessage());
+            $this->assertStringContainsString('ترافیک خواندن ماهانه از مبدأ ایران', $exception->getMessage());
         }
 
         $this->assertDatabaseHas('storage_backup_usage_periods', [
