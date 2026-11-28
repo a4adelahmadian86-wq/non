@@ -13,6 +13,7 @@ return new class extends Migration {
             $table->date('period_start');
             $table->unsignedBigInteger('class_a_operations')->default(0);
             $table->unsignedBigInteger('class_b_operations')->default(0);
+            $table->unsignedBigInteger('source_read_operations')->default(0);
             $table->unsignedBigInteger('source_read_bytes')->default(0);
             $table->unsignedBigInteger('uploaded_bytes')->default(0);
             $table->unsignedBigInteger('downloaded_bytes')->default(0);
