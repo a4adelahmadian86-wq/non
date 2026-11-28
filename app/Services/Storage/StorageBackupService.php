@@ -446,6 +446,9 @@ class StorageBackupService
 
                         $object = $this->findReusableBackupObject($target, $checksum);
                         if (! $object) {
+                            if ($file->volume->drive_key !== 'iran_primary') {
+                                throw new RuntimeException('خواندن خودکار از فضای دوردست تأییدنشده غیرفعال است؛ برای جلوگیری از هزینه، فقط مبدأ ایران با سقف مصرف مشخص خوانده می‌شود.');
+                            }
                             $size = max(0, (int) $file->size_bytes);
                             if ($file->volume->drive_key === 'iran_primary') {
                                 if ($sourceReadBytes + $size > $perRunSourceReadLimit) {
