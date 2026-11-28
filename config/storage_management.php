@@ -8,6 +8,7 @@ return [
         'enable_iran_replica' => filter_var(env('FARAST_ENABLE_IRAN_BACKUP', false), FILTER_VALIDATE_BOOLEAN),
         // Keep full-snapshot reads from Iran disabled. The v3 incremental writer has separate byte and operation budgets.
         'allow_iran_primary_full_source_reads' => filter_var(env('FARAST_BACKUP_ALLOW_IRAN_PRIMARY_FULL_READS', false), FILTER_VALIDATE_BOOLEAN),
+        'allow_unbudgeted_remote_full_source_reads' => filter_var(env('FARAST_BACKUP_ALLOW_UNBUDGETED_REMOTE_FULL_READS', false), FILTER_VALIDATE_BOOLEAN),
         // Keep only the newest verified snapshot per destination/type by default.
         'keep_latest' => max(1, min(10, (int) env('FARAST_BACKUP_KEEP_LATEST', 1))),
         'use_incremental_format' => filter_var(env('FARAST_BACKUP_INCREMENTAL', false), FILTER_VALIDATE_BOOLEAN),
