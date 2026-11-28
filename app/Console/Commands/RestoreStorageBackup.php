@@ -255,6 +255,8 @@ class RestoreStorageBackup extends Command
                         $restoredRun->backupObjects()->sync($objectIds);
                     });
 
+                    $backup->reconcileRestoredRun($restoredRun);
+
                     // A restore is exceptional. Conservatively exhaust this month's
                     // external and Iran-source budgets so no automatic retry can overrun them.
                     DB::table('storage_backup_usage_periods')
