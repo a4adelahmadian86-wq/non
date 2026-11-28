@@ -77,9 +77,9 @@ The existing product knowledge pipeline still persists chunks, facts, and extrac
 
 ## 5. Activation checklist — intentionally not yet completed
 
-- [ ] Confirm the actual Object Storage region in the account panel.
-- [ ] Confirm the actual S3 endpoint displayed for that region.
-- [ ] Confirm whether a bucket was auto-created; do not assume it was.
+- [x] User provided the regional endpoint list; Iranian Standard zones are identified above.
+- [ ] Confirm the bucket's actual region and exact endpoint after bucket creation.
+- [ ] Locate the bucket list and confirm whether any bucket exists; Bucket Policy screen is not the bucket list.
 - [ ] Confirm bucket is private.
 - [ ] Confirm PAYG/overage can be disabled or establish a verified hard stop.
 - [x] User confirms an access key is available. The actual key/secret are intentionally not stored in Git or chat.
@@ -88,4 +88,4 @@ The existing product knowledge pipeline still persists chunks, facts, and extrac
 - [ ] Test one tiny private object upload/download/delete and verify checksum.
 - [ ] Verify provider usage counters and that the test did not trigger paid consumption.
 
-**Current state (updated 2026-11-28):** User confirms an access key is available. The actual credential values are not recorded. The bucket name, region, exact S3 endpoint, and whether the key includes a matching secret are not yet verified from the account panel. No real connection has been tested, no user data has been uploaded, and no application-level free-tier traffic/request hard-stop has been implemented.
+**Current state (updated 2026-11-28):** User confirms an access key is available and supplied the regional endpoint/status list recorded above. The actual credential values are not recorded. No bucket is confirmed, no bucket name is known, and the exact bucket region is therefore not yet verified. No real connection has been tested, no user data has been uploaded, and no application-level free-tier traffic/request hard-stop has been implemented.
