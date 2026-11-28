@@ -198,7 +198,16 @@ class StorageBackupService
                 ->get());
         }
 
-        return $targets;
+        // The project explicitly forbids Arvan as a backup destination.
+        return $targets->reject(fn (StorageVolume $volume): bool => $this->isArvanEndpoint($volume))->values();
+    }
+
+    private function isArvanEndpoint(StorageVolume $volume): bool
+    {
+        $endpoint = (string) ($volume->endpoint ?: data_get($volume->credentials, 'endpoint', ''));
+        $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+
+        return $host === 'arvanstorage.ir' || str_ends_with($host, '.arvanstorage.ir');
     }
 
     private function pruneOldBackups(StorageVolume $target, StorageBackupRun $currentRun): void
