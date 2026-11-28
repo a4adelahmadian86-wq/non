@@ -13,8 +13,9 @@ class S3CompatibleAdapter
     {
         $size = (int) filesize($localPath);
         $sha256 ??= hash_file('sha256', $localPath);
-        if (! is_string($sha256) || ! preg_match('/^[a-f0-9]{64}$/i', $sha256)) {
-            throw new RuntimeException('محاسبه SHA-256 فایل پیش از آپلود ناموفق بود.');
+        $md5 = md5_file($localPath, true);
+        if (! is_string($sha256) || ! preg_match('/^[a-f0-9]{64}$/i', $sha256) || ! is_string($md5)) {
+            throw new RuntimeException('محاسبه Checksum فایل پیش از آپلود ناموفق بود.');
         }
         if ($size > 5 * 1024 * 1024 * 1024) {
             $this->multipartUpload($volume, $key, $localPath, $size, strtolower($sha256));
@@ -28,6 +29,7 @@ class S3CompatibleAdapter
                 'Content-Length' => (string) $size,
                 'Content-Type' => mime_content_type($localPath) ?: 'application/octet-stream',
                 'x-amz-meta-farast-sha256' => strtolower($sha256),
+                'Content-MD5' => base64_encode($md5),
             ]);
         } finally {
             fclose($stream);
@@ -59,7 +61,10 @@ class S3CompatibleAdapter
                 $response = $this->request($volume, 'PUT', $key, [
                     'partNumber' => (string) $partNumber,
                     'uploadId' => $uploadId,
-                ], $partStream, 'UNSIGNED-PAYLOAD', ['Content-Length' => (string) strlen($part)]);
+                ], $partStream, 'UNSIGNED-PAYLOAD', [
+                    'Content-Length' => (string) strlen($part),
+                    'Content-MD5' => base64_encode(md5($part, true)),
+                ]);
                 fclose($partStream);
                 $etag = trim((string) $response->getHeaderLine('ETag'), '"');
                 if ($etag === '') throw new RuntimeException('ETag بخش آپلودشده دریافت نشد.');
