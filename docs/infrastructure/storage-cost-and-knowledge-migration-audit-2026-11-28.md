@@ -230,7 +230,7 @@ The existing quota-guard PR was extended in place on its original branch; no par
 - Failed health checks now persist a retry timestamp and exponential backoff based on the configured interval, capped at 24 hours; a successful scheduled check clears the retry state.
 - The UI/docs explain that a full manual verification may use additional API operations and inventory listing.
 
-Exact updated head at this refresh: `5c33abf5418ce94dbdee6c0e5f264aa9d19f2e5d`. The latest workflow checks were queued/in progress; do not claim these follow-up changes have passed CI until their exact head runs complete.
+Exact updated head at this refresh: `946789dac85c251af478ddee9148a85725195aaf`. The Phase 3 test and Phase 4 agent jobs were in progress; the remaining checks were queued. Do not claim these follow-up changes have passed CI until their exact head runs complete.
 
 Still open before Arvan Base:
 - S3 probe remains PUT+GET+DELETE (three operations).
