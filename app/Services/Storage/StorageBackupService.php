@@ -221,8 +221,8 @@ class StorageBackupService
             ->where('id', '!=', $currentRun->id)
             ->orderByDesc('completed_at')
             ->orderByDesc('id')
-            ->skip($keepLatest - 1)
-            ->get();
+            ->get()
+            ->slice($keepLatest - 1);
 
         foreach ($oldRuns as $oldRun) {
             if (! $oldRun->object_key) {
