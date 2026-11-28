@@ -9,9 +9,13 @@ use RuntimeException;
 
 class S3CompatibleAdapter
 {
-    public function putFile(StorageVolume $volume, string $key, string $localPath): void
+    public function putFile(StorageVolume $volume, string $key, string $localPath, ?string $sha256 = null): void
     {
         $size = (int) filesize($localPath);
+        $sha256 ??= hash_file('sha256', $localPath);
+        if (! is_string($sha256) || ! preg_match('/^[a-f0-9]{64}$/i', $sha256)) {
+            throw new RuntimeException('محاسبه SHA-256 فایل پیش از آپلود ناموفق بود.');
+        }
         if ($size > 5 * 1024 * 1024 * 1024) {
             $this->multipartUpload($volume, $key, $localPath, $size);
             return;
@@ -23,6 +27,7 @@ class S3CompatibleAdapter
             $this->request($volume, 'PUT', $key, [], $stream, 'UNSIGNED-PAYLOAD', [
                 'Content-Length' => (string) $size,
                 'Content-Type' => mime_content_type($localPath) ?: 'application/octet-stream',
+                'x-amz-meta-farast-sha256' => strtolower($sha256),
             ]);
         } finally {
             fclose($stream);
@@ -105,14 +110,23 @@ class S3CompatibleAdapter
         }
     }
 
-    public function size(StorageVolume $volume, string $key): int
+    public function headObject(StorageVolume $volume, string $key): array
     {
         $response = $this->request($volume, 'HEAD', $key);
         $length = filter_var($response->getHeaderLine('Content-Length'), FILTER_VALIDATE_INT);
         if (! is_int($length) || $length < 0) {
             throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی دریافت نشد.');
         }
-        return $length;
+
+        return [
+            'size_bytes' => $length,
+            'sha256' => strtolower(trim($response->getHeaderLine('x-amz-meta-farast-sha256'))),
+        ];
+    }
+
+    public function size(StorageVolume $volume, string $key): int
+    {
+        return $this->headObject($volume, $key)['size_bytes'];
     }
 
     public function streamRange(StorageVolume $volume, string $key, int $start, int $length, $output): void
