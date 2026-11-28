@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
+use App\Models\StorageBackupObject;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use App\Services\Storage\StorageBackupService;
@@ -84,75 +85,82 @@ class RestoreStorageBackup extends Command
 
             $checksum = hash_file('sha256', $archive);
             if (! is_string($checksum) || ($run && ! hash_equals((string) $run->checksum, $checksum))) {
-                throw new RuntimeException('Checksum نسخه پشتیبان صحیح نیست.');
+                throw new RuntimeException('Checksum نسخه پشتیبان با مقدار ثبت‌شده مطابقت ندارد.');
             }
-            // For a local bootstrap restore, the encrypted manifest and per-entry
-            // AES authentication are the trust anchor; no database run row is needed.
-            $backup->verifyArchive($archive);
 
-            $zip = new ZipArchive();
-            if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
-            if (! $zip->setPassword($password)) {
-                $zip->close();
-                throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
-            }
-            $seenEntries = [];
-            for ($index = 0; $index < $zip->numFiles; $index++) {
-                $name = $zip->getNameIndex($index);
-                if (
-                    ! is_string($name)
-                    || $name === ''
-                    || strlen($name) > 4096
-                    || str_starts_with($name, '/')
-                    || preg_match('/^[A-Za-z]:/', $name)
-                    || str_contains($name, '\\')
-                    || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
-                    || str_contains($name, "\0")
-                    || isset($seenEntries[$name])
-                ) {
+            $incrementalManifest = null;
+            if ($run && (int) data_get($run->metadata, 'format_version', 0) === 3) {
+                $incrementalManifest = $backup->materializeIncrementalManifest($run, $archive, $work, $extracted);
+                $manifest = $incrementalManifest;
+                $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+            } else {
+                // Legacy ZIP v1/v2 backups remain fully restorable.
+                $backup->verifyArchive($archive);
+
+                $zip = new ZipArchive();
+                if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
+                if (! $zip->setPassword($password)) {
                     $zip->close();
-                    throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بازیابی شناسایی شد.');
+                    throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
                 }
-                $seenEntries[$name] = true;
-
-                $operatingSystem = 0;
-                $externalAttributes = 0;
-                if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
-                    $unixFileType = ($externalAttributes >> 16) & 0170000;
+                $seenEntries = [];
+                for ($index = 0; $index < $zip->numFiles; $index++) {
+                    $name = $zip->getNameIndex($index);
                     if (
-                        $operatingSystem === ZipArchive::OPSYS_UNIX
-                        && ! in_array($unixFileType, [0, 0100000, 0040000], true)
+                        ! is_string($name)
+                        || $name === ''
+                        || strlen($name) > 4096
+                        || str_starts_with($name, '/')
+                        || preg_match('/^[A-Za-z]:/', $name)
+                        || str_contains($name, '\\')
+                        || preg_match('#(^|/)\\.\\.?(/|$)#', $name)
+                        || str_contains($name, "\0")
+                        || isset($seenEntries[$name])
                     ) {
                         $zip->close();
-                        throw new RuntimeException('نوع فایل ویژه یا پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                        throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بازیابی شناسایی شد.');
+                    }
+                    $seenEntries[$name] = true;
+
+                    $operatingSystem = 0;
+                    $externalAttributes = 0;
+                    if ($zip->getExternalAttributesIndex($index, $operatingSystem, $externalAttributes)) {
+                        $unixFileType = ($externalAttributes >> 16) & 0170000;
+                        if (
+                            $operatingSystem === ZipArchive::OPSYS_UNIX
+                            && ! in_array($unixFileType, [0, 0100000, 0040000], true)
+                        ) {
+                            $zip->close();
+                            throw new RuntimeException('نوع فایل ویژه یا پیوند نمادین در آرشیو بازیابی مجاز نیست.');
+                        }
                     }
                 }
-            }
-            $manifestJson = $zip->getFromName('manifest.json');
-            if (! is_string($manifestJson)) {
+                $manifestJson = $zip->getFromName('manifest.json');
+                if (! is_string($manifestJson)) {
+                    $zip->close();
+                    throw new RuntimeException('Manifest رمزنگاری‌شده در بکاپ قابل خواندن نیست.');
+                }
+                $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
+                $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+                File::ensureDirectoryExists($extracted);
+                if ($zip->locateName('database/database.sql') === false) {
+                    $zip->close();
+                    throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
+                }
+                if (! $zip->extractTo($extracted)) {
+                    $zip->close();
+                    throw new RuntimeException('استخراج فایل‌های رمزنگاری‌شده بکاپ ناموفق بود.');
+                }
                 $zip->close();
-                throw new RuntimeException('Manifest رمزنگاری‌شده در بکاپ قابل خواندن نیست.');
             }
-            $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
-            $databaseDriver = (string) ($manifest['database_driver'] ?? '');
+
             $currentDriver = (string) config(
                 'database.connections.'.config('database.default').'.driver',
                 config('database.default')
             );
             if (! in_array($databaseDriver, ['sqlite', 'mysql', 'mariadb', 'pgsql'], true) || $databaseDriver !== $currentDriver) {
-                $zip->close();
                 throw new RuntimeException('درایور پایگاه داده بکاپ با درایور پشتیبانی‌شده و محیط مقصد یکسان نیست.');
             }
-            if ($zip->locateName('database/database.sql') === false) {
-                $zip->close();
-                throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
-            }
-            File::ensureDirectoryExists($extracted);
-            if (! $zip->extractTo($extracted)) {
-                $zip->close();
-                throw new RuntimeException('استخراج فایل‌های رمزنگاری‌شده بکاپ ناموفق بود.');
-            }
-            $zip->close();
 
             Artisan::call('down', ['--retry' => 60]);
             $maintenanceEnabled = true;
@@ -193,6 +201,103 @@ class RestoreStorageBackup extends Command
                     'completed_at' => $run->completed_at,
                     'metadata' => $runMetadata,
                 ])->save();
+
+                if (is_array($incrementalManifest)) {
+                    $volume = StorageVolume::query()->findOrFail($run->storage_volume_id);
+                    $references = [(array) $incrementalManifest['core']];
+                    foreach ((array) $incrementalManifest['managed_entries'] as $entry) {
+                        $references[] = (array) $entry;
+                    }
+                    $references = collect($references)->keyBy('id')->values();
+
+                    DB::transaction(function () use ($volume, $references, $restoredRun): void {
+                        $objectIds = [];
+                        foreach ($references as $reference) {
+                            $object = StorageBackupObject::query()
+                                ->where('storage_volume_id', $volume->id)
+                                ->where('sha256', $reference['sha256'])
+                                ->lockForUpdate()
+                                ->first();
+
+                            if (! $object) {
+                                $object = StorageBackupObject::create([
+                                    'storage_volume_id' => $volume->id,
+                                    'sha256' => $reference['sha256'],
+                                    'size_bytes' => $reference['size_bytes'],
+                                    'object_key' => $reference['object_key'],
+                                    'encrypted_size_bytes' => $reference['encrypted_size_bytes'],
+                                    'status' => 'verified',
+                                    'verified_at' => now(),
+                                    'metadata' => ['restored_from_manifest' => true],
+                                ]);
+                                $volume->update([
+                                    'used_bytes' => (int) $volume->used_bytes + (int) $reference['encrypted_size_bytes'],
+                                    'object_count' => (int) $volume->object_count + 1,
+                                ]);
+                            } else {
+                                $oldSize = (int) $object->encrypted_size_bytes;
+                                $object->update([
+                                    'size_bytes' => $reference['size_bytes'],
+                                    'object_key' => $reference['object_key'],
+                                    'encrypted_size_bytes' => $reference['encrypted_size_bytes'],
+                                    'status' => 'verified',
+                                    'verified_at' => now(),
+                                    'metadata' => array_merge((array) $object->metadata, ['restored_from_manifest' => true]),
+                                ]);
+                                $volume->update([
+                                    'used_bytes' => max(0, (int) $volume->used_bytes - $oldSize) + (int) $reference['encrypted_size_bytes'],
+                                ]);
+                            }
+
+                            $objectIds[] = (int) $object->id;
+                        }
+
+                        $restoredRun->backupObjects()->sync($objectIds);
+                    });
+
+                    try {
+                        $backup->reconcileRestoredRun($restoredRun);
+                    } catch (Throwable $reconcileException) {
+                        report($reconcileException);
+                    }
+
+                    // A restore is exceptional. Conservatively exhaust this month's
+                    // external and Iran-source budgets so no automatic retry can overrun them.
+                    DB::table('storage_backup_usage_periods')
+                        ->where('storage_volume_id', $volume->id)
+                        ->where('period_start', now()->startOfMonth()->toDateString())
+                        ->update([
+                            'class_a_operations' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('class_a_operations'),
+                                (int) config('storage_management.backup.max_class_a_ops_per_month', 8000)
+                            ),
+                            'class_b_operations' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('class_b_operations'),
+                                (int) config('storage_management.backup.max_class_b_ops_per_month', 80000)
+                            ),
+                            'source_read_operations' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('source_read_operations'),
+                                (int) config('storage_management.backup.max_iran_ops_per_month', 7000)
+                            ),
+                            'source_read_bytes' => max(
+                                (int) DB::table('storage_backup_usage_periods')
+                                    ->where('storage_volume_id', $volume->id)
+                                    ->where('period_start', now()->startOfMonth()->toDateString())
+                                    ->value('source_read_bytes'),
+                                (int) config('storage_management.backup.max_iran_source_read_bytes_per_month', 5368709120)
+                            ),
+                            'updated_at' => now(),
+                        ]);
+                }
             } else {
                 // Bootstrap recovery has no surviving storage_backup_runs row.
                 // Record the restore itself without pretending the archive remains

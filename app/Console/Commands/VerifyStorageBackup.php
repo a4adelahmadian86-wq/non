@@ -33,11 +33,22 @@ class VerifyStorageBackup extends Command
                 throw new \RuntimeException('Checksum نسخه پشتیبان با مقدار ثبت‌شده مطابقت ندارد.');
             }
 
-            // Use the same verifier as the upload path so manual verification and
-            // post-upload verification cannot silently drift apart.
-            $backup->verifyArchive($temporary);
+            if ((int) data_get($run->metadata, 'format_version', 0) === 3) {
+                $work = storage_path('app/backup-verify-work/'.bin2hex(random_bytes(12)));
+                if (! mkdir($work, 0700, true) && ! is_dir($work)) {
+                    throw new \RuntimeException('ساخت فضای موقت بررسی بکاپ افزایشی ناموفق بود.');
+                }
+                try {
+                    $backup->materializeIncrementalManifest($run, $temporary, $work, $work.'/extracted');
+                } finally {
+                    $this->removeDirectory($work);
+                }
+            } else {
+                // Legacy ZIP v1/v2 backups remain verifiable.
+                $backup->verifyArchive($temporary);
+            }
 
-            $this->info('نسخه پشتیبان سالم است: checksum، manifest و تمام جریان دیتابیس رمزگشایی شدند.');
+            $this->info('نسخه پشتیبان سالم است: checksum، Manifest و تمام Blobهای رمزنگاری‌شده بررسی شدند.');
             return self::SUCCESS;
         } catch (\Throwable $exception) {
             $this->error($exception->getMessage());
@@ -47,4 +58,20 @@ class VerifyStorageBackup extends Command
             @unlink($temporary);
         }
     }
+    private function removeDirectory(string $directory): void
+    {
+        if (! is_dir($directory)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($directory);
+    }
+
 }

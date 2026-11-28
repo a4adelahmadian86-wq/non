@@ -40,8 +40,8 @@ class StorageManager
         // consume the Iranian primary pool.
         foreach ($volumes as $volume) {
             try {
-                $this->writeToVolume($volume, $key, $file->getRealPath());
-                $this->verifyWrittenObject($volume, $key, $checksum);
+                $this->writeToVolume($volume, $key, $file->getRealPath(), $checksum);
+                $this->verifyWrittenObject($volume, $key, $checksum, (int) $file->getSize());
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
                 } catch (\Throwable $exception) {
@@ -372,7 +372,7 @@ class StorageManager
         return StoragePath::localVolumePath($volume, $key);
     }
 
-    private function writeToVolume(StorageVolume $volume, string $key, string $localPath): void
+    private function writeToVolume(StorageVolume $volume, string $key, string $localPath, ?string $sha256 = null): void
     {
         if ($volume->driver === 'local') {
             $target = $this->localVolumePath($volume, $key);
@@ -389,11 +389,24 @@ class StorageManager
             return;
         }
         if ($volume->driver !== 's3') throw new RuntimeException('آداپتور این نوع سرویس هنوز نصب نشده است.');
-        $this->s3->putFile($volume, $key, $localPath);
+        $this->s3->putFile($volume, $key, $localPath, $sha256);
     }
 
-    private function verifyWrittenObject(StorageVolume $volume, string $key, string $expectedChecksum): void
+    private function verifyWrittenObject(StorageVolume $volume, string $key, string $expectedChecksum, int $expectedSize): void
     {
+        if ($volume->driver === 's3') {
+            // The S3 PUT includes our SHA-256 as object metadata. A single HEAD
+            // verifies stored length and signed metadata without reading the full
+            // object back and paying source egress a second time.
+            $remote = $this->s3->headObject($volume, $key);
+            if ((int) $remote['size_bytes'] !== $expectedSize
+                || ! hash_equals($expectedChecksum, (string) $remote['sha256'])) {
+                throw new RuntimeException('اندازه یا SHA-256 ثبت‌شده در Metadata فایل پس از آپلود با نسخه اصلی مطابقت ندارد.');
+            }
+
+            return;
+        }
+
         $temporary = tempnam(sys_get_temp_dir(), 'farast-storage-verify');
         if (! is_string($temporary)) {
             throw new RuntimeException('ساخت فایل موقت برای تأیید صحت آپلود ناموفق بود.');
@@ -402,8 +415,10 @@ class StorageManager
         try {
             $this->downloadTo($this->volumeDisk($volume), $key, $temporary);
             $actualChecksum = hash_file('sha256', $temporary);
-            if (! is_string($actualChecksum) || ! hash_equals($expectedChecksum, $actualChecksum)) {
-                throw new RuntimeException('Checksum فایل ذخیره‌شده با فایل اصلی مطابقت ندارد.');
+            if (! is_string($actualChecksum)
+                || ! hash_equals($expectedChecksum, $actualChecksum)
+                || @filesize($temporary) !== $expectedSize) {
+                throw new RuntimeException('Checksum یا اندازه فایل ذخیره‌شده با فایل اصلی مطابقت ندارد.');
             }
         } finally {
             @unlink($temporary);

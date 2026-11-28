@@ -26,4 +26,14 @@ class StorageBackupRun extends Model
     {
         return $this->belongsTo(StorageVolume::class, 'storage_volume_id');
     }
+
+    public function backupObjects(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(
+            StorageBackupObject::class,
+            'storage_backup_run_objects',
+            'storage_backup_run_id',
+            'storage_backup_object_id'
+        )->withTimestamps();
+    }
 }

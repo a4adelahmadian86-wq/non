@@ -9,11 +9,16 @@ use RuntimeException;
 
 class S3CompatibleAdapter
 {
-    public function putFile(StorageVolume $volume, string $key, string $localPath): void
+    public function putFile(StorageVolume $volume, string $key, string $localPath, ?string $sha256 = null): void
     {
         $size = (int) filesize($localPath);
+        $sha256 ??= hash_file('sha256', $localPath);
+        $md5 = md5_file($localPath, true);
+        if (! is_string($sha256) || ! preg_match('/^[a-f0-9]{64}$/i', $sha256) || ! is_string($md5)) {
+            throw new RuntimeException('محاسبه Checksum فایل پیش از آپلود ناموفق بود.');
+        }
         if ($size > 5 * 1024 * 1024 * 1024) {
-            $this->multipartUpload($volume, $key, $localPath, $size);
+            $this->multipartUpload($volume, $key, $localPath, $size, strtolower($sha256));
             return;
         }
 
@@ -23,15 +28,19 @@ class S3CompatibleAdapter
             $this->request($volume, 'PUT', $key, [], $stream, 'UNSIGNED-PAYLOAD', [
                 'Content-Length' => (string) $size,
                 'Content-Type' => mime_content_type($localPath) ?: 'application/octet-stream',
+                'x-amz-meta-farast-sha256' => strtolower($sha256),
+                'Content-MD5' => base64_encode($md5),
             ]);
         } finally {
             fclose($stream);
         }
     }
 
-    private function multipartUpload(StorageVolume $volume, string $key, string $localPath, int $size): void
+    private function multipartUpload(StorageVolume $volume, string $key, string $localPath, int $size, string $sha256): void
     {
-        $init = $this->request($volume, 'POST', $key, ['uploads' => '']);
+        $init = $this->request($volume, 'POST', $key, ['uploads' => ''], null, 'UNSIGNED-PAYLOAD', [
+            'x-amz-meta-farast-sha256' => $sha256,
+        ]);
         $xml = simplexml_load_string((string) $init->getBody(), \SimpleXMLElement::class, LIBXML_NONET);
         $uploadId = $xml ? (string) ($xml->UploadId ?? '') : '';
         if ($uploadId === '') throw new RuntimeException('شناسه آپلود چندبخشی از سرویس‌دهنده دریافت نشد.');
@@ -52,7 +61,10 @@ class S3CompatibleAdapter
                 $response = $this->request($volume, 'PUT', $key, [
                     'partNumber' => (string) $partNumber,
                     'uploadId' => $uploadId,
-                ], $partStream, 'UNSIGNED-PAYLOAD', ['Content-Length' => (string) strlen($part)]);
+                ], $partStream, 'UNSIGNED-PAYLOAD', [
+                    'Content-Length' => (string) strlen($part),
+                    'Content-MD5' => base64_encode(md5($part, true)),
+                ]);
                 fclose($partStream);
                 $etag = trim((string) $response->getHeaderLine('ETag'), '"');
                 if ($etag === '') throw new RuntimeException('ETag بخش آپلودشده دریافت نشد.');
@@ -105,14 +117,23 @@ class S3CompatibleAdapter
         }
     }
 
-    public function size(StorageVolume $volume, string $key): int
+    public function headObject(StorageVolume $volume, string $key): array
     {
         $response = $this->request($volume, 'HEAD', $key);
         $length = filter_var($response->getHeaderLine('Content-Length'), FILTER_VALIDATE_INT);
         if (! is_int($length) || $length < 0) {
             throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی دریافت نشد.');
         }
-        return $length;
+
+        return [
+            'size_bytes' => $length,
+            'sha256' => strtolower(trim($response->getHeaderLine('x-amz-meta-farast-sha256'))),
+        ];
+    }
+
+    public function size(StorageVolume $volume, string $key): int
+    {
+        return $this->headObject($volume, $key)['size_bytes'];
     }
 
     public function streamRange(StorageVolume $volume, string $key, int $start, int $length, $output): void

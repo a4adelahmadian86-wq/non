@@ -127,7 +127,7 @@ class AdminStorageController extends Controller
             $limits[$field] = $value;
         }
 
-        $defaultHealthCheckInterval = $data['drive_key'] === 'iran_primary' ? 1440 : 5;
+        $defaultHealthCheckInterval = in_array($data['drive_key'], ['iran_primary', 'foreign_backup', 'iran_backup'], true) ? 1440 : 5;
         $healthCheckInterval = filter_var($connection['health_check_interval_minutes'] ?? $defaultHealthCheckInterval, FILTER_VALIDATE_INT);
         if ($healthCheckInterval === false || $healthCheckInterval < 5 || $healthCheckInterval > 1440) {
             return back()->withErrors(['connection_json' => 'فاصله بررسی سلامت باید عددی بین ۵ تا ۱۴۴۰ دقیقه باشد.'])->withInput($request->except('connection_json'));
@@ -148,8 +148,30 @@ class AdminStorageController extends Controller
             }
         }
         $bucket = (string) ($connection['bucket'] ?? ($credentials['bucket'] ?? ''));
-        $host = (string) parse_url($endpoint, PHP_URL_HOST);
-        $provider = trim((string) ($connection['provider'] ?? $host));
+        $host = strtolower((string) parse_url($endpoint, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($endpoint, PHP_URL_SCHEME));
+        $port = parse_url($endpoint, PHP_URL_PORT);
+        $endpointPath = (string) parse_url($endpoint, PHP_URL_PATH);
+        $provider = trim((string) ($connection['provider'] ?? ($data['drive_key'] === 'foreign_backup' ? 'tigris' : $host)));
+        if ($data['drive_key'] === 'foreign_backup') {
+            if (StorageVolume::query()->where('drive_key', 'foreign_backup')->where('provider', 'tigris')->exists()) {
+                return back()->withErrors([
+                    'drive_key' => 'برای جلوگیری از دور زدن سقف ماهانه حساب رایگان، فقط یک Volume دائمی Tigris برای FARAST مجاز است؛ همان Volume را ویرایش یا دوباره فعال کنید و Volume جدید نسازید.',
+                ])->withInput($request->except('connection_json'));
+            }
+            $region = strtolower((string) ($connection['region'] ?? ($credentials['region'] ?? '')));
+            $pathStyleValue = $connection['use_path_style_endpoint'] ?? ($credentials['use_path_style_endpoint'] ?? true);
+            $pathStyle = filter_var($pathStyleValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($driver !== 's3' || $scheme !== 'https' || $host !== 't3.storage.dev'
+                || ($port !== null && $port !== 443) || ! in_array($endpointPath, ['', '/'], true)
+                || $region !== 'auto' || $pathStyle !== false || strtolower($provider) !== 'tigris') {
+                return back()->withErrors([
+                    'connection_json' => 'برای جلوگیری از هزینه ناخواسته، مقصد بکاپ رایگان فعلاً فقط Tigris Standard است: endpoint برابر https://t3.storage.dev، region برابر auto، provider برابر tigris و use_path_style_endpoint برابر false.',
+                ])->withInput($request->except('connection_json'));
+            }
+            $credentials['region'] = 'auto';
+            $credentials['use_path_style_endpoint'] = false;
+        }
         $name = trim((string) ($connection['name'] ?? (($bucket !== '' ? $bucket.' · ' : '').($provider ?: 'فضای ذخیره‌سازی جدید'))));
         if ($name === '') $name = 'فضای ذخیره‌سازی جدید';
         foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint'] as $key) {
@@ -229,8 +251,9 @@ class AdminStorageController extends Controller
 
     private function recordVerificationFailure(StorageVolume $volume, Throwable $exception): void
     {
-        $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', 5), FILTER_VALIDATE_INT);
-        $interval = $interval === false ? 5 : max(5, min(1440, $interval));
+        $defaultInterval = in_array($volume->drive_key, ['iran_primary', 'foreign_backup', 'iran_backup'], true) ? 1440 : 5;
+        $interval = filter_var(data_get($volume->metadata, 'health_check_interval_minutes', $defaultInterval), FILTER_VALIDATE_INT);
+        $interval = $interval === false ? $defaultInterval : max(5, min(1440, $interval));
         $failureCount = max(0, (int) data_get($volume->metadata, 'health_check_failures', 0)) + 1;
         $backoffMinutes = min(1440, $interval * (2 ** min(5, $failureCount - 1)));
         $metadata = array_merge((array) $volume->metadata, [

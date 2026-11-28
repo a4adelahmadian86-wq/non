@@ -83,9 +83,11 @@ class StorageBackupPreflightTest extends TestCase
             'drive_key' => 'foreign_backup',
             'name' => 'External backup',
             'driver' => 's3',
-            'endpoint' => 'https://backup.example.test',
+            'provider' => 'tigris',
+            'endpoint' => 'https://t3.storage.dev',
+            'region' => 'auto',
             'bucket' => 'farast-backups',
-            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'credentials' => ['key' => 'test', 'secret' => 'test', 'region' => 'auto', 'use_path_style_endpoint' => false],
             'is_active' => true,
             'status' => 'healthy',
             'priority' => 1,
@@ -157,6 +159,114 @@ class StorageBackupPreflightTest extends TestCase
 
         $run = StorageBackupRun::query()
             ->where('backup_type', 'manual')
+            ->where('source_name', 'application')
+            ->sole();
+
+        $this->assertTrue((bool) data_get($run->metadata, 'archive_skipped'));
+        $this->assertSame('no_healthy_destination', data_get($run->metadata, 'reason'));
+    }
+
+
+    public function test_full_backup_blocks_unbudgeted_foreign_s3_sources(): void
+    {
+        config([
+            'storage_management.backup.encryption_key' => str_repeat('backup-key-', 8),
+            'storage_management.backup.enable_iran_replica' => false,
+            'storage_management.backup.use_incremental_format' => false,
+            'storage_management.backup.allow_unbudgeted_remote_full_source_reads' => false,
+        ]);
+
+        $source = StorageVolume::forceCreate([
+            'drive_key' => 'foreign_primary',
+            'name' => 'Unbudgeted foreign source',
+            'driver' => 's3',
+            'endpoint' => 'https://source.example.test',
+            'bucket' => 'farast-source',
+            'credentials' => ['key' => 'test', 'secret' => 'test'],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Tigris backup target',
+            'provider' => 'tigris',
+            'driver' => 's3',
+            'endpoint' => 'https://t3.storage.dev',
+            'region' => 'auto',
+            'bucket' => 'farast-backups',
+            'credentials' => ['key' => 'test', 'secret' => 'test', 'region' => 'auto', 'use_path_style_endpoint' => false],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        StorageManagedFile::create([
+            'storage_volume_id' => $source->id,
+            'drive_key' => 'foreign_primary',
+            'file_key' => 'products/private/source.pdf',
+            'original_name' => 'source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 1024,
+            'checksum' => str_repeat('a', 64),
+            'classification' => 'critical',
+            'status' => 'active',
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldNotReceive('downloadTo');
+        $storage->shouldNotReceive('uploadBackup');
+
+        try {
+            (new StorageBackupService($storage))->runWeekly('weekly');
+            $this->fail('A full backup must not read an unbudgeted remote S3 source.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('مبدأ S3 تأییدنشده', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'failed',
+        ]);
+    }
+
+
+    public function test_billable_or_unapproved_s3_provider_is_not_a_backup_target(): void
+    {
+        config([
+            'storage_management.backup.encryption_key' => str_repeat('backup-key-', 8),
+            'storage_management.backup.enable_iran_replica' => false,
+        ]);
+
+        StorageVolume::forceCreate([
+            'drive_key' => 'foreign_backup',
+            'name' => 'R2 must not be selected under no-card policy',
+            'provider' => 'cloudflare-r2',
+            'driver' => 's3',
+            'endpoint' => 'https://account.r2.cloudflarestorage.com',
+            'region' => 'auto',
+            'bucket' => 'farast-backups',
+            'credentials' => ['key' => 'test', 'secret' => 'test', 'region' => 'auto', 'use_path_style_endpoint' => true],
+            'is_active' => true,
+            'status' => 'healthy',
+            'priority' => 1,
+        ]);
+
+        $storage = Mockery::mock(StorageManager::class);
+        $storage->shouldNotReceive('downloadTo');
+        $storage->shouldNotReceive('uploadBackup');
+
+        try {
+            (new StorageBackupService($storage))->runWeekly('weekly');
+            $this->fail('Unapproved or billable providers must never be selected for free-tier backup.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('هیچ مقصد سالمی', $exception->getMessage());
+        }
+
+        $run = StorageBackupRun::query()
+            ->where('backup_type', 'weekly')
             ->where('source_name', 'application')
             ->sole();
 
