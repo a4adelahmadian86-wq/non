@@ -178,3 +178,17 @@ Do not simply replace the Eloquent relation in `ProductKnowledgeService`. First 
 ### Additional audit boundary
 
 The repository tree was inspected for the named application services/jobs/controllers, and the files above were read. This was a targeted consumer trace, not a formal static-analysis proof that no other code path reads those tables. Before schema changes or SQL row deletion, run a repository-wide search against the exact table/model/relation names and review every result, including tests, admin tools and reporting queries.
+
+
+### 7.1 Additional operational and publication consumers
+
+The targeted pass also found these SQL dependencies that must be included in the repository-wide pre-migration search:
+
+- `app/Http/Controllers/AdminStoreController.php`: admin product-document status/summary views read the document's evidence-backed fact count, audio state and reader page counts; upload/replacement flows lock document rows and call content-generation provenance checks.
+- `app/Http/Controllers/AdminProductOperationsController.php`: operations dashboard queries document processing states and retries failed/stale/awaiting-provider documents. It relies on the existing document row and retry service.
+- `app/Services/ProductPublicationReadiness.php`: publication readiness checks the existence/count of SQL reader page rows and validates source/document IDs and source hashes.
+- `app/Services/ProductLifecycleHealthService.php`: product lifecycle health checks stale document-processing rows and reader readiness.
+- `app/Console/Commands/RecoverStaleProductDocuments.php` and `RetryOfflineProductDocuments.php`: recovery/retry commands operate on existing document rows and statuses; their behavior must remain compatible with a bundle that is pending, unavailable or corrupt.
+- `app/Console/Commands/VerifyStorageBackup.php` and `RestoreStorageBackup.php`: backup verification/restore use the current storage manager and encrypted archive; preserve these paths and test a knowledge bundle round-trip as part of backup/restore verification.
+
+The knowledge bundle should not remove the SQL document row or its status machine. Publication readiness and admin monitoring should gain explicit bundle state fields (e.g. pending, verified, unavailable, schema_mismatch) without treating a missing/corrupt bundle as complete. A bundle read failure must preserve the legacy fallback when the SQL payload is still present; after any future SQL-retention change, it must fail closed rather than publishing partial knowledge.
