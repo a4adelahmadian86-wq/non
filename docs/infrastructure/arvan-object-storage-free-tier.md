@@ -59,7 +59,7 @@ Until the user explicitly approves paid usage:
 1. Use only the Base plan. Never upgrade to Growth, Professional, Enterprise, or enable paid add-ons.
 2. Do not use HiOps storage, Access Point, antivirus, or any other paid feature.
 3. Do not intentionally exceed 5 GB stored data, 20 GB monthly download traffic, or 10,000 read/write requests.
-4. Application-side upload and request guards must stop work before the free allowance is exhausted. Use conservative internal thresholds (initially 4.0 GB stored, 15 GB monthly egress, and 7,000 combined operations) to leave a safety margin.
+4. Before production use, application-side upload and request guards must be implemented and tested to stop work before the free allowance is exhausted. Proposed conservative thresholds are 4.0 GB stored, 15 GB monthly egress, and 7,000 combined operations. **These thresholds are a design requirement only; they are not yet implemented or active in the current application.**
 5. Do not assume the S3 API exposes accurate traffic or request metering. Storage usage may be measurable from provider-specific headers, but traffic/request totals must be verified in the provider dashboard or another authoritative meter.
 6. If usage cannot be measured reliably, fail closed: pause new uploads and nonessential reads rather than risk PAYG charges.
 7. Do not run bulk migrations, repeated syncs, public downloads, public buckets, static-site hosting, or load tests against this account.
@@ -87,4 +87,4 @@ The existing product knowledge pipeline still persists chunks, facts, and extrac
 - [ ] Test one tiny private object upload/download/delete and verify checksum.
 - [ ] Verify provider usage counters and that the test did not trigger paid consumption.
 
-**Current state:** Plan appears active in the screenshot. No evidence yet that an Object Storage bucket or S3 credentials exist, no real connection has been tested, and no user data has been uploaded.
+**Current state:** Plan appears active in the screenshot. No evidence yet that an Object Storage bucket or S3 credentials exist, no real connection has been tested, no user data has been uploaded, and no application-level free-tier traffic/request hard-stop has been implemented.
