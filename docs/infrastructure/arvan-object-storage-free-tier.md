@@ -79,6 +79,9 @@ The existing product knowledge pipeline still persists chunks, facts, and extrac
 
 - [x] User provided the regional endpoint list; Iranian Standard zones are identified above.
 - [ ] Confirm the bucket's actual region and exact endpoint after bucket creation.
+- [ ] Create a private Standard bucket only; do not enable Multi-zone unless confirmed free.
+- [ ] Keep Versioning and Object Lock disabled at initial creation; Object Lock is irreversible.
+- [ ] Use conservative bucket name characters (lowercase letters, digits, hyphens only; 3–63 chars).
 - [x] Dashboard screenshot confirms a **صندوقچه‌ها** sidebar item and a **+ صندوقچه** create button; user has not yet opened the bucket list or confirmed existing buckets.
 - [ ] Confirm bucket is private.
 - [ ] Confirm PAYG/overage can be disabled or establish a verified hard stop.
